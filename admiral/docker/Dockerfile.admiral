@@ -1,0 +1,11 @@
+FROM ubuntu:xenial
+
+RUN apt update -y
+
+RUN apt install -y curl
+
+COPY ./out/admiral /usr/local/admiral
+
+RUN chmod +x /usr/local/admiral
+
+ENTRYPOINT ["/usr/local/admiral"]

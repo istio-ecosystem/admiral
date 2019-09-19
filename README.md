@@ -1,5 +1,6 @@
-
  # Admiral
+
+[![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master)
 
 **Admiral provides automatic configuration for multiple istio deployments to work as a single mesh**
 
@@ -211,3 +212,7 @@ In this example the service object with the app=service1 label will have 3 dns n
 - service1.global - pins traffic the local region the traffic originated
 - service1-west.global - sends traffic to the west region and only to east if west in unavailable
 - service1-east.global - sends traffic to the east region and only to west if east in unavailable
+
+## Contributing
+Refer to [Contributing doc](./CONTRIBUTING.md)
+

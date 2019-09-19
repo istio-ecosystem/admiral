@@ -1,0 +1,55 @@
+
+
+---
+apiVersion: admiral.io/v1alpha1
+kind: GlobalTrafficPolicy
+metadata:
+  name: policy-identity1-prd
+spec:
+  selector:
+    identity: identity1
+    env: prd
+  policy:
+  - dns: prd.service1
+    lbtype: TOPOLOGY
+  - dns: prd.service1.us-west-2
+    lbtype: FAILOVER
+    target:
+    - region: us-west-2
+      weight: 100
+    - region: us-east-2
+      weight: 0
+  - dns: prd.service1.us-east-2
+    lbtype: FAILOVER
+    target:
+    - region: us-west-2
+      weight: 0
+    - region: us-east-2
+      weight: 100
+---
+apiVersion: admiral.io/v1alpha1
+kind: GlobalTrafficPolicy
+metadata:
+  name: policy-identity1-stage
+spec:
+  selector:
+    identity: identity1
+    env: stage
+  policy:
+    - dns: stage.service2
+      lbtype: TOPOLOGY
+    - dns: stage.service2-west2
+      lbtype: FAILOVER
+      target:
+        - region: us-west-2
+          weight: 100
+        - region: us-east-2
+          weight: 0
+    - dns: stage.service2-east2
+      lbtype: FAILOVER
+      target:
+        - region: us-west-2
+          weight: 0
+        - region: us-east-2
+          weight: 100
+---
