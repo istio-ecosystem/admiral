@@ -1,0 +1,23 @@
+---
+apiVersion: admiral.io/v1aplha1
+kind: Dependency
+metadata:
+  name: dep1
+spec:
+  source: "identity3"
+  identityLabel: identity
+  destinations:
+    - "identity1"
+    - "identity2"
+
+---
+apiVersion: admiral.io/v1aplha1
+kind: Dependency
+metadata:
+  name: dep2
+spec:
+  source: "identity1"
+  identityLabel: identity
+  destinations:
+    - "identity2"
+    - "identity3"

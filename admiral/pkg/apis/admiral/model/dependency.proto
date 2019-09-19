@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package admiral.global.v1alpha;
+
+option go_package = "model";
+
+// ```
+// apiVersion: admiral.global.traffic/v1alpha
+// kind: Dependency
+// metadata:
+//   name: my-dependency
+// spec:
+//   identityLabel: identity
+//   source: source-identity-1
+//   destinations:
+//   - dest-identity-1
+//   - dest-identity-2
+//   - dest-identity-3
+//   - dest-identity-4
+//   - dest-identity-5
+//
+// ```
+
+message Dependency {
+
+    // REQUIRED: identifier for the source workload
+    string source = 1;
+
+    // REQUIRED: the label on the workload for selecting source and destination
+    string identityLabel = 2;
+
+    // REQUIRED: A list of workloads that source workload depends on.
+    repeated string destinations = 3;
+}
