@@ -27,7 +27,7 @@ Admiral watching the cluster generated some Istio configuration.
 
 ```kubeclt get ServiceEntry```
 
-### Multi cluster
+### Multi-Cluster
 ```kubeclt apply something```
 
 #### Generated config
@@ -48,11 +48,11 @@ Admiral watching the cluster generated some Istio configuration.
 
 Admiral acts as a controller watching k8s clusters that have a credential stored as a secret object which the namespace Admiral is running in.  Admiral delivers Istio configuration to each cluster to enable services to communicate.  This configuration is contextual to each cluster, removing the need for service owners to know the mesh cluster topology.
 
-### Contextual configuration
+### Contextual Configuration
 With multiple Istio control planes, Admiral instruments contextual Istio configuration for a given k8s service for a cluster from which this service is being accessed from. For example, k8s service running in k8s cluster 1 and k8s cluster 2 when accessed from k8s cluster 3 should be distributed across Istio ingress load balancer in cluster 1 and cluster 2. When the same k8s service is accessed from cluster 2, it should be distributed across local FQDN and the Istio ingress load balancer in cluster 1.
 
 
-### Why is the Configuration opinionated?
+### Why is the Configuration Opinionated?
 
 There are three main aspects that led to deploying service mesh globally with the opinionated configuration automation.
 
@@ -62,7 +62,7 @@ There are three main aspects that led to deploying service mesh globally with th
 
 - The need to have several FQDN for the same service that have different resolution and load balancing properties.  For example, service1.global could resolve to local topology first.  Service1 being deployed in multiple regions would need a names like service1-west.global and service1-east.global. Each of these names would resolve the region in the name respectively and the opposite region in a failure scenario.  These names are often used for testing in one region during deployments and for troubleshooting.
 
-## Connecting clusters
+## Connecting Clusters
 
 Each cluster is an independent cluster with an Istio control plane.  Admiral needs a k8s context to watch each cluster stored as a secret.  This is used for Admiral to watch and generate configuration.
 
@@ -91,7 +91,7 @@ spec:
 ```
 Service labels will be used to create the default dns name.
 
-## DNS names
+## DNS Names
 
 By default dns names will be constructed using the values of two labels from the service.  
 - env
@@ -106,6 +106,8 @@ For the service above
 If the env label is not present it will be dropped from the dns name.
 
 **service1.mesh**
+
+*No "real" dns name are created but the core dns plug is used with back ServiceEntries*
 
 ## Types
 
@@ -172,7 +174,7 @@ spec:
 
 The default dns name that is created for service2 would use the value of the name label.
 
-### Global Traffic Routing
+### Global Traffic Policy
 
 Using the Global Traffic policy type will allow for the creation of multiple dns names with different routing locality configuration for the service.
 
