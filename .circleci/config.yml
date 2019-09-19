@@ -1,7 +1,7 @@
 version: 2.1
 jobs:
   build:
-    working_directory: /go/src/github.com/istio-ecosystem/admiral
+    working_directory: /go/src/github.com/admiral
     docker:
     - image: circleci/golang:1.11
     steps:
