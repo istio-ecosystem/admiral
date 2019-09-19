@@ -40,7 +40,20 @@ kubectl apply -f istio.yaml
 ## Examples
 
 ### Single cluster
-```kubeclt apply something```
+```
+
+make gen-yaml
+
+kubectl apply -f ./out/yaml/remotecluster.yaml
+
+kubectl apply -f ./out/yaml/demosinglecluster.yaml
+
+#create the secret for admiral to monitor. 
+#Since this is froma single cluster demo the remote and local context are the same
+./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+
+
+```
 
 #### Generated config
 
