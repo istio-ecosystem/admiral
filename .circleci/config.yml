@@ -1,0 +1,25 @@
+version: 2.1
+jobs:
+  build:
+    working_directory: /go/src/github.com/istio-ecosystem/admiral
+    docker:
+    - image: circleci/golang:1.11
+    steps:
+    - checkout
+    - run:
+        name: Build
+        command: |
+          make build
+    - run:
+        name: Tests
+        command: |
+          make test
+    - setup_remote_docker
+    - run:
+        name: Build Docker image
+        command: |
+          make docker-build
+    - run:
+        name: Push Docker image
+        command: |
+          make docker-push
