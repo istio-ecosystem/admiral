@@ -13,7 +13,7 @@ spec:
             - --log_output_level
             - info
             - --dependency_namespace
-            - default
+            - admiral
             - --secret_namespace
-            - default
+            - admiral
           name: admiral
