@@ -1,12 +1,15 @@
 apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: default
+namespace: admiral
 
 bases:
   - ../../base
 
 patchesStrategicMerge:
   - envconfig-values.yaml
+
+resources:
+  - ns.yaml
 
 

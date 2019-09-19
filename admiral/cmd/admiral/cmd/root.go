@@ -40,7 +40,12 @@ func GetRootCmd(args []string) *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			log.Info("Starting Admiral")
-			clusters.InitAdmiral(ctx, params)
+			_, err := clusters.InitAdmiral(ctx, params)
+
+			if err != nil {
+				log.Fatalf("Error: %v", err)
+			}
+
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			shutdown(cancel)

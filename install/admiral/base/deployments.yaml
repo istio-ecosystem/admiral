@@ -30,7 +30,7 @@ spec:
             - $(secret_resolver)
             - --secret_resolver_config_path
             - /etc/admiral/config.yaml
-          image: hub.docker.com/r/admiralproj/admiral:latest
+          image: docker.io/admiralproj/admiral:latest
           #          livenessProbe:
           #            failureThreshold: 5
           #            httpGet:
@@ -50,9 +50,9 @@ spec:
           resources:
             limits:
               cpu: 1
-              memory: 4096M
+              memory: 1028M
             requests:
-              cpu: 1
-              memory: 4096M
+              cpu: 0.25
+              memory: 256M
 
 ---

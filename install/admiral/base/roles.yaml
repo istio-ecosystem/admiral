@@ -5,7 +5,7 @@ kind: Role
 metadata:
   name: admiral-dependency-role
 rules:
-  - apiGroups: ["intuit.com"]
+  - apiGroups: ["admiral.io"]
     resources: ["dependencies"]
     verbs: ["get", "list", "watch"]
 

@@ -91,3 +91,4 @@ docker-push:
 gen-yaml:
 	mkdir -p ./out/yaml
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
+	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml

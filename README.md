@@ -9,7 +9,33 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 ## Install
 
 ### Prerequisite
-[Install Istio with replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/)
+[Install Istio with replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
+
+**Example Setup**
+```
+wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
+
+tar -xf istio-1.2.6-osx.tar.gz
+
+kubectl create ns istio-system
+
+kubectl create secret generic cacerts -n istio-system \
+    --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
+    --from-file=istio-1.2.6/samples/certs/ca-key.pem \
+    --from-file=istio-1.2.6/samples/certs/root-cert.pem \
+    --from-file=istio-1.2.6/samples/certs/cert-chain.pem
+
+helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+
+kubectl get crds | grep 'istio.io' | wc -l
+
+helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
+    -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml > istio.yaml
+
+kubectl apply -f istio.yaml  
+
+```
+
 
 ## Examples
 

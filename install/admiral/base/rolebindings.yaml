@@ -11,7 +11,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: admiral
-    namespace: admiral-remote-ctx
+    namespace: admiral
 
 ---
 
