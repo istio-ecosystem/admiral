@@ -1,0 +1,15 @@
+apiversion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+images:
+  - name: docker.artifactory.a.intuit.com/strategic/services/service-mesh/service/heliograph
+    newTag: latest
+  - name: docker.artifactory.a.intuit.com/strategic/services/service-mesh/service/admiral
+    newTag: dev
+
+resources:
+  - crds.yaml
+  - deployments.yaml
+  - roles.yaml
+  - rolebindings.yaml
+  - serviceaccounts.yaml

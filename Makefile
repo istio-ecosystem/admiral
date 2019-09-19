@@ -87,3 +87,7 @@ docker-build:
 docker-push:
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 	docker push $(IMAGE):$(TAG)
+
+gen-yaml:
+	mkdir -p ./out/yaml
+	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml

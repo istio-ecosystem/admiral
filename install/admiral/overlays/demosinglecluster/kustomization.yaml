@@ -1,0 +1,12 @@
+apiversion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: default
+
+bases:
+  - ../../base
+
+patchesStrategicMerge:
+  - envconfig-values.yaml
+
+
