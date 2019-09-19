@@ -1,0 +1,10 @@
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: dependency-v2
+  namespace: admiral
+spec:
+  source: Admiral.platform.mesh.client
+  identityLabel: identity
+  destinations:
+    - Admiral.platform.mesh.server
