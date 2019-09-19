@@ -1,0 +1,82 @@
+
+
+syntax = "proto3";
+
+package admiral.global.v1alpha;
+
+option go_package = "model";
+
+
+// ```
+// apiVersion: navarch.global.traffic/v1alpha
+// kind: GlobalTrafficPolicy
+// metadata:
+//   name: my-routing
+// spec:
+//   selector:
+//     identity: my-identity
+//     env: prd
+//   policy:
+//   - dns: prd.accounts.global
+//     lbType: topology
+//   - dns: prd.accounts-us-west2
+//     lbType: failover
+//     target:
+//     - region: us-west2
+//       weight: 90
+//     - region: us-east2
+//       weight: 10
+//   - dns: prd.accounts-us-east2
+//     lbType: failover
+//     target:
+//     - region: us-west2
+//       weight: 10
+//     - region: us-east2
+//       weight: 90
+//
+// ```
+
+message GlobalTrafficPolicy {
+    // REQUIRED: A list host name .
+    repeated TrafficPolicy policy = 1;
+
+    // REQUIRED: One or more labels that indicate a specific set of pods/VMs
+    // on which this global routing policy should be applied. The scope of
+    // label search is restricted to namespace mark for mesh enablement
+    // this will scan all cluster and namespace
+    map<string, string> selector = 2;
+}
+
+// TrafficPolicy describes routing for a hostname.
+message TrafficPolicy {
+
+    // REQUIRED: dns that can be used by client.  This name will have the
+    // traffic type applied to it
+    string dns = 1;
+
+    // REQUIRED: type of global load distrubtion
+    LbType lbType = 2;
+
+
+    enum LbType {
+
+        //Traffic with be routed to local locality first
+        //if there are no health instances in the local locality traffic will be routed to
+        //remote locality
+        TOPOLOGY = 0;
+
+        FAILOVER = 1;
+    }
+
+    //weigth of primary and secondary must each 100
+    repeated TrafficGroup target = 3;
+}
+
+message TrafficGroup {
+
+    //region for the traffic
+    string region = 1;
+    //weight for traffic this region should get.
+    int32 weight = 2;
+
+}
