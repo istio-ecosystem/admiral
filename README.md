@@ -1,7 +1,6 @@
 
-
 <p align="center">
-  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">
+  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">  
 </p>
 
 
@@ -53,9 +52,9 @@ kustomize will be used to generate deploy yamls
 ### Single cluster
 
 
-Setup Admiral
-```
+#### Setup Admiral
 
+```
 make gen-yaml
 
 kubectl apply -f ./out/yaml/remotecluster.yaml
@@ -68,8 +67,7 @@ kubectl apply -f ./out/yaml/demosinglecluster.yaml
 
 
 ```
-
-Setup Sample App
+#### Setup Sample App
 
 ```
 kubectl apply -f ./out/yaml/sample.yaml
@@ -77,17 +75,64 @@ kubectl apply -f ./out/yaml/sample_dep.yaml
 
 ```
 
+
+#### Testing
+
+``` kubectl exec --namespace=sample -it $(kubectl get pod -l "app=sleep" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.nginx.global```
+
+
 #### Generated config
 
 Admiral watching the cluster generated some Istio configuration.  
 
 ##### ServiceEntry
 
-```kubeclt get ServiceEntry```
+Two service entries were created in the admiral sync namespace.
 
-##### Virtual Service
+```kubectl get ServiceEntry -n admiral-sync```
 
-```kubeclt get ServiceEntry```
+```
+NAME                      HOSTS                    LOCATION        RESOLUTION   AGE
+default.nginx.global-se   [default.nginx.global]   MESH_INTERNAL   DNS          76m
+default.sleep.global-se   [default.sleep.global]   MESH_INTERNAL   DNS          76m
+```
+
+```kubectl get ServiceEntry default.nginx.global-se  -n admiral-sync -o yaml```
+
+Looking in more detail the hostname default.nginx.global is pointing back the default k8s FQDNs
+
+```
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  creationTimestamp: "2019-09-20T22:04:59Z"
+  generation: 1
+  labels:
+    identity: nginx
+  name: default.nginx.global-se
+  namespace: admiral-sync
+  resourceVersion: "452814"
+  selfLink: /apis/networking.istio.io/v1alpha3/namespaces/admiral-sync/serviceentries/default.nginx.global-se
+  uid: b02cdbee-dbf2-11e9-9461-0aa9b467cf9c
+spec:
+  addresses:
+  - 127.0.10.2
+  endpoints:
+  - address: nginx.sample.svc.cluster.local
+    locality: us-west-2
+    ports:
+      http: 80
+  hosts:
+  - default.nginx.global
+  location: MESH_INTERNAL
+  ports:
+  - name: http
+    number: 80
+    protocol: http
+  resolution: DNS
+
+```
+
 
 ### Multi-Cluster
 ```kubeclt apply something```
