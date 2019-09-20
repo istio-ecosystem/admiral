@@ -80,15 +80,15 @@ build-linux:
 
 docker-build:
 	#NOTE: Assumes binary has already been built (admiral)
-	ifeq ($(TAG),)
-		TAG = latest
+	ifeq ($(strip $(TAG)),)
+	TAG = latest
 	endif
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
 	ifeq ($(BRANCH),master)
 		echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-		ifeq ($(TAG),)
+		ifeq ($(strip $(TAG)),)
 			TAG = latest
 		endif
 		echo "Publishing artifact: $(TAG)"

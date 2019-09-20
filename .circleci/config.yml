@@ -10,11 +10,8 @@ jobs:
         name: Setting BRANCH, TAG & SHA variables
         command: |
           echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
-          echo "$TAG"
           echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
-          echo "$BRANCH"
           echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
-          echo "$SHA"
           source $BASH_ENV
     - run:
         name: Build
