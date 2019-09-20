@@ -78,21 +78,21 @@ crd-gen:
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
-
 docker-build:
 	#NOTE: Assumes binary has already been built (admiral)
+	ifeq ($(TAG),)
+		TAG = latest
+	endif
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
 	ifeq ($(BRANCH),master)
 		echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 		ifeq ($(TAG),)
-			echo "Publishing latest image"
-            docker push $(IMAGE):latest
-		else
-			echo "Publishing release artifact: $(TAG)"
-			docker push $(IMAGE):$(TAG)
+			TAG = latest
 		endif
+		echo "Publishing artifact: $(TAG)"
+		docker push $(IMAGE):$(TAG)
 	else
 		echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
 	endif
