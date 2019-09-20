@@ -80,22 +80,22 @@ build-linux:
 
 docker-build:
 	#NOTE: Assumes binary has already been built (admiral)
-	ifeq ($(strip $(TAG)),)
+ifeq ($(strip $(TAG)),)
 	TAG = latest
-	endif
+endif
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
-	ifeq ($(BRANCH),master)
-		echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-		ifeq ($(strip $(TAG)),)
-			TAG = latest
-		endif
-		echo "Publishing artifact: $(TAG)"
-		docker push $(IMAGE):$(TAG)
-	else
-		echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
-	endif
+ifeq ($(strip $(TAG)),)
+	TAG = latest
+endif
+ifeq ($(BRANCH),master)
+	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
+	echo "Publishing artifact: $(TAG)"
+	docker push $(IMAGE):$(TAG)
+else
+	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
+endif
 
 gen-yaml:
 	mkdir -p ./out/yaml
