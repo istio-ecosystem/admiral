@@ -1,4 +1,9 @@
- # Admiral
+
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">
+</p>
+
 
 [![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master)
 
@@ -39,14 +44,16 @@ kubectl apply -f istio.yaml
 
 ## Examples
 
-kustomize will be used to generate deploy yaml
+kustomize will be used to generate deploy yamls
 
-[brew install kustomize] (https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
+**mac install**
+
+[brew install kustomize](https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
 
 ### Single cluster
 
 
-Setup Admiral 
+Setup Admiral
 ```
 
 make gen-yaml
@@ -55,7 +62,7 @@ kubectl apply -f ./out/yaml/remotecluster.yaml
 
 kubectl apply -f ./out/yaml/demosinglecluster.yaml
 
-#create the secret for admiral to monitor. 
+#create the secret for admiral to monitor.
 #Since this is froma single cluster demo the remote and local context are the same
 ./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 
@@ -65,8 +72,8 @@ kubectl apply -f ./out/yaml/demosinglecluster.yaml
 Setup Sample App
 
 ```
-kubectl apply -f ./out/yaml/sample.yaml 
-kubectl apply -f ./out/yaml/sample_dep.yaml 
+kubectl apply -f ./out/yaml/sample.yaml
+kubectl apply -f ./out/yaml/sample_dep.yaml
 
 ```
 
@@ -269,4 +276,3 @@ In this example the service object with the app=service1 label will have 3 dns n
 
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)
-
