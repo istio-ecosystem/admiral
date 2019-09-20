@@ -79,11 +79,10 @@ build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
 docker-build:
-#NOTE: Assumes binary has already been built (admiral)
+    #NOTE: Assumes binary has already been built (admiral)
 ifeq ($(strip $(TAG)),)
 override TAG=latest
 endif
-	echo $(TAG)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
