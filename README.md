@@ -39,6 +39,10 @@ kubectl apply -f istio.yaml
 
 ## Examples
 
+kustomize will be used to generate deploy yaml
+
+[brew install kustomize] (https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
+
 ### Single cluster
 
 
