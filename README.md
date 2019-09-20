@@ -1,5 +1,8 @@
 
-![logo](https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png)
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">
+</p>
 
 
 [![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master)
