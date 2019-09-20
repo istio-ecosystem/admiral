@@ -79,19 +79,19 @@ build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
 docker-build:
-	#NOTE: Assumes binary has already been built (admiral)
+#NOTE: Assumes binary has already been built (admiral)
 ifeq ($(strip $(TAG)),)
-	TAG=latest
+override TAG=latest
 endif
+	echo $(TAG)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
 ifeq ($(strip $(TAG)),)
-	TAG=latest
+override TAG=latest
 endif
 ifeq ($(BRANCH),master)
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-	echo "Publishing artifact: $(TAG)"
 	docker push $(IMAGE):$(TAG)
 else
 	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
