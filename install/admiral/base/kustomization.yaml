@@ -9,5 +9,5 @@ resources:
   - crds.yaml
   - deployments.yaml
   - roles.yaml
-  - rolebindings.yaml
-  - serviceaccounts.yaml
+  - role_bindings.yaml
+  - service_accounts.yaml

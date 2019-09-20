@@ -43,6 +43,7 @@ func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
 func GetDeploymentGlobalIdentifier(deployment *k8sAppsV1.Deployment) string {
 	identity := deployment.Spec.Template.Labels[DefaultGlobalIdentifier()]
 	if len(identity) == 0 {
+		//TODO can this be removed now? This was for backward compatibility
 		identity = deployment.Spec.Template.Annotations[DefaultGlobalIdentifier()]
 	}
 	return identity
@@ -57,7 +58,7 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string) string {
 	var environment = deployment.Spec.Template.Labels[Env]
 	if len(environment) == 0 {
 		environment = "default"
-		logrus.Warnf("%v label missing on %v in namespace %v. Using 'default' as the value.", identifier, deployment.Name, deployment.Namespace)
+		logrus.Warnf("%v label missing on %v in namespace %v. Using 'default' as the value.", Env, deployment.Name, deployment.Namespace)
 	}
 	alias := deployment.Spec.Template.Labels[identifier]
 	if len(alias) == 0 {
@@ -83,7 +84,6 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 		return SpiffePrefix + identifierVal
 	}
 }
-
 
 func GetLocalAddressForSe(seName string, seAddressCache *Map) string {
 	var address = seAddressCache.Get(seName)

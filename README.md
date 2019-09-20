@@ -40,6 +40,9 @@ kubectl apply -f istio.yaml
 ## Examples
 
 ### Single cluster
+
+
+Setup Admiral 
 ```
 
 make gen-yaml
@@ -52,6 +55,14 @@ kubectl apply -f ./out/yaml/demosinglecluster.yaml
 #Since this is froma single cluster demo the remote and local context are the same
 ./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 
+
+```
+
+Setup Sample App
+
+```
+kubectl apply -f ./out/yaml/sample.yaml 
+kubectl apply -f ./out/yaml/sample_dep.yaml 
 
 ```
 
