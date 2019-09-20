@@ -12,4 +12,7 @@ patchesStrategicMerge:
 resources:
   - ns.yaml
 
+resources:
+  - ns.yaml
+
 
