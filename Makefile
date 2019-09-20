@@ -78,17 +78,16 @@ crd-gen:
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
-docker-build:
-    #NOTE: Assumes binary has already been built (admiral)
+set-tag:
 ifeq ($(strip $(TAG)),)
 override TAG=latest
 endif
+
+docker-build: set-tag
+    #NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
-docker-publish:
-ifeq ($(strip $(TAG)),)
-override TAG=latest
-endif
+docker-publish: set-tag
 ifeq ($(BRANCH),master)
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 	docker push $(IMAGE):$(TAG)
