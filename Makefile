@@ -1,6 +1,5 @@
 DOCKER_REPO=admiralproj
 IMAGE=$(DOCKER_REPO)/admiral
-TAG=latest
 DOCKER_USER=aattuluri
 
 SHELL := /bin/bash
@@ -79,14 +78,22 @@ crd-gen:
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
+set-tag:
+ifeq ($(strip $(TAG)),)
+override TAG=latest
+endif
 
-docker-build:
-	#NOTE: Assumes binary has already been built (admiral)
+docker-build: set-tag
+    #NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
-docker-push:
+docker-publish: set-tag
+ifeq ($(BRANCH),master)
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 	docker push $(IMAGE):$(TAG)
+else
+	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
+endif
 
 gen-yaml:
 	mkdir -p ./out/yaml
