@@ -1,0 +1,13 @@
+apiversion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+images:
+  - name: hub.docker.com/r/admiralproj/admiral
+    newTag: latest
+
+resources:
+  - crds.yaml
+  - deployments.yaml
+  - roles.yaml
+  - role_bindings.yaml
+  - service_accounts.yaml

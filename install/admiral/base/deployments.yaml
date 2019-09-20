@@ -1,0 +1,58 @@
+---
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  labels:
+    app: admiral
+  name: admiral
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admiral
+  template:
+    metadata:
+      labels:
+        app: admiral
+    spec:
+      serviceAccountName: admiral
+      containers:
+        - args:
+            - --log_output_level
+            - $(log_output_level)
+            - --dependency_namespace
+            - $(dependency_namespace)
+            - --secret_namespace
+            - $(secret_namespace)
+            - --san_domain
+            - $(san_domain)
+            - --secret_resolver
+            - $(secret_resolver)
+            - --secret_resolver_config_path
+            - /etc/admiral/config.yaml
+          image: docker.io/admiralproj/admiral:latest
+          #          livenessProbe:
+          #            failureThreshold: 5
+          #            httpGet:
+          #              path: /health/full
+          #              port: 8443
+          #              scheme: HTTPS
+          #            initialDelaySeconds: 90
+          #            periodSeconds: 5
+          #            successThreshold: 1
+          #            timeoutSeconds: 1
+          name: admiral
+          ports:
+            - containerPort: 8443
+              name: service
+            - containerPort: 8490
+              name: metrics
+          resources:
+            limits:
+              cpu: 1
+              memory: 1028M
+            requests:
+              cpu: 0.25
+              memory: 256M
+
+---
