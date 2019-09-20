@@ -1,6 +1,5 @@
 DOCKER_REPO=admiralproj
 IMAGE=$(DOCKER_REPO)/admiral
-TAG=latest
 DOCKER_USER=aattuluri
 
 SHELL := /bin/bash
@@ -84,9 +83,19 @@ docker-build:
 	#NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
-docker-push:
-	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-	docker push $(IMAGE):$(TAG)
+docker-publish:
+	ifeq ($(BRANCH),master)
+		echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
+		ifeq ($(TAG),)
+			echo "Publishing latest image"
+            docker push $(IMAGE):latest
+		else
+			echo "Publishing release artifact: $(TAG)"
+			docker push $(IMAGE):$(TAG)
+		endif
+	else
+		echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
+	endif
 
 gen-yaml:
 	mkdir -p ./out/yaml
