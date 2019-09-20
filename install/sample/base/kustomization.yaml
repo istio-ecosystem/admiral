@@ -6,4 +6,4 @@ namespace: sample
 resources:
   - namespace.yaml
   - nginx_deployment.yaml
-  - httpbin.yaml
+  - sleep.yaml

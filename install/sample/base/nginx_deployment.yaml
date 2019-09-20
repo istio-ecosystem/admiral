@@ -28,8 +28,8 @@ data:
           listen       80;
           server_name  _;
           location / {
-              root   html;
-              index  index.html index.htm;
+              return 200 BAM!!!;
+
           }
       }
     }
