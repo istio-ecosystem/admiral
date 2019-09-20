@@ -1,0 +1,160 @@
+#This should be installed in the cluster admiral will be monitoring
+
+
+#read access to all namespace
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: admiral-sync
+  annotations:
+  labels:
+    istio-injection: disabled
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admiral-sync-read
+rules:
+  - apiGroups: ['', 'apps']
+    resources: [ 'pods', 'services', 'nodes', 'deployments']
+    verbs: ['get', 'watch', 'list']
+  - apiGroups: ["networking.istio.io"]
+    resources: ['virtualservices', 'destinationrules', 'serviceentries', 'envoyfilters' ,'gateways', 'sidecars']
+    verbs: [ "get", "list", "watch"]
+  - apiGroups: ["admiral.io"]
+    resources: ['globaltrafficpolicies']
+    verbs: [ "get", "list", "watch"]
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: istio-admin
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups:
+      - networking.istio.io
+    resources:
+      - virtualservices
+      - destinationrules
+      - serviceentries
+      - envoyfilters
+      - gateways
+      - sidecars
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+      - patch
+      - watch
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: istio-viewers
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+rules:
+  - apiGroups:
+      - networking.istio.io
+    resources:
+      - virtualservices
+      - destinationrules
+      - serviceentries
+      - envoyfilters
+      - gateways
+      - sidecars
+    verbs:
+      - get
+      - list
+      - watch
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admiral-sidecar-write
+rules:
+  - apiGroups:
+      - networking.istio.io
+    resources:
+      - sidecars
+    verbs:
+      - get
+      - list
+      - update
+---
+
+
+#only write istio networking to admiral-sync namespace
+---
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admiral-sync-write
+  namespace: admiral-sync
+rules:
+  - apiGroups: ["networking.istio.io"]
+    resources: ['virtualservices', 'destinationrules', 'serviceentries', 'gateways']
+    verbs: ["create", "update"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admiral-sync-write-binding
+  namespace: admiral-sync
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: admiral-sync-write
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral-sync
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admiral-sync-read-binding
+  namespace: admiral-sync
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admiral-sync-read
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral-sync
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admiral-sidecar-write-binding
+  namespace: admiral-sync
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admiral-sidecar-write
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral-sync
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admiral
+  namespace: admiral-sync

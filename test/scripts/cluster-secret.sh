@@ -8,6 +8,12 @@ if [ "$#" -gt "1" ]; then
   remote_cluster=$2
 fi
 
+if [ "$#" -gt "2" ]; then
+  namespace_secrets=$3
+fi
+
+
+
 #TBD make sure you have context switched
 export KUBECONFIG=$remote_cluster
 
@@ -59,13 +65,12 @@ EOF
 source remote_cluster_env_vars
 
 #TBD make sure you have context switched
-NAMESPACE_SECRETS=default
 #create secret on control plane cluster to connect to remote cluster
 
 #export KUBECONFIG=~/.kube/config
 #kubectx minikube
 export KUBECONFIG=$local_cluster
 
-kubectl delete secret ${CLUSTER_NAME} -n ${NAMESPACE_SECRETS}
-kubectl create secret generic ${CLUSTER_NAME} --from-file ${KUBECFG_FILE} -n ${NAMESPACE_SECRETS}
-kubectl label secret ${CLUSTER_NAME} admiral/sync=true -n ${NAMESPACE_SECRETS}
+kubectl delete secret ${CLUSTER_NAME} -n $namespace_secrets
+kubectl create secret generic ${CLUSTER_NAME} --from-file ${KUBECFG_FILE} -n $namespace_secrets
+kubectl label secret ${CLUSTER_NAME} admiral/sync=true -n $namespace_secrets

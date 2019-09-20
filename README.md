@@ -9,12 +9,66 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 ## Install
 
 ### Prerequisite
-[Install Istio with replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/)
+[Install Istio with replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
+
+**Example Setup**
+```
+wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
+
+tar -xf istio-1.2.6-osx.tar.gz
+
+kubectl create ns istio-system
+
+kubectl create secret generic cacerts -n istio-system \
+    --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
+    --from-file=istio-1.2.6/samples/certs/ca-key.pem \
+    --from-file=istio-1.2.6/samples/certs/root-cert.pem \
+    --from-file=istio-1.2.6/samples/certs/cert-chain.pem
+
+helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+
+kubectl get crds | grep 'istio.io' | wc -l
+
+helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
+    -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml > istio.yaml
+
+kubectl apply -f istio.yaml  
+
+```
+
 
 ## Examples
 
+kustomize will be used to generate deploy yaml
+
+[brew install kustomize] (https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
+
 ### Single cluster
-```kubeclt apply something```
+
+
+Setup Admiral 
+```
+
+make gen-yaml
+
+kubectl apply -f ./out/yaml/remotecluster.yaml
+
+kubectl apply -f ./out/yaml/demosinglecluster.yaml
+
+#create the secret for admiral to monitor. 
+#Since this is froma single cluster demo the remote and local context are the same
+./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+
+
+```
+
+Setup Sample App
+
+```
+kubectl apply -f ./out/yaml/sample.yaml 
+kubectl apply -f ./out/yaml/sample_dep.yaml 
+
+```
 
 #### Generated config
 

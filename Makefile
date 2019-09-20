@@ -87,3 +87,12 @@ docker-build:
 docker-push:
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 	docker push $(IMAGE):$(TAG)
+
+gen-yaml:
+	mkdir -p ./out/yaml
+	mkdir -p ./out/scripts
+	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
+	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml
+	kustomize build ./install/sample/base/ > ./out/yaml/sample.yaml
+	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
+	cp ./test/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh

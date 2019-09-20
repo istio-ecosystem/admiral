@@ -1,0 +1,19 @@
+---
+
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: admiral
+spec:
+  template:
+
+    spec:
+      containers:
+        - args:
+            - --log_output_level
+            - info
+            - --dependency_namespace
+            - admiral
+            - --secret_namespace
+            - admiral
+          name: admiral
