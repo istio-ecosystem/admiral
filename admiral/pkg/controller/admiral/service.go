@@ -79,16 +79,24 @@ func (s *serviceCache) Delete(pod *ServiceClusterEntry) {
 
 func (s *serviceCache) GetLoadBalancer(key string, namespace string) string {
 
+	var lb = "admiral_dummy.com"
 	service := s.Get(namespace)
 	if service == nil || service.Service[namespace] == nil {
-		return ""
+		return lb
 	}
 	for _, service := range service.Service[namespace] {
 		if service.Name == key {
-			return service.Status.LoadBalancer.Ingress[0].Hostname
+			loadBalancerStatus := service.Status.LoadBalancer.Ingress
+			if len(loadBalancerStatus) > 0 {
+				if len(loadBalancerStatus[0].Hostname) > 0 {
+					return loadBalancerStatus[0].Hostname
+				} else {
+					return loadBalancerStatus[0].IP
+				}
+			}
 		}
 	}
-	return ""
+	return lb
 
 }
 
