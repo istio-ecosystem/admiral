@@ -8,44 +8,55 @@
 
 **Admiral provides automatic configuration for multiple istio deployments to work as a single mesh**
 
-Istio has a very robust set of multi-cluster capabilities.  Managing this configuration in multiple cluster at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity from developers and mesh operators pushing this complexity into automation.
+Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity from developers and mesh operators pushing this complexity into automation.
 
 ## Install
 
 ### Prerequisite
-[Install Istio with replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
+[K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
+
 
 **Example Setup**
+
+`Note`: You can [install minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
+
+
 ```
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
-
+```
+```
 tar -xf istio-1.2.6-osx.tar.gz
-
+```
+```
 kubectl create ns istio-system
-
+```
+```
 kubectl create secret generic cacerts -n istio-system \
     --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
     --from-file=istio-1.2.6/samples/certs/ca-key.pem \
     --from-file=istio-1.2.6/samples/certs/root-cert.pem \
     --from-file=istio-1.2.6/samples/certs/cert-chain.pem
-
+```
+```
 helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
-
+```
+```
 kubectl get crds | grep 'istio.io' | wc -l
-
+```
+```
 helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml > istio.yaml
-
+```
+```
 kubectl apply -f istio.yaml  
-
 ```
 
 
 ## Examples
 
-kustomize will be used to generate deploy yamls
+`kustomize` is used to generate deployment yamls for examples
 
-**mac install**
+**Install for Mac OSX**
 
 [brew install kustomize](https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
 
@@ -56,38 +67,48 @@ kustomize will be used to generate deploy yamls
 
 ```
 make gen-yaml
-
-kubectl apply -f ./out/yaml/remotecluster.yaml
-
-kubectl apply -f ./out/yaml/demosinglecluster.yaml
-
-#create the secret for admiral to monitor.
-#Since this is froma single cluster demo the remote and local context are the same
-./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
-
+```
 
 ```
-#### Setup Sample App
+kubectl apply -f ./out/yaml/remotecluster.yaml
+```
+
+```
+kubectl apply -f ./out/yaml/demosinglecluster.yaml
+```
+
+```
+#create the secret for admiral to monitor.
+#Since this is for a single cluster demo the remote and local context are the same
+./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+```
+```
+#point hosts ending in global to be resolved by istio coredns
+./test/scripts/redirect-dns.sh 
+```
+#### Setup Sample Apps
 
 ```
 kubectl apply -f ./out/yaml/sample.yaml
+```
+```
 kubectl apply -f ./out/yaml/sample_dep.yaml
 
 ```
 
 
-#### Testing
+#### Test
 
 ``` kubectl exec --namespace=sample -it $(kubectl get pod -l "app=sleep" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.nginx.global```
 
 
-#### Generated config
+#### Generated configuration
 
-Admiral watching the cluster generated some Istio configuration.  
+Admiral generated Istio configuration.  
 
 ##### ServiceEntry
 
-Two service entries were created in the admiral sync namespace.
+Two service entries were created in the `admiral-sync` namespace.
 
 ```kubectl get ServiceEntry -n admiral-sync```
 
@@ -135,19 +156,19 @@ spec:
 
 
 ### Multi-Cluster
-```kubeclt apply something```
+```Loading...```
 
 #### Generated config
 
-Admiral watching the cluster generated some Istio configuration.  
+```Loading...``` 
 
 ##### ServiceEntry
 
-```kubeclt get ServiceEntry```
+```Loading...```
 
 ##### Virtual Service
 
-```kubeclt get ServiceEntry```
+```Loading...```
 
 ## Multi-Cluster Deployment Topology
 

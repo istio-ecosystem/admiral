@@ -20,7 +20,7 @@ export KUBECONFIG=$remote_cluster
 #prep for creating kubeconfig of remote cluster
 export WORK_DIR=$(pwd)
 CLUSTER_NAME=$(kubectl config view --minify=true -o "jsonpath={.clusters[].name}")
-export KUBECFG_FILE=${WORK_DIR}/${CLUSTER_NAME}
+export KUBECFG_FILE=/tmp/${CLUSTER_NAME}
 SERVER=$(kubectl config view --minify=true -o "jsonpath={.clusters[].cluster.server}")
 NAMESPACE_SYNC=admiral-sync
 SERVICE_ACCOUNT=admiral
@@ -74,3 +74,6 @@ export KUBECONFIG=$local_cluster
 kubectl delete secret ${CLUSTER_NAME} -n $namespace_secrets
 kubectl create secret generic ${CLUSTER_NAME} --from-file ${KUBECFG_FILE} -n $namespace_secrets
 kubectl label secret ${CLUSTER_NAME} admiral/sync=true -n $namespace_secrets
+
+rm -rf remote_cluster_env_vars
+rm -rf $KUBECFG_FILE
