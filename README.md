@@ -80,11 +80,11 @@ kubectl apply -f ./out/yaml/demosinglecluster.yaml
 ```
 #create the secret for admiral to monitor.
 #Since this is for a single cluster demo the remote and local context are the same
-./test/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+./install/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 ```
 ```
 #point hosts ending in global to be resolved by istio coredns
-./test/scripts/redirect-dns.sh 
+./install/scripts/redirect-dns.sh 
 ```
 #### Setup Sample Apps
 
