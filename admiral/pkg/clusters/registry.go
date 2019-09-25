@@ -440,7 +440,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		deploymentInstance := deployment.Deployments[namespace];
 
-		serviceInstance := GetServiceForDeployment(rc, deploymentInstance[0], namespace)
+		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
 		if serviceInstance == nil {
 			continue
@@ -511,7 +511,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 }
 
 
-func GetServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
+func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
 
 	cachedService := rc.ServiceController.Cache.Get(namespace)
 
@@ -900,7 +900,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 	deploymentInstance := deployment.Deployments[identityId][0]
 
-	serviceInstance := GetServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
+	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
 
 	cname := common.GetCname(deploymentInstance, "identity")
 	if cname == destinationRule.Host {
