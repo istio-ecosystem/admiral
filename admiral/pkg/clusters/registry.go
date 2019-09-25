@@ -2,15 +2,14 @@ package clusters
 
 import (
 	"context"
-	"github.com/gogo/protobuf/proto"
 	"github.com/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/admiral/admiral/pkg/controller/admiral"
 	"github.com/admiral/admiral/pkg/controller/common"
 	"github.com/admiral/admiral/pkg/controller/istio"
 	"github.com/admiral/admiral/pkg/controller/secret"
 	"github.com/admiral/admiral/pkg/controller/util"
+	"github.com/gogo/protobuf/proto"
 	"k8s.io/client-go/rest"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,8 +19,8 @@ import (
 	"sync"
 
 	istioModel "istio.io/istio/pilot/pkg/model"
-	k8sV1 "k8s.io/api/core/v1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 
 	networking "istio.io/api/networking/v1alpha3"
@@ -441,7 +440,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		deploymentInstance := deployment.Deployments[namespace];
 
-		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
+		serviceInstance := GetServiceForDeployment(rc, deploymentInstance[0], namespace)
 
 		if serviceInstance == nil {
 			continue
@@ -476,7 +475,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 	for sourceCluster, serviceInstance := range sourceServices {
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		rc := remoteRegistry.remoteControllers[sourceCluster]
-		var meshPorts = getMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
+		var meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
 		for key, serviceEntry := range serviceEntries {
 			for _, ep := range serviceEntry.Endpoints {
 				clusterIngress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
@@ -511,7 +510,8 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 	}
 }
 
-func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
+
+func GetServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
 
 	cachedService := rc.ServiceController.Cache.Get(namespace)
 
@@ -530,7 +530,7 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 		}
 		//make sure the service matches the deployment Selector and also has a mesh port in the port spec
 		if match {
-			ports := getMeshPorts(rc.ClusterID, service, deployment)
+			ports := GetMeshPorts(rc.ClusterID, service, deployment)
 			if len(ports) > 0 {
 				matchedService = service
 				break
@@ -538,35 +538,6 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 		}
 	}
 	return matchedService
-}
-
-func getMeshPorts(clusterName string, destService *k8sV1.Service,
-	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
-	var ports = make(map[string]uint32)
-	var meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
-	if len(meshPorts) == 0 {
-		log.Infof(LogFormat, "GetMeshPorts", "service", destService.Name, clusterName, "No mesh ports present, defaulting to first port")
-		//TODO default to 8090 instead if the first port?
-		ports[destService.Spec.Ports[0].Name] = uint32(destService.Spec.Ports[0].Port)
-		return ports
-	}
-
-	meshPortsSplit := strings.Split(meshPorts, ",")
-	var meshPortMap = make(map[uint32]uint32)
-	for _, meshPort := range meshPortsSplit {
-		port, err := strconv.ParseUint(meshPort, 10, 32)
-		if err != nil {
-			continue
-		}
-		meshPortMap[uint32(port)] = uint32(port)
-	}
-	for _, servicePort := range destService.Spec.Ports {
-		if _, ok := meshPortMap[uint32(servicePort.Port)]; ok {
-			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port")
-			ports[common.Http] = uint32(servicePort.Port)
-		}
-	}
-	return ports
 }
 
 func getDependentClusters(dependents *common.Map, identityClusterCache *common.MapOfMaps, sourceServices map[string]*k8sV1.Service) map[string]string {
@@ -929,7 +900,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 	deploymentInstance := deployment.Deployments[identityId][0]
 
-	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
+	serviceInstance := GetServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
 
 	cname := common.GetCname(deploymentInstance, "identity")
 	if cname == destinationRule.Host {
