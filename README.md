@@ -13,19 +13,29 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 ## Install
 
 ### Prerequisite
-[K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
-
 
 **Example Setup**
 
-`Note`: You can [install minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
+`Note`: If running in windows, a bash shell is required (cygwin)
 
+* [install minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
+* Install [helm](https://github.com/helm/helm)
+* Install `wget`
 
 ```
-#Download and extract Istio 
+#Download Istio 
+
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
+OR
+wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-linux.tar.gz
+OR
+wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-win.tar.gz
+```
+```
+# Extract istio
 tar -xf istio-1.2.6-osx.tar.gz
 ```
+
 ```
 #Create istio-system namespace
 kubectl create ns istio-system
@@ -50,14 +60,10 @@ helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace
     -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
 ```
 
+`Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
+
 
 ## Examples
-
-`kustomize` is used to generate deployment yamls for examples
-
-**Install for Mac OSX**
-
-[brew install kustomize](https://github.com/kubernetes-sigs/kustomize/blob/master/docs/INSTALL.md)
 
 ### Single cluster
 
