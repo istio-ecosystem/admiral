@@ -22,15 +22,16 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 
 
 ```
+#Download and extract Istio 
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
-```
-```
 tar -xf istio-1.2.6-osx.tar.gz
 ```
 ```
+#Create istio-system namespace
 kubectl create ns istio-system
 ```
 ```
+#Create k8s secret to be used by Citadel for mTLS cert generation
 kubectl create secret generic cacerts -n istio-system \
     --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
     --from-file=istio-1.2.6/samples/certs/ca-key.pem \
@@ -38,17 +39,15 @@ kubectl create secret generic cacerts -n istio-system \
     --from-file=istio-1.2.6/samples/certs/cert-chain.pem
 ```
 ```
+#Generate, install and verify Istio CRDs
 helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
-```
-```
+#Make sure Istio crds are installed
 kubectl get crds | grep 'istio.io' | wc -l
 ```
 ```
+#Generate & Install Istio
 helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
-    -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml > istio.yaml
-```
-```
-kubectl apply -f istio.yaml  
+    -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
 ```
 
 
@@ -66,40 +65,43 @@ kubectl apply -f istio.yaml
 #### Setup Admiral
 
 ```
-make gen-yaml
+#Download and extract admiral
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-alpha/admiral-install-v0.1-alpha.tar.gz
+tar xvf admiral-install-v0.1-alpha.tar.gz
 ```
 
 ```
-kubectl apply -f ./out/yaml/remotecluster.yaml
+#Install admiral 
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
 ```
 
 ```
-kubectl apply -f ./out/yaml/demosinglecluster.yaml
-```
-
-```
-#create the secret for admiral to monitor.
+#Create the secret for admiral to monitor.
 #Since this is for a single cluster demo the remote and local context are the same
-./install/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 ```
 ```
-#point hosts ending in global to be resolved by istio coredns
-./install/scripts/redirect-dns.sh 
+#Point hosts ending in global to be resolved by istio coredns
+./admiral-install-v0.1-alpha/scripts/redirect-dns.sh 
 ```
 #### Setup Sample Apps
 
 ```
-kubectl apply -f ./out/yaml/sample.yaml
+#Install test services
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
 ```
 ```
-kubectl apply -f ./out/yaml/sample_dep.yaml
+#Install the dependency CR
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample_dep.yaml
 
 ```
-
 
 #### Test
 
-``` kubectl exec --namespace=sample -it $(kubectl get pod -l "app=sleep" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.nginx.global```
+```
+kubectl exec --namespace=sample -it $(kubectl get pod -l "app=sleep" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.nginx.global
+```
 
 
 #### Generated configuration
