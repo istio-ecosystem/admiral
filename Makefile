@@ -102,4 +102,5 @@ gen-yaml:
 	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml
 	kustomize build ./install/sample/base/ > ./out/yaml/sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
-	cp ./test/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh
+	cp ./install/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh
+	cp ./install/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh
