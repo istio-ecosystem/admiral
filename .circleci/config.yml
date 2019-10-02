@@ -24,9 +24,9 @@ jobs:
         command: |
           make test
           go tool cover -html=c.out -o coverage.html
-          mv coverage.html /tmp/artifacts
+          mv coverage.html /tmp/
     - codecov/upload:
-        file: /tmp/artifacts/coverage.html
+        file: /tmp/coverage.html
     - setup_remote_docker
     - run:
         name: Build Docker image
