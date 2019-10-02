@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  codecov: codecov/codecov@1.0.2
 jobs:
   build:
     working_directory: /go/src/github.com/admiral
@@ -21,6 +23,10 @@ jobs:
         name: Tests
         command: |
           make test
+          go tool cover -html=c.out -o coverage.html
+          mv coverage.html /tmp/artifacts
+    - codecov/upload:
+        file: /tmp/artifacts/coverage.html
     - setup_remote_docker
     - run:
         name: Build Docker image
