@@ -30,19 +30,19 @@ import (
 )
 
 const (
-	LogFormat = "op=%s type=%v name=%v cluster=%s message=%s"
+	LogFormat    = "op=%s type=%v name=%v cluster=%s message=%s"
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
 )
 
 type AdmiralParams struct {
-	KubeconfigPath string
+	KubeconfigPath             string
 	CacheRefreshDuration       time.Duration
 	ClusterRegistriesNamespace string
-	DependenciesNamespace string
-	SyncNamespace string
-	EnableSAN bool
-	SANPrefix string
-	SecretResolver string
+	DependenciesNamespace      string
+	SyncNamespace              string
+	EnableSAN                  bool
+	SANPrefix                  string
+	SecretResolver             string
 }
 
 func (b AdmiralParams) String() string {
@@ -81,25 +81,25 @@ type ServiceHandler struct {
 }
 
 type RemoteController struct {
-	ClusterID         		string
-	IstioConfigStore  		istio.ConfigStoreCache
-	GlobalTraffic     		*admiral.GlobalTrafficController
-	DeploymentController    *admiral.DeploymentController
-	ServiceController 		*admiral.ServiceController
-	PodController	*admiral.PodController
-	NodeController 	  		*admiral.NodeController
-	stop              		chan struct{}
+	ClusterID            string
+	IstioConfigStore     istio.ConfigStoreCache
+	GlobalTraffic        *admiral.GlobalTrafficController
+	DeploymentController *admiral.DeploymentController
+	ServiceController    *admiral.ServiceController
+	PodController        *admiral.PodController
+	NodeController       *admiral.NodeController
+	stop                 chan struct{}
 	//listener for normal types
 }
 
 type AdmiralCache struct {
-	CnameClusterCache *common.MapOfMaps
-	CnameDependentClusterCache *common.MapOfMaps
-	CnameIdentityCache *sync.Map
-	IdentityClusterCache *common.MapOfMaps
-	ClusterLocalityCache *common.MapOfMaps
-	IdentityDependencyCache *common.MapOfMaps
-	ServiceEntryAddressCache *common.Map
+	CnameClusterCache               *common.MapOfMaps
+	CnameDependentClusterCache      *common.MapOfMaps
+	CnameIdentityCache              *sync.Map
+	IdentityClusterCache            *common.MapOfMaps
+	ClusterLocalityCache            *common.MapOfMaps
+	IdentityDependencyCache         *common.MapOfMaps
+	ServiceEntryAddressCache        *common.Map
 	SubsetServiceEntryIdentityCache *sync.Map
 }
 
@@ -111,7 +111,7 @@ type RemoteRegistry struct {
 	remoteControllers map[string]*RemoteController
 	secretClient      k8s.Interface
 	ctx               context.Context
-	AdmiralCache	  *AdmiralCache
+	AdmiralCache      *AdmiralCache
 }
 
 func (r *RemoteRegistry) shutdown() {
@@ -205,7 +205,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 	if len(sourceClusters) == 0 || len(serviceEntries) == 0 {
 		log.Infof(LogFormat, "Event", "dependency-record", sourceIdentity, "", "skipped")
-		return;
+		return
 	}
 
 	for dCluster, globalFqdn := range destinationClusters {
@@ -225,9 +225,8 @@ func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-
 func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
-		destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	globalFqdn := common.GetCname(destDeployment, identifier)
 
@@ -256,9 +255,9 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 			//ExportTo: []string{"*"}, --> //TODO this is causing a coredns plugin to fail serving the DNS entry
 			Ports: []*networking.Port{{Number: uint32(common.DefaultHttpPort),
 				Name: common.Http, Protocol: common.Http}},
-			Location:   networking.ServiceEntry_MESH_INTERNAL,
-			Resolution: networking.ServiceEntry_DNS,
-			Addresses:  []string{common.GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressCache)},
+			Location:        networking.ServiceEntry_MESH_INTERNAL,
+			Resolution:      networking.ServiceEntry_DNS,
+			Addresses:       []string{common.GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressCache)},
 			SubjectAltNames: san,
 		}
 		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
@@ -279,7 +278,7 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 }
 
 func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
-		syncNamespace string) {
+	syncNamespace string) {
 	for _, se := range serviceEntries {
 
 		//add service entry
@@ -302,7 +301,7 @@ func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//Add a label
 			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				newServiceEntry.Labels = map[string]string {common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
+				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
 			if err == nil {
@@ -333,22 +332,21 @@ func createIstioConfig(schema istio.ProtoSchema, object proto.Message, name stri
 }
 
 func makeVirtualService(host string, destination string, port uint32) *networking.VirtualService {
-	return &networking.VirtualService{Hosts:[]string{host},
-	    Gateways: []string{common.Mesh, common.MulticlusterIngressGateway},
+	return &networking.VirtualService{Hosts: []string{host},
+		Gateways: []string{common.Mesh, common.MulticlusterIngressGateway},
 		ExportTo: []string{"*"},
-		Http:[]*networking.HTTPRoute{{Route: []*networking.HTTPRouteDestination{{Destination:
-		&networking.Destination{Host:destination, Port: &networking.PortSelector{Port:&networking.PortSelector_Number{Number:port}}}}}}}}
+		Http:     []*networking.HTTPRoute{{Route: []*networking.HTTPRouteDestination{{Destination: &networking.Destination{Host: destination, Port: &networking.PortSelector{Port: &networking.PortSelector_Number{Number: port}}}}}}}}
 }
 
 func makeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
 	return &networking.ServiceEntry_Endpoint{Address: address,
 		Locality: locality,
-		Ports: map[string]uint32{portName: common.DefaultMtlsPort}} //
+		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
 }
 
 func getDestinationRule(host string) *networking.DestinationRule {
-	return &networking.DestinationRule{Host:host,
-		TrafficPolicy:&networking.TrafficPolicy{Tls:&networking.TLSSettings{Mode:networking.TLSSettings_ISTIO_MUTUAL}}}
+	return &networking.DestinationRule{Host: host,
+		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}}
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
@@ -369,7 +367,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '" + common.DefaultGlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -386,7 +384,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '" + common.DefaultGlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -438,7 +436,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 			continue
 		}
 
-		deploymentInstance := deployment.Deployments[namespace];
+		deploymentInstance := deployment.Deployments[namespace]
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
@@ -484,7 +482,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 					ep.Address = localFqdn
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
-					addServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string {sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+					addServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
 						map[string]*networking.ServiceEntry{key: serviceEntry}, remoteRegistry.config.SyncNamespace)
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
@@ -510,7 +508,6 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 	}
 }
 
-
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
 
 	cachedService := rc.ServiceController.Cache.Get(namespace)
@@ -521,7 +518,7 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 	var matchedService *k8sV1.Service
 	for _, service := range cachedService.Service[namespace] {
 		var match = true
-		for lkey, lvalue := range service.Spec.Selector{
+		for lkey, lvalue := range service.Spec.Selector {
 			value, ok := deployment.Spec.Selector.MatchLabels[lkey]
 			if !ok || value != lvalue {
 				match = false
@@ -586,14 +583,14 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 	w.remoteControllers = make(map[string]*RemoteController)
 
 	w.AdmiralCache = &AdmiralCache{
-		IdentityClusterCache: common.NewMapOfMaps(),
-		CnameClusterCache: common.NewMapOfMaps(),
-		CnameDependentClusterCache: common.NewMapOfMaps(),
-		ClusterLocalityCache: common.NewMapOfMaps(),
-		IdentityDependencyCache: common.NewMapOfMaps(),
-		ServiceEntryAddressCache: common.NewMap(),
-		CnameIdentityCache: &sync.Map{},
-	    SubsetServiceEntryIdentityCache:&sync.Map{}}
+		IdentityClusterCache:            common.NewMapOfMaps(),
+		CnameClusterCache:               common.NewMapOfMaps(),
+		CnameDependentClusterCache:      common.NewMapOfMaps(),
+		ClusterLocalityCache:            common.NewMapOfMaps(),
+		IdentityDependencyCache:         common.NewMapOfMaps(),
+		ServiceEntryAddressCache:        common.NewMap(),
+		CnameIdentityCache:              &sync.Map{},
+		SubsetServiceEntryIdentityCache: &sync.Map{}}
 
 	err = createSecretController(ctx, &w, params)
 	if err != nil {
@@ -648,35 +645,35 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
-	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry:r}, clientConfig, resyncPeriod)
+	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with GlobalTrafficController controller init: %v", err)
 	}
 
 	log.Infof("starting deployment controller custerID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry:r}, clientConfig, resyncPeriod)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
 	log.Infof("starting pod controller custerID: %v", clusterID)
-	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry:r}, clientConfig, resyncPeriod)
+	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
 	}
 
 	log.Infof("starting node controller custerID: %v", clusterID)
-	rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry:r}, clientConfig)
+	rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r}, clientConfig)
 
 	if err != nil {
 		return fmt.Errorf(" Error with NodeController controller init: %v", err)
 	}
 
 	log.Infof("starting service controller custerID: %v", clusterID)
-	rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry:r}, clientConfig, resyncPeriod)
+	rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with ServiceController controller init: %v", err)
@@ -704,12 +701,12 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 		clusterId := remoteController.ClusterID
 
 		if m.Namespace == r.config.SyncNamespace {
-			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: " + m.Namespace)
+			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: "+m.Namespace)
 			return
 		}
 
 		if len(virtualService.Hosts) > 1 {
-			log.Errorf(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace=" + m.Namespace)
+			log.Errorf(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+m.Namespace)
 			return
 		}
 
@@ -770,7 +767,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 		var localIdentityId string
 
 		if m.Namespace == r.config.SyncNamespace || m.Namespace == common.NamespaceKubeSystem {
-			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: " + m.Namespace)
+			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: "+m.Namespace)
 			return
 		}
 
@@ -784,11 +781,10 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 		log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Processing")
 
-
 		//Create label based service entry in source and dependent clusters for subset routing to work
 		host := destinationRule.Host
 
-		basicSEName := getIstioResourceName(host,  "-se")
+		basicSEName := getIstioResourceName(host, "-se")
 
 		seName := getIstioResourceName(m.Name, "-se")
 
@@ -918,11 +914,11 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 }
 
 func createSeWithDrLabels(remoteController *RemoteController, localCluster bool, identityId string, seName string, se *networking.ServiceEntry,
-		dr *networking.DestinationRule, seAddressMap *common.Map) map[string]*networking.ServiceEntry {
+	dr *networking.DestinationRule, seAddressMap *common.Map) map[string]*networking.ServiceEntry {
 	var allSes = make(map[string]*networking.ServiceEntry)
 	var newSe = copyServiceEntry(se)
 
-	newSe.Addresses = []string {common.GetLocalAddressForSe(seName, seAddressMap)}
+	newSe.Addresses = []string{common.GetLocalAddressForSe(seName, seAddressMap)}
 
 	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
 
@@ -960,12 +956,12 @@ func copyEndpoint(e *networking.ServiceEntry_Endpoint) *networking.ServiceEntry_
 	util.MapCopy(labels, e.Labels)
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
-	return &networking.ServiceEntry_Endpoint{Address:e.Address, Ports:ports, Locality:e.Locality, Labels:labels}
+	return &networking.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
 }
 
 func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
-	return &networking.ServiceEntry{Ports:se.Ports, Resolution: se.Resolution, Hosts:se.Hosts, Location:se.Location,
-				SubjectAltNames:se.SubjectAltNames, ExportTo:se.ExportTo, Endpoints:se.Endpoints, Addresses:se.Addresses}
+	return &networking.ServiceEntry{Ports: se.Ports, Resolution: se.Resolution, Hosts: se.Hosts, Location: se.Location,
+		SubjectAltNames: se.SubjectAltNames, ExportTo: se.ExportTo, Endpoints: se.Endpoints, Addresses: se.Addresses}
 }
 
 func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.Config, t string, syncNamespace string) {
@@ -985,6 +981,7 @@ func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.C
 		_, e = rc.IstioConfigStore.Update(*exist)
 	}
 
+	//TODO this should return an error
 	if e != nil {
 		log.Errorf(LogErrFormat, verb, t, m.Spec, rc.ClusterID, e)
 	} else {
