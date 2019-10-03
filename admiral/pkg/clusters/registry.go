@@ -889,12 +889,17 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
-	if deployment == nil || deployment.Deployments[identityId] == nil {
+	if deployment == nil || len(deployment.Deployments) == 0 {
 		log.Errorf(LogFormat, "Find", "deployment", identityId, remoteController.ClusterID, "Couldn't find deployment with identity")
 		return
 	}
 
-	deploymentInstance := deployment.Deployments[identityId][0]
+	//TODO this will pull a random deployment from some cluster which might not be the right deployment
+	var deploymentInstance *k8sAppsV1.Deployment
+	for _, value := range deployment.Deployments {
+		deploymentInstance = value[0]
+		break
+	}
 
 	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
 
