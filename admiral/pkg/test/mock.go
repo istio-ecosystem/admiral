@@ -35,8 +35,9 @@ func (m *MockIstioConfigStore) Create(config istio.Config) (revision string, err
 }
 func (m *MockIstioConfigStore) Update(config istio.Config) (newRevision string, err error) {
 
-	m.TestHook(config)
-
+	if m.TestHook != nil {
+		m.TestHook(config)
+	}
 	return "", nil
 }
 func (m *MockIstioConfigStore) Delete(typ, name, namespace string) error {
