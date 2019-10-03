@@ -6,6 +6,10 @@ import (
 	"github.com/admiral/admiral/pkg/controller/istio"
 	"github.com/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
+
+	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sCoreV1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"testing"
 	"time"
@@ -129,7 +133,7 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 	}
 }
 
-func TestCreateDestinationRuleForLocalNoDeployLable(t *testing.T) {
+func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 
 	config := rest.Config{
 		Host: "localhost",
@@ -158,6 +162,79 @@ func TestCreateDestinationRuleForLocalNoDeployLable(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "app", "cluster1", &des, "sync")
+	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des, "sync")
+
+}
+
+func TestCreateDestinationRuleForLocal(t *testing.T) {
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+
+	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fail()
+	}
+
+	deployment := k8sAppsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sAppsV1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: k8sCoreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	d.Added(&deployment)
+
+	service := k8sCoreV1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sCoreV1.ServiceSpec{
+			Selector: map[string]string{"identity": "bar"},
+			Ports: []k8sCoreV1.ServicePort{
+				{Name: "http", Port: 8080},
+			},
+		},
+	}
+
+	s.Added(&service)
+
+	rc := RemoteController{
+		IstioConfigStore: &test.MockIstioConfigStore{
+
+			TestHook: func(i interface{}) {
+				res := i.(*k8sAppsV1.Deployment)
+				if res.Name != "test" {
+					t.Fail()
+				}
+			},
+		},
+		DeploymentController: d,
+		ServiceController:    s,
+	}
+
+	des := networking.DestinationRule{
+		Host: "dev.bar.global",
+		Subsets: []*networking.Subset{
+			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
+		},
+	}
+
+	createDestinationRuleForLocal(&rc, "local.name", "bar", "cluster1", &des, "sync")
 
 }

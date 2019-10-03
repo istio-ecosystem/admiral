@@ -25,16 +25,16 @@ type DeploymentHandler interface {
 }
 
 type DeploymentClusterEntry struct {
-	Identity string
-	Deployments     map[string][]*k8sAppsV1.Deployment
+	Identity    string
+	Deployments map[string][]*k8sAppsV1.Deployment
 }
 
 type DeploymentController struct {
-	K8sClient  kubernetes.Interface
+	K8sClient         kubernetes.Interface
 	DeploymentHandler DeploymentHandler
-	Cache      *deploymentCache
-	informer   cache.SharedIndexInformer
-	ctl        *Controller
+	Cache             *deploymentCache
+	informer          cache.SharedIndexInformer
+	ctl               *Controller
 }
 
 type deploymentCache struct {
@@ -72,16 +72,17 @@ func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sA
 
 	if v == nil {
 		v = &DeploymentClusterEntry{
-			Identity: key,
-			Deployments:     make(map[string][]*k8sAppsV1.Deployment),
+			Identity:    key,
+			Deployments: make(map[string][]*k8sAppsV1.Deployment),
 		}
 		p.cache[v.Identity] = v
 	}
 
+	//TODO this is assuming globally unquie names name which might not alway be the case.  This would need a cluster name too
 	namespaceDeployments := v.Deployments[deployment.Namespace]
 
 	if namespaceDeployments == nil {
-		namespaceDeployments = make ([]*k8sAppsV1.Deployment, 0)
+		namespaceDeployments = make([]*k8sAppsV1.Deployment, 0)
 	}
 
 	namespaceDeployments = append(namespaceDeployments, deployment)

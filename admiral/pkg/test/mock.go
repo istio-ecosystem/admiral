@@ -3,6 +3,7 @@ package test
 import (
 	"github.com/admiral/admiral/pkg/controller/istio"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sCoreV1 "k8s.io/api/core/v1"
 )
 
 type MockIstioConfigStore struct {
@@ -53,5 +54,16 @@ func (m *MockDeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (m *MockDeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+
+}
+
+type MockServiceHandler struct {
+}
+
+func (m *MockServiceHandler) Added(obj *k8sCoreV1.Service) {
+
+}
+
+func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
 
 }
