@@ -32,6 +32,10 @@ func (m *MockIstioConfigStore) List(typ, namespace string) ([]istio.Config, erro
 }
 
 func (m *MockIstioConfigStore) Create(config istio.Config) (revision string, err error) {
+
+	if m.TestHook != nil {
+		m.TestHook(config)
+	}
 	return "", nil
 }
 func (m *MockIstioConfigStore) Update(config istio.Config) (newRevision string, err error) {
@@ -65,5 +69,16 @@ func (m *MockServiceHandler) Added(obj *k8sCoreV1.Service) {
 }
 
 func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
+
+}
+
+type MockNodeHandler struct {
+}
+
+func (m *MockNodeHandler) Added(obj *k8sCoreV1.Node) {
+
+}
+
+func (m *MockNodeHandler) Deleted(obj *k8sCoreV1.Node) {
 
 }

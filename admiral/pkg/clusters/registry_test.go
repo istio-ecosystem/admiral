@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"context"
 	"github.com/admiral/admiral/pkg/controller/admiral"
 	"github.com/admiral/admiral/pkg/controller/common"
 	"github.com/admiral/admiral/pkg/controller/istio"
@@ -168,16 +169,40 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 
 func TestCreateDestinationRuleForLocal(t *testing.T) {
 
+	rc, err := createMockRemoteController(
+		func(i interface{}) {
+			res := i.(istio.Config)
+			if res.Name != "local.name" {
+				t.Fail()
+			}
+		},
+	)
+
+	if err != nil {
+		t.Fail()
+	}
+	des := networking.DestinationRule{
+		Host: "dev.bar.global",
+		Subsets: []*networking.Subset{
+			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
+		},
+	}
+
+	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des, "sync")
+
+}
+
+func createMockRemoteController(f func(interface{})) (*RemoteController, error) {
 	config := rest.Config{
 		Host: "localhost",
 	}
-
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-
-	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	stop := make(chan struct{})
+	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
 
 	if e != nil {
-		t.Fail()
+		return nil, e
 	}
 
 	deployment := k8sAppsV1.Deployment{
@@ -196,9 +221,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 			},
 		},
 	}
-
 	d.Added(&deployment)
-
 	service := k8sCoreV1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
@@ -211,30 +234,74 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 			},
 		},
 	}
-
 	s.Added(&service)
 
 	rc := RemoteController{
 		IstioConfigStore: &test.MockIstioConfigStore{
-
-			TestHook: func(i interface{}) {
-				res := i.(*k8sAppsV1.Deployment)
-				if res.Name != "test" {
-					t.Fail()
-				}
-			},
+			TestHook: f,
 		},
 		DeploymentController: d,
 		ServiceController:    s,
+		NodeController:       n,
+		ClusterID:            "test.cluster",
+	}
+	return &rc, nil
+}
+
+func TestCreateSecretController(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
 	}
 
-	des := networking.DestinationRule{
-		Host: "dev.bar.global",
-		Subsets: []*networking.Subset{
-			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
-		},
+	rr := RemoteRegistry{}
+	err := createSecretController(context.Background(), &rr, p)
+
+	if err != nil {
+		t.Fail()
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "bar", "cluster1", &des, "sync")
+	p = AdmiralParams{
+		KubeconfigPath: "fail",
+	}
+
+	rr = RemoteRegistry{}
+	err = createSecretController(context.Background(), &rr, p)
+
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func TestInitAdmiral(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, err := InitAdmiral(context.Background(), p)
+
+	if err != nil {
+		t.Fail()
+	}
+	if len(rr.remoteControllers) != 0 {
+		t.Fail()
+	}
+}
+
+func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+
+		return
+	})
+
+	rr.remoteControllers["test.cluster"] = rc
+	createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
 
 }
