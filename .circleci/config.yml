@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  codecov: codecov/codecov@1.0.2
 jobs:
   build:
     working_directory: /go/src/github.com/admiral
@@ -22,6 +24,8 @@ jobs:
         command: |
           make test
           mv c.out /tmp/
+    - codecov/upload:
+        file: /tmp/c.out
     - setup_remote_docker
     - run:
         name: Build Docker image
