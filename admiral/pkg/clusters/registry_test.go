@@ -2,12 +2,14 @@ package clusters
 
 import (
 	"context"
+	depModel "github.com/admiral/admiral/pkg/apis/admiral/model"
+	"github.com/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/admiral/admiral/pkg/controller/admiral"
 	"github.com/admiral/admiral/pkg/controller/common"
 	"github.com/admiral/admiral/pkg/controller/istio"
 	"github.com/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
-
+	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -297,11 +299,74 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	rr, _ := InitAdmiral(context.Background(), p)
 
 	rc, _ := createMockRemoteController(func(i interface{}) {
-
-		return
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Fail()
+			}
+		}
 	})
 
 	rr.remoteControllers["test.cluster"] = rc
 	createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
+
+}
+func TestAdded(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		t.Fail()
+	})
+	rr.remoteControllers["test.cluster"] = rc
+	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fail()
+	}
+
+	dh := DependencyHandler{
+		RemoteRegistry: rr,
+		DepController:  d,
+	}
+
+	depData := v1.Dependency{
+		Spec: depModel.Dependency{
+			IdentityLabel: "idenity",
+			Destinations:  []string{"one", "two"},
+			Source:        "bar",
+		},
+	}
+
+	dh.Added(&depData)
+
+}
+
+func TestCreateIstioController(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		t.Fail()
+	})
+	rr.remoteControllers["test.cluster"] = rc
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	opts := istioKube.ControllerOptions{
+		WatchedNamespace: metav1.NamespaceAll,
+		ResyncPeriod:     time.Second * time.Duration(300),
+		DomainSuffix:     ".cluster",
+	}
+
+	rr.createIstioController(&config, opts, rc, make(chan struct{}), "test.cluster")
 
 }

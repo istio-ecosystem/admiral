@@ -1,6 +1,7 @@
 package test
 
 import (
+	"github.com/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/admiral/admiral/pkg/controller/istio"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
@@ -80,5 +81,16 @@ func (m *MockNodeHandler) Added(obj *k8sCoreV1.Node) {
 }
 
 func (m *MockNodeHandler) Deleted(obj *k8sCoreV1.Node) {
+
+}
+
+type MockDependencyHandler struct {
+}
+
+func (m *MockDependencyHandler) Added(obj *v1.Dependency) {
+
+}
+
+func (m *MockDependencyHandler) Deleted(obj *v1.Dependency) {
 
 }
