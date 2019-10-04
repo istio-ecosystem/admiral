@@ -343,6 +343,7 @@ func TestAdded(t *testing.T) {
 	}
 
 	dh.Added(&depData)
+	dh.Deleted(&depData)
 
 }
 
@@ -369,4 +370,97 @@ func TestCreateIstioController(t *testing.T) {
 
 	rr.createIstioController(&config, opts, rc, make(chan struct{}), "test.cluster")
 
+}
+
+func TestMakeVirtualService(t *testing.T) {
+	vs := makeVirtualService("test.local", "dest", 8080)
+	if vs.Hosts[0] != "test.local" {
+		t.Fail()
+	}
+	if vs.Http[0].Route[0].Destination.Host != "dest" {
+		t.Fail()
+	}
+}
+
+func TestDeploymentHandler(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Fail()
+			}
+		}
+	})
+	rr.remoteControllers["test.cluster"] = rc
+
+	dh := DeploymentHandler{
+		RemoteRegistry: rr,
+	}
+
+	deployment := k8sAppsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sAppsV1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: k8sCoreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	dh.Added(&deployment)
+
+	dh.Deleted(&deployment)
+}
+
+func TestPodHandler(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Fail()
+			}
+		}
+	})
+	rr.remoteControllers["test.cluster"] = rc
+
+	ph := PodHandler{
+		RemoteRegistry: rr,
+	}
+
+	pod := k8sCoreV1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sCoreV1.PodSpec{
+			Hostname: "test.local",
+		},
+	}
+
+	ph.Added(&pod)
+
+	ph.Deleted(&pod)
 }
