@@ -1,8 +1,44 @@
 package util
 
 import (
+	"reflect"
 	"testing"
 )
+
+
+func TestCopyMap(t *testing.T) {
+	t.Parallel()
+	var empty = map[string]string {}
+	var m1 = map[string]string {"env": "stage", "version": "v1"}
+
+	testCases := []struct {
+		name string
+		input   map[string]string
+		expected   map[string]string
+	}{
+		{
+			name: "m1 is copied",
+			input: m1,
+			expected: m1,
+		},
+		{
+			name: "empty is copied as is",
+			input: empty,
+			expected: empty,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			var eMap = make(map[string]string)
+			MapCopy(eMap, c.input)
+			if !reflect.DeepEqual(c.expected, eMap) {
+				t.Errorf("Wanted result: %v, got: %v", c.expected, eMap)
+			}
+		})
+	}
+
+}
 
 func TestSubset(t *testing.T) {
 	t.Parallel()
