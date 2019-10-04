@@ -4,7 +4,7 @@
 </p>
 
 
-[![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master)
+[![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master) <!--[![codecov](https://codecov.io/gh/istio-ecosystem/admiral/branch/master/graph/badge.svg)](https://codecov.io/gh/istio-ecosystem/admiral) -->
 
 **Admiral provides automatic configuration for multiple istio deployments to work as a single mesh**
 
@@ -14,7 +14,9 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 
 ### Prerequisite
 
-**Example Setup**
+One or more k8s clusters.
+
+**Example setup for a K8s cluster**
 
 `Note`: If running in windows, a bash shell is required (cygwin)
 
@@ -23,17 +25,21 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 * Install `wget`
 
 ```
-#Download Istio 
+#Download & extract Istio 
 
+#Download
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
 OR
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-linux.tar.gz
 OR
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-win.tar.gz
-```
-```
-# Extract istio
+
+#Extract
 tar -xf istio-1.2.6-osx.tar.gz
+OR
+tar -xf istio-1.2.6-linux.tar.gz
+OR
+tar -xf istio-1.2.6-win.tar.gz
 ```
 
 ```
@@ -66,7 +72,6 @@ helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace
 ## Examples
 
 ### Single cluster
-
 
 #### Setup Admiral
 
