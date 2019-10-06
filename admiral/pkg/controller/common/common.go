@@ -28,10 +28,6 @@ const (
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
 )
 
-func GetServiceGlobalIdentifier(service *k8sV1.Service) string {
-	return service.Labels[DefaultGlobalIdentifier()]
-}
-
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
 	identity := pod.Labels[DefaultGlobalIdentifier()]
 	if len(identity) == 0 {
