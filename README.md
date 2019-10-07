@@ -73,6 +73,10 @@ kubectl get crds | grep 'istio.io' | wc -l
 
 helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
+    
+#Verify that istio pods are up
+
+kubectl get pods -n istio-system
 ```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
@@ -96,6 +100,10 @@ tar xvf admiral-install-v0.1-alpha.tar.gz
 
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
+
+#Verify admiral is running
+
+kubectl get pods -n admiral
 ```
 
 ```
@@ -103,6 +111,10 @@ kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
 
 #Since this is for a single cluster demo the remote and local context are the same
 ./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+
+#Verify the secret
+
+kubectl get secrets -n admiral
 ```
 ```
 #Point hosts ending in global to be resolved by istio coredns
@@ -120,6 +132,10 @@ kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
 #Install the dependency CR
 
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample_dep.yaml
+
+#Verify that admiral created service names for 'greeting' service
+
+kubectl get serviceentry -n admiral-sync
 
 ```
 
