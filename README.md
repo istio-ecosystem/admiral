@@ -198,23 +198,7 @@ spec:
 
 ```
 
-
-### Multi-Cluster
-```Loading...```
-
-#### Generated config
-
-```Loading...``` 
-
-##### ServiceEntry
-
-```Loading...```
-
-##### Virtual Service
-
-```Loading...```
-
-## Multi-Cluster Deployment Topology
+## Admiral Architecture
 
 ![alt text](https://user-images.githubusercontent.com/35096265/65183155-b8244b00-da17-11e9-9f2d-cce5a96fe2e8.png "Admiral Architecture")
 
