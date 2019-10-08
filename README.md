@@ -236,6 +236,7 @@ metadata:
   name: my-service
   labels:
     app: service1
+    identity: service1
     env: dev
 spec:
   ports:
@@ -259,9 +260,9 @@ For the service above
 
 **dev.service1.global**
 
-If the env label is not present it will be dropped from the dns name.
+If the env label is not present the word default will be used.
 
-**service1.mesh**
+**default.service1.mesh**
 
 *No "real" dns name are created but the core dns plug is used with back ServiceEntries*
 
@@ -270,24 +271,6 @@ If the env label is not present it will be dropped from the dns name.
 Admiral introduces two new CRDs to control the cross cluster automation.
 
 ### Dependency
-
-In this example we define a Dependency type.  This dependency has an identityLabel with value app.  This will cause the value of the app label on service type to be used as the global identifier.
-
-```
----
-apiVersion: admiral.io/v1alpha1
-kind: Dependency
-metadata:
-  name: dependency
-  namespace: admiral
-spec:
-  source: *
-  identityLabel: app
-  destinations:
-    - *    
----    
-```  
-If a dependency with `*` is defined for the source and destinations it will cause all config to be sync to all clusters.  This is great for getting started but defining dependencies should be used for production deployments.
 
 The Dependency type can be used for more than just picking the global identifier.  The dependency information is used to prune the configuration syncing so only configuration needed in each
 cluster is provisioned by Admiral.  
@@ -303,32 +286,14 @@ metadata:
   namespace: admiral
 spec:
   source: service1
-  identityLabel: app
+  identityLabel: identity
   destinations:
     - service2
     - service3
 ---    
 ```
 This config tells Admiral to only sync configuration for service2 and service3 to any cluster where service1 is running.
-
 Once granular dependency types are defined the identityLabel can be different for separate entries.
-
-```
----
-apiVersion: admiral.io/v1alpha1
-kind: Dependency
-metadata:
-  name: dependency
-  namespace: admiral
-spec:
-  source: service2
-  identityLabel: name
-  destinations:
-    - service3    
----    
-```
-
-The default dns name that is created for service2 would use the value of the name label.
 
 ### Global Traffic Policy
 
