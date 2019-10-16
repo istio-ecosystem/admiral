@@ -22,7 +22,7 @@ const (
 	DotGlobal                  = ".global"
 	Mesh                       = "mesh"
 	MulticlusterIngressGateway = "istio-multicluster-ingressgateway"
-	LocalAddressPrefix         = "127.0"
+	LocalAddressPrefix         = "240.0"
 	NodeRegionLabel            = "failure-domain.beta.kubernetes.io/region"
 	SpiffePrefix               = "spiffe://"
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"

@@ -28,7 +28,7 @@ data:
           listen       80;
           server_name  _;
           location / {
-              return 200 "Hello Admiral, Welcome to API World 2019!!";
+              return 200 "Hello World! - Admiral!!";
 
           }
       }
