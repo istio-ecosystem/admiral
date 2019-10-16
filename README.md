@@ -20,14 +20,16 @@ One or more k8s clusters.
 
 `Note`: If running in windows, a bash shell is required (cygwin)
 
-* [install minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
-* Install [helm](https://github.com/helm/helm)
-* Install `wget`
+* Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+* Install [minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
+* Install [helm](https://github.com/helm/helm/blob/master/docs/install.md)
+* Install [wget](https://www.gnu.org/software/wget/)
 
 ```
 #Download & extract Istio 
 
 #Download
+
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
 OR
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-linux.tar.gz
@@ -35,6 +37,7 @@ OR
 wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-win.tar.gz
 
 #Extract
+
 tar -xf istio-1.2.6-osx.tar.gz
 OR
 tar -xf istio-1.2.6-linux.tar.gz
@@ -44,10 +47,12 @@ tar -xf istio-1.2.6-win.tar.gz
 
 ```
 #Create istio-system namespace
+
 kubectl create ns istio-system
 ```
 ```
 #Create k8s secret to be used by Citadel for mTLS cert generation
+
 kubectl create secret generic cacerts -n istio-system \
     --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
     --from-file=istio-1.2.6/samples/certs/ca-key.pem \
@@ -56,14 +61,22 @@ kubectl create secret generic cacerts -n istio-system \
 ```
 ```
 #Generate, install and verify Istio CRDs
+
 helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+
 #Make sure Istio crds are installed
+
 kubectl get crds | grep 'istio.io' | wc -l
 ```
 ```
 #Generate & Install Istio
+
 helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
     -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
+    
+#Verify that istio pods are up
+
+kubectl get pods -n istio-system
 ```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
@@ -77,41 +90,59 @@ helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace
 
 ```
 #Download and extract admiral
+
 wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-alpha/admiral-install-v0.1-alpha.tar.gz
 tar xvf admiral-install-v0.1-alpha.tar.gz
 ```
 
 ```
 #Install admiral 
+
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
+
+#Verify admiral is running
+
+kubectl get pods -n admiral
 ```
 
 ```
 #Create the secret for admiral to monitor.
+
 #Since this is for a single cluster demo the remote and local context are the same
 ./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+
+#Verify the secret
+
+kubectl get secrets -n admiral
 ```
 ```
 #Point hosts ending in global to be resolved by istio coredns
+
 ./admiral-install-v0.1-alpha/scripts/redirect-dns.sh 
 ```
 #### Setup Sample Apps
 
 ```
 #Install test services
+
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
 ```
 ```
 #Install the dependency CR
+
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample_dep.yaml
+
+#Verify that admiral created service names for 'greeting' service
+
+kubectl get serviceentry -n admiral-sync
 
 ```
 
 #### Test
 
 ```
-kubectl exec --namespace=sample -it $(kubectl get pod -l "app=sleep" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.nginx.global
+kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.greeting.global
 ```
 
 
@@ -127,13 +158,13 @@ Two service entries were created in the `admiral-sync` namespace.
 
 ```
 NAME                      HOSTS                    LOCATION        RESOLUTION   AGE
-default.nginx.global-se   [default.nginx.global]   MESH_INTERNAL   DNS          76m
-default.sleep.global-se   [default.sleep.global]   MESH_INTERNAL   DNS          76m
+default.greeting.global-se   [default.greeting.global]   MESH_INTERNAL   DNS          76m
+default.webapp.global-se   [default.webapp.global]   MESH_INTERNAL   DNS          76m
 ```
 
-```kubectl get ServiceEntry default.nginx.global-se  -n admiral-sync -o yaml```
+```kubectl get ServiceEntry default.greeting.global-se  -n admiral-sync -o yaml```
 
-Looking in more detail the hostname default.nginx.global is pointing back the default k8s FQDNs
+Looking in more detail the hostname default.greeting.global is pointing back the default k8s FQDNs
 
 ```
 apiVersion: networking.istio.io/v1alpha3
@@ -142,22 +173,22 @@ metadata:
   creationTimestamp: "2019-09-20T22:04:59Z"
   generation: 1
   labels:
-    identity: nginx
-  name: default.nginx.global-se
+    identity: greeting
+  name: default.greeting.global-se
   namespace: admiral-sync
   resourceVersion: "452814"
-  selfLink: /apis/networking.istio.io/v1alpha3/namespaces/admiral-sync/serviceentries/default.nginx.global-se
+  selfLink: /apis/networking.istio.io/v1alpha3/namespaces/admiral-sync/serviceentries/default.greeting.global-se
   uid: b02cdbee-dbf2-11e9-9461-0aa9b467cf9c
 spec:
   addresses:
   - 127.0.10.2
   endpoints:
-  - address: nginx.sample.svc.cluster.local
+  - address: greeting.sample.svc.cluster.local
     locality: us-west-2
     ports:
       http: 80
   hosts:
-  - default.nginx.global
+  - default.greeting.global
   location: MESH_INTERNAL
   ports:
   - name: http
@@ -167,23 +198,7 @@ spec:
 
 ```
 
-
-### Multi-Cluster
-```Loading...```
-
-#### Generated config
-
-```Loading...``` 
-
-##### ServiceEntry
-
-```Loading...```
-
-##### Virtual Service
-
-```Loading...```
-
-## Multi-Cluster Deployment Topology
+## Admiral Architecture
 
 ![alt text](https://user-images.githubusercontent.com/35096265/65183155-b8244b00-da17-11e9-9f2d-cce5a96fe2e8.png "Admiral Architecture")
 
@@ -221,6 +236,7 @@ metadata:
   name: my-service
   labels:
     app: service1
+    identity: service1
     env: dev
 spec:
   ports:
@@ -244,9 +260,9 @@ For the service above
 
 **dev.service1.global**
 
-If the env label is not present it will be dropped from the dns name.
+If the env label is not present the word default will be used.
 
-**service1.mesh**
+**default.service1.mesh**
 
 *No "real" dns name are created but the core dns plug is used with back ServiceEntries*
 
@@ -255,24 +271,6 @@ If the env label is not present it will be dropped from the dns name.
 Admiral introduces two new CRDs to control the cross cluster automation.
 
 ### Dependency
-
-In this example we define a Dependency type.  This dependency has an identityLabel with value app.  This will cause the value of the app label on service type to be used as the global identifier.
-
-```
----
-apiVersion: admiral.io/v1alpha1
-kind: Dependency
-metadata:
-  name: dependency
-  namespace: admiral
-spec:
-  source: *
-  identityLabel: app
-  destinations:
-    - *    
----    
-```  
-If a dependency with `*` is defined for the source and destinations it will cause all config to be sync to all clusters.  This is great for getting started but defining dependencies should be used for production deployments.
 
 The Dependency type can be used for more than just picking the global identifier.  The dependency information is used to prune the configuration syncing so only configuration needed in each
 cluster is provisioned by Admiral.  
@@ -288,32 +286,14 @@ metadata:
   namespace: admiral
 spec:
   source: service1
-  identityLabel: app
+  identityLabel: identity
   destinations:
     - service2
     - service3
 ---    
 ```
 This config tells Admiral to only sync configuration for service2 and service3 to any cluster where service1 is running.
-
 Once granular dependency types are defined the identityLabel can be different for separate entries.
-
-```
----
-apiVersion: admiral.io/v1alpha1
-kind: Dependency
-metadata:
-  name: dependency
-  namespace: admiral
-spec:
-  source: service2
-  identityLabel: name
-  destinations:
-    - service3    
----    
-```
-
-The default dns name that is created for service2 would use the value of the name label.
 
 ### Global Traffic Policy
 
