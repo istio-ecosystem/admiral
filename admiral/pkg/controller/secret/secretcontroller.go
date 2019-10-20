@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/admiral/admiral/pkg/controller/secret/resolver"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
 	"k8s.io/client-go/rest"
 	"time"
 

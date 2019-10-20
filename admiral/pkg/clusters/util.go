@@ -1,7 +1,7 @@
 package clusters
 
 import (
-	"github.com/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"istio.io/istio/pkg/log"
 	"strconv"
 	"strings"

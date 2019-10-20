@@ -2,12 +2,12 @@ package clusters
 
 import (
 	"context"
-	depModel "github.com/admiral/admiral/pkg/apis/admiral/model"
-	"github.com/admiral/admiral/pkg/apis/admiral/v1"
-	"github.com/admiral/admiral/pkg/controller/admiral"
-	"github.com/admiral/admiral/pkg/controller/common"
-	"github.com/admiral/admiral/pkg/controller/istio"
-	"github.com/admiral/admiral/pkg/test"
+	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
 	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
 	k8sAppsV1 "k8s.io/api/apps/v1"

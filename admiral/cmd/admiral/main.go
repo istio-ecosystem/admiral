@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/admiral/admiral/cmd/admiral/cmd"
 	"os"
+
+	"github.com/istio-ecosystem/admiral/admiral/cmd/admiral/cmd"
 )
 
 func main() {

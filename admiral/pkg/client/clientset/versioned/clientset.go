@@ -21,7 +21,7 @@ package versioned
 import (
 	"fmt"
 
-	admiralv1 "github.com/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
+	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
