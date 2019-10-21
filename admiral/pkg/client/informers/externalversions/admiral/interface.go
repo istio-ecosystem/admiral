@@ -19,8 +19,8 @@ limitations under the License.
 package admiral
 
 import (
-	v1 "github.com/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
-	internalinterfaces "github.com/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
+	internalinterfaces "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to each of this group's versions.

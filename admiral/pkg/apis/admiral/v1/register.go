@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/admiral/admiral/pkg/apis/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral"
 
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

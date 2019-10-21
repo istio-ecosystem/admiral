@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	clientset "github.com/admiral/admiral/pkg/client/clientset/versioned"
+	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 )
 
 // retrieve the Kubernetes cluster client from outside of the cluster

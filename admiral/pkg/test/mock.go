@@ -1,8 +1,8 @@
 package test
 
 import (
-	"github.com/admiral/admiral/pkg/apis/admiral/v1"
-	"github.com/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 )

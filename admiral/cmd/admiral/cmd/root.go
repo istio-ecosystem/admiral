@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/admiral/admiral/pkg/clusters"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"istio.io/istio/pkg/log"
 	"os"
 	"os/signal"

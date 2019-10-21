@@ -2,12 +2,12 @@ package clusters
 
 import (
 	"context"
-	"github.com/admiral/admiral/pkg/apis/admiral/v1"
-	"github.com/admiral/admiral/pkg/controller/admiral"
-	"github.com/admiral/admiral/pkg/controller/common"
-	"github.com/admiral/admiral/pkg/controller/istio"
-	"github.com/admiral/admiral/pkg/controller/secret"
-	"github.com/admiral/admiral/pkg/controller/util"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/gogo/protobuf/proto"
 	"k8s.io/client-go/rest"
 	"strings"

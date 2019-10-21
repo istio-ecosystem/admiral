@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/admiral/admiral/pkg/client/clientset/versioned"
-	admiralv1 "github.com/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
-	fakeadmiralv1 "github.com/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1/fake"
+	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
+	fakeadmiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

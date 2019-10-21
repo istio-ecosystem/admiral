@@ -2,7 +2,7 @@ package admiral
 
 import (
 	"fmt"
-	"github.com/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"

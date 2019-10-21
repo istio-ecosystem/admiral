@@ -21,8 +21,8 @@ package v1
 import (
 	"time"
 
-	v1 "github.com/admiral/admiral/pkg/apis/admiral/v1"
-	scheme "github.com/admiral/admiral/pkg/client/clientset/versioned/scheme"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	scheme "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

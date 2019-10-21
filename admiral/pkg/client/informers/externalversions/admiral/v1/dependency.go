@@ -21,10 +21,10 @@ package v1
 import (
 	time "time"
 
-	admiralv1 "github.com/admiral/admiral/pkg/apis/admiral/v1"
-	versioned "github.com/admiral/admiral/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/admiral/admiral/pkg/client/listers/admiral/v1"
+	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	versioned "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	internalinterfaces "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/listers/admiral/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
