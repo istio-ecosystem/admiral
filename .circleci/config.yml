@@ -35,3 +35,47 @@ jobs:
         name: Publish Docker image
         command: |
           make docker-publish
+    - persist_to_workspace:
+        root: .
+        paths:
+          - .
+
+  publish-github-release:
+    docker:
+    - image: circleci/golang:1.11
+    working_directory: /go/pkg/mod/github.com/admiral
+    steps:
+    - attach_workspace:
+        at: .
+    - run:
+        name: Generate output
+        command: |
+          make download-kustomize
+          echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
+          source $BASH_ENV
+          make gen-yaml
+          mkdir ./artifact
+          cd out && tar -zcvf ../artifact/admiral-install-${CIRCLE_TAG}.tar.gz * && cd ..
+    - run:
+        name: Publish Release on GitHub
+        command: |
+          go get github.com/tcnksm/ghr
+          ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ./artifact/
+
+
+workflows:
+  version: 2
+  build-and-release:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /.*/
+      - publish-github-release:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              ignore: /.*/
