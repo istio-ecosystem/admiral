@@ -103,7 +103,7 @@ download-kustomize:
 	head -n1 |\
 	cut -d '"' -f 4 |\
 	xargs curl -O -L
-	mv kustomize_kustomize_$(OPSYS)_amd64 kustomize
+	mv kustomize_kustomize.*_$(OPSYS)_amd64 kustomize
 	chmod u+x kustomize
 
 gen-yaml: 
