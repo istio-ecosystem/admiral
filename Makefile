@@ -28,7 +28,7 @@ CUSTOM_RESOURCE_NAME=admiral
 CUSTOM_RESOURCE_VERSION=v1
 
 MAIN_PATH_ADMIRAL=./admiral/cmd/admiral/main.go
-
+OPSYS:=$(shell $(GOCMD) env GOOS)
 
 PATH:=$(GOBIN):$(PATH)
 
@@ -95,7 +95,18 @@ else
 	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
 endif
 
-gen-yaml:
+download-kustomize:
+	curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases |\
+	grep browser_download |\
+	grep $(OPSYS) |\
+	grep kustomize_kustomize |\
+	head -n1 |\
+	cut -d '"' -f 4 |\
+	xargs curl -O -L
+	mv kustomize_kustomize.*_$(OPSYS)_amd64 kustomize
+	chmod u+x kustomize
+
+gen-yaml: 
 	mkdir -p ./out/yaml
 	mkdir -p ./out/scripts
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml

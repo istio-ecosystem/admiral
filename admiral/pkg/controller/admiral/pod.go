@@ -2,7 +2,7 @@ package admiral
 
 import (
 	"fmt"
-	"github.com/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"

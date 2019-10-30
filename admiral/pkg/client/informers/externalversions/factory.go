@@ -23,9 +23,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/admiral/admiral/pkg/client/clientset/versioned"
-	admiral "github.com/admiral/admiral/pkg/client/informers/externalversions/admiral"
-	internalinterfaces "github.com/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
+	versioned "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	admiral "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral"
+	internalinterfaces "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/internalinterfaces"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

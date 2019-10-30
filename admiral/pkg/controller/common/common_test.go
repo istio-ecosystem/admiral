@@ -14,10 +14,10 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	cacheWithEntry := NewMap()
 	cacheWithNoEntry := NewMap()
 	cacheWith255Entries := NewMap()
-	cacheWithEntry.Put("dev.a.global", "127.0.10.1")
+	cacheWithEntry.Put("dev.a.global", LocalAddressPrefix + ".10.1")
 
 	for i := 1; i <= 255; i++ {
-		cacheWith255Entries.Put(strconv.Itoa(i) + ".global", "127.0.10." + strconv.Itoa(i))
+		cacheWith255Entries.Put(strconv.Itoa(i) + ".global", LocalAddressPrefix + ".10." + strconv.Itoa(i))
 	}
 
 	testCases := []struct {
@@ -30,25 +30,25 @@ func TestGetLocalAddressForSe(t *testing.T) {
 			name: "should return new available address",
 			seName: "dev.a.global",
 			seAddressCache: cacheWithNoEntry,
-			wantAddess: "127.0.10.1",
+			wantAddess: LocalAddressPrefix + ".10.1",
 		},
 		{
 			name: "should return address from map",
 			seName: "dev.a.global",
 			seAddressCache: cacheWithEntry,
-			wantAddess: "127.0.10.1",
+			wantAddess: LocalAddressPrefix + ".10.1",
 		},
 		{
 			name: "should return new available address",
 			seName: "dev.b.global",
 			seAddressCache: cacheWithEntry,
-			wantAddess: "127.0.10.2",
+			wantAddess: LocalAddressPrefix + ".10.2",
 		},
 		{
 			name: "should return new available address in higher subnet",
 			seName: "dev.a.global",
 			seAddressCache: cacheWith255Entries,
-			wantAddess: "127.0.11.1",
+			wantAddess: LocalAddressPrefix + ".11.1",
 		},
 	}
 

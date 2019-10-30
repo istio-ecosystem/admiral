@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	admiralv1 "github.com/admiral/admiral/pkg/apis/admiral/v1"
+	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

@@ -2,15 +2,15 @@ package admiral
 
 import (
 	"fmt"
-	"github.com/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"sync"
 	"time"
 
-	clientset "github.com/admiral/admiral/pkg/client/clientset/versioned"
-	informerV1 "github.com/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
+	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 )
 
 // Handler interface contains the methods that are required

@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
-	pkgtest "github.com/admiral/admiral/pkg/test"
+	pkgtest "github.com/istio-ecosystem/admiral/admiral/pkg/test"
 )
 
 const secretName string = "testSecretName"

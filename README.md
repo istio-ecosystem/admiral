@@ -26,23 +26,23 @@ One or more k8s clusters.
 * Install [wget](https://www.gnu.org/software/wget/)
 
 ```
-#Download & extract Istio 
+#Download & extract Istio
 
 #Download
 
-wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-osx.tar.gz
+wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-osx.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-linux.tar.gz
+wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-linux.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.2.6/istio-1.2.6-win.tar.gz
+wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-win.tar.gz
 
 #Extract
 
-tar -xf istio-1.2.6-osx.tar.gz
+tar -xf istio-1.3.3-osx.tar.gz
 OR
-tar -xf istio-1.2.6-linux.tar.gz
+tar -xf istio-1.3.3-linux.tar.gz
 OR
-tar -xf istio-1.2.6-win.tar.gz
+tar -xf istio-1.3.3-win.tar.gz
 ```
 
 ```
@@ -54,15 +54,15 @@ kubectl create ns istio-system
 #Create k8s secret to be used by Citadel for mTLS cert generation
 
 kubectl create secret generic cacerts -n istio-system \
-    --from-file=istio-1.2.6/samples/certs/ca-cert.pem \
-    --from-file=istio-1.2.6/samples/certs/ca-key.pem \
-    --from-file=istio-1.2.6/samples/certs/root-cert.pem \
-    --from-file=istio-1.2.6/samples/certs/cert-chain.pem
+    --from-file=istio-1.3.3/samples/certs/ca-cert.pem \
+    --from-file=istio-1.3.3/samples/certs/ca-key.pem \
+    --from-file=istio-1.3.3/samples/certs/root-cert.pem \
+    --from-file=istio-1.3.3/samples/certs/cert-chain.pem
 ```
 ```
 #Generate, install and verify Istio CRDs
 
-helm template istio-1.2.6/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+helm template istio-1.3.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
 
 #Make sure Istio crds are installed
 
@@ -71,9 +71,9 @@ kubectl get crds | grep 'istio.io' | wc -l
 ```
 #Generate & Install Istio
 
-helm template istio-1.2.6/install/kubernetes/helm/istio --name istio --namespace istio-system \
-    -f istio-1.2.6/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
-    
+helm template istio-1.3.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
+    -f istio-1.3.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
+
 #Verify that istio pods are up
 
 kubectl get pods -n istio-system
@@ -96,7 +96,7 @@ tar xvf admiral-install-v0.1-alpha.tar.gz
 ```
 
 ```
-#Install admiral 
+#Install admiral
 
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
 kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
@@ -119,7 +119,7 @@ kubectl get secrets -n admiral
 ```
 #Point hosts ending in global to be resolved by istio coredns
 
-./admiral-install-v0.1-alpha/scripts/redirect-dns.sh 
+./admiral-install-v0.1-alpha/scripts/redirect-dns.sh
 ```
 #### Setup Sample Apps
 
@@ -142,7 +142,7 @@ kubectl get serviceentry -n admiral-sync
 #### Test
 
 ```
-kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -- curl -v http://default.greeting.global
+kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
 
 
