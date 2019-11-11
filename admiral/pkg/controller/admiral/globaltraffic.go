@@ -101,7 +101,7 @@ func (d *GlobalTrafficController) Added(ojb interface{}) {
 	d.DepHandler.Added(dep)
 }
 
-func (d *GlobalTrafficController) Deleted(name string) {
+func (d *GlobalTrafficController) Deleted(ojb interface{}) {
 	//TODO this delete needs to be sorted out
 	d.DepHandler.Deleted(nil)
 }

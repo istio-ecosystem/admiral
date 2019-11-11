@@ -10,7 +10,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
-	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,7 +66,7 @@ func TestDeleteCacheController(t *testing.T) {
 func TestAddUpdateIstioResource(t *testing.T) {
 
 	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{},
+
 	}
 
 	new := istio.Config{}
@@ -171,12 +170,6 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 	}
 
 	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{
-
-			TestHook: func(i interface{}) {
-				t.Fail()
-			},
-		},
 		DeploymentController: d,
 	}
 
@@ -261,9 +254,6 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	s.Added(&service)
 
 	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{
-			TestHook: f,
-		},
 		DeploymentController: d,
 		ServiceController:    s,
 		NodeController:       n,
@@ -367,31 +357,6 @@ func TestAdded(t *testing.T) {
 
 	dh.Added(&depData)
 	dh.Deleted(&depData)
-
-}
-
-func TestCreateIstioController(t *testing.T) {
-
-	p := AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		t.Fail()
-	})
-	rr.remoteControllers["test.cluster"] = rc
-	config := rest.Config{
-		Host: "localhost",
-	}
-
-	opts := istioKube.ControllerOptions{
-		WatchedNamespace: metav1.NamespaceAll,
-		ResyncPeriod:     time.Second * time.Duration(300),
-		DomainSuffix:     ".cluster",
-	}
-
-	rr.createIstioController(&config, opts, rc, make(chan struct{}), "test.cluster")
 
 }
 

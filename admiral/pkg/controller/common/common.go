@@ -26,6 +26,22 @@ const (
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
 )
 
+type Event int
+
+const (
+	Add    Event = 0
+	Update Event = 1
+	Delete Event = 2
+)
+
+type ResourceType string
+
+const (
+	VirtualService  ResourceType = "VirtualService"
+	DestinationRule  ResourceType = "DestinationRule"
+	ServiceEntry  ResourceType = "ServiceEntry"
+)
+
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
 	identity := pod.Labels[DefaultGlobalIdentifier()]
 	if len(identity) == 0 {

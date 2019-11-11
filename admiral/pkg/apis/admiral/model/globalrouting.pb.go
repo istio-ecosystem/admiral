@@ -3,9 +3,11 @@
 
 package model
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,14 +18,14 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type TrafficPolicy_LbType int32
 
 const (
-	// Traffic with be routed to local locality first
-	// if there are no health instances in the local locality traffic will be routed to
-	// remote locality
+	//Traffic with be routed to local locality first
+	//if there are no health instances in the local locality traffic will be routed to
+	//remote locality
 	TrafficPolicy_TOPOLOGY TrafficPolicy_LbType = 0
 	TrafficPolicy_FAILOVER TrafficPolicy_LbType = 1
 )
@@ -32,6 +34,7 @@ var TrafficPolicy_LbType_name = map[int32]string{
 	0: "TOPOLOGY",
 	1: "FAILOVER",
 }
+
 var TrafficPolicy_LbType_value = map[string]int32{
 	"TOPOLOGY": 0,
 	"FAILOVER": 1,
@@ -40,8 +43,9 @@ var TrafficPolicy_LbType_value = map[string]int32{
 func (x TrafficPolicy_LbType) String() string {
 	return proto.EnumName(TrafficPolicy_LbType_name, int32(x))
 }
+
 func (TrafficPolicy_LbType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_globalrouting_80c97d19fb14f2ca, []int{1, 0}
+	return fileDescriptor_a5c0dc509add6f4f, []int{1, 0}
 }
 
 type GlobalTrafficPolicy struct {
@@ -61,16 +65,17 @@ func (m *GlobalTrafficPolicy) Reset()         { *m = GlobalTrafficPolicy{} }
 func (m *GlobalTrafficPolicy) String() string { return proto.CompactTextString(m) }
 func (*GlobalTrafficPolicy) ProtoMessage()    {}
 func (*GlobalTrafficPolicy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_globalrouting_80c97d19fb14f2ca, []int{0}
+	return fileDescriptor_a5c0dc509add6f4f, []int{0}
 }
+
 func (m *GlobalTrafficPolicy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GlobalTrafficPolicy.Unmarshal(m, b)
 }
 func (m *GlobalTrafficPolicy) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GlobalTrafficPolicy.Marshal(b, m, deterministic)
 }
-func (dst *GlobalTrafficPolicy) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GlobalTrafficPolicy.Merge(dst, src)
+func (m *GlobalTrafficPolicy) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GlobalTrafficPolicy.Merge(m, src)
 }
 func (m *GlobalTrafficPolicy) XXX_Size() int {
 	return xxx_messageInfo_GlobalTrafficPolicy.Size(m)
@@ -102,7 +107,7 @@ type TrafficPolicy struct {
 	Dns string `protobuf:"bytes,1,opt,name=dns,proto3" json:"dns,omitempty"`
 	// REQUIRED: type of global load distrubtion
 	LbType TrafficPolicy_LbType `protobuf:"varint,2,opt,name=lbType,proto3,enum=admiral.global.v1alpha.TrafficPolicy_LbType" json:"lbType,omitempty"`
-	// weigth of primary and secondary must each 100
+	//weigth of primary and secondary must each 100
 	Target               []*TrafficGroup `protobuf:"bytes,3,rep,name=target,proto3" json:"target,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
@@ -113,16 +118,17 @@ func (m *TrafficPolicy) Reset()         { *m = TrafficPolicy{} }
 func (m *TrafficPolicy) String() string { return proto.CompactTextString(m) }
 func (*TrafficPolicy) ProtoMessage()    {}
 func (*TrafficPolicy) Descriptor() ([]byte, []int) {
-	return fileDescriptor_globalrouting_80c97d19fb14f2ca, []int{1}
+	return fileDescriptor_a5c0dc509add6f4f, []int{1}
 }
+
 func (m *TrafficPolicy) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TrafficPolicy.Unmarshal(m, b)
 }
 func (m *TrafficPolicy) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TrafficPolicy.Marshal(b, m, deterministic)
 }
-func (dst *TrafficPolicy) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TrafficPolicy.Merge(dst, src)
+func (m *TrafficPolicy) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TrafficPolicy.Merge(m, src)
 }
 func (m *TrafficPolicy) XXX_Size() int {
 	return xxx_messageInfo_TrafficPolicy.Size(m)
@@ -155,9 +161,9 @@ func (m *TrafficPolicy) GetTarget() []*TrafficGroup {
 }
 
 type TrafficGroup struct {
-	// region for the traffic
+	//region for the traffic
 	Region string `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
-	// weight for traffic this region should get.
+	//weight for traffic this region should get.
 	Weight               int32    `protobuf:"varint,2,opt,name=weight,proto3" json:"weight,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -168,16 +174,17 @@ func (m *TrafficGroup) Reset()         { *m = TrafficGroup{} }
 func (m *TrafficGroup) String() string { return proto.CompactTextString(m) }
 func (*TrafficGroup) ProtoMessage()    {}
 func (*TrafficGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_globalrouting_80c97d19fb14f2ca, []int{2}
+	return fileDescriptor_a5c0dc509add6f4f, []int{2}
 }
+
 func (m *TrafficGroup) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_TrafficGroup.Unmarshal(m, b)
 }
 func (m *TrafficGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_TrafficGroup.Marshal(b, m, deterministic)
 }
-func (dst *TrafficGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TrafficGroup.Merge(dst, src)
+func (m *TrafficGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TrafficGroup.Merge(m, src)
 }
 func (m *TrafficGroup) XXX_Size() int {
 	return xxx_messageInfo_TrafficGroup.Size(m)
@@ -203,16 +210,16 @@ func (m *TrafficGroup) GetWeight() int32 {
 }
 
 func init() {
+	proto.RegisterEnum("admiral.global.v1alpha.TrafficPolicy_LbType", TrafficPolicy_LbType_name, TrafficPolicy_LbType_value)
 	proto.RegisterType((*GlobalTrafficPolicy)(nil), "admiral.global.v1alpha.GlobalTrafficPolicy")
 	proto.RegisterMapType((map[string]string)(nil), "admiral.global.v1alpha.GlobalTrafficPolicy.SelectorEntry")
 	proto.RegisterType((*TrafficPolicy)(nil), "admiral.global.v1alpha.TrafficPolicy")
 	proto.RegisterType((*TrafficGroup)(nil), "admiral.global.v1alpha.TrafficGroup")
-	proto.RegisterEnum("admiral.global.v1alpha.TrafficPolicy_LbType", TrafficPolicy_LbType_name, TrafficPolicy_LbType_value)
 }
 
-func init() { proto.RegisterFile("globalrouting.proto", fileDescriptor_globalrouting_80c97d19fb14f2ca) }
+func init() { proto.RegisterFile("globalrouting.proto", fileDescriptor_a5c0dc509add6f4f) }
 
-var fileDescriptor_globalrouting_80c97d19fb14f2ca = []byte{
+var fileDescriptor_a5c0dc509add6f4f = []byte{
 	// 323 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xdf, 0x4a, 0xc3, 0x30,
 	0x14, 0xc6, 0xed, 0xca, 0xea, 0x3c, 0x6e, 0x52, 0x32, 0x19, 0xc5, 0x2b, 0x29, 0x13, 0x76, 0x21,

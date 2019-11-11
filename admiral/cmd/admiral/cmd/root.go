@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
-	"istio.io/istio/pkg/log"
+	"github.com/prometheus/common/log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	loggingOptions = log.DefaultOptions()
 	ctx, cancel    = context.WithCancel(context.Background())
 )
 
@@ -35,8 +34,7 @@ func GetRootCmd(args []string) *cobra.Command {
 			if len(args) > 0 {
 				return fmt.Errorf("%q is an invalid argument", args[0])
 			}
-			err := log.Configure(loggingOptions)
-			return err
+			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			log.Info("Starting Admiral")

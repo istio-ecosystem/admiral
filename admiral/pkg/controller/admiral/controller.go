@@ -2,8 +2,7 @@ package admiral
 
 import (
 	"fmt"
-
-	"istio.io/istio/pkg/log"
+	"github.com/sirupsen/logrus"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -20,7 +19,7 @@ const (
 // Handler interface contains the methods that are required
 type Delegator interface {
 	Added(interface{})
-	Deleted(name string)
+	Deleted(interface{})
 }
 
 type Controller struct {
@@ -39,7 +38,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 
 	controller.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			log.Debugf("Informer: add : %v", obj)
+			logrus.Debugf("Informer: add : %v", obj)
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 
 			if err == nil {
@@ -48,14 +47,14 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			log.Debugf("Informer Update: %v", newObj)
+			logrus.Debugf("Informer Update: %v", newObj)
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
 			if err == nil {
 				controller.queue.Add(key)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			log.Debugf("Dependency Informer Delete: %v", obj)
+			logrus.Debugf("Informer Delete: %v", obj)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
 				controller.queue.Add(key)
@@ -73,18 +72,18 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	log.Info("Starting controller")
+	logrus.Info("Starting controller")
 
 	go c.informer.Run(stopCh)
 
 	// Wait for the caches to be synced before starting workers
-	log.Info(" Waiting for informer caches to sync")
+	logrus.Info(" Waiting for informer caches to sync")
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf(" timed out waiting for caches to sync"))
 		return
 	}
 
-	log.Info("informer caches synced")
+	logrus.Info("informer caches synced")
 	wait.Until(c.runWorker, 5*time.Second, stopCh)
 }
 
@@ -107,10 +106,10 @@ func (c *Controller) processNextItem() bool {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(depName)
 	} else if c.queue.NumRequeues(depName) < maxRetries {
-		log.Errorf("Error processing %s (will retry): %v", depName, err)
+		logrus.Errorf("Error processing %s (will retry): %v", depName, err)
 		c.queue.AddRateLimited(depName)
 	} else {
-		log.Errorf("Error processing %s (giving up): %v", depName, err)
+		logrus.Errorf("Error processing %s (giving up): %v", depName, err)
 		c.queue.Forget(depName)
 		utilruntime.HandleError(err)
 	}
@@ -127,7 +126,7 @@ func (c *Controller) processItem(name string) error {
 	if exists {
 		c.delegator.Added(obj)
 	} else {
-		c.delegator.Deleted(name)
+		c.delegator.Deleted(obj)
 	}
 
 	return nil
