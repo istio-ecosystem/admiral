@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 
@@ -26,6 +27,7 @@ type DependencyHandler struct {
 
 type GlobalTrafficHandler struct {
 	RemoteRegistry *RemoteRegistry
+	GlobalTrafficController  *admiral.GlobalTrafficController
 }
 
 type DeploymentHandler struct {
@@ -71,7 +73,7 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
+	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
 
 }
 
@@ -82,7 +84,7 @@ func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCach
 	logrus.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
 }
 
-func handleDependencyRecord(identifier string, sourceIdentity string, admiralCache *AdmiralCache, rcs map[string]*RemoteController, config AdmiralParams, obj *v1.Dependency) {
+func handleDependencyRecord(identifier string, sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, config AdmiralParams, obj *v1.Dependency) {
 
 	destinationIdentitys := obj.Spec.Destinations
 
@@ -98,7 +100,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 		if tempDeployment != nil {
 			sourceClusters[rc.ClusterID] = rc.ClusterID
-			admiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
+			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		}
 
 		//create and store destination service entries
@@ -112,7 +114,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 			for _, deployment := range destDeployment.Deployments {
 
-				admiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
+				r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
 
 				deployments := rc.DeploymentController.Cache.Get(destinationCluster)
 
@@ -120,7 +122,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 					continue
 				}
 				//TODO pass deployment
-				tmpSe := createServiceEntry(identifier, rc, config, admiralCache, deployment[0], serviceEntries)
+				tmpSe := createServiceEntry(identifier, rc, config, r.AdmiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -128,7 +130,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 				destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
 
-				admiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
+				r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
 
 				serviceEntries[tmpSe.Hosts[0]] = tmpSe
 			}
@@ -143,15 +145,15 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 	for dCluster, globalFqdn := range destinationClusters {
 		for _, sCluster := range sourceClusters {
-			admiralCache.CnameClusterCache.Put(globalFqdn, dCluster, dCluster)
-			admiralCache.CnameDependentClusterCache.Put(globalFqdn, sCluster, sCluster)
+			r.AdmiralCache.CnameClusterCache.Put(globalFqdn, dCluster, dCluster)
+			r.AdmiralCache.CnameDependentClusterCache.Put(globalFqdn, sCluster, sCluster)
 			//filter out the source clusters same as destinationClusters
 			delete(sourceClusters, dCluster)
 		}
 	}
 
 	//add service entries for all dependencies in source cluster
-	addServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
+	addServiceEntriesWithDr(r, sourceClusters, rcs, serviceEntries)
 }
 
 func getIstioResourceName(host string, suffix string) string {
@@ -210,8 +212,8 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 	return tmpSe
 }
 
-func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
-	syncNamespace string) {
+func addServiceEntriesWithDr(r *RemoteRegistry, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
+	var syncNamespace = r.config.SyncNamespace
 	for _, se := range serviceEntries {
 
 		//add service entry
@@ -237,7 +239,8 @@ func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
 
 			//Add a label
-			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+			identityId, ok := r.AdmiralCache.CnameIdentityCache.Load(se.Hosts[0])
+			if ok {
 				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
@@ -249,7 +252,9 @@ func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				oldDestinationRule = nil
 			}
 
-			destinationRule := getDestinationRule(se.Hosts[0])
+			globalTrafficPolicy := getMatchingGlobalTrafficPolicy(rc, identityId.(string))
+
+			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
 
 			newDestinationRule  := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
@@ -257,6 +262,11 @@ func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 		}
 
 	}
+}
+
+//TODO use selector on pod, instead of hardcoded identityId
+func getMatchingGlobalTrafficPolicy(rc *RemoteController, identityId string) *v1.GlobalTrafficPolicy {
+	return rc.GlobalTraffic.Cache.Get(identityId)
 }
 
 func makeVirtualService(host string, destination string, port uint32) *networking.VirtualService {
@@ -272,12 +282,35 @@ func makeRemoteEndpointForServiceEntry(address string, locality string, portName
 		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
 }
 
-func getDestinationRule(host string) *networking.DestinationRule {
-	//TODO Add distribute/failover based on global traffic policy setting for this host
-	return &networking.DestinationRule{Host: host,
-		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}, LoadBalancer:&networking.LoadBalancerSettings{
-
-		}}}
+func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTrafficPolicy) *networking.DestinationRule {
+	var dr = &networking.DestinationRule{}
+	dr.Host = host
+	dr.TrafficPolicy = &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}
+	if gtpWrapper != nil {
+		var loadBalancerSettings = &networking.LoadBalancerSettings{}
+		gtp := gtpWrapper.Spec
+		gtpTrafficPolicy := gtp.Policy[0]
+		if len(gtpTrafficPolicy.Target) > 0 {
+			var localityLbSettings = &networking.LocalityLoadBalancerSetting{}
+			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
+				distribute := make([]*networking.LocalityLoadBalancerSetting_Distribute, 0)
+				targetTrafficMap := make(map[string]uint32)
+				for _, tg := range gtpTrafficPolicy.Target {
+					targetTrafficMap[tg.Region] = uint32(tg.Weight)
+				}
+				distribute = append(distribute, &networking.LocalityLoadBalancerSetting_Distribute{
+					From: locality,
+					To:   targetTrafficMap,
+				})
+				localityLbSettings.Distribute = distribute
+			} else {
+				//this will have default behavior
+			}
+			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = localityLbSettings
+			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
+		}
+	}
+	return dr
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
@@ -286,6 +319,10 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	logrus.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+}
+
+func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+	logrus.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
@@ -302,7 +339,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 		return
 	}
 
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
+	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
@@ -319,7 +356,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 		return
 	}
 
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
+	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
@@ -346,28 +383,28 @@ func (ic *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
 	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
-func (ic *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
-	//logrus.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
+	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
 }
 
-func (ic *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
-	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
+	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
 }
 
-func (ic *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
-	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
+	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
 }
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
-	handleVirtualServiceEvent(obj, vh, common.Add, "VirtualService")
+	handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
-	handleVirtualServiceEvent(obj, vh, common.Update, "VirtualService")
+	handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
-	handleVirtualServiceEvent(obj, vh, common.Delete, "VirtualService")
+	handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
 }
 
 
@@ -382,7 +419,7 @@ func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
 	//	return
 	//}
 	//
-	//createServiceEntryForNewServiceOrPod(obj.Namespace, sourceIdentity, sc.RemoteRegistry, sc.RemoteRegistry.config.SyncNamespace)
+	//createServiceEntryForNewServiceOrPod(obj.Namespace, sourceIdentity, sc.RemoteRegistry)
 
 }
 
@@ -656,7 +693,7 @@ func createDestinationRulSkeletion(dr networking.DestinationRule, name string, n
 	return &v1alpha3.DestinationRule{Spec:dr, ObjectMeta: v12.ObjectMeta{Name:name, Namespace: namespace}}
 }
 
-func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry, syncNamespace string) {
+func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry) {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 
@@ -704,8 +741,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	addServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries,
-		remoteRegistry.config.SyncNamespace)
+	addServiceEntriesWithDr(remoteRegistry, dependentClusters, remoteRegistry.remoteControllers, serviceEntries)
 
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	for sourceCluster, serviceInstance := range sourceServices {
@@ -720,8 +756,8 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 					ep.Address = localFqdn
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
-					addServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
-						map[string]*networking.ServiceEntry{key: serviceEntry}, remoteRegistry.config.SyncNamespace)
+					addServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+						map[string]*networking.ServiceEntry{key: serviceEntry})
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
 					ep.Ports = oldPorts

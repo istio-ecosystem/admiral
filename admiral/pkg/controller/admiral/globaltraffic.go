@@ -16,12 +16,13 @@ import (
 // Handler interface contains the methods that are required
 type GlobalTrafficHandler interface {
 	Added(obj *v1.GlobalTrafficPolicy)
+	Updated(obj *v1.GlobalTrafficPolicy)
 	Deleted(obj *v1.GlobalTrafficPolicy)
 }
 
 type GlobalTrafficController struct {
 	CrdClient  clientset.Interface
-	DepHandler GlobalTrafficHandler
+	GlobalTrafficHandler GlobalTrafficHandler
 	Cache      *globalTarfficCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
@@ -68,7 +69,7 @@ func (g *GlobalTrafficController) GetGlobalTrafficPolicies() ([]v1.GlobalTraffic
 func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
 
 	globalTrafficController := GlobalTrafficController{}
-	globalTrafficController.DepHandler = handler
+	globalTrafficController.GlobalTrafficHandler = handler
 
 	gtpCache := globalTarfficCache{}
 	gtpCache.cache = make(map[string]*v1.GlobalTrafficPolicy)
@@ -98,10 +99,16 @@ func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHan
 func (d *GlobalTrafficController) Added(ojb interface{}) {
 	dep := ojb.(*v1.GlobalTrafficPolicy)
 	d.Cache.Put(dep)
-	d.DepHandler.Added(dep)
+	d.GlobalTrafficHandler.Added(dep)
+}
+
+func (d *GlobalTrafficController) Updated(ojb interface{}) {
+	dep := ojb.(*v1.GlobalTrafficPolicy)
+	d.Cache.Put(dep)
+	d.GlobalTrafficHandler.Updated(dep)
 }
 
 func (d *GlobalTrafficController) Deleted(ojb interface{}) {
-	//TODO this delete needs to be sorted out
-	d.DepHandler.Deleted(nil)
+	dep := ojb.(*v1.GlobalTrafficPolicy)
+	d.GlobalTrafficHandler.Deleted(dep)
 }
