@@ -271,7 +271,7 @@ func getMatchingGlobalTrafficPolicy(rc *RemoteController, identityId string) *v1
 
 func makeVirtualService(host string, destination string, port uint32) *networking.VirtualService {
 	return &networking.VirtualService{Hosts: []string{host},
-		Gateways: []string{common.Mesh, common.MulticlusterIngressGateway},
+		Gateways: []string{common.MulticlusterIngressGateway},
 		ExportTo: []string{"*"},
 		Http:     []*networking.HTTPRoute{{Route: []*networking.HTTPRouteDestination{{Destination: &networking.Destination{Host: destination, Port: &networking.PortSelector{Number: port}}}}}}}
 }
@@ -287,7 +287,9 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 	dr.Host = host
 	dr.TrafficPolicy = &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}
 	if gtpWrapper != nil {
-		var loadBalancerSettings = &networking.LoadBalancerSettings{}
+		var loadBalancerSettings = &networking.LoadBalancerSettings{
+			LbPolicy: &networking.LoadBalancerSettings_Simple{Simple: networking.LoadBalancerSettings_ROUND_ROBIN},
+		}
 		gtp := gtpWrapper.Spec
 		gtpTrafficPolicy := gtp.Policy[0]
 		if len(gtpTrafficPolicy.Target) > 0 {
@@ -299,14 +301,14 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 					targetTrafficMap[tg.Region] = uint32(tg.Weight)
 				}
 				distribute = append(distribute, &networking.LocalityLoadBalancerSetting_Distribute{
-					From: locality,
+					From: locality + "/*",
 					To:   targetTrafficMap,
 				})
 				localityLbSettings.Distribute = distribute
 			} else {
 				//this will have default behavior
 			}
-			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = localityLbSettings
+			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 		}
 	}
@@ -625,7 +627,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 		exist.Annotations = obj.Annotations
 		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(obj)
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(exist)
 	}
 
 	if err != nil {
@@ -641,14 +643,14 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	if exist == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
+		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
 		op = "Add"
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(obj)
+		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(exist)
 	}
 
 	if err != nil {
@@ -664,14 +666,14 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	if exist == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(obj)
+		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(obj)
 		op = "Add"
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Update(obj)
+		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Update(exist)
 	}
 
 	if err != nil {
@@ -767,17 +769,17 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 			//add virtual service for routing locally in within the cluster
 			//virtualServiceName := getIstioResourceName(cname, "-default-vs")
 			//
-			//oldVirtualService := rc.IstioConfigStore.Get(istioModel.VirtualService.Type, virtualServiceName, remoteRegistry.config.SyncNamespace)
+			//oldVirtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(remoteRegistry.config.SyncNamespace).Get(virtualServiceName, v12.GetOptions{})
+			//
+			//if err != nil {
+			//	oldVirtualService = nil
+			//}
 			//
 			//virtualService := makeVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
 			//
-			//newVirtualService, err := createIstioConfig(istio.VirtualServiceProto, virtualService, virtualServiceName, remoteRegistry.config.SyncNamespace)
+			//newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, remoteRegistry.config.SyncNamespace)
 			//
-			//if err == nil {
-			//	addUpdateIstioResource(rc, *newVirtualService, oldVirtualService, virtualServiceName, syncNamespace)
-			//} else {
-			//	logrus.Errorf(LogErrFormat, "Create", istioModel.VirtualService.Type, virtualServiceName, rc.ClusterID, err)
-			//}
+			//addUpdateVirtualService(newVirtualService, oldVirtualService, remoteRegistry.config.SyncNamespace, rc)
 		}
 	}
 }
