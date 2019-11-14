@@ -2,16 +2,16 @@ package clusters
 
 import (
 	"fmt"
+	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/sirupsen/logrus"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
@@ -310,6 +310,11 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 			}
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
+			dr.TrafficPolicy.OutlierDetection = &networking.OutlierDetection{
+				BaseEjectionTime: &types.Duration{Seconds: 120},
+				ConsecutiveErrors: 10,
+				Interval: &types.Duration{Seconds: 60},
+			}
 		}
 	}
 	return dr

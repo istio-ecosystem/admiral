@@ -84,12 +84,12 @@ endif
 
 docker-build: set-tag
     #NOTE: Assumes binary has already been built (admiral)
-	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
+	docker build -t $(IMAGE):$(MYTAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish: set-tag
 ifeq ($(BRANCH),master)
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-	docker push $(IMAGE):$(TAG)
+	docker push $(IMAGE):$(MYTAG)
 else
 	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
 endif
