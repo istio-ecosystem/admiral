@@ -226,9 +226,16 @@ func getIstioResourceName(host string, suffix string) string {
 }
 
 func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
-	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	destDeployment *k8sAppsV1.Deployment, address string, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	globalFqdn := common.GetCname(destDeployment, identifier)
+
+	//handling case where the service doesn't have a clusterIP for whatever reason
+	if address == "" {
+		address = common.GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressCache)
+	} else {
+		admiralCache.ServiceEntryAddressCache.Put(getIstioResourceName(globalFqdn, "-se"), address)
+	}
 
 	if len(globalFqdn) == 0 {
 		return nil
@@ -257,7 +264,7 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 				Name: common.Http, Protocol: common.Http}},
 			Location:        networking.ServiceEntry_MESH_INTERNAL,
 			Resolution:      networking.ServiceEntry_DNS,
-			Addresses:       []string{common.GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressCache)},
+			Addresses:       []string{address},
 			SubjectAltNames: san,
 		}
 		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
@@ -440,6 +447,12 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
+		serviceClusterIp := ""
+		if serviceInstance != nil {
+			serviceClusterIp = serviceInstance.Spec.ClusterIP
+		}
+
+
 		if serviceInstance == nil {
 			continue
 		}
@@ -453,7 +466,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry("identity", rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry("identity", rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceClusterIp, serviceEntries)
 
 	}
 
