@@ -179,6 +179,8 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 			for _, deployment := range destDeployment.Deployments {
 
+				svc := getServiceForDeployment(rc, deployment[0], "namespace")
+
 				admiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
 
 				deployments := rc.DeploymentController.Cache.Get(destinationCluster)
@@ -187,7 +189,13 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 					continue
 				}
 				//TODO pass deployment
-				tmpSe := createServiceEntry(identifier, rc, config, admiralCache, deployment[0], serviceEntries)
+
+				serviceClusterIp := ""
+				if svc != nil {
+					serviceClusterIp = svc.Spec.ClusterIP
+				}
+
+				tmpSe := createServiceEntry(identifier, rc, config, admiralCache, deployment[0], serviceClusterIp, serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -451,7 +459,6 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 		if serviceInstance != nil {
 			serviceClusterIp = serviceInstance.Spec.ClusterIP
 		}
-
 
 		if serviceInstance == nil {
 			continue
