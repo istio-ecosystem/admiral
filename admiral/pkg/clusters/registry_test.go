@@ -2,12 +2,14 @@ package clusters
 
 import (
 	"context"
+	"fmt"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"gotest.tools/assert"
 	networking "istio.io/api/networking/v1alpha3"
 	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -312,6 +314,37 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
 
 }
+
+
+func TestCreateServiceEntryUseClusterIP(t *testing.T) {
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Fail()
+			}
+		}
+	})
+
+	rr.remoteControllers["test.cluster"] = rc
+	rc.ServiceController.Cache.Get("test").Service["test"][0].Spec.ClusterIP = "1.2.3.4"
+
+	serviceentries := createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
+
+
+	for key, value := range serviceentries{
+		fmt.Println("Key:", key, "Value:", value.Addresses[0])
+		assert.Equal(t, value.Addresses[0], "1.2.3.4", "Expected SE address to be equal to the cluster IP but it was not")
+	}
+}
+
+
 func TestAdded(t *testing.T) {
 
 	p := AdmiralParams{

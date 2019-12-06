@@ -2,13 +2,13 @@ package clusters
 
 import (
 	"context"
+	"github.com/gogo/protobuf/proto"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/gogo/protobuf/proto"
 	"k8s.io/client-go/rest"
 	"strings"
 	"time"
@@ -179,7 +179,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 
 			for _, deployment := range destDeployment.Deployments {
 
-				svc := getServiceForDeployment(rc, deployment[0], "namespace")
+				svc := getServiceForDeployment(rc, deployment[0], deployment[0].Namespace)
 
 				admiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
 
@@ -433,7 +433,7 @@ func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
 
 }
 
-func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry, syncNamespace string) {
+func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry, syncNamespace string) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 
@@ -526,6 +526,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 			//}
 		}
 	}
+	return serviceEntries
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {

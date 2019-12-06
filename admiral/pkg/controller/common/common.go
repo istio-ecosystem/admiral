@@ -84,6 +84,7 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 func GetLocalAddressForSe(seName string, seAddressCache *Map) string {
 	var address = seAddressCache.Get(seName)
 	if len(address) == 0 {
+		logrus.Warn("Falling back to legacy ServiceEntry address creation (This should not happen). SeName=%v", seName)
 		secondIndex := (len(seAddressCache.Map()) / 255) + 10
 		firstIndex := (len(seAddressCache.Map()) % 255) + 1
 		address = LocalAddressPrefix + Sep + strconv.Itoa(secondIndex) + Sep + strconv.Itoa(firstIndex)
