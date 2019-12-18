@@ -4,7 +4,6 @@ import (
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	"strconv"
 )
 
 const (
@@ -79,18 +78,6 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 	} else {
 		return SpiffePrefix + identifierVal
 	}
-}
-
-func GetLocalAddressForSe(seName string, seAddressCache *Map) string {
-	var address = seAddressCache.Get(seName)
-	if len(address) == 0 {
-		logrus.Warn("Falling back to legacy ServiceEntry address creation (This should not happen). SeName=%v", seName)
-		secondIndex := (len(seAddressCache.Map()) / 255) + 10
-		firstIndex := (len(seAddressCache.Map()) % 255) + 1
-		address = LocalAddressPrefix + Sep + strconv.Itoa(secondIndex) + Sep + strconv.Itoa(firstIndex)
-		seAddressCache.Put(seName, address)
-	}
-	return address
 }
 
 func GetNodeLocality(node *k8sV1.Node) string {
