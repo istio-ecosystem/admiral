@@ -7,6 +7,8 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"gopkg.in/yaml.v2"
+	"k8s.io/api/core/v1"
 	"reflect"
 	"testing"
 
@@ -31,14 +33,14 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 	}
 
 	cacheWithNoEntry := ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		EntryAddresses: map[string]string{"test-se": "1.2.3.4"},
+		Addresses: []string{"1.2.3.4"},
 	}
 
 	emptyCacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
 	}
 
 
@@ -55,7 +57,41 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 	if value != "bar" {
 		t.Fail()
 	}
+
+	if newSe.Addresses[0] != "1.2.3.4" {
+		t.Errorf("Address set incorrectly from cache, expected 1.2.3.4, got %v", newSe.Addresses[0])
+	}
 }
+
+//todo make this pass
+//func TestAddServiceEntriesWithDr(t *testing.T) {
+//	admiralCache := AdmiralCache{}
+//
+//	se := networking.ServiceEntry{
+//		Hosts: []string{"test.com"},
+//		Endpoints: []*networking.ServiceEntry_Endpoint{
+//			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+//		},
+//	}
+//
+//	rc, _ := createMockRemoteController(func(i interface{}) {
+//		res := i.(istio.Config)
+//		se, ok := res.Spec.(*networking.ServiceEntry)
+//		if ok {
+//			if se.Hosts[0] != "dev.bar.global" {
+//				t.Fail()
+//			}
+//		}
+//	})
+//
+//	seConfig, _ := createIstioConfig(istio.ServiceEntryProto, &se, "se1", "admiral-sync")
+//	_, err := rc.IstioConfigStore.Create(*seConfig)
+//	if err != nil {
+//		log.Infof("%v", err)
+//	}
+//
+//	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se}, "admiral-sync")
+//}
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
@@ -103,31 +139,31 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	emptyCacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
 	}
 
 	cacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
 	cacheControllerWith255Entries := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWith255Entries),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWith255Entries),
 	}
 
 	cacheControllerGetError := test.FakeConfigMapController{
 		GetError: errors.New("BAD THINGS HAPPENED"),
 		PutError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
 	cacheControllerPutError := test.FakeConfigMapController{
 		PutError: errors.New("BAD THINGS HAPPENED"),
 		GetError: nil,
-		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
 
@@ -219,4 +255,16 @@ func TestGetLocalAddressForSe(t *testing.T) {
 		})
 	}
 
+}
+
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore) *v1.ConfigMap{
+	bytes,_ := yaml.Marshal(addressStore)
+
+	cm := v1.ConfigMap{
+		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
+	}
+	cm.Name="se-address-configmap"
+	cm.Namespace="admiral-remote-ctx"
+	cm.ResourceVersion="1234"
+	return &cm
 }

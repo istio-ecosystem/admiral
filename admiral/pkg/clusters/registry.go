@@ -110,7 +110,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 	}
 
 	//add service entries for all dependencies in source cluster
-	addServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
+	AddServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
 }
 
 func getIstioResourceName(host string, suffix string) string {

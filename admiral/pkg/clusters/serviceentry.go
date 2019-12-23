@@ -46,8 +46,8 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 
 	if err != nil {
 		log.Errorf("Could not get unique address after %v retries. Failing to create serviceentry name=%v", maxRetries, globalFqdn)
+		return nil
 	}
-
 
 	if needsCacheUpdate {
 		loadServiceEntryCacheData(admiralCache.ConfigMapController, admiralCache)
@@ -144,7 +144,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	addServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries,
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries,
 		remoteRegistry.config.SyncNamespace)
 
 	//update the address to local fqdn for service entry in a cluster local to the service instance
@@ -160,7 +160,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 					ep.Address = localFqdn
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
-					addServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
 						map[string]*networking.ServiceEntry{key: serviceEntry}, remoteRegistry.config.SyncNamespace)
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
@@ -230,7 +230,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 	return allSes
 }
 
-func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
+func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
 	syncNamespace string) {
 	for _, se := range serviceEntries {
 
