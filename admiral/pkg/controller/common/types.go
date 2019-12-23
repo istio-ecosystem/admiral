@@ -62,7 +62,6 @@ func (s *Map) Map() map[string]string {
 	return s.cache
 }
 
-
 func (s *MapOfMaps) Put(pkey string, key string, value string) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()

@@ -1,7 +1,10 @@
 package clusters
 
 import (
+	"errors"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	"istio.io/istio/pkg/log"
 	"strconv"
 	"strings"
@@ -42,4 +45,36 @@ func GetMeshPorts(clusterName string, destService *k8sV1.Service,
 		}
 	}
 	return ports
+}
+
+func GetServiceEntryStateFromConfigmap(configmap *k8sV1.ConfigMap) *ServiceEntryAddressStore {
+
+	bytes := []byte(configmap.Data["serviceEntryAddressStore"])
+	addressStore := ServiceEntryAddressStore{}
+	err := yaml.Unmarshal(bytes, &addressStore)
+
+	if err != nil {
+		logrus.Errorf("Could not unmarshal configmap data. Double check the configmap format. %v", err)
+		return nil
+	}
+	if addressStore.Addresses == nil {
+		addressStore.Addresses = []string{}
+	}
+	if addressStore.EntryAddresses == nil {
+		addressStore.EntryAddresses = map[string]string{}
+	}
+
+
+	return &addressStore
+}
+
+func ValidateConfigmapBeforePutting(cm *k8sV1.ConfigMap) error {
+	if cm.ResourceVersion == "" {
+		return errors.New("resourceversion required") //without it, we can't be sure someone else didn't put something between our read and write
+	}
+	store := GetServiceEntryStateFromConfigmap(cm)
+	if len(store.EntryAddresses) != len(store.Addresses) {
+		return errors.New("address cache length mismatch") //should be impossible. We're in a state where the list of addresses doesn't match the map of se:address. Something's been missed and must be fixed
+	}
+	return nil
 }
