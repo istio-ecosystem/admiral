@@ -49,6 +49,7 @@ type AdmiralParams struct {
 	EnableSAN                  bool
 	SANPrefix                  string
 	SecretResolver             string
+	LabelSet				   *common.LabelSet
 }
 
 func (b AdmiralParams) String() string {

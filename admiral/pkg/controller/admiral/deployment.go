@@ -14,10 +14,6 @@ import (
 	"sync"
 )
 
-const NamespaceSidecarInjectionLabelFilter = "istio-injection=enabled"
-const PodSidecarInjectionLabel = "istio-injected"
-const PodSidecarInjectionLabelFilter = PodSidecarInjectionLabel + "=true"
-
 // Handler interface contains the methods that are required
 type DeploymentHandler interface {
 	Added(obj *k8sAppsV1.Deployment)
@@ -35,6 +31,7 @@ type DeploymentController struct {
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
 	ctl               *Controller
+	labelSet 		  common.LabelSet
 }
 
 type deploymentCache struct {
@@ -95,7 +92,8 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: NamespaceSidecarInjectionLabelFilter})
+	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
@@ -106,7 +104,8 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 	for _, v := range istioEnabledNs.Items {
 
 		deployments := d.K8sClient.AppsV1().Deployments(v.Name)
-		deploymentsList, err := deployments.List(meta_v1.ListOptions{LabelSelector: PodSidecarInjectionLabelFilter})
+		admiralEnabledLabelFilter := d.labelSet.DeploymentLabel+"=true"
+		deploymentsList, err := deployments.List(meta_v1.ListOptions{LabelSelector: admiralEnabledLabelFilter})
 
 		if err != nil {
 			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
@@ -152,7 +151,7 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 func (d *DeploymentController) Added(ojb interface{}) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
-	if len(key) > 0 && deployment.Spec.Template.Labels[PodSidecarInjectionLabel] == "true" {
+	if len(key) > 0 && deployment.Spec.Template.Labels[d.labelSet.DeploymentLabel] == "true" {
 		d.Cache.AppendDeploymentToCluster(key, deployment)
 		d.DeploymentHandler.Added(deployment)
 	}

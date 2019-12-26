@@ -15,10 +15,6 @@ import (
 	"sync"
 )
 
-const SidecarInjectionNamespaceFilter = "istio-injection=enabled"
-const SidecarInjectionPodLabel = "istio-injected"
-const SidecarInjectionPodFilter = SidecarInjectionPodLabel + "=true"
-
 // Handler interface contains the methods that are required
 type PodHandler interface {
 	Added(obj *k8sV1.Pod)
@@ -36,6 +32,7 @@ type PodController struct {
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
+	labelSet   common.LabelSet
 }
 
 type podCache struct {
@@ -95,7 +92,8 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: SidecarInjectionNamespaceFilter})
+	sidecarInjectionNamespaceFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: sidecarInjectionNamespaceFilter})
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
@@ -106,7 +104,8 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	for _, v := range istioEnabledNs.Items {
 
 		pods := d.K8sClient.CoreV1().Pods(v.Name)
-		podsList, err := pods.List(meta_v1.ListOptions{LabelSelector: SidecarInjectionPodFilter})
+		admiralEnabledLabelFilter := d.labelSet.DeploymentLabel+"=true"
+		podsList, err := pods.List(meta_v1.ListOptions{LabelSelector: admiralEnabledLabelFilter})
 
 		if err != nil {
 			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
@@ -157,7 +156,7 @@ func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.C
 func (d *PodController) Added(ojb interface{}) {
 	pod := ojb.(*k8sV1.Pod)
 	key := d.Cache.getKey(pod)
-	if len(key) > 0 && pod.Labels[PodSidecarInjectionLabel] == "true" {
+	if len(key) > 0 && pod.Labels[d.labelSet.DeploymentLabel] == "true" {
 		d.Cache.AppendPodToCluster(key, pod)
 		d.PodHandler.Added(pod)
 	}

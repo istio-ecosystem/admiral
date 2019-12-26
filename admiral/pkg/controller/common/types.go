@@ -20,6 +20,13 @@ type ServiceEntryAddressStore struct {
 	Addresses		[]string   `yaml:"addresses,omitempty"` //trading space for efficiency - this will give a quick way to validate that the address is unique
 }
 
+type LabelSet struct {
+	DeploymentLabel string
+	TargetGroupLabel string
+	NamespaceSidecarInjectionLabel string
+	NamespaceSidecarInjectionLabelValue string
+}
+
 func NewMap() *Map {
   n := new(Map)
   n.cache = make(map[string]string)
