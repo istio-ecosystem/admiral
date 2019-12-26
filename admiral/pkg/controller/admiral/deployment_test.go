@@ -17,6 +17,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	}
 	labelset := common.LabelSet{
 		DeploymentLabel: "istio-injected",
+		AdmiralIgnoreLabel: "admiral-ignore",
 	}
 	depController := DeploymentController{
 		DeploymentHandler: &mdh,
@@ -27,6 +28,8 @@ func TestDeploymentController_Added(t *testing.T) {
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
 	deploymentWithBadLabels := v1.Deployment{}
 	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
+	deploymentWithIgnoreLabels := v1.Deployment{}
+	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
 
 	testCases := []struct {
 		name               string
@@ -46,6 +49,12 @@ func TestDeploymentController_Added(t *testing.T) {
 			expectedDeployment: nil,
 			expectedCacheSize:  0,
 		},
+		{
+			name:               "Expects ignored deployment to not be added to the cache",
+			deployment:         &deploymentWithIgnoreLabels,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
@@ -55,7 +64,9 @@ func TestDeploymentController_Added(t *testing.T) {
 				if len(depController.Cache.cache) != 0 {
 					t.Errorf("Cache should be empty if expected deployment is nil")
 				}
-			} else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[""]) != c.expectedCacheSize {
+			} else if len(depController.Cache.cache)==0 && c.expectedCacheSize != 0 {
+				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
+			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[""]) != c.expectedCacheSize {
 				t.Errorf("Deployment controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Deployments[""]), c.expectedCacheSize)
 			} else if depController.Cache.cache["id"].Deployments[""][0] != &deployment {
 				t.Errorf("Incorrect deployment added to deployment controller cache. Got %v expected %v", depController.Cache.cache["id"].Deployments[""][0], deployment)
@@ -65,14 +76,3 @@ func TestDeploymentController_Added(t *testing.T) {
 	}
 
 }
-
-//
-//func (d *DeploymentController) Added(ojb interface{}) {
-//	deployment := ojb.(*k8sAppsV1.Deployment)
-//	key := d.Cache.getKey(deployment)
-//	if len(key) > 0 && deployment.Spec.Template.Labels[d.labelSet.DeploymentLabel] == "true" {
-//		d.Cache.AppendDeploymentToCluster(key, deployment)
-//		d.DeploymentHandler.Added(deployment)
-//	}
-//
-//}

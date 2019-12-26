@@ -73,11 +73,13 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Type of resolver to use to fetch kubeconfig for monitored clusters")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.DeploymentLabel, "deployment_label", "istio-injected",
 		"The label, on a deployment, which must be set to \"True\" for Admiral to listen on the deployment")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "target_group_label", "target-group",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.SubsetLabel, "subset_label", "subset",
 		"The label, on a deployment, tells admiral which target group this deployment is a part of. Used for traffic splits via the Global Traffic Policy object")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "namespace_injected_label", "sidecar.istio.io/inject",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabel, "namespace_injected_label", "sidecar.istio.io/inject",
 		"The label key, on a namespace, which tells Istio to perform sidecar injection")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "namespace_injected_value", "enabled",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabelValue, "namespace_injected_value", "enabled",
+		"The label value, on a namespace, which tells Istio to perform sidecar injection")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.AdmiralIgnoreLabel, "admiral_ignore_label", "admiral-ignore",
 		"The label value, on a namespace, which tells Istio to perform sidecar injection")
 	loggingOptions.AttachCobraFlags(rootCmd)
 

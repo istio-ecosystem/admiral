@@ -104,14 +104,22 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 	for _, v := range istioEnabledNs.Items {
 
 		deployments := d.K8sClient.AppsV1().Deployments(v.Name)
-		admiralEnabledLabelFilter := d.labelSet.DeploymentLabel+"=true"
-		deploymentsList, err := deployments.List(meta_v1.ListOptions{LabelSelector: admiralEnabledLabelFilter})
+		deploymentsList, err := deployments.List(meta_v1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("error listing deployments: %v", err)
+		}
+		var admiralDeployments []k8sAppsV1.Deployment
+		for _, deployment := range deploymentsList.Items {
+			if !d.shouldIgnoreBasedOnLabels(&deployment) {
+				admiralDeployments = append(admiralDeployments, deployment)
+			}
+		}
 
 		if err != nil {
 			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
 		}
 
-		for _, pi := range deploymentsList.Items {
+		for _, pi := range admiralDeployments {
 			res = append(res, &pi)
 		}
 	}
@@ -151,7 +159,7 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 func (d *DeploymentController) Added(ojb interface{}) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
-	if len(key) > 0 && deployment.Spec.Template.Labels[d.labelSet.DeploymentLabel] == "true" {
+	if len(key) > 0 && !d.shouldIgnoreBasedOnLabels(deployment) {
 		d.Cache.AppendDeploymentToCluster(key, deployment)
 		d.DeploymentHandler.Added(deployment)
 	}
@@ -160,4 +168,14 @@ func (d *DeploymentController) Added(ojb interface{}) {
 
 func (d *DeploymentController) Deleted(name string) {
 	//TODO deal with this
+}
+
+func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
+	if deployment.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
+		return true
+	}
+	if deployment.Spec.Template.Labels[d.labelSet.DeploymentLabel] != "true" { //Not sidecar injected, we don't want to inject
+			return true
+	}
+	return false //labels are fine, we should not ignore
 }
