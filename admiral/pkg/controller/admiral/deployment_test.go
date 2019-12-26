@@ -1,9 +1,13 @@
 package admiral
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	"k8s.io/api/apps/v1"
+	"github.com/sirupsen/logrus"
+	k8sAppsV1 "k8s.io/api/apps/v1"
+	coreV1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"sync"
 	"testing"
 )
@@ -24,17 +28,17 @@ func TestDeploymentController_Added(t *testing.T) {
 		Cache:             &cache,
 		labelSet:          labelset,
 	}
-	deployment := v1.Deployment{}
+	deployment := k8sAppsV1.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
-	deploymentWithBadLabels := v1.Deployment{}
+	deploymentWithBadLabels := k8sAppsV1.Deployment{}
 	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
-	deploymentWithIgnoreLabels := v1.Deployment{}
+	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
 
 	testCases := []struct {
 		name               string
-		deployment         *v1.Deployment
-		expectedDeployment *v1.Deployment
+		deployment         *k8sAppsV1.Deployment
+		expectedDeployment *k8sAppsV1.Deployment
 		expectedCacheSize  int
 	}{
 		{
@@ -77,6 +81,60 @@ func TestDeploymentController_Added(t *testing.T) {
 
 }
 
+
+
 func TestDeploymentController_GetDeployments(t *testing.T) {
+
+	depController := DeploymentController{
+		labelSet: common.LabelSet{
+			DeploymentLabel:                    "istio-injected",
+			NamespaceSidecarInjectionLabel:      "istio-injection",
+			NamespaceSidecarInjectionLabelValue: "enabled",
+			AdmiralIgnoreLabel:  "admiral-ignore",
+		},
+	}
+
+
+	client := fake.NewSimpleClientset()
+
+	ns := coreV1.Namespace{}
+	ns.Labels = map[string]string{"istio-injection": "enabled"}
+	ns.Name = "test-ns"
+
+	_, err := client.CoreV1().Namespaces().Create(&ns)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	deployment := k8sAppsV1.Deployment{}
+	deployment.Namespace = "test-ns"
+	deployment.Name="deployment"
+	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
+	deploymentWithBadLabels := k8sAppsV1.Deployment{}
+	deploymentWithBadLabels.Namespace = "test-ns"
+	deploymentWithBadLabels.Name="deploymentWithBadLabels"
+	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
+	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
+	deploymentWithIgnoreLabels.Namespace = "test-ns"
+	deploymentWithIgnoreLabels.Name="deploymentWithIgnoreLabels"
+	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
+	_, err = client.AppsV1().Deployments("test-ns").Create(&deployment)
+	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithBadLabels)
+	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithIgnoreLabels)
+
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+
+	depController.K8sClient = client
+	resultingDeps, _ := depController.GetDeployments()
+
+	if len(resultingDeps) != 1 {
+		t.Errorf("Get Deployments returned too many values. Expected 1, got %v", len(resultingDeps))
+	}
+	if  !cmp.Equal(resultingDeps[0], &deployment) {
+		logrus.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
+		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
+	}
 
 }
