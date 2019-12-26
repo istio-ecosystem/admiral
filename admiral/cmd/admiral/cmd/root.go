@@ -71,11 +71,11 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Prefix to use when creating SAN for Service Entries")
 	rootCmd.PersistentFlags().StringVar(&params.SecretResolver, "secret_resolver", "",
 		"Type of resolver to use to fetch kubeconfig for monitored clusters")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.DeploymentLabel, "deployment_label", "istio-injected",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.DeploymentLabel, "deployment_label", "sidecar.istio.io/inject",
 		"The label, on a deployment, which must be set to \"True\" for Admiral to listen on the deployment")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.SubsetLabel, "subset_label", "subset",
 		"The label, on a deployment, tells admiral which target group this deployment is a part of. Used for traffic splits via the Global Traffic Policy object")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabel, "namespace_injected_label", "sidecar.istio.io/inject",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabel, "namespace_injected_label", "istio-injection",
 		"The label key, on a namespace, which tells Istio to perform sidecar injection")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabelValue, "namespace_injected_value", "enabled",
 		"The label value, on a namespace, which tells Istio to perform sidecar injection")

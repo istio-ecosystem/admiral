@@ -76,3 +76,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	}
 
 }
+
+func TestDeploymentController_GetDeployments(t *testing.T) {
+
+}
