@@ -75,7 +75,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The label, on a deployment, which must be set to \"True\" for Admiral to listen on the deployment")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "target_group_label", "target-group",
 		"The label, on a deployment, tells admiral which target group this deployment is a part of. Used for traffic splits via the Global Traffic Policy object")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "namespace_injected_label", "istio-injection",
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "namespace_injected_label", "sidecar.istio.io/inject",
 		"The label key, on a namespace, which tells Istio to perform sidecar injection")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.TargetGroupLabel, "namespace_injected_value", "enabled",
 		"The label value, on a namespace, which tells Istio to perform sidecar injection")

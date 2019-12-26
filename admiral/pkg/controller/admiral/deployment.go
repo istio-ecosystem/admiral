@@ -35,7 +35,7 @@ type DeploymentController struct {
 }
 
 type deploymentCache struct {
-	//map of dependencies key=identity value array of onboarded identitys
+	//map of dependencies key=identity value array of onboarded identities
 	cache map[string]*DeploymentClusterEntry
 	mutex *sync.Mutex
 }
