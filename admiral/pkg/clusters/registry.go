@@ -50,6 +50,8 @@ type AdmiralParams struct {
 	SANPrefix                  string
 	SecretResolver             string
 	LabelSet				   *common.LabelSet
+	NameSuffix                 string
+	Identifier                 string
 }
 
 func (b AdmiralParams) String() string {
@@ -237,7 +239,7 @@ func getIstioResourceName(host string, suffix string) string {
 func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	globalFqdn := common.GetCname(destDeployment, identifier)
+	globalFqdn := common.GetCname(destDeployment, identifier, config.NameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -477,7 +479,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
-		cname = common.GetCname(deploymentInstance[0], "identity")
+		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.Identifier, remoteRegistry.config.NameSuffix)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -486,7 +488,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry("identity", rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry(remoteRegistry.config.Identifier, rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
 
 	}
 
@@ -913,7 +915,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.NameSuffix, r.config.Identifier)
 				}
 
 			}
@@ -928,7 +930,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *networking.DestinationRule, syncNamespace string) {
+	destinationRule *networking.DestinationRule, syncNamespace string, nameSuffix string, identifier string) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -946,7 +948,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
 
-	cname := common.GetCname(deploymentInstance, "identity")
+	cname := common.GetCname(deploymentInstance, identifier, nameSuffix)
 	if cname == destinationRule.Host {
 		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		existsDestinationRule := remoteController.IstioConfigStore.Get(istioModel.DestinationRule.Type, localDrName, syncNamespace)

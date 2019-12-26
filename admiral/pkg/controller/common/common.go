@@ -18,7 +18,6 @@ const (
 	Dash                       = "-"
 	Slash                      = "/"
 	DotLocalDomainSuffix       = ".svc.cluster.local"
-	DotGlobal                  = ".global"
 	Mesh                       = "mesh"
 	MulticlusterIngressGateway = "istio-multicluster-ingressgateway"
 	LocalAddressPrefix         = "240.0"
@@ -49,7 +48,7 @@ func DefaultGlobalIdentifier() string {
 }
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global
-func GetCname(deployment *k8sAppsV1.Deployment, identifier string) string {
+func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix string) string {
 	var environment = deployment.Spec.Template.Labels[Env]
 	if len(environment) == 0 {
 		environment = "default"
@@ -64,7 +63,7 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string) string {
 		logrus.Errorf("Unable to get cname for service with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	return environment + Sep + alias + DotGlobal
+	return environment + Sep + alias + nameSuffix
 }
 
 // GetSAN returns SAN for a service entry in the format spiffe://<domain>/<identifier>, Ex: spiffe://subdomain.domain.com/Admiral.platform.mesh.server
