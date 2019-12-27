@@ -27,3 +27,12 @@ func Subset(m1 map[string]string, m2 map[string]string) bool {
 	}
 	return true;
 }
+
+func Contains(vs []string, t string) bool {
+	for _, v := range vs {
+		if v == t {
+			return true
+		}
+	}
+	return false
+}

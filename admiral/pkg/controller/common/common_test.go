@@ -5,69 +5,8 @@ import (
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
-	"strconv"
 	"testing"
 )
-
-func TestGetLocalAddressForSe(t *testing.T) {
-	t.Parallel()
-	cacheWithEntry := NewMap()
-	cacheWithNoEntry := NewMap()
-	cacheWith255Entries := NewMap()
-	cacheWithEntry.Put("dev.a.global", LocalAddressPrefix + ".10.1")
-
-	for i := 1; i <= 255; i++ {
-		cacheWith255Entries.Put(strconv.Itoa(i) + ".global", LocalAddressPrefix + ".10." + strconv.Itoa(i))
-	}
-
-	testCases := []struct {
-		name   string
-		seName   string
-		seAddressCache  *Map
-		wantAddess string
-	}{
-		{
-			name: "should return new available address",
-			seName: "dev.a.global",
-			seAddressCache: cacheWithNoEntry,
-			wantAddess: LocalAddressPrefix + ".10.1",
-		},
-		{
-			name: "should return address from map",
-			seName: "dev.a.global",
-			seAddressCache: cacheWithEntry,
-			wantAddess: LocalAddressPrefix + ".10.1",
-		},
-		{
-			name: "should return new available address",
-			seName: "dev.b.global",
-			seAddressCache: cacheWithEntry,
-			wantAddess: LocalAddressPrefix + ".10.2",
-		},
-		{
-			name: "should return new available address in higher subnet",
-			seName: "dev.a.global",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: LocalAddressPrefix + ".11.1",
-		},
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			seAddress := GetLocalAddressForSe(c.seName, c.seAddressCache)
-			if c.wantAddess != "" {
-				if !reflect.DeepEqual(seAddress, c.wantAddess) {
-					t.Errorf("Wanted se address: %s, got: %s", c.wantAddess, seAddress)
-				}
-			} else {
-				if seAddress != "" {
-					t.Errorf("Unexpectedly found address: %s", seAddress)
-				}
-			}
-		})
-	}
-
-}
 
 func TestGetSAN(t *testing.T) {
 	t.Parallel()

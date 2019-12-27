@@ -46,6 +46,7 @@ require (
 	google.golang.org/grpc v1.18.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2
+	gotest.tools v2.2.0+incompatible
 	istio.io/api v0.0.0-20190213184321-d817a1a3e29a
 	istio.io/istio v0.0.0-20190214070811-6113e155ac85
 	k8s.io/api v0.0.0-20190118113203-912cbe2bfef3

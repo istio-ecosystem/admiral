@@ -333,5 +333,15 @@ In this example the service object with the app=service1 label will have 3 dns n
 - service1-west.global - sends traffic to the west region and only to east if west in unavailable
 - service1-east.global - sends traffic to the east region and only to west if east in unavailable
 
+## Who uses Admiral?
+
+Organizations below are **officially** using Admiral. Please send a PR with your organization name if you are using Admiral.
+
+1. [Intuit](https://www.intuit.com/)
+
+## Community Blogs and Presentations
+
+1. [Stitching a Service Mesh Across Hundreds of Discrete Networks](https://www.youtube.com/watch?v=EWyNbBn1vns)
+
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)

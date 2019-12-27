@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -14,6 +15,8 @@ import (
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"reflect"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -119,9 +122,19 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 		},
 	}
 
-	address := common.NewMap()
+	cacheWithNoEntry := common.ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses: []string{},
+	}
 
-	res := createSeWithDrLabels(nil, false, "", "test-se", &se, &des, address)
+	emptyCacheController := test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+	}
+
+
+	res := createSeWithDrLabels(nil, false, "", "test-se", &se, &des, &cacheWithNoEntry, &emptyCacheController)
 
 	if res == nil {
 		t.Fail()
@@ -312,6 +325,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
 
 }
+
 func TestAdded(t *testing.T) {
 
 	p := AdmiralParams{
@@ -464,3 +478,146 @@ func TestPodHandler(t *testing.T) {
 
 	ph.Deleted(&pod)
 }
+
+func TestGetLocalAddressForSe(t *testing.T) {
+	t.Parallel()
+	cacheWithEntry := common.ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+	cacheWithNoEntry := common.ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses: []string{},
+	}
+	cacheWith255Entries := common.ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses: []string{},
+	}
+
+	for i := 1; i <= 255; i++ {
+		address :=  common.LocalAddressPrefix + ".10." + strconv.Itoa(i)
+		cacheWith255Entries.EntryAddresses[strconv.Itoa(i) + ".mesh"] = address
+		cacheWith255Entries.Addresses = append(cacheWith255Entries.Addresses, address)
+	}
+
+	emptyCacheController := test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+	}
+
+	cacheController := test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+	}
+
+	cacheControllerWith255Entries := test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWith255Entries),
+	}
+
+	cacheControllerGetError := test.FakeConfigMapController{
+		GetError: errors.New("BAD THINGS HAPPENED"),
+		PutError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+	}
+
+	cacheControllerPutError := test.FakeConfigMapController{
+		PutError: errors.New("BAD THINGS HAPPENED"),
+		GetError: nil,
+		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
+	}
+
+
+	testCases := []struct {
+		name   string
+		seName   string
+		seAddressCache  common.ServiceEntryAddressStore
+		wantAddess string
+		cacheController admiral.ConfigMapControllerInterface
+		expectedCacheUpdate bool
+		wantedError error
+	}{
+		{
+			name: "should return new available address",
+			seName: "e2e.a.mesh",
+			seAddressCache: cacheWithNoEntry,
+			wantAddess: common.LocalAddressPrefix + ".10.1",
+			cacheController: &emptyCacheController,
+			expectedCacheUpdate: true,
+			wantedError: nil,
+		},
+		{
+			name: "should return address from map",
+			seName: "e2e.a.mesh",
+			seAddressCache: cacheWithEntry,
+			wantAddess: common.LocalAddressPrefix + ".10.1",
+			cacheController: &cacheController,
+			expectedCacheUpdate: false,
+			wantedError: nil,
+		},
+		{
+			name: "should return new available address",
+			seName: "e2e.b.mesh",
+			seAddressCache: cacheWithEntry,
+			wantAddess: common.LocalAddressPrefix + ".10.2",
+			cacheController: &cacheController,
+			expectedCacheUpdate: true,
+			wantedError: nil,
+		},
+		{
+			name: "should return new available address in higher subnet",
+			seName: "e2e.a.mesh",
+			seAddressCache: cacheWith255Entries,
+			wantAddess: common.LocalAddressPrefix + ".11.1",
+			cacheController: &cacheControllerWith255Entries,
+			expectedCacheUpdate: true,
+			wantedError: nil,
+		},
+		{
+			name: "should gracefully propagate get error",
+			seName: "e2e.a.mesh",
+			seAddressCache: cacheWith255Entries,
+			wantAddess: "",
+			cacheController: &cacheControllerGetError,
+			expectedCacheUpdate: true,
+			wantedError: errors.New("BAD THINGS HAPPENED"),
+		},
+		{
+			name: "Should not return address on put error",
+			seName: "e2e.abcdefghijklmnop.mesh",
+			seAddressCache: cacheWith255Entries,
+			wantAddess: "",
+			cacheController: &cacheControllerPutError,
+			expectedCacheUpdate: true,
+			wantedError: errors.New("BAD THINGS HAPPENED"),
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			seAddress, needsCacheUpdate, err := GetLocalAddressForSe(c.seName, &c.seAddressCache, c.cacheController)
+			if c.wantAddess != "" {
+				if !reflect.DeepEqual(seAddress, c.wantAddess) {
+					t.Errorf("Wanted se address: %s, got: %s", c.wantAddess, seAddress)
+				}
+				if err==nil && c.wantedError==nil {
+					//we're fine
+				} else if err.Error() != c.wantedError.Error() {
+					t.Errorf("Error mismatch. Expected %v but got %v", c.wantedError, err)
+				}
+				if needsCacheUpdate != c.expectedCacheUpdate {
+					t.Errorf("Expected %v, got %v for needs cache update", c.expectedCacheUpdate, needsCacheUpdate)
+				}
+			} else {
+				if seAddress != "" {
+					t.Errorf("Unexpectedly found address: %s", seAddress)
+				}
+			}
+		})
+	}
+
+}
+
