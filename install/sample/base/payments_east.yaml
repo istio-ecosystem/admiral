@@ -27,7 +27,7 @@ data:
       server {
           listen       80;
           server_name  _;
-          add_header locality cluster_0
+          add_header locality cluster_1;
           location / {
               return 200 "Hello World! - Admiral!!";
 
@@ -38,19 +38,18 @@ data:
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: greeting
+  name: payments
 spec:
   replicas: 1
   template:
     metadata:
-      annotations:
-        sidecar.istio.io/inject: "true"
       labels:
-        app: greeting
-        identity: greetin
+        app: payments
+        identity: payments
+        istio-injected: "true"
     spec:
       containers:
-        - name: greeting
+        - name: payments
           image: nginx
           ports:
             - containerPort: 80
@@ -75,13 +74,13 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: greeting
-    identity: greeting
-  name: greeting
+    app: payments
+    identity: payments
+  name: payments
 spec:
   ports:
     - port: 80
       targetPort: 80
       name: http
   selector:
-    app: greeting
+    app: payments

@@ -10,4 +10,5 @@ spec:
   identityLabel: identity
   destinations:
     - greeting
+    - payments
 ---
