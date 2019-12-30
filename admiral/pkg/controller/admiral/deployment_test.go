@@ -20,8 +20,8 @@ func TestDeploymentController_Added(t *testing.T) {
 		mutex: &sync.Mutex{},
 	}
 	labelset := common.LabelSet{
-		DeploymentLabel: "istio-injected",
-		AdmiralIgnoreLabel: "admiral-ignore",
+		DeploymentAnnotation: "sidecar.istio.io/inject",
+		AdmiralIgnoreLabel:   "admiral-ignore",
 	}
 	depController := DeploymentController{
 		DeploymentHandler: &mdh,
@@ -30,10 +30,12 @@ func TestDeploymentController_Added(t *testing.T) {
 	}
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
+	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithBadLabels := k8sAppsV1.Deployment{}
 	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
 	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
+	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 
 	testCases := []struct {
 		name               string
@@ -87,10 +89,10 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 
 	depController := DeploymentController{
 		labelSet: common.LabelSet{
-			DeploymentLabel:                    "istio-injected",
+			DeploymentAnnotation:                "sidecar.istio.io/inject",
 			NamespaceSidecarInjectionLabel:      "istio-injection",
 			NamespaceSidecarInjectionLabelValue: "enabled",
-			AdmiralIgnoreLabel:  "admiral-ignore",
+			AdmiralIgnoreLabel:                  "admiral-ignore",
 		},
 	}
 
@@ -110,14 +112,17 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 	deployment.Namespace = "test-ns"
 	deployment.Name="deployment"
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
+	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithBadLabels := k8sAppsV1.Deployment{}
 	deploymentWithBadLabels.Namespace = "test-ns"
 	deploymentWithBadLabels.Name="deploymentWithBadLabels"
 	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
+	deploymentWithBadLabels.Spec.Template.Annotations = map[string]string{"woo": "yay"}
 	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Namespace = "test-ns"
 	deploymentWithIgnoreLabels.Name="deploymentWithIgnoreLabels"
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
+	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	_, err = client.AppsV1().Deployments("test-ns").Create(&deployment)
 	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithBadLabels)
 	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithIgnoreLabels)

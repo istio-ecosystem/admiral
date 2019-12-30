@@ -174,7 +174,7 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 	if deployment.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
-	if deployment.Spec.Template.Labels[d.labelSet.DeploymentLabel] != "true" { //Not sidecar injected, we don't want to inject
+	if deployment.Spec.Template.Annotations[d.labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
 			return true
 	}
 	return false //labels are fine, we should not ignore

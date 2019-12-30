@@ -17,7 +17,6 @@ spec:
       labels:
         app: webapp
         identity: webapp
-        sidecar.istio.io/inject: "true"
         #admiral-ignore: "true" #Uncommenting this line will cause admiral to ignore this deployment despite the fact that it's in the mesh
     spec:
       serviceAccountName: webapp

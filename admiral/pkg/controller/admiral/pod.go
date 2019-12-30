@@ -104,7 +104,7 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	for _, v := range istioEnabledNs.Items {
 
 		pods := d.K8sClient.CoreV1().Pods(v.Name)
-		admiralEnabledLabelFilter := d.labelSet.DeploymentLabel+"=true"
+		admiralEnabledLabelFilter := d.labelSet.DeploymentAnnotation +"=true"
 		podsList, err := pods.List(meta_v1.ListOptions{LabelSelector: admiralEnabledLabelFilter})
 
 		if err != nil {
@@ -156,7 +156,7 @@ func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.C
 func (d *PodController) Added(ojb interface{}) {
 	pod := ojb.(*k8sV1.Pod)
 	key := d.Cache.getKey(pod)
-	if len(key) > 0 && pod.Labels[d.labelSet.DeploymentLabel] == "true" {
+	if len(key) > 0 && pod.Labels[d.labelSet.DeploymentAnnotation] == "true" {
 		d.Cache.AppendPodToCluster(key, pod)
 		d.PodHandler.Added(pod)
 	}

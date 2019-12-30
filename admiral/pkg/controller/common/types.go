@@ -21,11 +21,11 @@ type ServiceEntryAddressStore struct {
 }
 
 type LabelSet struct {
-	DeploymentLabel                     string
+	DeploymentAnnotation                string
 	SubsetLabel                         string
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
-	AdmiralIgnoreLabel string
+	AdmiralIgnoreLabel                  string
 }
 
 func NewMap() *Map {
