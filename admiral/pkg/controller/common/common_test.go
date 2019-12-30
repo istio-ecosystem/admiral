@@ -58,7 +58,7 @@ func TestGetSAN(t *testing.T) {
 
 func TestGetCname(t *testing.T) {
 
-	nameSuffix := ".global"
+	nameSuffix := "global"
 	identifier := "identity"
 	identifierVal := "company.platform.server"
 

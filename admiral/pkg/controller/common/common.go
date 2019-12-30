@@ -63,7 +63,7 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		logrus.Errorf("Unable to get cname for service with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	return environment + Sep + alias + nameSuffix
+	return environment + Sep + alias + Sep + nameSuffix
 }
 
 // GetSAN returns SAN for a service entry in the format spiffe://<domain>/<identifier>, Ex: spiffe://subdomain.domain.com/Admiral.platform.mesh.server
