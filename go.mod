@@ -41,18 +41,17 @@ require (
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1 // indirect
-	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613 // indirect
-	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006 // indirect
 	golang.org/x/oauth2 v0.0.0-20190212230446-3e8b2be13635 // indirect
 	google.golang.org/grpc v1.18.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.2.2
-	gotest.tools v2.2.0+incompatible
+	gotest.tools v2.2.0+incompatible // indirect
 	istio.io/api v0.0.0-20190213184321-d817a1a3e29a
 	istio.io/istio v0.0.0-20190214070811-6113e155ac85
 	k8s.io/api v0.0.0-20190118113203-912cbe2bfef3
 	k8s.io/apiextensions-apiserver v0.0.0-20181204003618-e419c5771cdc
 	k8s.io/apimachinery v0.0.0-20190208202428-1a579f8a7b42
 	k8s.io/client-go v0.0.0-20190117233410-4022682532b3
+	k8s.io/code-generator v0.15.8-beta.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20190208205540-d7c86cdc46e3 // indirect
 )
