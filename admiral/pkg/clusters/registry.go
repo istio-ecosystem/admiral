@@ -1026,18 +1026,28 @@ func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.C
 		_, e = rc.IstioConfigStore.Create(m)
 
 	} else {
-		exist.Labels = m.Labels
-		exist.Spec = m.Spec
-		exist.Annotations = m.Annotations
-		verb = "Update"
-		_, e = rc.IstioConfigStore.Update(*exist)
+		if len(exist.Labels) > 0 {
+			if _, ok := exist.Labels["disable-update"]; ok {
+				verb = "Skipped"
+			}
+		}
+
+		if verb != "Skipped" {
+			exist.Labels = m.Labels
+			exist.Spec = m.Spec
+			exist.Annotations = m.Annotations
+			verb = "Update"
+			_, e = rc.IstioConfigStore.Update(*exist)
+		}
 	}
 
 	//TODO this should return an error
 	if e != nil {
 		log.Errorf(LogErrFormat, verb, t, m.Spec, rc.ClusterID, e)
-	} else {
+	} else if verb != "Skipped" {
 		log.Infof(LogFormat, verb, t, m.Name, rc.ClusterID, "success")
+	} else {
+		log.Infof(LogFormat, verb, t, m.Name, rc.ClusterID, "Found Skip flag")
 	}
 }
 
