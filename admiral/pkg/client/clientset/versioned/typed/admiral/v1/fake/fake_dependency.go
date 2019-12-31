@@ -131,7 +131,7 @@ func (c *FakeDependencies) DeleteCollection(options *v1.DeleteOptions, listOptio
 // Patch applies the patch and returns the patched dependency.
 func (c *FakeDependencies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *admiralv1.Dependency, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, name, pt, data, subresources...), &admiralv1.Dependency{})
+		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, name, data, subresources...), &admiralv1.Dependency{})
 
 	if obj == nil {
 		return nil, err
