@@ -131,7 +131,7 @@ func (c *FakeGlobalTrafficPolicies) DeleteCollection(options *v1.DeleteOptions, 
 // Patch applies the patch and returns the patched globalTrafficPolicy.
 func (c *FakeGlobalTrafficPolicies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *admiralv1.GlobalTrafficPolicy, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(globaltrafficpoliciesResource, c.ns, name, data, subresources...), &admiralv1.GlobalTrafficPolicy{})
+		Invokes(testing.NewPatchSubresourceAction(globaltrafficpoliciesResource, c.ns, name, pt, data, subresources...), &admiralv1.GlobalTrafficPolicy{})
 
 	if obj == nil {
 		return nil, err
