@@ -74,9 +74,19 @@ func TestAddUpdateIstioResource(t *testing.T) {
 
 	existing := istio.Config{}
 
+	configToSkipUpdate := istio.Config{
+		ConfigMeta: istio.ConfigMeta{
+			Labels: map[string]string{
+				"disable-update": "true",
+			},
+		},
+	}
+
 	addUpdateIstioResource(&rc, new, nil, "VirtualService", "default")
 
 	addUpdateIstioResource(&rc, new, &existing, "VirtualService", "default")
+
+	addUpdateIstioResource(&rc, new, &configToSkipUpdate, "VirtualService", "default")
 }
 
 func TestCopyServiceEntry(t *testing.T) {
