@@ -11,3 +11,6 @@ We welcome contributions :)
 ```
 /admiral/cmd/admiral/main.go --kube_config <path_to_kube_config>
 ```
+
+## Code Generation
+* If you've made changes to model objects and need to re-generate their clientsets, use `sh hack/update-codegen.sh`
