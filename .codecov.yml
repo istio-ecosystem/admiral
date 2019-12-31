@@ -5,5 +5,3 @@ coverage:
 
 ignore:
   - admiral/pkg/client/**/*
-  - **/*.pb.go
-  - **/*.proto
