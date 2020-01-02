@@ -8,8 +8,10 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/clientcmd"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestDeploymentController_Added(t *testing.T) {
@@ -142,4 +144,19 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
 	}
 
+}
+
+func TestNewDeploymentController(t *testing.T) {
+	config, err := clientcmd.BuildConfigFromFlags("", "../../test/resources/admins@fake-cluster.k8s.local")
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	stop := make(chan struct{})
+	depHandler := test.MockDeploymentHandler{}
+
+	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000))
+
+	if depCon == nil {
+		t.Errorf("Deployment controller should not be nil")
+	}
 }

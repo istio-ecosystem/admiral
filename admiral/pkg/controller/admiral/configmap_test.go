@@ -135,3 +135,46 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 		})
 	}
 }
+
+func TestNewConfigMapController(t *testing.T) {
+
+
+
+	testCases := []struct {
+		name string
+		kubeconfigPath string
+		namespace string
+		expectedError error
+	}{
+		{
+			name: "Fails creating an in-cluster config while out of a cluster",
+			kubeconfigPath: "",
+			namespace: "ns",
+			expectedError: errors.New("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
+		},
+		{
+			name: "Kubeconfig config",
+			kubeconfigPath: "../../test/resources/admins@fake-cluster.k8s.local",
+			namespace: "ns",
+			expectedError: nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			controller, err := NewConfigMapController(c.kubeconfigPath, c.namespace)
+			if err==nil && c.expectedError==nil {
+				//only do these in an error-less context
+				if c.namespace != controller.ConfigmapNamespace {
+					t.Errorf("Namespace mismatch. Expected %v but got %v", c.namespace, controller.ConfigmapNamespace)
+				}
+				if controller.K8sClient.CoreV1() == nil {
+					t.Errorf("Clientset is nil")
+				}
+			} else if err.Error() != c.expectedError.Error() {
+				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
+			}
+		})
+	}
+
+}
