@@ -2,9 +2,12 @@ package admiral
 
 import (
 	"errors"
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 )
 
@@ -66,4 +69,69 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 		})
 	}
 
+}
+
+func TestConfigMapController_GetConfigMap(t *testing.T) {
+	configmapController := ConfigMapController{
+		ConfigmapNamespace: "admiral",
+	}
+
+	client := fake.NewSimpleClientset()
+	cm := v1.ConfigMap{}
+	cm.Name = "se-address-configmap"
+	cm.Namespace="admiral"
+	cm.Labels= map[string]string{"foo":"bar"}//differentiating from a new/empty cm
+	_, err := client.CoreV1().ConfigMaps("admiral").Create(&cm)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	configmapController.K8sClient = client
+
+
+	emptyConfigmapController := ConfigMapController{
+		ConfigmapNamespace: "admiral",
+	}
+
+	emptyClient := fake.NewSimpleClientset()
+	emptyCM := v1.ConfigMap{}
+	emptyCM.Name = "se-address-configmap"
+	emptyCM.Namespace="admiral"
+	emptyConfigmapController.K8sClient = emptyClient
+
+	testCases := []struct{
+		name string
+		configMapController	 *ConfigMapController
+		expectedConfigMap 	*v1.ConfigMap
+		expectedError	error
+	}{
+		{
+			name: "should return confirmap",
+			configMapController:     &configmapController,
+			expectedConfigMap: &cm,
+			expectedError: nil,
+		},
+		{
+			name: "should return newly created configmap",
+			configMapController:     &emptyConfigmapController,
+			expectedConfigMap: &emptyCM,
+			expectedError: nil,
+		},
+
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			cm, err := c.configMapController.GetConfigMap()
+			if err==nil && c.expectedError==nil {
+				//we're fine
+			} else if err.Error() != c.expectedError.Error() {
+				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
+			}
+			if !cmp.Equal(cm, c.expectedConfigMap) {
+				logrus.Info("Object Diff: " + cmp.Diff(cm, c.expectedConfigMap))
+				t.Errorf("Configmap Mismatch. Expected %v but got %v", c.expectedConfigMap, cm)
+			}
+
+		})
+	}
 }
