@@ -35,6 +35,9 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 		Addresses: []string{common.LocalAddressPrefix + ".10.1","1.2.3.4"},
 	}
 
+	emptyCM := v1.ConfigMap{}
+	emptyCM.ResourceVersion = "123"
+
 	testCases := []struct{
 		name string
 		configMap	 *v1.ConfigMap
@@ -43,6 +46,11 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 		{
 			name: "should not throw error on legal configmap",
 			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, "123"),
+			expectedError: nil,
+		},
+		{
+			name: "should not throw error on empty configmap",
+			configMap:     &emptyCM,
 			expectedError: nil,
 		},
 		{
@@ -63,6 +71,8 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 			errorResult := validateConfigmapBeforePutting(c.configMap)
 			if errorResult==nil && c.expectedError==nil {
 				//we're fine
+			} else if c.expectedError == nil && errorResult != nil{
+				t.Errorf("Unexpected error. Err: %v", errorResult)
 			} else if errorResult.Error() != c.expectedError.Error() {
 				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
 			}
@@ -124,6 +134,8 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 			cm, err := c.configMapController.GetConfigMap()
 			if err==nil && c.expectedError==nil {
 				//we're fine
+			} else if c.expectedError == nil && err != nil {
+				t.Errorf("Unexpected error. Err: %v", err)
 			} else if err.Error() != c.expectedError.Error() {
 				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
 			}
@@ -137,9 +149,6 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 }
 
 func TestNewConfigMapController(t *testing.T) {
-
-
-
 	testCases := []struct {
 		name string
 		kubeconfigPath string
@@ -175,6 +184,37 @@ func TestNewConfigMapController(t *testing.T) {
 				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
 			}
 		})
+	}
+
+}
+
+func TestConfigMapController_PutConfigMap(t *testing.T) {
+	configmapController := ConfigMapController{
+		ConfigmapNamespace: "admiral-remote-ctx",
+	}
+
+	client := fake.NewSimpleClientset()
+	cm := v1.ConfigMap{}
+	cm.Name = "se-address-configmap"
+	cm.Namespace="admiral-remote-ctx"
+	_, err := client.CoreV1().ConfigMaps("admiral-remote-ctx").Create(&cm)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	configmapController.K8sClient = client
+
+
+	legalStore := common.ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+
+	cm = *buildFakeConfigMapFromAddressStore(&legalStore, "123")
+
+	err = configmapController.PutConfigMap(&cm)
+
+	if err != nil {
+		t.Errorf("No error expected. Err: %v", err)
 	}
 
 }
