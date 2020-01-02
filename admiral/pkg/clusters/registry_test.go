@@ -74,9 +74,19 @@ func TestAddUpdateIstioResource(t *testing.T) {
 
 	existing := istio.Config{}
 
+	configToSkipUpdate := istio.Config{
+		ConfigMeta: istio.ConfigMeta{
+			Labels: map[string]string{
+				"disable-update": "true",
+			},
+		},
+	}
+
 	addUpdateIstioResource(&rc, new, nil, "VirtualService", "default")
 
 	addUpdateIstioResource(&rc, new, &existing, "VirtualService", "default")
+
+	addUpdateIstioResource(&rc, new, &configToSkipUpdate, "VirtualService", "default")
 }
 
 func TestCopyServiceEntry(t *testing.T) {
@@ -124,15 +134,14 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 
 	cacheWithNoEntry := common.ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		Addresses:      []string{},
 	}
 
 	emptyCacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
 	}
-
 
 	res := createSeWithDrLabels(nil, false, "", "test-se", &se, &des, &cacheWithNoEntry, &emptyCacheController)
 
@@ -178,7 +187,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des, "sync")
+	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des, "sync", ".global", "identity")
 
 }
 
@@ -203,7 +212,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des, "sync")
+	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des, "sync", ".global", "identity")
 
 }
 
@@ -483,116 +492,115 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	t.Parallel()
 	cacheWithEntry := common.ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+		Addresses:      []string{common.LocalAddressPrefix + ".10.1"},
 	}
 	cacheWithNoEntry := common.ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		Addresses:      []string{},
 	}
 	cacheWith255Entries := common.ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		Addresses:      []string{},
 	}
 
 	for i := 1; i <= 255; i++ {
-		address :=  common.LocalAddressPrefix + ".10." + strconv.Itoa(i)
-		cacheWith255Entries.EntryAddresses[strconv.Itoa(i) + ".mesh"] = address
+		address := common.LocalAddressPrefix + ".10." + strconv.Itoa(i)
+		cacheWith255Entries.EntryAddresses[strconv.Itoa(i)+".mesh"] = address
 		cacheWith255Entries.Addresses = append(cacheWith255Entries.Addresses, address)
 	}
 
 	emptyCacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
 	}
 
 	cacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
 	cacheControllerWith255Entries := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWith255Entries),
 	}
 
 	cacheControllerGetError := test.FakeConfigMapController{
-		GetError: errors.New("BAD THINGS HAPPENED"),
-		PutError: nil,
+		GetError:          errors.New("BAD THINGS HAPPENED"),
+		PutError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
 	cacheControllerPutError := test.FakeConfigMapController{
-		PutError: errors.New("BAD THINGS HAPPENED"),
-		GetError: nil,
+		PutError:          errors.New("BAD THINGS HAPPENED"),
+		GetError:          nil,
 		ConfigmapToReturn: test.BuildFakeConfigMapFromAddressStore(&cacheWithEntry),
 	}
 
-
 	testCases := []struct {
-		name   string
-		seName   string
-		seAddressCache  common.ServiceEntryAddressStore
-		wantAddess string
-		cacheController admiral.ConfigMapControllerInterface
+		name                string
+		seName              string
+		seAddressCache      common.ServiceEntryAddressStore
+		wantAddess          string
+		cacheController     admiral.ConfigMapControllerInterface
 		expectedCacheUpdate bool
-		wantedError error
+		wantedError         error
 	}{
 		{
-			name: "should return new available address",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWithNoEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.1",
-			cacheController: &emptyCacheController,
+			name:                "should return new available address",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWithNoEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.1",
+			cacheController:     &emptyCacheController,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return address from map",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWithEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.1",
-			cacheController: &cacheController,
+			name:                "should return address from map",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWithEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.1",
+			cacheController:     &cacheController,
 			expectedCacheUpdate: false,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return new available address",
-			seName: "e2e.b.mesh",
-			seAddressCache: cacheWithEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.2",
-			cacheController: &cacheController,
+			name:                "should return new available address",
+			seName:              "e2e.b.mesh",
+			seAddressCache:      cacheWithEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.2",
+			cacheController:     &cacheController,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return new available address in higher subnet",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: common.LocalAddressPrefix + ".11.1",
-			cacheController: &cacheControllerWith255Entries,
+			name:                "should return new available address in higher subnet",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          common.LocalAddressPrefix + ".11.1",
+			cacheController:     &cacheControllerWith255Entries,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should gracefully propagate get error",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: "",
-			cacheController: &cacheControllerGetError,
+			name:                "should gracefully propagate get error",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          "",
+			cacheController:     &cacheControllerGetError,
 			expectedCacheUpdate: true,
-			wantedError: errors.New("BAD THINGS HAPPENED"),
+			wantedError:         errors.New("BAD THINGS HAPPENED"),
 		},
 		{
-			name: "Should not return address on put error",
-			seName: "e2e.abcdefghijklmnop.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: "",
-			cacheController: &cacheControllerPutError,
+			name:                "Should not return address on put error",
+			seName:              "e2e.abcdefghijklmnop.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          "",
+			cacheController:     &cacheControllerPutError,
 			expectedCacheUpdate: true,
-			wantedError: errors.New("BAD THINGS HAPPENED"),
+			wantedError:         errors.New("BAD THINGS HAPPENED"),
 		},
 	}
 
@@ -603,7 +611,7 @@ func TestGetLocalAddressForSe(t *testing.T) {
 				if !reflect.DeepEqual(seAddress, c.wantAddess) {
 					t.Errorf("Wanted se address: %s, got: %s", c.wantAddess, seAddress)
 				}
-				if err==nil && c.wantedError==nil {
+				if err == nil && c.wantedError == nil {
 					//we're fine
 				} else if err.Error() != c.wantedError.Error() {
 					t.Errorf("Error mismatch. Expected %v but got %v", c.wantedError, err)
@@ -620,4 +628,3 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	}
 
 }
-

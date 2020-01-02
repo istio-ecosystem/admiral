@@ -49,6 +49,9 @@ type AdmiralParams struct {
 	EnableSAN                  bool
 	SANPrefix                  string
 	SecretResolver             string
+	LabelSet                   *common.LabelSet
+	HostnameSuffix             string
+	WorkloadIdentityLabel      string
 }
 
 func (b AdmiralParams) String() string {
@@ -106,8 +109,8 @@ type AdmiralCache struct {
 	ClusterLocalityCache            *common.MapOfMaps
 	IdentityDependencyCache         *common.MapOfMaps
 	SubsetServiceEntryIdentityCache *sync.Map
-	ServiceEntryAddressStore	 	*common.ServiceEntryAddressStore
-	ConfigMapController		     	admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
+	ServiceEntryAddressStore        *common.ServiceEntryAddressStore
+	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
 }
 
 //This will handle call backs from the secret controller to provision
@@ -236,23 +239,23 @@ func getIstioResourceName(host string, suffix string) string {
 func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	globalFqdn := common.GetCname(destDeployment, identifier)
+	globalFqdn := common.GetCname(destDeployment, identifier, config.HostnameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
 	//initializations
-	var err error =  nil
+	var err error = nil
 	maxRetries := 3
 	counter := 0
 	address := ""
 	needsCacheUpdate := false
 
-	for err==nil && counter<maxRetries {
+	for err == nil && counter < maxRetries {
 		address, needsCacheUpdate, err = GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
 
 		//random expo backoff
 		timeToBackoff := rand.Intn(int(math.Pow(100.0, float64(counter)))) //get a random number between 0 and 100^counter. Will always be 0 the first time, will be 0-100 the second, and 0-1000 the third
-		time.Sleep(time.Duration(timeToBackoff)*time.Millisecond)
+		time.Sleep(time.Duration(timeToBackoff) * time.Millisecond)
 
 		counter++
 	}
@@ -260,7 +263,6 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 	if err != nil {
 		log.Errorf("Could not get unique address after %v retries. Failing to create serviceentry name=%v", maxRetries, globalFqdn)
 	}
-
 
 	if needsCacheUpdate {
 		loadServiceEntryCacheData(admiralCache.ConfigMapController, admiralCache)
@@ -476,7 +478,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
-		cname = common.GetCname(deploymentInstance[0], "identity")
+		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.WorkloadIdentityLabel, remoteRegistry.config.HostnameSuffix)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -485,7 +487,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry("identity", rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry(remoteRegistry.config.WorkloadIdentityLabel, rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
 
 	}
 
@@ -623,7 +625,7 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		IdentityDependencyCache:         common.NewMapOfMaps(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:	     &common.ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{},}}
+		ServiceEntryAddressStore:        &common.ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}}}
 
 	configMapController, err := admiral.NewConfigMapController(w.config.KubeconfigPath, w.config.SyncNamespace)
 	if err != nil {
@@ -631,8 +633,6 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
-
-
 
 	err = createSecretController(ctx, &w, params)
 	if err != nil {
@@ -912,7 +912,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.WorkloadIdentityLabel)
 				}
 
 			}
@@ -927,7 +927,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *networking.DestinationRule, syncNamespace string) {
+	destinationRule *networking.DestinationRule, syncNamespace string, nameSuffix string, identifier string) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -945,7 +945,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
 
-	cname := common.GetCname(deploymentInstance, "identity")
+	cname := common.GetCname(deploymentInstance, identifier, nameSuffix)
 	if cname == destinationRule.Host {
 		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		existsDestinationRule := remoteController.IstioConfigStore.Get(istioModel.DestinationRule.Type, localDrName, syncNamespace)
@@ -967,7 +967,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 
 	address, _, err := GetLocalAddressForSe(seName, seAddressCache, configmapController)
 	if err != nil {
-		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v",err)
+		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v", err)
 		return nil
 	}
 	newSe.Addresses = []string{address}
@@ -1026,18 +1026,28 @@ func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.C
 		_, e = rc.IstioConfigStore.Create(m)
 
 	} else {
-		exist.Labels = m.Labels
-		exist.Spec = m.Spec
-		exist.Annotations = m.Annotations
-		verb = "Update"
-		_, e = rc.IstioConfigStore.Update(*exist)
+		if len(exist.Labels) > 0 {
+			if _, ok := exist.Labels["disable-update"]; ok {
+				verb = "Skipped"
+			}
+		}
+
+		if verb != "Skipped" {
+			exist.Labels = m.Labels
+			exist.Spec = m.Spec
+			exist.Annotations = m.Annotations
+			verb = "Update"
+			_, e = rc.IstioConfigStore.Update(*exist)
+		}
 	}
 
 	//TODO this should return an error
 	if e != nil {
 		log.Errorf(LogErrFormat, verb, t, m.Spec, rc.ClusterID, e)
-	} else {
+	} else if verb != "Skipped" {
 		log.Infof(LogFormat, verb, t, m.Name, rc.ClusterID, "success")
+	} else {
+		log.Infof(LogFormat, verb, t, m.Name, rc.ClusterID, "Found Skip flag")
 	}
 }
 
@@ -1085,7 +1095,7 @@ func GetLocalAddressForSe(seName string, seAddressCache *common.ServiceEntryAddr
 }
 
 //an atomic fetch and update operation against the configmap (using K8s build in optimistic consistency mechanism via resource version)
-func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface)  (string, error){
+func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
 	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
 	cm, err := configMapController.GetConfigMap()
 	if err != nil {
@@ -1095,7 +1105,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 	newAddressState := admiral.GetServiceEntryStateFromConfigmap(cm)
 
 	if newAddressState == nil {
-		return "",  errors.New("could not unmarshall configmap yaml")
+		return "", errors.New("could not unmarshall configmap yaml")
 	}
 
 	if val, ok := newAddressState.EntryAddresses[seName]; ok { //Someone else updated the address state, so we'll use that
@@ -1107,11 +1117,11 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 	address := common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 
 	for util.Contains(newAddressState.Addresses, address) {
-		if firstIndex<255 {
+		if firstIndex < 255 {
 			firstIndex++
 		} else {
 			secondIndex++
-			firstIndex=0
+			firstIndex = 0
 		}
 		address = common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 	}
@@ -1147,5 +1157,3 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 
 	return c.PutConfigMap(originalConfigmap)
 }
-
-

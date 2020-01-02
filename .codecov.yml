@@ -2,3 +2,6 @@ coverage:
   range: 60..100
   round: down
   precision: 2
+
+ignore:
+  - admiral/pkg/client/**/*

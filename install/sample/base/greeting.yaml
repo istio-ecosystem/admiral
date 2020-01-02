@@ -42,10 +42,11 @@ spec:
   replicas: 1
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         app: greeting
-        identity: greeting
-        istio-injected: "true"
+        identity: greetin
     spec:
       containers:
         - name: greeting

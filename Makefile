@@ -41,7 +41,7 @@ build-mac:
 	$(GOBUILD) -o $(BINARY_DARWIN) -v $(MAIN_PATH_ADMIRAL)
 
 test:
-	$(GOTEST) -v `go list ./... | grep -v github.com/admiral/admiral/pkg/client` -coverprofile=c.out
+	$(GOTEST) -v `go list ./... | grep -v client` -coverprofile=c.out
 
 clean:
 	$(GOCLEAN)
