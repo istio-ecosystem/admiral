@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"github.com/google/go-cmp/cmp"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -9,6 +10,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
 	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
+	"istio.io/istio/pkg/log"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -418,4 +420,94 @@ func TestPodHandler(t *testing.T) {
 	ph.Added(&pod)
 
 	ph.Deleted(&pod)
+}
+
+func TestGetServiceForDeployment(t *testing.T) {
+	baseRc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+			}
+		}
+	})
+
+	rcWithService, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+			}
+		}
+	})
+
+	service := k8sCoreV1.Service{}
+	service.Namespace = "under-test"
+	service.Spec.Ports = []k8sCoreV1.ServicePort{
+		{
+			Name: "port1",
+			Port: 8090,
+		},
+	}
+	service.Spec.Selector = map[string]string{"under-test":"true"}
+	rcWithService.ServiceController.Cache.Put(&service)
+
+	deploymentWithNoSelector := k8sAppsV1.Deployment{}
+	deploymentWithNoSelector.Name = "dep1"
+	deploymentWithNoSelector.Namespace ="under-test"
+	deploymentWithNoSelector.Spec.Selector = &metav1.LabelSelector{}
+
+	deploymentWithSelector := k8sAppsV1.Deployment{}
+	deploymentWithSelector.Name = "dep2"
+	deploymentWithSelector.Namespace = "under-test"
+	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{}
+	deploymentWithSelector.Spec.Selector.MatchLabels = map[string]string{"under-test":"true"}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		controller *RemoteController
+		deployment *k8sAppsV1.Deployment
+		namespace string
+		expectedService *k8sCoreV1.Service
+	}{
+		{
+			name: "Should return nil with nothing in the cache",
+			controller:baseRc,
+			deployment:nil,
+			namespace:"foobar",
+			expectedService:nil,
+		},
+		{
+			name: "Should not match if selectors don't match",
+			controller:rcWithService,
+			deployment:&deploymentWithNoSelector,
+			namespace:"under-test",
+			expectedService:nil,
+		},
+		{
+			name: "Should return proper service",
+			controller:rcWithService,
+			deployment:&deploymentWithSelector,
+			namespace:"under-test",
+			expectedService:&service,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			resultingService := getServiceForDeployment(c.controller, c.deployment, c.namespace)
+			if resultingService == nil && c.expectedService == nil {
+				//perfect
+			} else {
+				if !cmp.Equal(resultingService, c.expectedService) {
+					log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
+					t.Errorf("Service mismatch. Got %v, expected %v",resultingService, c.expectedService)
+				}
+			}
+		})
+	}
 }
