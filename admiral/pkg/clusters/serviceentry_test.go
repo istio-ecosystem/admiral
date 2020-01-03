@@ -8,6 +8,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
+	v12 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	"reflect"
 	"sync"
@@ -262,6 +263,24 @@ func TestGetLocalAddressForSe(t *testing.T) {
 
 }
 
+func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
+	address := "1.2.3.4"
+	locality := "us-west-2"
+	portName := "port"
+
+	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName)
+
+	if endpoint.Address != address {
+		t.Errorf("Address mismatch. Got: %v, expected: %v", endpoint.Address, address)
+	}
+	if endpoint.Locality != locality {
+		t.Errorf("Locality mismatch. Got: %v, expected: %v", endpoint.Locality, locality)
+	}
+	if endpoint.Ports[portName] != 15443 {
+		t.Errorf("Incorrect port found")
+	}
+}
+
 func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
 	bytes,_ := yaml.Marshal(addressStore)
 
@@ -272,4 +291,47 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, 
 	cm.Namespace="admiral-remote-ctx"
 	cm.ResourceVersion=resourceVersion
 	return &cm
+}
+
+func TestCreateServiceEntry(t *testing.T) {
+	admiralCache := AdmiralCache{}
+
+	cnameIdentityCache := sync.Map{}
+	cnameIdentityCache.Store("dev.bar.global", "bar")
+	admiralCache.CnameIdentityCache = &cnameIdentityCache
+
+	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":"127.0.0.1"},
+		Addresses: []string{"127'.0.0.1"},
+	}
+
+	admiralCache.CnameClusterCache = common.NewMapOfMaps()
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+			}
+		}
+	})
+
+	params := AdmiralParams{
+		EnableSAN: true,
+		SANPrefix: "prefix",
+	}
+
+	deployment := v12.Deployment{}
+	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+
+	resultingEntry := createServiceEntry("identity", rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
+
+	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
+		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	}
+	if resultingEntry.Addresses[0] != "127.0.0.1" {
+		t.Errorf("Address mismatch. Got: %v, expected: 127.0.0.1", resultingEntry.Addresses[0])
+	}
+
 }

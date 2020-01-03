@@ -278,10 +278,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				log.Infof(LogFormat, "CreateConfig", istioModel.DestinationRule.Type, destinationRuleName, sourceCluster, err)
 			}
 		}
-
 	}
-
-
 }
 
 func makeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
@@ -322,7 +319,7 @@ func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStor
 	return address, false, nil
 }
 
-//an atomic fetch and update operation against the configmap (using K8s build in optimistic consistency mechanism via resource version)
+//an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
 func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface)  (string, error){
 	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
 	cm, err := configMapController.GetConfigMap()
