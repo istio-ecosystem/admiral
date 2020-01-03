@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"k8s.io/api/core/v1"
 	"reflect"
+	"sync"
 	"testing"
 
 	networking "istio.io/api/networking/v1alpha3"
@@ -63,35 +64,39 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 	}
 }
 
-//todo make this pass
-//func TestAddServiceEntriesWithDr(t *testing.T) {
-//	admiralCache := AdmiralCache{}
-//
-//	se := networking.ServiceEntry{
-//		Hosts: []string{"test.com"},
-//		Endpoints: []*networking.ServiceEntry_Endpoint{
-//			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
-//		},
-//	}
-//
-//	rc, _ := createMockRemoteController(func(i interface{}) {
-//		res := i.(istio.Config)
-//		se, ok := res.Spec.(*networking.ServiceEntry)
-//		if ok {
-//			if se.Hosts[0] != "dev.bar.global" {
-//				t.Fail()
-//			}
-//		}
-//	})
-//
-//	seConfig, _ := createIstioConfig(istio.ServiceEntryProto, &se, "se1", "admiral-sync")
-//	_, err := rc.IstioConfigStore.Create(*seConfig)
-//	if err != nil {
-//		log.Infof("%v", err)
-//	}
-//
-//	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se}, "admiral-sync")
-//}
+func TestAddServiceEntriesWithDr(t *testing.T) {
+	admiralCache := AdmiralCache{}
+
+	cnameIdentityCache := sync.Map{}
+	cnameIdentityCache.Store("dev.bar.global", "bar")
+	admiralCache.CnameIdentityCache = &cnameIdentityCache
+
+	se := networking.ServiceEntry{
+		Hosts: []string{"dev.bar.global"},
+		Endpoints: []*networking.ServiceEntry_Endpoint{
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+		},
+	}
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		res := i.(istio.Config)
+		se, ok := res.Spec.(*networking.ServiceEntry)
+		if ok {
+			if se.Hosts[0] != "dev.bar.global" {
+				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+			}
+		}
+	})
+
+	seConfig, _ := createIstioConfig(istio.ServiceEntryProto, &se, "se1", "admiral-sync")
+	_, err := rc.IstioConfigStore.Create(*seConfig)
+	if err != nil {
+		t.Errorf("%v", err)
+
+	}
+
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se}, "admiral-sync")
+	}
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
