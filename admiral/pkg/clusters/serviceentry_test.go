@@ -40,7 +40,7 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 	emptyCacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry, "123"),
 	}
 
 
@@ -139,31 +139,31 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	emptyCacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry, "123"),
 	}
 
 	cacheController := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 	cacheControllerWith255Entries := test.FakeConfigMapController{
 		GetError: nil,
 		PutError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWith255Entries),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWith255Entries, "123"),
 	}
 
 	cacheControllerGetError := test.FakeConfigMapController{
 		GetError: errors.New("BAD THINGS HAPPENED"),
 		PutError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 	cacheControllerPutError := test.FakeConfigMapController{
 		PutError: errors.New("BAD THINGS HAPPENED"),
 		GetError: nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry),
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 
@@ -257,7 +257,7 @@ func TestGetLocalAddressForSe(t *testing.T) {
 
 }
 
-func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore) *v1.ConfigMap{
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
 	bytes,_ := yaml.Marshal(addressStore)
 
 	cm := v1.ConfigMap{
@@ -265,6 +265,6 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore) 
 	}
 	cm.Name="se-address-configmap"
 	cm.Namespace="admiral-remote-ctx"
-	cm.ResourceVersion="1234"
+	cm.ResourceVersion=resourceVersion
 	return &cm
 }

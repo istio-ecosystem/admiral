@@ -15,17 +15,13 @@ type MapOfMaps struct {
 	mutex *sync.Mutex
 }
 
-type ServiceEntryAddressStore struct {
-	EntryAddresses	map[string]string `yaml:"entry-addresses,omitempty"`
-	Addresses		[]string   `yaml:"addresses,omitempty"` //trading space for efficiency - this will give a quick way to validate that the address is unique
-}
-
 type LabelSet struct {
 	DeploymentAnnotation                string
 	SubsetLabel                         string
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
+	WorkloadIdentityLabel      			string
 }
 
 func NewMap() *Map {

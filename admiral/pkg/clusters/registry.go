@@ -500,7 +500,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.WorkloadIdentityLabel)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityLabel)
 				}
 
 			}
@@ -554,11 +554,6 @@ func copyEndpoint(e *networking.ServiceEntry_Endpoint) *networking.ServiceEntry_
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
 	return &networking.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
-}
-
-func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
-	return &networking.ServiceEntry{Ports: se.Ports, Resolution: se.Resolution, Hosts: se.Hosts, Location: se.Location,
-		SubjectAltNames: se.SubjectAltNames, ExportTo: se.ExportTo, Endpoints: se.Endpoints, Addresses: se.Addresses}
 }
 
 func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.Config, t string, syncNamespace string) {

@@ -20,10 +20,12 @@ import (
 	"time"
 )
 
+const cnameSuffix = "mesh"
+
 func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	globalFqdn := common.GetCname(destDeployment, identifier)
+	globalFqdn := common.GetCname(destDeployment, identifier, cnameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -122,7 +124,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
 
-		cname = common.GetCname(deploymentInstance[0], "identity")
+		cname = common.GetCname(deploymentInstance[0], "identity", cname)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -389,4 +391,3 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 
 	return c.PutConfigMap(originalConfigmap)
 }
-
