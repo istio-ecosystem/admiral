@@ -7,6 +7,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
+	"sync"
 	"testing"
 	"time"
 )
@@ -81,4 +82,44 @@ func TestPodController_GetPods(t *testing.T) {
 		t.Errorf("Too many pods found. Expected 1, found %v", podsList)
 	}
 
+}
+
+func TestPodCache_AppendPodToCluster(t *testing.T) {
+	podCache := podCache{}
+	podCache.cache = make(map[string]*PodClusterEntry)
+	podCache.mutex = &sync.Mutex{}
+
+	pod := &v1.Pod{}
+	pod.Name="foobar"
+	pod.Namespace = "ns"
+	pod.Labels = map[string]string{"identity":"my-first-pod"}
+
+	podCache.AppendPodToCluster("ns", pod)
+
+	if podCache.getKey(pod) != "my-first-pod" {
+		t.Errorf("Incorrect key. Got %v, expected ns", podCache.getKey(pod))
+	}
+	if !cmp.Equal(podCache.Get("ns").Pods["ns"][0], pod) {
+		t.Errorf("Incorrect pod fount. Diff: %v", cmp.Diff(podCache.Get("ns").Pods["ns"], pod))
+	}
+
+	length := len(podCache.Get("ns").Pods["ns"])
+
+	podCache.AppendPodToCluster("ns", pod)
+
+	if podCache.getKey(pod) != "my-first-pod" {
+		t.Errorf("Incorrect key. Got %v, expected ns", podCache.getKey(pod))
+	}
+	if !cmp.Equal(podCache.Get("ns").Pods["ns"][0], pod) {
+		t.Errorf("Incorrect pod fount. Diff: %v", cmp.Diff(podCache.Get("ns").Pods["ns"], pod))
+	}
+	if (length+1) != len(podCache.Get("ns").Pods["ns"]) {
+		t.Errorf("Didn't add a second pod, expected %v, got %v", length+1, len(podCache.Get("ns").Pods["ns"]))
+	}
+
+	podCache.Delete(podCache.Get("ns"))
+
+	if podCache.Get("ns") != nil {
+		t.Errorf("Didn't delete successfully, expected nil, got %v", podCache.Get("ns"))
+	}
 }
