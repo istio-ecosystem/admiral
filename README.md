@@ -6,7 +6,7 @@
 
 [![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master) [![codecov](https://codecov.io/gh/istio-ecosystem/admiral/branch/master/graph/badge.svg)](https://codecov.io/gh/istio-ecosystem/admiral)
 
-**Admiral provides automatic configuration for multiple istio deployments to work as a single mesh**
+**Admiral provides automatic configuration and service discovery for multicluster Istio service mesh**
 
 Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity from developers and mesh operators pushing this complexity into automation.
 
@@ -342,6 +342,8 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 ## Community Blogs and Presentations
 
 1. [Stitching a Service Mesh Across Hundreds of Discrete Networks](https://www.youtube.com/watch?v=EWyNbBn1vns)
+
+2. [Multicluster Istio configuration and service discovery using Admiral](https://istio.io/blog/2020/multi-cluster-mesh-automation/)
 
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)
