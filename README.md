@@ -79,6 +79,12 @@ helm template istio-1.3.3/install/kubernetes/helm/istio --name istio --namespace
 kubectl get pods -n istio-system
 ```
 
+```
+#Point hosts ending in global to be resolved by istio-coredns
+
+./admiral-install-v0.1-alpha/scripts/redirect-dns.sh
+```
+
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
 
 
@@ -111,16 +117,12 @@ kubectl get pods -n admiral
 
 #Since this is for a single cluster demo the remote and local context are the same
 ./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
-
+```
+```
 #Verify the secret
-
 kubectl get secrets -n admiral
 ```
-```
-#Point hosts ending in global to be resolved by istio coredns
 
-./admiral-install-v0.1-alpha/scripts/redirect-dns.sh
-```
 #### Setup Sample Apps
 
 ```
@@ -144,7 +146,6 @@ kubectl get serviceentry -n admiral-sync
 ```
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
-
 
 #### Generated configuration
 
@@ -195,8 +196,59 @@ spec:
     number: 80
     protocol: http
   resolution: DNS
+```
+
+
+### Multicluster set up
+
+Finish steps from Single Cluster before proceeding with the steps below
+
+Let's call the cluster used in Single cluster set up `Cluster 1`. Now we will use the steps below to add `Cluster 2` to the mesh and have it monitored by Admiral
+
+Finish the `Prerequisites` section for `Cluster 2` (install Istio and set up DNS for `.global` names)
+
+Set KUBECONFIG to Cluster 2
 
 ```
+# Delete Istio's envoy filter for translating `global` to `svc.cluster.local`, we don't need that because Admiral generates Service Entries.
+kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+
+```
+```
+# Create admiral role and bindings on Cluster 2
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
+```
+```
+# Set CLUSTER_1 env variable
+export CLUSTER_1=<path_to_kubeconfig_of_cluster_1>
+
+# Set CLUSTER_2 env variable
+export CLUSTER_2=<path_to_kubeconfig_of_cluster_2>
+```
+```
+# Create the k8s secret for admiral to monitor Cluster 2.
+./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
+```
+
+```
+#Install test services in Cluster 2
+
+kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
+```
+
+Now set KUBECONFIG back to Cluster 1
+
+```
+# Verify that the ServiceEntry for greeting service in Cluster 1 now has second endpoint (Cluster 2's istio-ingressgateway address)
+kubectl get serviceentry default.greeting.global-se -n admiral-sync -o yaml
+```
+
+Now run the below request multiple times and see the responses from greeting service instances in both Cluster 1 and Cluster 2.
+
+```
+kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
+```
+
 
 ## Admiral Architecture
 
