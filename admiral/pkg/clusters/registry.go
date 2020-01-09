@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"context"
-	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -10,12 +9,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/rest"
-	"math"
-	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +21,6 @@ import (
 	istioModel "istio.io/istio/pilot/pkg/model"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	k8s "k8s.io/client-go/kubernetes"
 
 	networking "istio.io/api/networking/v1alpha3"
 	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
@@ -39,118 +32,6 @@ const (
 	LogFormat    = "op=%s type=%v name=%v cluster=%s message=%s"
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
 )
-
-type AdmiralParams struct {
-	KubeconfigPath             string
-	CacheRefreshDuration       time.Duration
-	ClusterRegistriesNamespace string
-	DependenciesNamespace      string
-	SyncNamespace              string
-	EnableSAN                  bool
-	SANPrefix                  string
-	SecretResolver             string
-	LabelSet                   *common.LabelSet
-	HostnameSuffix             string
-	WorkloadIdentityLabel      string
-}
-
-func (b AdmiralParams) String() string {
-	return fmt.Sprintf("KubeconfigPath=%v ", b.KubeconfigPath) +
-		fmt.Sprintf("CacheRefreshDuration=%v ", b.CacheRefreshDuration) +
-		fmt.Sprintf("ClusterRegistriesNamespace=%v ", b.ClusterRegistriesNamespace) +
-		fmt.Sprintf("DependenciesNamespace=%v ", b.DependenciesNamespace) +
-		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
-		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
-		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
-}
-
-type DependencyHandler struct {
-	RemoteRegistry *RemoteRegistry
-	DepController  *admiral.DependencyController
-}
-
-type GlobalTrafficHandler struct {
-	RemoteRegistry *RemoteRegistry
-}
-
-type DeploymentHandler struct {
-	RemoteRegistry *RemoteRegistry
-}
-
-type PodHandler struct {
-	RemoteRegistry *RemoteRegistry
-}
-
-type NodeHandler struct {
-	RemoteRegistry *RemoteRegistry
-}
-
-type ServiceHandler struct {
-	RemoteRegistry *RemoteRegistry
-}
-
-type RemoteController struct {
-	ClusterID            string
-	IstioConfigStore     istio.ConfigStoreCache
-	GlobalTraffic        *admiral.GlobalTrafficController
-	DeploymentController *admiral.DeploymentController
-	ServiceController    *admiral.ServiceController
-	PodController        *admiral.PodController
-	NodeController       *admiral.NodeController
-	stop                 chan struct{}
-	//listener for normal types
-}
-
-type AdmiralCache struct {
-	CnameClusterCache               *common.MapOfMaps
-	CnameDependentClusterCache      *common.MapOfMaps
-	CnameIdentityCache              *sync.Map
-	IdentityClusterCache            *common.MapOfMaps
-	ClusterLocalityCache            *common.MapOfMaps
-	IdentityDependencyCache         *common.MapOfMaps
-	SubsetServiceEntryIdentityCache *sync.Map
-	ServiceEntryAddressStore        *common.ServiceEntryAddressStore
-	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
-}
-
-//This will handle call backs from the secret controller to provision
-//controllers watching config in remote clusters
-type RemoteRegistry struct {
-	config AdmiralParams
-	sync.Mutex
-	remoteControllers map[string]*RemoteController
-	secretClient      k8s.Interface
-	ctx               context.Context
-	AdmiralCache      *AdmiralCache
-}
-
-func (r *RemoteRegistry) shutdown() {
-
-	done := r.ctx.Done()
-	//wait for the context to close
-	<-done
-
-	//close the remote controllers stop channel
-	for _, v := range r.remoteControllers {
-		close(v.stop)
-	}
-}
-
-func (dh *DependencyHandler) Added(obj *v1.Dependency) {
-
-	log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
-
-	sourceIdentity := obj.Spec.Source
-
-	if len(sourceIdentity) == 0 {
-		log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
-	}
-
-	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
-
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
-
-}
 
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *v1.Dependency) {
 	for _, dIdentity := range dr.Spec.Destinations {
@@ -229,141 +110,13 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 	}
 
 	//add service entries for all dependencies in source cluster
-	addServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
+	AddServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
 }
 
 func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
-	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
-
-	globalFqdn := common.GetCname(destDeployment, identifier, config.HostnameSuffix)
-
-	//Handling retries for getting/putting service entries from/in cache
-
-	//initializations
-	var err error = nil
-	maxRetries := 3
-	counter := 0
-	address := ""
-	needsCacheUpdate := false
-
-	for err == nil && counter < maxRetries {
-		address, needsCacheUpdate, err = GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
-
-		//random expo backoff
-		timeToBackoff := rand.Intn(int(math.Pow(100.0, float64(counter)))) //get a random number between 0 and 100^counter. Will always be 0 the first time, will be 0-100 the second, and 0-1000 the third
-		time.Sleep(time.Duration(timeToBackoff) * time.Millisecond)
-
-		counter++
-	}
-
-	if err != nil {
-		log.Errorf("Could not get unique address after %v retries. Failing to create serviceentry name=%v", maxRetries, globalFqdn)
-	}
-
-	if needsCacheUpdate {
-		loadServiceEntryCacheData(admiralCache.ConfigMapController, admiralCache)
-	}
-
-	if len(globalFqdn) == 0 {
-		return nil
-	}
-
-	var san []string
-	if config.EnableSAN {
-		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, identifier)
-		if len(tmpSan) > 0 {
-			san = []string{common.GetSAN(config.SANPrefix, destDeployment, identifier)}
-		}
-	} else {
-		san = nil
-	}
-
-	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
-
-	tmpSe := serviceEntries[globalFqdn]
-
-	if tmpSe == nil {
-
-		tmpSe = &networking.ServiceEntry{
-			Hosts: []string{globalFqdn},
-			//ExportTo: []string{"*"}, --> //TODO this is causing a coredns plugin to fail serving the DNS entry
-			Ports: []*networking.Port{{Number: uint32(common.DefaultHttpPort),
-				Name: common.Http, Protocol: common.Http}},
-			Location:        networking.ServiceEntry_MESH_INTERNAL,
-			Resolution:      networking.ServiceEntry_DNS,
-			Addresses:       []string{address}, //It is possible that the address is an empty string. That is fine as the se creation will fail and log an error
-			SubjectAltNames: san,
-		}
-		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
-	}
-
-	endpointAddress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
-	var locality string
-	if rc.NodeController.Locality != nil {
-		locality = rc.NodeController.Locality.Region
-	}
-	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
-		locality, common.Http)
-	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
-
-	serviceEntries[globalFqdn] = tmpSe
-
-	return tmpSe
-}
-
-func addServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
-	syncNamespace string) {
-	for _, se := range serviceEntries {
-
-		//add service entry
-		serviceEntryName := getIstioResourceName(se.Hosts[0], "-se")
-
-		destinationRuleName := getIstioResourceName(se.Hosts[0], "-default-dr")
-
-		for _, sourceCluster := range sourceClusters {
-
-			rc := rcs[sourceCluster]
-
-			if rc == nil {
-				log.Warnf(LogFormat, "Find", "remote-controller", sourceCluster, sourceCluster, "doesn't exist")
-				continue
-			}
-
-			oldServiceEntry := rc.IstioConfigStore.Get(istioModel.ServiceEntry.Type, serviceEntryName, syncNamespace)
-
-			newServiceEntry, err := createIstioConfig(istio.ServiceEntryProto, se, serviceEntryName, syncNamespace)
-
-			//Add a label
-			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
-			}
-
-			if err == nil {
-				addUpdateIstioResource(rc, *newServiceEntry, oldServiceEntry, istioModel.ServiceEntry.Type, syncNamespace)
-			} else {
-				log.Infof(LogFormat, "CreateConfig", istioModel.ServiceEntry.Type, serviceEntryName, sourceCluster, err)
-			}
-
-			//add destination rule
-			oldDestinationRule := rc.IstioConfigStore.Get(istioModel.DestinationRule.Type, destinationRuleName, syncNamespace)
-
-			destinationRule := getDestinationRule(se.Hosts[0])
-
-			newDestinationRule, err := createIstioConfig(istio.DestinationRuleProto, destinationRule, destinationRuleName, syncNamespace)
-
-			if err == nil {
-				addUpdateIstioResource(rc, *newDestinationRule, oldDestinationRule, istioModel.DestinationRule.Type, syncNamespace)
-			} else {
-				log.Infof(LogFormat, "CreateConfig", istioModel.DestinationRule.Type, destinationRuleName, sourceCluster, err)
-			}
-		}
-
-	}
-}
 
 func createIstioConfig(schema istio.ProtoSchema, object proto.Message, name string, namespace string) (*istio.Config, error) {
 	return istio.ConvertIstioType(schema, object, name, namespace)
@@ -376,171 +129,10 @@ func makeVirtualService(host string, destination string, port uint32) *networkin
 		Http:     []*networking.HTTPRoute{{Route: []*networking.HTTPRouteDestination{{Destination: &networking.Destination{Host: destination, Port: &networking.PortSelector{Port: &networking.PortSelector_Number{Number: port}}}}}}}}
 }
 
-func makeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
-	return &networking.ServiceEntry_Endpoint{Address: address,
-		Locality: locality,
-		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
-}
 
 func getDestinationRule(host string) *networking.DestinationRule {
 	return &networking.DestinationRule{Host: host,
 		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}}
-}
-
-func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
-	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
-}
-
-func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
-}
-
-func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
-}
-
-func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
-
-	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
-
-	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
-		return
-	}
-
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
-}
-
-func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	//TODO update subset service entries
-}
-
-func (pc *PodHandler) Added(obj *k8sV1.Pod) {
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
-
-	globalIdentifier := common.GetPodGlobalIdentifier(obj)
-
-	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
-		return
-	}
-
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
-}
-
-func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
-	//TODO update subset service entries
-}
-
-func (nc *NodeHandler) Added(obj *k8sV1.Node) {
-	//log.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
-}
-
-func (pc *NodeHandler) Deleted(obj *k8sV1.Node) {
-	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
-}
-
-func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
-
-	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Received, doing nothing")
-
-	//sourceIdentity := common.GetServiceGlobalIdentifier(obj)
-	//
-	//if len(sourceIdentity) == 0 {
-	//	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Skipped as '" + common.GlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
-	//	return
-	//}
-	//
-	//createServiceEntryForNewServiceOrPod(obj.Namespace, sourceIdentity, sc.RemoteRegistry, sc.RemoteRegistry.config.SyncNamespace)
-
-}
-
-func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry, syncNamespace string) map[string]*networking.ServiceEntry {
-	//create a service entry, destination rule and virtual service in the local cluster
-	sourceServices := make(map[string]*k8sV1.Service)
-
-	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
-
-	var serviceEntries = make(map[string]*networking.ServiceEntry)
-
-	var cname string
-
-	for _, rc := range remoteRegistry.remoteControllers {
-
-		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-
-		if deployment == nil || deployment.Deployments[namespace] == nil {
-			continue
-		}
-
-		deploymentInstance := deployment.Deployments[namespace]
-
-		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
-
-		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.WorkloadIdentityLabel, remoteRegistry.config.HostnameSuffix)
-
-		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
-		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
-		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
-		sourceServices[rc.ClusterID] = serviceInstance
-
-		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
-
-		createServiceEntry(remoteRegistry.config.WorkloadIdentityLabel, rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
-
-	}
-
-	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity)
-
-	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
-
-	//update cname dependent cluster cache
-	for clusterId, _ := range dependentClusters {
-		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
-	}
-
-	addServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries,
-		remoteRegistry.config.SyncNamespace)
-
-	//update the address to local fqdn for service entry in a cluster local to the service instance
-	for sourceCluster, serviceInstance := range sourceServices {
-		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		rc := remoteRegistry.remoteControllers[sourceCluster]
-		var meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
-		for key, serviceEntry := range serviceEntries {
-			for _, ep := range serviceEntry.Endpoints {
-				clusterIngress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
-				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
-				if ep.Address == clusterIngress || ep.Address == "" {
-					ep.Address = localFqdn
-					oldPorts := ep.Ports
-					ep.Ports = meshPorts
-					addServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
-						map[string]*networking.ServiceEntry{key: serviceEntry}, remoteRegistry.config.SyncNamespace)
-					//swap it back to use for next iteration
-					ep.Address = clusterIngress
-					ep.Ports = oldPorts
-				}
-			}
-
-			//add virtual service for routing locally in within the cluster
-			//virtualServiceName := getIstioResourceName(cname, "-default-vs")
-			//
-			//oldVirtualService := rc.IstioConfigStore.Get(istioModel.VirtualService.Type, virtualServiceName, remoteRegistry.config.SyncNamespace)
-			//
-			//virtualService := makeVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
-			//
-			//newVirtualService, err := createIstioConfig(istio.VirtualServiceProto, virtualService, virtualServiceName, remoteRegistry.config.SyncNamespace)
-			//
-			//if err == nil {
-			//	addUpdateIstioResource(rc, *newVirtualService, oldVirtualService, virtualServiceName, syncNamespace)
-			//} else {
-			//	log.Errorf(LogErrFormat, "Create", istioModel.VirtualService.Type, virtualServiceName, rc.ClusterID, err)
-			//}
-		}
-	}
-	return serviceEntries
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
@@ -592,10 +184,6 @@ func getDependentClusters(dependents *common.Map, identityClusterCache *common.M
 	return dependentClusters
 }
 
-func (sc *ServiceHandler) Deleted(obj *k8sV1.Service) {
-
-}
-
 func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, error) {
 
 	log.Infof("Initializing Admiral with params: %v", params)
@@ -625,7 +213,7 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		IdentityDependencyCache:         common.NewMapOfMaps(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &common.ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}}}
+		ServiceEntryAddressStore:	     &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{},}}
 
 	configMapController, err := admiral.NewConfigMapController(w.config.KubeconfigPath, w.config.SyncNamespace)
 	if err != nil {
@@ -912,7 +500,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.WorkloadIdentityLabel)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityLabel)
 				}
 
 			}
@@ -960,60 +548,12 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	}
 }
 
-func createSeWithDrLabels(remoteController *RemoteController, localCluster bool, identityId string, seName string, se *networking.ServiceEntry,
-	dr *networking.DestinationRule, seAddressCache *common.ServiceEntryAddressStore, configmapController admiral.ConfigMapControllerInterface) map[string]*networking.ServiceEntry {
-	var allSes = make(map[string]*networking.ServiceEntry)
-	var newSe = copyServiceEntry(se)
-
-	address, _, err := GetLocalAddressForSe(seName, seAddressCache, configmapController)
-	if err != nil {
-		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v", err)
-		return nil
-	}
-	newSe.Addresses = []string{address}
-
-	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
-
-	for _, endpoint := range se.Endpoints {
-		for _, subset := range dr.Subsets {
-			newEndpoint := copyEndpoint(endpoint)
-			newEndpoint.Labels = subset.Labels
-
-			////create a service entry with name subsetSeName
-			//if localCluster {
-			//	subsetSeName := seName + common.Dash + subset.Name
-			//	subsetSeAddress := strings.Split(se.Hosts[0], common.DotMesh)[0] + common.Sep + subset.Name + common.DotMesh BROKEN MUST FIX //todo fix the cname format here
-			//
-			//	//TODO uncomment the line below when subset routing across clusters is fixed
-			//	//newEndpoint.Address = subsetSeAddress
-			//
-			//	subSetSe := createSeWithPodIps(remoteController, identityId, subsetSeName, subsetSeAddress, newSe, newEndpoint, subset, seAddressMap)
-			//	if subSetSe != nil {
-			//		allSes[subsetSeName] = subSetSe
-			//		//TODO create default DestinationRules for these subset SEs
-			//	}
-			//}
-
-			endpoints = append(endpoints, newEndpoint)
-
-		}
-	}
-	newSe.Endpoints = endpoints
-	allSes[seName] = newSe
-	return allSes
-}
-
 func copyEndpoint(e *networking.ServiceEntry_Endpoint) *networking.ServiceEntry_Endpoint {
 	labels := make(map[string]string)
 	util.MapCopy(labels, e.Labels)
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
 	return &networking.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
-}
-
-func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
-	return &networking.ServiceEntry{Ports: se.Ports, Resolution: se.Resolution, Hosts: se.Hosts, Location: se.Location,
-		SubjectAltNames: se.SubjectAltNames, ExportTo: se.ExportTo, Endpoints: se.Endpoints, Addresses: se.Addresses}
 }
 
 func addUpdateIstioResource(rc *RemoteController, m istio.Config, exist *istio.Config, t string, syncNamespace string) {
@@ -1067,93 +607,3 @@ func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 	return nil
 }
 
-func loadServiceEntryCacheData(c admiral.ConfigMapControllerInterface, admiralCache *AdmiralCache) {
-	configmap, err := c.GetConfigMap()
-	if err != nil {
-		log.Warnf("Failed to refresh configmap state Error: %v", err)
-		return //No need to invalidate the cache
-	}
-
-	entryCache := admiral.GetServiceEntryStateFromConfigmap(configmap)
-
-	if entryCache != nil {
-		*admiralCache.ServiceEntryAddressStore = *entryCache
-		log.Infof("Successfully updated service entry cache state")
-	}
-
-}
-
-//Gets a guarenteed unique local address for a serviceentry. Returns the address, True iff the configmap was updated false otherwise, and an error if any
-//Any error coupled with an empty string address means the method should be retried
-func GetLocalAddressForSe(seName string, seAddressCache *common.ServiceEntryAddressStore, configMapController admiral.ConfigMapControllerInterface) (string, bool, error) {
-	var address = seAddressCache.EntryAddresses[seName]
-	if len(address) == 0 {
-		address, err := GenerateNewAddressAndAddToConfigMap(seName, configMapController)
-		return address, true, err
-	}
-	return address, false, nil
-}
-
-//an atomic fetch and update operation against the configmap (using K8s build in optimistic consistency mechanism via resource version)
-func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
-	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
-	cm, err := configMapController.GetConfigMap()
-	if err != nil {
-		return "", err
-	}
-
-	newAddressState := admiral.GetServiceEntryStateFromConfigmap(cm)
-
-	if newAddressState == nil {
-		return "", errors.New("could not unmarshall configmap yaml")
-	}
-
-	if val, ok := newAddressState.EntryAddresses[seName]; ok { //Someone else updated the address state, so we'll use that
-		return val, nil
-	}
-
-	secondIndex := (len(newAddressState.Addresses) / 255) + 10
-	firstIndex := (len(newAddressState.Addresses) % 255) + 1
-	address := common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
-
-	for util.Contains(newAddressState.Addresses, address) {
-		if firstIndex < 255 {
-			firstIndex++
-		} else {
-			secondIndex++
-			firstIndex = 0
-		}
-		address = common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
-	}
-	newAddressState.Addresses = append(newAddressState.Addresses, address)
-	newAddressState.EntryAddresses[seName] = address
-
-	err = putServiceEntryStateFromConfigmap(configMapController, cm, newAddressState)
-
-	if err != nil {
-		return "", err
-	}
-	return address, nil
-}
-
-//puts new data into an existing configmap. Providing the original is necessary to prevent fetch and update race conditions
-func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, originalConfigmap *k8sV1.ConfigMap, data *common.ServiceEntryAddressStore) error {
-	if originalConfigmap == nil {
-		return errors.New("configmap must not be nil")
-	}
-
-	bytes, err := yaml.Marshal(data)
-
-	if err != nil {
-		logrus.Errorf("Failed to put service entry state into the configmap. %v", err)
-		return nil
-	}
-
-	if originalConfigmap.Data == nil {
-		originalConfigmap.Data = map[string]string{}
-	}
-
-	originalConfigmap.Data["serviceEntryAddressStore"] = string(bytes)
-
-	return c.PutConfigMap(originalConfigmap)
-}
