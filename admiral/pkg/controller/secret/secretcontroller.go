@@ -145,6 +145,13 @@ func NewController(
 				queue.Add(key)
 			}
 		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(newObj)
+			log.Infof("Processing update: %s", key)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			log.Infof("Processing delete: %s", key)
@@ -237,47 +244,54 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 	for clusterID, kubeConfig := range s.Data {
 		// clusterID must be unique even across multiple secrets
 		if _, ok := c.cs.remoteClusters[clusterID]; !ok {
-			if len(kubeConfig) == 0 {
-				log.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
-					clusterID, secretName, s.ObjectMeta.Namespace)
-				continue
-			}
-
-			kubeConfig, err := c.secretResolver.FetchKubeConfig(clusterID, kubeConfig)
-
-			if err != nil {
-				log.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
-					clusterID, c.secretResolver, err)
-				continue
-			}
-
-			clusterConfig, err := LoadKubeConfig(kubeConfig)
-			if err != nil {
-				log.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
-					clusterID, secretName, s.ObjectMeta.Namespace, err)
-				log.Infof("KubeConfig: '%s'", string(kubeConfig))
-				continue
-			}
-
 			log.Infof("Adding new cluster member: %s", clusterID)
 			c.cs.remoteClusters[clusterID] = &RemoteCluster{}
 			c.cs.remoteClusters[clusterID].secretName = secretName
-			clientConfig := clientcmd.NewDefaultClientConfig(*clusterConfig, &clientcmd.ConfigOverrides{})
-
-			var restConfig *rest.Config
-			restConfig, err = clientConfig.ClientConfig()
-
-			if err != nil {
-				log.Errorf("error during conversion of secret to client config: %v", err)
-			}
-
-			err = c.addCallback(restConfig, clusterID, 2 * time.Minute)
-			if err != nil {
-				log.Errorf("error during create of clusterID: %s %v", clusterID, err)
-			}
 		} else {
-			log.Infof("Cluster %s in the secret %s in namespace %s already exists",
+			log.Infof("Cluster %s in the secret %s in namespace %s already exists. Reloading secret...",
 				clusterID, c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
+		}
+
+		if len(kubeConfig) == 0 {
+			log.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
+				clusterID, secretName, s.ObjectMeta.Namespace)
+			continue
+		}
+
+		kubeConfig, err := c.secretResolver.FetchKubeConfig(clusterID, kubeConfig)
+
+		if err != nil {
+			log.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
+				clusterID, c.secretResolver, err)
+			continue
+		}
+
+		clusterConfig, err := LoadKubeConfig(kubeConfig)
+
+		if err != nil {
+			log.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
+				clusterID, secretName, s.ObjectMeta.Namespace, err)
+			log.Infof("KubeConfig: '%s'", string(kubeConfig))
+			continue
+		}
+
+		clientConfig := clientcmd.NewDefaultClientConfig(*clusterConfig, &clientcmd.ConfigOverrides{})
+
+		var restConfig *rest.Config
+		restConfig, err = clientConfig.ClientConfig()
+
+		if err != nil {
+			log.Errorf("error during conversion of secret to client config: %v", err)
+			continue
+		}
+
+		err = c.addCallback(restConfig, clusterID, 2 * time.Minute)
+
+		if err != nil {
+			log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
+			continue
+		}else{
+			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.",clusterID,c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
 		}
 	}
 	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
