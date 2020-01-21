@@ -74,9 +74,9 @@ func TestDeploymentController_Added(t *testing.T) {
 				}
 			} else if len(depController.Cache.cache)==0 && c.expectedCacheSize != 0 {
 				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
-			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[""]) != c.expectedCacheSize {
+			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[common.Default]) != c.expectedCacheSize {
 				t.Errorf("Deployment controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Deployments[""]), c.expectedCacheSize)
-			} else if depController.Cache.cache["id"].Deployments[""][0] != &deployment {
+			} else if depController.Cache.cache["id"].Deployments[common.Default][0] != &deployment {
 				t.Errorf("Incorrect deployment added to deployment controller cache. Got %v expected %v", depController.Cache.cache["id"].Deployments[""][0], deployment)
 			}
 
