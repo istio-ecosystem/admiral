@@ -102,7 +102,7 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 	return tmpSe
 }
 
-func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity string, remoteRegistry *RemoteRegistry, syncNamespace string) map[string]*networking.ServiceEntry {
+func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 
@@ -116,15 +116,15 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 
-		if deployment == nil || deployment.Deployments[namespace] == nil {
+		if deployment == nil || deployment.Deployments[env] == nil {
 			continue
 		}
 
-		deploymentInstance := deployment.Deployments[namespace]
+		deploymentInstance := deployment.Deployments[env]
 
-		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], namespace)
+		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], env)
 
-		cname = common.GetCname(deploymentInstance[0], "identity", cname)
+		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityLabel, cname)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -133,7 +133,7 @@ func createServiceEntryForNewServiceOrPod(namespace string, sourceIdentity strin
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry("identity", rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry(remoteRegistry.config.LabelSet.WorkloadIdentityLabel, rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
 
 	}
 

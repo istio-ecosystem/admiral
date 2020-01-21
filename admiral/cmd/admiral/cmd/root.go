@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"istio.io/istio/pkg/log"
 	"os"
 	"os/signal"
@@ -24,7 +25,7 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	var ()
 
-	params := clusters.AdmiralParams{}
+	params := clusters.AdmiralParams{LabelSet: &common.LabelSet{}}
 
 	rootCmd := &cobra.Command{
 		Use:          "Admiral",

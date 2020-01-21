@@ -274,35 +274,35 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf(" Error with Istio controller init: %v", err)
 	}
 
-	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
+	log.Infof("starting global traffic policy controller clusterID: %v", clusterID)
 	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with GlobalTrafficController controller init: %v", err)
 	}
 
-	log.Infof("starting deployment controller custerID: %v", clusterID)
+	log.Infof("starting deployment controller clusterID: %v", clusterID)
 	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
-	log.Infof("starting pod controller custerID: %v", clusterID)
+	log.Infof("starting pod controller clusterID: %v", clusterID)
 	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
 	}
 
-	log.Infof("starting node controller custerID: %v", clusterID)
+	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r}, clientConfig)
 
 	if err != nil {
 		return fmt.Errorf(" Error with NodeController controller init: %v", err)
 	}
 
-	log.Infof("starting service controller custerID: %v", clusterID)
+	log.Infof("starting service controller clusterID: %v", clusterID)
 	rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
