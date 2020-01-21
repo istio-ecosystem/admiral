@@ -345,5 +345,9 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 
 2. [Multicluster Istio configuration and service discovery using Admiral](https://istio.io/blog/2020/multi-cluster-mesh-automation/)
 
+## Collaboration and Communication
+
+[Admiral Slack Channel](https://istio.slack.com/archives/GP0QM9ZJ8) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
+
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)
