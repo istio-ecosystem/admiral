@@ -217,6 +217,11 @@ func TestGetEnv(t *testing.T) {
 			expected:   "stage",
 		},
 		{
+			name:       "should return valid env from annotation",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"env": "stage"}}}}},
+			expected:   "stage",
+		},
+		{
 			name:       "should return env from namespace suffix",
 			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "uswest2-prd"}},
 			expected:   "prd",

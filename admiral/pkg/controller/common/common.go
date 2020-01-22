@@ -67,6 +67,9 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 func GetEnv(deployment *k8sAppsV1.Deployment) string {
 	var environment = deployment.Spec.Template.Labels[Env]
 	if len(environment) == 0 {
+		environment = deployment.Spec.Template.Annotations[Env]
+	}
+	if len(environment) == 0 {
 		splitNamespace := strings.Split(deployment.Namespace, Dash)
 		environment = splitNamespace[len(splitNamespace) - 1]
 	}
