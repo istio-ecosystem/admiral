@@ -6,5 +6,3 @@ namespace: sample
 resources:
   - namespace.yaml
   - greeting.yaml
-  - webapp.yaml
-  - sample_dep.yaml

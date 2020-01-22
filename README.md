@@ -30,19 +30,19 @@ One or more k8s clusters.
 
 #Download
 
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-osx.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-osx.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-linux.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-linux.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-win.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-win.tar.gz
 
 #Extract
 
-tar -xf istio-1.3.3-osx.tar.gz
+tar -xf istio-1.4.3-osx.tar.gz
 OR
-tar -xf istio-1.3.3-linux.tar.gz
+tar -xf istio-1.4.3-linux.tar.gz
 OR
-tar -xf istio-1.3.3-win.tar.gz
+tar -xf istio-1.4.3-win.tar.gz
 ```
 
 ```
@@ -54,15 +54,15 @@ kubectl create ns istio-system
 #Create k8s secret to be used by Citadel for mTLS cert generation
 
 kubectl create secret generic cacerts -n istio-system \
-    --from-file=istio-1.3.3/samples/certs/ca-cert.pem \
-    --from-file=istio-1.3.3/samples/certs/ca-key.pem \
-    --from-file=istio-1.3.3/samples/certs/root-cert.pem \
-    --from-file=istio-1.3.3/samples/certs/cert-chain.pem
+    --from-file=istio-1.4.3/samples/certs/ca-cert.pem \
+    --from-file=istio-1.4.3/samples/certs/ca-key.pem \
+    --from-file=istio-1.4.3/samples/certs/root-cert.pem \
+    --from-file=istio-1.4.3/samples/certs/cert-chain.pem
 ```
 ```
 #Generate, install and verify Istio CRDs
 
-helm template istio-1.3.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+helm template istio-1.4.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
 
 #Make sure Istio crds are installed
 
@@ -71,8 +71,8 @@ kubectl get crds | grep 'istio.io' | wc -l
 ```
 #Generate & Install Istio
 
-helm template istio-1.3.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
-    -f istio-1.3.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
+helm template istio-1.4.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
+    -f istio-1.4.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
 
 #Verify that istio pods are up
 
@@ -82,7 +82,7 @@ kubectl get pods -n istio-system
 ```
 #Point hosts ending in global to be resolved by istio-coredns
 
-./admiral-install-v0.1-alpha/scripts/redirect-dns.sh
+./admiral-install-v0.1-beta/scripts/redirect-dns.sh
 ```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
@@ -97,15 +97,15 @@ kubectl get pods -n istio-system
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-alpha/admiral-install-v0.1-alpha.tar.gz
-tar xvf admiral-install-v0.1-alpha.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
+tar xvf admiral-install-v0.1-beta.tar.gz
 ```
 
 ```
 #Install admiral
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/demosinglecluster.yaml
 
 #Verify admiral is running
 
@@ -116,7 +116,7 @@ kubectl get pods -n admiral
 #Create the secret for admiral to monitor.
 
 #Since this is for a single cluster demo the remote and local context are the same
-./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+./admiral-install-v0.1-beta/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 ```
 ```
 #Verify the secret
@@ -128,12 +128,12 @@ kubectl get secrets -n admiral
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample.yaml
 ```
 ```
 #Install the dependency CR
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample_dep.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample_dep.yaml
 
 #Verify that admiral created service names for 'greeting' service
 
@@ -216,7 +216,7 @@ kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 ```
 # Create admiral role and bindings on Cluster 2
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
 ```
 ```
 # Set CLUSTER_1 env variable
@@ -227,13 +227,13 @@ export CLUSTER_2=<path_to_kubeconfig_of_cluster_2>
 ```
 ```
 # Create the k8s secret for admiral to monitor Cluster 2.
-./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
+./admiral-install-v0.1-beta/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
 ```
 
 ```
 #Install test services in Cluster 2
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster_sample.yaml
 ```
 
 Now set KUBECONFIG back to Cluster 1
@@ -243,7 +243,7 @@ Now set KUBECONFIG back to Cluster 1
 kubectl get serviceentry default.greeting.global-se -n admiral-sync -o yaml
 ```
 
-Now run the below request multiple times and see the responses from greeting service instances in both Cluster 1 and Cluster 2.
+Now run the below request multiple times and see the requests being load balanced between local (Cluster 1) and remote (Cluster 2) instances of greeting service (You can see the response payload change based on which greeting's instance served the request)
 
 ```
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
