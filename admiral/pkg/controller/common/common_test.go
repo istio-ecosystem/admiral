@@ -198,3 +198,42 @@ func TestGetPodGlobalIdentifier(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEnv(t *testing.T) {
+
+	testCases := []struct {
+		name       string
+		deployment k8sAppsV1.Deployment
+		expected   string
+	}{
+		{
+			name:       "should return default env",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}},
+			expected:   Default,
+		},
+		{
+			name:       "should return valid env from label",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage"}}}}},
+			expected:   "stage",
+		},
+		{
+			name:       "should return valid env from annotation",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"env": "stage"}}}}},
+			expected:   "stage",
+		},
+		{
+			name:       "should return env from namespace suffix",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "uswest2-prd"}},
+			expected:   "prd",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			env := GetEnv(&c.deployment)
+			if !(env == c.expected) {
+				t.Errorf("Wanted Cname: %s, got: %s", c.expected, env)
+			}
+		})
+	}
+}
