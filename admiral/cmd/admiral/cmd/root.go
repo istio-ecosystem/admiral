@@ -25,8 +25,12 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	var ()
 
+<<<<<<< HEAD
 	params := clusters.AdmiralParams{}
 	params.LabelSet = &common.LabelSet{}
+=======
+	params := clusters.AdmiralParams{LabelSet: &common.LabelSet{}}
+>>>>>>> Fix local SE generation. Fix related bugs. (#59)
 
 	rootCmd := &cobra.Command{
 		Use:          "Admiral",
