@@ -3,6 +3,9 @@ kind: Kustomization
 
 namespace: sample
 
-resources:
-  - namespace.yaml
+bases:
+  - ../../base
+
+patchesStrategicMerge:
   - greeting.yaml
+

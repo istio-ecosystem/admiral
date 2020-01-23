@@ -3,6 +3,10 @@ kind: Kustomization
 
 namespace: admiral
 
+images:
+  - name: docker.io/admiralproj/admiral
+    newTag: v0.1-beta
+
 bases:
   - ../../base
 

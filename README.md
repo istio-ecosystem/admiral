@@ -231,7 +231,7 @@ export CLUSTER_2=<path_to_kubeconfig_of_cluster_2>
 ```
 
 ```
-#Install test services in Cluster 2
+#Install test service in Cluster 2
 
 kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster_sample.yaml
 ```
