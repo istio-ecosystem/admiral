@@ -6,6 +6,7 @@ import (
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	networking "istio.io/api/networking/v1alpha3"
@@ -120,7 +121,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
 
 	if e != nil {
 		t.Fail()
@@ -177,7 +178,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
 	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
 

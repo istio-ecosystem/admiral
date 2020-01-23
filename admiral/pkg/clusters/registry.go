@@ -79,7 +79,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 				}
 				//TODO pass deployment
 
-				tmpSe := createServiceEntry(identifier, rc, config, admiralCache, deployment[0], serviceEntries)
+				tmpSe := createServiceEntry(rc, config, admiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -282,14 +282,14 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting deployment controller clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
-	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
