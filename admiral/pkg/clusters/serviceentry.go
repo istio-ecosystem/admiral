@@ -120,7 +120,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		deploymentInstance := deployment.Deployments[env]
 
-		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], env)
+		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
 
 		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityLabel, cname)
 

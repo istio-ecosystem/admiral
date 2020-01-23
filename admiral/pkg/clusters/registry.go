@@ -135,15 +135,15 @@ func getDestinationRule(host string) *networking.DestinationRule {
 		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}}
 }
 
-func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
+func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
 
-	cachedService := rc.ServiceController.Cache.Get(namespace)
+	cachedService := rc.ServiceController.Cache.Get(deployment.Namespace)
 
 	if cachedService == nil {
 		return nil
 	}
 	var matchedService *k8sV1.Service
-	for _, service := range cachedService.Service[namespace] {
+	for _, service := range cachedService.Service[deployment.Namespace] {
 		var match = true
 		for lkey, lvalue := range service.Spec.Selector {
 			value, ok := deployment.Spec.Selector.MatchLabels[lkey]
@@ -531,7 +531,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		break
 	}
 
-	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
+	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance)
 
 	cname := common.GetCname(deploymentInstance, identifier, nameSuffix)
 	if cname == destinationRule.Host {
