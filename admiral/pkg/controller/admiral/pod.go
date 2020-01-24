@@ -32,7 +32,7 @@ type PodController struct {
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
-	labelSet   common.LabelSet
+	labelSet   *common.LabelSet
 }
 
 type podCache struct {
@@ -127,10 +127,11 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	return res, nil
 }
 
-func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration) (*PodController, error) {
+func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*PodController, error) {
 
 	podController := PodController{}
 	podController.PodHandler = handler
+	podController.labelSet = labelSet
 
 	podCache := podCache{}
 	podCache.cache = make(map[string]*PodClusterEntry)

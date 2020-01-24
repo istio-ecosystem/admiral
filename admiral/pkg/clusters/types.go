@@ -37,6 +37,7 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("DependenciesNamespace=%v ", b.DependenciesNamespace) +
 		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
 		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
+		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
 		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
 }
 
@@ -155,7 +156,9 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 		return
 	}
 
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
+	env := common.GetEnv(obj)
+
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
@@ -172,7 +175,8 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 		return
 	}
 
-	createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.config.SyncNamespace)
+	//TODO Skip pod events until GTP is implemented
+	//createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {

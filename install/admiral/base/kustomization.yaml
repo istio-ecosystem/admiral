@@ -2,7 +2,7 @@ apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 images:
-  - name: hub.docker.com/r/admiralproj/admiral
+  - name: docker.io/admiralproj/admiral
     newTag: latest
 
 resources:

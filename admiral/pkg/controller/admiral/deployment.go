@@ -31,7 +31,7 @@ type DeploymentController struct {
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
 	ctl               *Controller
-	labelSet 		  common.LabelSet
+	labelSet 		  *common.LabelSet
 }
 
 type deploymentCache struct {
@@ -74,17 +74,16 @@ func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sA
 		}
 		p.cache[v.Identity] = v
 	}
+	env := common.GetEnv(deployment)
+	envDeployments := v.Deployments[env]
 
-	//TODO this is assuming globally unquie names name which might not alway be the case.  This would need a cluster name too
-	namespaceDeployments := v.Deployments[deployment.Namespace]
-
-	if namespaceDeployments == nil {
-		namespaceDeployments = make([]*k8sAppsV1.Deployment, 0)
+	if envDeployments == nil {
+		envDeployments = make([]*k8sAppsV1.Deployment, 0)
 	}
 
-	namespaceDeployments = append(namespaceDeployments, deployment)
+	envDeployments = append(envDeployments, deployment)
 
-	v.Deployments[deployment.Namespace] = namespaceDeployments
+	v.Deployments[env] = envDeployments
 
 }
 
@@ -127,10 +126,11 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 	return res, nil
 }
 
-func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
+func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
 
 	deploymentController := DeploymentController{}
 	deploymentController.DeploymentHandler = handler
+	deploymentController.labelSet = labelSet
 
 	deploymentCache := deploymentCache{}
 	deploymentCache.cache = make(map[string]*DeploymentClusterEntry)

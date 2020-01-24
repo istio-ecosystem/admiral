@@ -4,6 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	"strings"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 	NodeRegionLabel            = "failure-domain.beta.kubernetes.io/region"
 	SpiffePrefix               = "spiffe://"
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
+	Default                    = "default"
 )
 
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
@@ -49,11 +51,7 @@ func DefaultGlobalIdentifier() string {
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global
 func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix string) string {
-	var environment = deployment.Spec.Template.Labels[Env]
-	if len(environment) == 0 {
-		environment = "default"
-		logrus.Warnf("%v label missing on %v in namespace %v. Using 'default' as the value.", Env, deployment.Name, deployment.Namespace)
-	}
+	var environment = GetEnv(deployment)
 	alias := deployment.Spec.Template.Labels[identifier]
 	if len(alias) == 0 {
 		logrus.Warnf("%v label missing on service %v in namespace %v. Falling back to annotation to create cname.", identifier, deployment.Name, deployment.Namespace)
@@ -64,6 +62,23 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		return ""
 	}
 	return environment + Sep + alias + Sep + nameSuffix
+}
+
+func GetEnv(deployment *k8sAppsV1.Deployment) string {
+	var environment = deployment.Spec.Template.Labels[Env]
+	if len(environment) == 0 {
+		environment = deployment.Spec.Template.Annotations[Env]
+	}
+	if len(environment) == 0 {
+		splitNamespace := strings.Split(deployment.Namespace, Dash)
+		if len(splitNamespace) > 1 {
+			environment = splitNamespace[len(splitNamespace)-1]
+		}
+	}
+	if len(environment) == 0 {
+		environment = Default
+	}
+	return environment
 }
 
 // GetSAN returns SAN for a service entry in the format spiffe://<domain>/<identifier>, Ex: spiffe://subdomain.domain.com/Admiral.platform.mesh.server

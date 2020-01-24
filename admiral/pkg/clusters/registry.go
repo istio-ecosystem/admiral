@@ -79,7 +79,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 				}
 				//TODO pass deployment
 
-				tmpSe := createServiceEntry(identifier, rc, config, admiralCache, deployment[0], serviceEntries)
+				tmpSe := createServiceEntry(rc, config, admiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -135,15 +135,18 @@ func getDestinationRule(host string) *networking.DestinationRule {
 		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}}
 }
 
-func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment, namespace string) *k8sV1.Service {
+func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
 
-	cachedService := rc.ServiceController.Cache.Get(namespace)
+	if deployment == nil {
+		return nil
+	}
+	cachedService := rc.ServiceController.Cache.Get(deployment.Namespace)
 
 	if cachedService == nil {
 		return nil
 	}
 	var matchedService *k8sV1.Service
-	for _, service := range cachedService.Service[namespace] {
+	for _, service := range cachedService.Service[deployment.Namespace] {
 		var match = true
 		for lkey, lvalue := range service.Spec.Selector {
 			value, ok := deployment.Spec.Selector.MatchLabels[lkey]
@@ -274,35 +277,35 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf(" Error with Istio controller init: %v", err)
 	}
 
-	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
+	log.Infof("starting global traffic policy controller clusterID: %v", clusterID)
 	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with GlobalTrafficController controller init: %v", err)
 	}
 
-	log.Infof("starting deployment controller custerID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	log.Infof("starting deployment controller clusterID: %v", clusterID)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
-	log.Infof("starting pod controller custerID: %v", clusterID)
-	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	log.Infof("starting pod controller clusterID: %v", clusterID)
+	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
 	}
 
-	log.Infof("starting node controller custerID: %v", clusterID)
+	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r}, clientConfig)
 
 	if err != nil {
 		return fmt.Errorf(" Error with NodeController controller init: %v", err)
 	}
 
-	log.Infof("starting service controller custerID: %v", clusterID)
+	log.Infof("starting service controller clusterID: %v", clusterID)
 	rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
@@ -531,7 +534,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		break
 	}
 
-	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance, deploymentInstance.Namespace)
+	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance)
 
 	cname := common.GetCname(deploymentInstance, identifier, nameSuffix)
 	if cname == destinationRule.Host {
