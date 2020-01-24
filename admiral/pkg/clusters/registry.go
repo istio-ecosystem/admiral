@@ -137,6 +137,9 @@ func getDestinationRule(host string) *networking.DestinationRule {
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
 
+	if deployment == nil {
+		return nil
+	}
 	cachedService := rc.ServiceController.Cache.Get(deployment.Namespace)
 
 	if cachedService == nil {

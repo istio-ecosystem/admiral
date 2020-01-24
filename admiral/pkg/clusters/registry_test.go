@@ -463,36 +463,31 @@ func TestGetServiceForDeployment(t *testing.T) {
 	deploymentWithSelector := k8sAppsV1.Deployment{}
 	deploymentWithSelector.Name = "dep2"
 	deploymentWithSelector.Namespace = "under-test"
-	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{}
-	deploymentWithSelector.Spec.Selector.MatchLabels = map[string]string{"under-test":"true"}
+	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"under-test":"true"}}
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name string
 		controller *RemoteController
 		deployment *k8sAppsV1.Deployment
-		namespace string
 		expectedService *k8sCoreV1.Service
 	}{
 		{
 			name: "Should return nil with nothing in the cache",
 			controller:baseRc,
 			deployment:nil,
-			namespace:"foobar",
 			expectedService:nil,
 		},
 		{
 			name: "Should not match if selectors don't match",
 			controller:rcWithService,
 			deployment:&deploymentWithNoSelector,
-			namespace:"under-test",
 			expectedService:nil,
 		},
 		{
 			name: "Should return proper service",
 			controller:rcWithService,
 			deployment:&deploymentWithSelector,
-			namespace:"under-test",
 			expectedService:&service,
 		},
 	}
@@ -500,7 +495,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			resultingService := getServiceForDeployment(c.controller, c.deployment, c.namespace)
+			resultingService := getServiceForDeployment(c.controller, c.deployment)
 			if resultingService == nil && c.expectedService == nil {
 				//perfect
 			} else {
