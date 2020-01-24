@@ -20,12 +20,10 @@ import (
 	"time"
 )
 
-const cnameSuffix = "mesh"
-
-func createServiceEntry(identifier string, rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
+func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	globalFqdn := common.GetCname(destDeployment, identifier, cnameSuffix)
+	globalFqdn := common.GetCname(destDeployment, config.LabelSet.WorkloadIdentityLabel, config.HostnameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -61,9 +59,9 @@ func createServiceEntry(identifier string, rc *RemoteController, config AdmiralP
 
 	var san []string
 	if config.EnableSAN {
-		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, identifier)
+		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)
 		if len(tmpSan) > 0 {
-			san = []string{common.GetSAN(config.SANPrefix, destDeployment, identifier)}
+			san = []string{common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)}
 		}
 	} else {
 		san = nil
@@ -122,7 +120,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		deploymentInstance := deployment.Deployments[env]
 
-		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0], env)
+		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
 
 		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityLabel, cname)
 
@@ -133,7 +131,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry(remoteRegistry.config.LabelSet.WorkloadIdentityLabel, rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry(rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
 
 	}
 

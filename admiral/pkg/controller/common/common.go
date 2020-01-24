@@ -71,7 +71,9 @@ func GetEnv(deployment *k8sAppsV1.Deployment) string {
 	}
 	if len(environment) == 0 {
 		splitNamespace := strings.Split(deployment.Namespace, Dash)
-		environment = splitNamespace[len(splitNamespace) - 1]
+		if len(splitNamespace) > 1 {
+			environment = splitNamespace[len(splitNamespace)-1]
+		}
 	}
 	if len(environment) == 0 {
 		environment = Default

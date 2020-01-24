@@ -226,6 +226,11 @@ func TestGetEnv(t *testing.T) {
 			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "uswest2-prd"}},
 			expected:   "prd",
 		},
+		{
+			name:       "should return default when namespace doesn't have blah..region-env format",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "sample"}},
+			expected:   Default,
+		},
 	}
 
 	for _, c := range testCases {

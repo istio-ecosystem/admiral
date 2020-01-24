@@ -296,13 +296,15 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, 
 func TestCreateServiceEntry(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
+	localAddress := common.LocalAddressPrefix + ".10.1"
+
 	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
 
 	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":"127.0.0.1"},
-		Addresses: []string{"127'.0.0.1"},
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":localAddress},
+		Addresses: []string{localAddress},
 	}
 
 	admiralCache.CnameClusterCache = common.NewMapOfMaps()
@@ -320,18 +322,34 @@ func TestCreateServiceEntry(t *testing.T) {
 	params := AdmiralParams{
 		EnableSAN: true,
 		SANPrefix: "prefix",
+		LabelSet:&common.LabelSet{WorkloadIdentityLabel:"identity"},
+		HostnameSuffix: "mesh",
 	}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
+		Addresses: []string{localAddress},
+	}
+
+	cacheController := &test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
+	}
+
+	admiralCache.ConfigMapController = cacheController
 
 	deployment := v12.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
 
-	resultingEntry := createServiceEntry("identity", rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
+	resultingEntry := createServiceEntry(rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
 
 	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
 		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
 	}
-	if resultingEntry.Addresses[0] != "127.0.0.1" {
-		t.Errorf("Address mismatch. Got: %v, expected: 127.0.0.1", resultingEntry.Addresses[0])
+
+	if resultingEntry.Addresses[0] != localAddress {
+		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
 	}
 
 }

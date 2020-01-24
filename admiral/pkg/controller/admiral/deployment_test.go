@@ -28,7 +28,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	depController := DeploymentController{
 		DeploymentHandler: &mdh,
 		Cache:             &cache,
-		labelSet:          labelset,
+		labelSet:          &labelset,
 	}
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
@@ -90,7 +90,7 @@ func TestDeploymentController_Added(t *testing.T) {
 func TestDeploymentController_GetDeployments(t *testing.T) {
 
 	depController := DeploymentController{
-		labelSet: common.LabelSet{
+		labelSet: &common.LabelSet{
 			DeploymentAnnotation:                "sidecar.istio.io/inject",
 			NamespaceSidecarInjectionLabel:      "istio-injection",
 			NamespaceSidecarInjectionLabelValue: "enabled",
@@ -154,7 +154,7 @@ func TestNewDeploymentController(t *testing.T) {
 	stop := make(chan struct{})
 	depHandler := test.MockDeploymentHandler{}
 
-	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000))
+	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000), &common.LabelSet{})
 
 	if depCon == nil {
 		t.Errorf("Deployment controller should not be nil")
