@@ -20,7 +20,7 @@ func TestNewPodController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockPodHandler{}
 
-	podController, err := NewPodController(stop, &handler, config, time.Duration(1000))
+	podController, err := NewPodController(stop, &handler, config, time.Duration(1000), &common.LabelSet{})
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -33,7 +33,7 @@ func TestNewPodController(t *testing.T) {
 
 func TestPodController_GetPods(t *testing.T) {
 	controller := PodController{
-		labelSet: common.LabelSet{
+		labelSet: &common.LabelSet{
 			DeploymentAnnotation:                "sidecar.istio.io/inject",
 			NamespaceSidecarInjectionLabel:      "istio-injection",
 			NamespaceSidecarInjectionLabelValue: "enabled",
