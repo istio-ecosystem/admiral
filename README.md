@@ -425,7 +425,7 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 
 ## Collaboration and Communication
 
-[Admiral Slack Channel](https://istio.slack.com/archives/GP0QM9ZJ8) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
+[Admiral Slack Channel](https://istio.slack.com/archives/CT3F18T08) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
 
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)
