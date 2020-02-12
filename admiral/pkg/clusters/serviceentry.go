@@ -23,7 +23,7 @@ import (
 func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	globalFqdn := common.GetCname(destDeployment, config.LabelSet.WorkloadIdentityLabel, config.HostnameSuffix)
+	globalFqdn := common.GetCname(destDeployment, config.LabelSet.WorkloadIdentityKey, config.HostnameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -59,9 +59,9 @@ func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache
 
 	var san []string
 	if config.EnableSAN {
-		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)
+		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityKey)
 		if len(tmpSan) > 0 {
-			san = []string{common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)}
+			san = []string{common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityKey)}
 		}
 	} else {
 		san = nil
@@ -122,7 +122,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
 
-		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityLabel, cname)
+		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityKey, cname)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)

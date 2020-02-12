@@ -503,7 +503,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityLabel)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityKey)
 				}
 
 			}

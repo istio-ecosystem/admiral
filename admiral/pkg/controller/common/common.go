@@ -52,13 +52,9 @@ func DefaultGlobalIdentifier() string {
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global
 func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix string) string {
 	var environment = GetEnv(deployment)
-	alias := deployment.Spec.Template.Labels[identifier]
+	alias := GetValueForKeyFromDeployment(identifier, deployment)
 	if len(alias) == 0 {
-		logrus.Warnf("%v label missing on service %v in namespace %v. Falling back to annotation to create cname.", identifier, deployment.Name, deployment.Namespace)
-		alias = deployment.Spec.Template.Annotations[identifier]
-	}
-	if len(alias) == 0 {
-		logrus.Errorf("Unable to get cname for service with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
+		logrus.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation or label", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
 	return environment + Sep + alias + Sep + nameSuffix
@@ -83,8 +79,9 @@ func GetEnv(deployment *k8sAppsV1.Deployment) string {
 
 // GetSAN returns SAN for a service entry in the format spiffe://<domain>/<identifier>, Ex: spiffe://subdomain.domain.com/Admiral.platform.mesh.server
 func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) string {
-	identifierVal := deployment.Spec.Template.Labels[identifier]
+	identifierVal := GetValueForKeyFromDeployment(identifier, deployment)
 	if len(identifierVal) == 0 {
+		logrus.Errorf("Unable to get SAN for deployment with name %v in namespace %v as it doesn't have the %v annotation or label", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
 	if len(domain) > 0 {
@@ -97,4 +94,13 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 func GetNodeLocality(node *k8sV1.Node) string {
 	region, _ := node.Labels[NodeRegionLabel]
 	return region
+}
+
+func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) string {
+	value := deployment.Spec.Template.Labels[key]
+	if len(value) == 0 {
+		logrus.Warnf("%v label missing on deployment %v in namespace %v. Falling back to annotation.", key, deployment.Name, deployment.Namespace)
+		value = deployment.Spec.Template.Annotations[key]
+	}
+	return value
 }

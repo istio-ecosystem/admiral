@@ -322,7 +322,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	params := AdmiralParams{
 		EnableSAN: true,
 		SANPrefix: "prefix",
-		LabelSet:&common.LabelSet{WorkloadIdentityLabel:"identity"},
+		LabelSet:&common.LabelSet{WorkloadIdentityKey: "identity"},
 		HostnameSuffix: "mesh",
 	}
 
