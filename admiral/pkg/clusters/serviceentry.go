@@ -37,6 +37,11 @@ func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache
 	for err==nil && counter<maxRetries {
 		address, needsCacheUpdate, err = GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
 
+		if err != nil {
+			log.Errorf("Error getting local address for Service Entry. Err: %v", err)
+			break
+		}
+
 		//random expo backoff
 		timeToBackoff := rand.Intn(int(math.Pow(100.0, float64(counter)))) //get a random number between 0 and 100^counter. Will always be 0 the first time, will be 0-100 the second, and 0-1000 the third
 		time.Sleep(time.Duration(timeToBackoff)*time.Millisecond)
