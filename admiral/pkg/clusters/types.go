@@ -158,7 +158,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -177,7 +177,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 

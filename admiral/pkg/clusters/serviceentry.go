@@ -257,8 +257,8 @@ func AddServiceEntriesWithDr(r *RemoteRegistry, sourceClusters map[string]string
 
 			//Add a label
 			var identityId string
-			if identityId, ok := r.AdmiralCache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
+			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
 			if newServiceEntry != nil {
