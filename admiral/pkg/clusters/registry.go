@@ -191,6 +191,8 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 
 	log.Infof("Initializing Admiral with params: %v", params)
 
+	common.OverrideDefaultWorkloadIdentifier(params.LabelSet.WorkloadIdentityKey)
+
 	w := RemoteRegistry{
 		ctx: ctx,
 	}

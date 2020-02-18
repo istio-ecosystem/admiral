@@ -29,24 +29,20 @@ const (
 )
 
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
-	identity := pod.Labels[DefaultGlobalIdentifier()]
+	identity := pod.Labels[GetWorkloadIdentifier()]
 	if len(identity) == 0 {
-		identity = pod.Annotations[DefaultGlobalIdentifier()]
+		identity = pod.Annotations[GetWorkloadIdentifier()]
 	}
 	return identity
 }
 
 func GetDeploymentGlobalIdentifier(deployment *k8sAppsV1.Deployment) string {
-	identity := deployment.Spec.Template.Labels[DefaultGlobalIdentifier()]
+	identity := deployment.Spec.Template.Labels[GetWorkloadIdentifier()]
 	if len(identity) == 0 {
 		//TODO can this be removed now? This was for backward compatibility
-		identity = deployment.Spec.Template.Annotations[DefaultGlobalIdentifier()]
+		identity = deployment.Spec.Template.Annotations[GetWorkloadIdentifier()]
 	}
 	return identity
-}
-
-func DefaultGlobalIdentifier() string {
-	return Identity
 }
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global

@@ -258,7 +258,10 @@ func TestInitAdmiral(t *testing.T) {
 
 	p := AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{},
 	}
+
+	p.LabelSet.WorkloadIdentityKey="overridden-key"
 
 	rr, err := InitAdmiral(context.Background(), p)
 
@@ -267,6 +270,10 @@ func TestInitAdmiral(t *testing.T) {
 	}
 	if len(rr.remoteControllers) != 0 {
 		t.Fail()
+	}
+
+	if common.GetWorkloadIdentifier() != "overridden-key" {
+		t.Errorf("Workload identity label override failed. Expected \"overridden-key\", git %v", common.GetWorkloadIdentifier())
 	}
 }
 

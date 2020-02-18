@@ -254,7 +254,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//Add a label
 			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
+				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
 			if err == nil {
