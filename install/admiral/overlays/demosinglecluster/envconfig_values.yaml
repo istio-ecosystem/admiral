@@ -16,4 +16,6 @@ spec:
             - admiral
             - --secret_namespace
             - admiral
+            - --sync_namespace
+            - admiral
           name: admiral
