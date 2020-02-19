@@ -65,8 +65,8 @@ func TestConfigManagement(t *testing.T) {
 	if GetDependenciesNamespace() != "default" {
 		t.Errorf("Dependency namespace mismatch, expected default, got %v", GetDependenciesNamespace())
 	}
-	if GetSecretResolver() != "default" {
-		t.Errorf("Secret resolver mismatch, expected default, got %v", GetSecretResolver())
+	if GetSecretResolver() != "" {
+		t.Errorf("Secret resolver mismatch, expected empty string, got %v", GetSecretResolver())
 	}
 
 }

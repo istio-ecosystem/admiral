@@ -15,7 +15,7 @@ func init() {
 		CacheRefreshDuration: time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace: "default",
-		SecretResolver: "default",
+		SecretResolver: "",
 
 	}
 
