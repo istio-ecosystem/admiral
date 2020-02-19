@@ -40,7 +40,7 @@ func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCach
 	log.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
 }
 
-func handleDependencyRecord(identifier string, sourceIdentity string, admiralCache *AdmiralCache, rcs map[string]*RemoteController, config AdmiralParams, obj *v1.Dependency) {
+func handleDependencyRecord(identifier string, sourceIdentity string, admiralCache *AdmiralCache, rcs map[string]*RemoteController, obj *v1.Dependency) {
 
 	destinationIdentitys := obj.Spec.Destinations
 
@@ -79,7 +79,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 				}
 				//TODO pass deployment
 
-				tmpSe := createServiceEntry(rc, config, admiralCache, deployment[0], serviceEntries)
+				tmpSe := createServiceEntry(rc, admiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -110,7 +110,7 @@ func handleDependencyRecord(identifier string, sourceIdentity string, admiralCac
 	}
 
 	//add service entries for all dependencies in source cluster
-	AddServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
+	AddServiceEntriesWithDr(admiralCache, sourceClusters, rcs, serviceEntries)
 }
 
 func getIstioResourceName(host string, suffix string) string {
@@ -187,13 +187,11 @@ func getDependentClusters(dependents *common.Map, identityClusterCache *common.M
 	return dependentClusters
 }
 
-func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, error) {
+func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
 
 	log.Infof("Initializing Admiral with params: %v", params)
 
-	if params.LabelSet != nil {
-		common.OverrideDefaultWorkloadIdentifier(params.LabelSet.WorkloadIdentityKey)
-	}
+	common.InitializeConfig(params)
 
 	w := RemoteRegistry{
 		ctx: ctx,
@@ -209,7 +207,6 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
 	}
 
-	w.config = params
 	w.remoteControllers = make(map[string]*RemoteController)
 
 	w.AdmiralCache = &AdmiralCache{
@@ -222,14 +219,14 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:	     &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{},}}
 
-	configMapController, err := admiral.NewConfigMapController(w.config.KubeconfigPath, w.config.SyncNamespace)
+	configMapController, err := admiral.NewConfigMapController()
 	if err != nil {
 		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
-	err = createSecretController(ctx, &w, params)
+	err = createSecretController(ctx, &w)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with secret control init: %v", err)
 	}
@@ -239,10 +236,10 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 	return &w, nil
 }
 
-func createSecretController(ctx context.Context, w *RemoteRegistry, params AdmiralParams) error {
+func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	var err error
 
-	w.secretClient, err = admiral.K8sClientFromPath(params.KubeconfigPath)
+	w.secretClient, err = admiral.K8sClientFromPath(common.GetKubeconfigPath())
 	if err != nil {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
@@ -250,8 +247,8 @@ func createSecretController(ctx context.Context, w *RemoteRegistry, params Admir
 	err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
 		w.deleteCacheController,
-		w.config.ClusterRegistriesNamespace,
-		ctx, params.SecretResolver)
+		common.GetClusterRegistriesNamespace(),
+		ctx, common.GetSecretResolver())
 
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)
@@ -289,14 +286,14 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting deployment controller clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
-	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
+	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
@@ -327,6 +324,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 
 func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts istioKube.ControllerOptions, remoteController *RemoteController, stop <-chan struct{}, clusterID string) error {
 	configClient, err := istio.NewClient(clientConfig, "", istio.IstioConfigTypes, opts.DomainSuffix)
+	syncNamespace := common.GetSyncNamespace()
 	if err != nil {
 		return fmt.Errorf("error creating istio client to the remote clusterId: %s error:%v", clusterID, err)
 	}
@@ -337,7 +335,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 		clusterId := remoteController.ClusterID
 
-		if m.Namespace == r.config.SyncNamespace {
+		if m.Namespace == common.GetSyncNamespace() {
 			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: "+m.Namespace)
 			return
 		}
@@ -365,11 +363,11 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 				if istio.EventDelete == e {
 
 					log.Infof(LogFormat, "Delete", istioModel.DestinationRule.Type, m.Name, clusterId, "Success")
-					rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, m.Name, r.config.SyncNamespace)
+					rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, m.Name, syncNamespace)
 
 				} else {
 
-					exist := rc.IstioConfigStore.Get(istioModel.VirtualService.Type, m.Name, r.config.SyncNamespace)
+					exist := rc.IstioConfigStore.Get(istioModel.VirtualService.Type, m.Name, syncNamespace)
 
 					//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
 					for _, httpRoute := range virtualService.Http {
@@ -386,7 +384,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 						}
 					}
 
-					addUpdateIstioResource(rc, m, exist, istioModel.VirtualService.Type, r.config.SyncNamespace)
+					addUpdateIstioResource(rc, m, exist, istioModel.VirtualService.Type, syncNamespace)
 				}
 			}
 
@@ -403,7 +401,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 		var localIdentityId string
 
-		if m.Namespace == r.config.SyncNamespace || m.Namespace == common.NamespaceKubeSystem {
+		if m.Namespace == syncNamespace || m.Namespace == common.NamespaceKubeSystem {
 			log.Infof(LogFormat, "Event", e.String(), m.Name, clusterId, "Skipping the namespace: "+m.Namespace)
 			return
 		}
@@ -441,7 +439,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 			var drServiceEntries = make(map[string]*networking.ServiceEntry)
 
-			exist := rc.IstioConfigStore.Get(istioModel.ServiceEntry.Type, basicSEName, r.config.SyncNamespace)
+			exist := rc.IstioConfigStore.Get(istioModel.ServiceEntry.Type, basicSEName, syncNamespace)
 
 			var identityId = ""
 
@@ -467,36 +465,36 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 			if istio.EventDelete == e {
 
-				rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, m.Name, r.config.SyncNamespace)
+				rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, m.Name, syncNamespace)
 				log.Infof(LogFormat, "Delete", istioModel.ServiceEntry.Type, m.Name, clusterId, "success")
-				rc.IstioConfigStore.Delete(istioModel.ServiceEntry.Type, seName, r.config.SyncNamespace)
+				rc.IstioConfigStore.Delete(istioModel.ServiceEntry.Type, seName, syncNamespace)
 				log.Infof(LogFormat, "Delete", istioModel.ServiceEntry.Type, seName, clusterId, "success")
 				for _, subset := range destinationRule.Subsets {
 					sseName := seName + common.Dash + subset.Name
-					rc.IstioConfigStore.Delete(istioModel.ServiceEntry.Type, sseName, r.config.SyncNamespace)
+					rc.IstioConfigStore.Delete(istioModel.ServiceEntry.Type, sseName, syncNamespace)
 					log.Infof(LogFormat, "Delete", istioModel.ServiceEntry.Type, sseName, clusterId, "success")
 				}
-				rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, localDrName, r.config.SyncNamespace)
+				rc.IstioConfigStore.Delete(istioModel.DestinationRule.Type, localDrName, syncNamespace)
 				log.Infof(LogFormat, "Delete", istioModel.DestinationRule.Type, localDrName, clusterId, "success")
 
 			} else {
 
-				exist := rc.IstioConfigStore.Get(istioModel.DestinationRule.Type, m.Name, r.config.SyncNamespace)
+				exist := rc.IstioConfigStore.Get(istioModel.DestinationRule.Type, m.Name, syncNamespace)
 
 				//copy destination rule only to other clusters
 				if dependentCluster != clusterId {
-					addUpdateIstioResource(rc, m, exist, istioModel.DestinationRule.Type, r.config.SyncNamespace)
+					addUpdateIstioResource(rc, m, exist, istioModel.DestinationRule.Type, syncNamespace)
 				}
 
 				if drServiceEntries != nil {
 					for _seName, se := range drServiceEntries {
-						existsServiceEntry = rc.IstioConfigStore.Get(istioModel.ServiceEntry.Type, _seName, r.config.SyncNamespace)
-						newServiceEntry, err = createIstioConfig(istio.ServiceEntryProto, se, _seName, r.config.SyncNamespace)
+						existsServiceEntry = rc.IstioConfigStore.Get(istioModel.ServiceEntry.Type, _seName, syncNamespace)
+						newServiceEntry, err = createIstioConfig(istio.ServiceEntryProto, se, _seName, syncNamespace)
 						if err != nil {
 							log.Warnf(LogErrFormat, "Create", istioModel.ServiceEntry.Type, seName, clusterId, err)
 						}
 						if newServiceEntry != nil {
-							addUpdateIstioResource(rc, *newServiceEntry, existsServiceEntry, istioModel.ServiceEntry.Type, r.config.SyncNamespace)
+							addUpdateIstioResource(rc, *newServiceEntry, existsServiceEntry, istioModel.ServiceEntry.Type, syncNamespace)
 						}
 						//cache the subset service entries for updating them later for pod events
 						if dependentCluster == clusterId && se.Resolution == networking.ServiceEntry_STATIC {
@@ -507,7 +505,7 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityKey)
+					createDestinationRuleForLocal(remoteController, localDrName, localIdentityId, clusterId, destinationRule)
 				}
 
 			}
@@ -522,8 +520,11 @@ func (r *RemoteRegistry) createIstioController(clientConfig *rest.Config, opts i
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *networking.DestinationRule, syncNamespace string, nameSuffix string, identifier string) {
+	destinationRule *networking.DestinationRule) {
 
+	syncNamespace := common.GetSyncNamespace()
+	nameSuffix := common.GetHostnameSuffix()
+	identifier := common.GetWorkloadIdentifier()
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
 	if deployment == nil || len(deployment.Deployments) == 0 {

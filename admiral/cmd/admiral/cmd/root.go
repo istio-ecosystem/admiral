@@ -25,7 +25,7 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	var ()
 
-	params := clusters.AdmiralParams{LabelSet: &common.LabelSet{}}
+	params := common.AdmiralParams{LabelSet: &common.LabelSet{}}
 
 	rootCmd := &cobra.Command{
 		Use:          "Admiral",

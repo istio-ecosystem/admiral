@@ -96,12 +96,12 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	}
 
-	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se}, "admiral-sync")
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se})
 	}
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
@@ -319,13 +319,6 @@ func TestCreateServiceEntry(t *testing.T) {
 		}
 	})
 
-	params := AdmiralParams{
-		EnableSAN: true,
-		SANPrefix: "prefix",
-		LabelSet:&common.LabelSet{WorkloadIdentityKey: "identity"},
-		HostnameSuffix: "mesh",
-	}
-
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
 		Addresses: []string{localAddress},
@@ -342,7 +335,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	deployment := v12.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
 
-	resultingEntry := createServiceEntry(rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
+	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
 
 	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
 		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])

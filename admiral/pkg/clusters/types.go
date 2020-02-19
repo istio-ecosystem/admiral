@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"context"
-	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -13,34 +12,7 @@ import (
 	k8s "k8s.io/client-go/kubernetes"
 
 	"sync"
-	"time"
 )
-
-type AdmiralParams struct {
-	KubeconfigPath             string
-	CacheRefreshDuration       time.Duration
-	ClusterRegistriesNamespace string
-	DependenciesNamespace      string
-	SyncNamespace              string
-	EnableSAN                  bool
-	SANPrefix                  string
-	SecretResolver             string
-	LabelSet                   *common.LabelSet
-	HostnameSuffix             string
-
-}
-
-func (b AdmiralParams) String() string {
-	return fmt.Sprintf("KubeconfigPath=%v ", b.KubeconfigPath) +
-		fmt.Sprintf("CacheRefreshDuration=%v ", b.CacheRefreshDuration) +
-		fmt.Sprintf("ClusterRegistriesNamespace=%v ", b.ClusterRegistriesNamespace) +
-		fmt.Sprintf("DependenciesNamespace=%v ", b.DependenciesNamespace) +
-		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
-		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
-		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
-		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
-}
-
 
 type RemoteController struct {
 	ClusterID            string
@@ -67,7 +39,6 @@ type AdmiralCache struct {
 }
 
 type RemoteRegistry struct {
-	config AdmiralParams
 	sync.Mutex
 	remoteControllers map[string]*RemoteController
 	secretClient      k8s.Interface
@@ -129,7 +100,7 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
+	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, obj)
 
 }
 
