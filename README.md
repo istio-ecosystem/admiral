@@ -6,7 +6,7 @@
 
 [![CircleCI](https://circleci.com/gh/istio-ecosystem/admiral/tree/master.svg?style=svg)](https://circleci.com/gh/istio-ecosystem/admiral/tree/master) [![codecov](https://codecov.io/gh/istio-ecosystem/admiral/branch/master/graph/badge.svg)](https://codecov.io/gh/istio-ecosystem/admiral)
 
-**Admiral provides automatic configuration for multiple istio deployments to work as a single mesh**
+**Admiral provides automatic configuration and service discovery for multicluster Istio service mesh**
 
 Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity from developers and mesh operators pushing this complexity into automation.
 
@@ -14,9 +14,9 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 
 ### Prerequisite
 
-One or more k8s clusters.
+One or more k8s clusters will need the following steps executed
 
-**Example setup for a K8s cluster**
+#### Install the below utilities
 
 `Note`: If running in windows, a bash shell is required (cygwin)
 
@@ -25,24 +25,24 @@ One or more k8s clusters.
 * Install [helm](https://github.com/helm/helm/blob/master/docs/install.md)
 * Install [wget](https://www.gnu.org/software/wget/)
 
-```
-#Download & extract Istio
+#### Install Istio
 
+```
 #Download
 
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-osx.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-osx.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-linux.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-linux.tar.gz
 OR
-wget https://github.com/istio/istio/releases/download/1.3.3/istio-1.3.3-win.tar.gz
+wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-win.tar.gz
 
 #Extract
 
-tar -xf istio-1.3.3-osx.tar.gz
+tar -xf istio-1.4.3-osx.tar.gz
 OR
-tar -xf istio-1.3.3-linux.tar.gz
+tar -xf istio-1.4.3-linux.tar.gz
 OR
-tar -xf istio-1.3.3-win.tar.gz
+tar -xf istio-1.4.3-win.tar.gz
 ```
 
 ```
@@ -54,15 +54,15 @@ kubectl create ns istio-system
 #Create k8s secret to be used by Citadel for mTLS cert generation
 
 kubectl create secret generic cacerts -n istio-system \
-    --from-file=istio-1.3.3/samples/certs/ca-cert.pem \
-    --from-file=istio-1.3.3/samples/certs/ca-key.pem \
-    --from-file=istio-1.3.3/samples/certs/root-cert.pem \
-    --from-file=istio-1.3.3/samples/certs/cert-chain.pem
+    --from-file=istio-1.4.3/samples/certs/ca-cert.pem \
+    --from-file=istio-1.4.3/samples/certs/ca-key.pem \
+    --from-file=istio-1.4.3/samples/certs/root-cert.pem \
+    --from-file=istio-1.4.3/samples/certs/cert-chain.pem
 ```
 ```
 #Generate, install and verify Istio CRDs
 
-helm template istio-1.3.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+helm template istio-1.4.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
 
 #Make sure Istio crds are installed
 
@@ -71,35 +71,54 @@ kubectl get crds | grep 'istio.io' | wc -l
 ```
 #Generate & Install Istio
 
-helm template istio-1.3.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
-    -f istio-1.3.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
+helm template istio-1.4.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
+    -f istio-1.4.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
 
 #Verify that istio pods are up
 
 kubectl get pods -n istio-system
 ```
 
+#### DNS setup
+In a k8s cluster, you will have a DNS component that would resolve names. Admiral generates names ending in global (Ex: `stage.greeting.global`) which can be resolved by istiocoredns (as its watching Istio ServiceEntries created by Admiral with those names) installed as part of Istio.
+So you have to point DNS resolution for names ending in `global` to point to `ClusterIp` of istiocoredns service. The below step is to point coredns in a k8s cluster to istiocoredns. If you are using kube-dns, you can tweak this script.
+
+```Note: The below script wipes out existing codedns config map, please manually edit it if you want to try this in a cluster with real services/traffic```
+
+```
+#Run the below script for having coredns point to istiocoredns for dns lookups of names ending in global
+
+./admiral-install-v0.1-beta/scripts/redirect-dns.sh
+```
+
+#### Remove envoy cluster rewrite filter
+Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
+```
+# Delete envoy filter for translating `global` to `svc.cluster.local`
+kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+```
+
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
 
 
-## Examples
+## Example Installations & Demos
 
 ### Single cluster
 
-#### Setup Admiral
+#### Install/Run Admiral
 
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-alpha/admiral-install-v0.1-alpha.tar.gz
-tar xvf admiral-install-v0.1-alpha.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
+tar xvf admiral-install-v0.1-beta.tar.gz
 ```
 
 ```
 #Install admiral
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/remotecluster.yaml
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/demosinglecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/demosinglecluster.yaml
 
 #Verify admiral is running
 
@@ -110,28 +129,24 @@ kubectl get pods -n admiral
 #Create the secret for admiral to monitor.
 
 #Since this is for a single cluster demo the remote and local context are the same
-./admiral-install-v0.1-alpha/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
-
+./admiral-install-v0.1-beta/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+```
+```
 #Verify the secret
-
 kubectl get secrets -n admiral
 ```
-```
-#Point hosts ending in global to be resolved by istio coredns
 
-./admiral-install-v0.1-alpha/scripts/redirect-dns.sh
-```
-#### Setup Sample Apps
+#### Deploy Sample Services
 
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample.yaml
 ```
 ```
-#Install the dependency CR
+#Install the dependency CR (this is optional)
 
-kubectl apply -f ./admiral-install-v0.1-alpha/yaml/sample_dep.yaml
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample_dep.yaml
 
 #Verify that admiral created service names for 'greeting' service
 
@@ -139,12 +154,12 @@ kubectl get serviceentry -n admiral-sync
 
 ```
 
-#### Test
+#### Demo
 
+Now, run the command below that uses the CNAME generated by Admiral
 ```
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
-
 
 #### Generated configuration
 
@@ -195,8 +210,71 @@ spec:
     number: 80
     protocol: http
   resolution: DNS
+```
+
+
+### Multicluster
+
+Finish steps from Single Cluster to have Admiral running and ready to watch other clusters (lets call them remote clusters) which we will be setting in the steps below.
+
+Let's call the cluster used in Single cluster set up `Cluster 1`. Now we will use the steps below to add `Cluster 2` to the mesh and have it monitored by Admiral
+
+Finish the steps from `Prerequisites` section for `Cluster 2`
+
+#### Add Cluster 2 to Admiral's watcher
+```
+# Set CLUSTER_1 env variable
+export CLUSTER_1=<path_to_kubeconfig_for_cluster_1>
+
+# Set CLUSTER_2 env variable
+export CLUSTER_2=<path_to_kubeconfig_for_cluster_2>
+```
 
 ```
+# Switch kubectx to Cluster 2
+export KUBECONFIG=$CLUSTER_2
+# Create admiral role and bindings on Cluster 2
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
+```
+
+```
+#Switch kubectx to Cluster 1
+export KUBECONFIG=$CLUSTER_1
+
+# Create the k8s secret for admiral to monitor Cluster 2.
+./admiral-install-v0.1-beta/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
+```
+
+At this point, admiral is watching `Cluster 2`
+
+#### Deploy Sample Services in Cluster 2
+```
+#Switch kubectx to Cluster 2
+export KUBECONFIG=$CLUSTER_2
+
+#Install test services in Cluster 2
+
+kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster_sample.yaml
+```
+
+#### Verify
+
+```
+#Switch kubectx to Cluster 1
+export KUBECONFIG=$CLUSTER_1
+
+# Verify that the ServiceEntry for greeting service in Cluster 1 now has second endpoint (Cluster 2's istio-ingressgateway address)
+kubectl get serviceentry default.greeting.global-se -n admiral-sync -o yaml
+```
+
+#### Demo
+
+Now run the below request multiple times and see the requests being load balanced between local (Cluster 1) and remote (Cluster 2) instances of greeting service (You can see the response payload change based on which greeting's instance served the request)
+
+```
+kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
+```
+
 
 ## Admiral Architecture
 
@@ -342,6 +420,12 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 ## Community Blogs and Presentations
 
 1. [Stitching a Service Mesh Across Hundreds of Discrete Networks](https://www.youtube.com/watch?v=EWyNbBn1vns)
+
+2. [Multicluster Istio configuration and service discovery using Admiral](https://istio.io/blog/2020/multi-cluster-mesh-automation/)
+
+## Collaboration and Communication
+
+[Admiral Slack Channel](https://istio.slack.com/archives/CT3F18T08) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
 
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)

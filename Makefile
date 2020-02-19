@@ -77,21 +77,36 @@ crd-gen:
 build-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PATH_ADMIRAL)
 
+#set tag to `latest` if master branch and TAG is not set
+#set tag to commit sha if TAG is not set and is not master branch
 set-tag:
-ifeq ($(strip $(TAG)),)
+ifndef TAG
+ifeq ($(BRANCH),master)
 override TAG=latest
+endif
+endif
+ifndef TAG
+override TAG=$(SHA)
 endif
 
 docker-build: set-tag
     #NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
-docker-publish: set-tag
-ifeq ($(BRANCH),master)
+docker-publish:
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
-	docker push $(IMAGE):$(TAG)
+ifeq ($(TAG),)
+	echo "This is not a Tag/Release, skipping docker publish"
 else
-	echo "Skipping publish for branch: $(BRANCH), artifacts are published only from master branch"
+	docker push $(IMAGE):$(TAG)
+endif
+#no tag set and its master branch, in this case publish `latest` tag
+ifeq ($(TAG),)
+ifeq ($(BRANCH),master)
+	docker push $(IMAGE):latest
+else
+	echo "This is not master branch, skipping to publish 'latest' tag"
+endif
 endif
 
 download-kustomize:
@@ -111,6 +126,7 @@ gen-yaml:
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
 	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml
 	kustomize build ./install/sample/base/ > ./out/yaml/sample.yaml
+	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
 	cp ./install/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh
 	cp ./install/scripts/redirect-dns.sh ./out/scripts/redirect-dns.sh

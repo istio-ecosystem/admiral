@@ -3,83 +3,11 @@ package admiral
 import (
 	"errors"
 	"github.com/google/go-cmp/cmp"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 )
-
-func buildFakeConfigMapFromAddressStore(addressStore *common.ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
-	bytes,_ := yaml.Marshal(addressStore)
-
-	cm := v1.ConfigMap{
-		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
-	}
-	cm.Name="se-address-configmap"
-	cm.Namespace="admiral-remote-ctx"
-	cm.ResourceVersion=resourceVersion
-	return &cm
-}
-
-func TestValidateConfigmapBeforePutting(t *testing.T) {
-
-	legalStore := common.ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
-	}
-
-	illegalStore := common.ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1","1.2.3.4"},
-	}
-
-	emptyCM := v1.ConfigMap{}
-	emptyCM.ResourceVersion = "123"
-
-	testCases := []struct{
-		name string
-		configMap	 *v1.ConfigMap
-		expectedError	error
-	}{
-		{
-			name: "should not throw error on legal configmap",
-			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, "123"),
-			expectedError: nil,
-		},
-		{
-			name: "should not throw error on empty configmap",
-			configMap:     &emptyCM,
-			expectedError: nil,
-		},
-		{
-			name: "should throw error on no resourceversion",
-			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, ""),
-			expectedError: errors.New("resourceversion required"),
-		},
-		{
-			name: "should throw error on length mismatch",
-			configMap:     buildFakeConfigMapFromAddressStore(&illegalStore, "123"),
-			expectedError: errors.New("address cache length mismatch"),
-		},
-
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			errorResult := validateConfigmapBeforePutting(c.configMap)
-			if errorResult==nil && c.expectedError==nil {
-				//we're fine
-			} else if c.expectedError == nil && errorResult != nil{
-				t.Errorf("Unexpected error. Err: %v", errorResult)
-			} else if errorResult.Error() != c.expectedError.Error() {
-				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
-			}
-		})
-	}
-
-}
 
 func TestConfigMapController_GetConfigMap(t *testing.T) {
 	configmapController := ConfigMapController{
@@ -203,13 +131,7 @@ func TestConfigMapController_PutConfigMap(t *testing.T) {
 	}
 	configmapController.K8sClient = client
 
-
-	legalStore := common.ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
-	}
-
-	cm = *buildFakeConfigMapFromAddressStore(&legalStore, "123")
+	cm.Data = map[string]string{"Foo":"Bar"}
 
 	err = configmapController.PutConfigMap(&cm)
 

@@ -32,7 +32,7 @@ type PodController struct {
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
-	labelSet   common.LabelSet
+	labelSet   *common.LabelSet
 }
 
 type podCache struct {
@@ -92,8 +92,8 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	sidecarInjectionNamespaceFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: sidecarInjectionNamespaceFilter})
+	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
@@ -104,14 +104,22 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	for _, v := range istioEnabledNs.Items {
 
 		pods := d.K8sClient.CoreV1().Pods(v.Name)
-		admiralEnabledLabelFilter := d.labelSet.DeploymentAnnotation +"=true"
-		podsList, err := pods.List(meta_v1.ListOptions{LabelSelector: admiralEnabledLabelFilter})
+		podsList, err := pods.List(meta_v1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("error listing pods: %v", err)
+		}
+		var admiralDeployments []k8sV1.Pod
+		for _, pod := range podsList.Items {
+			if pod.Annotations[d.labelSet.DeploymentAnnotation] == "true" {
+				admiralDeployments = append(admiralDeployments, pod)
+			}
+		}
 
 		if err != nil {
 			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
 		}
 
-		for _, pi := range podsList.Items {
+		for _, pi := range admiralDeployments {
 			res = append(res, &pi)
 		}
 	}
@@ -119,10 +127,11 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	return res, nil
 }
 
-func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration) (*PodController, error) {
+func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*PodController, error) {
 
 	podController := PodController{}
 	podController.PodHandler = handler
+	podController.labelSet = labelSet
 
 	podCache := podCache{}
 	podCache.cache = make(map[string]*PodClusterEntry)

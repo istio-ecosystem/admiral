@@ -45,6 +45,17 @@ func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
 
 }
 
+type MockPodHandler struct {
+}
+
+func (m MockPodHandler) Added (obj *k8sCoreV1.Pod) {
+
+}
+
+func (m MockPodHandler) Deleted (obj *k8sCoreV1.Pod) {
+
+}
+
 type MockNodeHandler struct {
 }
 
@@ -64,5 +75,16 @@ func (m *MockDependencyHandler) Added(obj *v1.Dependency) {
 }
 
 func (m *MockDependencyHandler) Deleted(obj *v1.Dependency) {
+
+}
+
+type MockGlobalTrafficHandler struct {
+}
+
+func (m *MockGlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
+
+}
+
+func (m *MockGlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 
 }

@@ -1,9 +1,10 @@
 package clusters
 
 import (
+	"errors"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sAppsV1 "k8s.io/api/apps/v1"
-	v12 "k8s.io/api/core/v1"
+	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"strconv"
@@ -30,7 +31,7 @@ func TestGetMeshPorts(t *testing.T) {
 		Spec: k8sV1.ServiceSpec{Ports: serviceMeshPorts},
 	}
 	deployment := k8sAppsV1.Deployment{
-		Spec: k8sAppsV1.DeploymentSpec{Template:v12.PodTemplateSpec{
+		Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 		}}}
 
@@ -60,7 +61,7 @@ func TestGetMeshPorts(t *testing.T) {
 				Spec: k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
 			},
 			deployment: k8sAppsV1.Deployment{
-				Spec: k8sAppsV1.DeploymentSpec{Template:v12.PodTemplateSpec{
+				Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
 				}}},
 			expected: portsFromDefaultSvcPort,
@@ -72,7 +73,7 @@ func TestGetMeshPorts(t *testing.T) {
 				Spec: k8sV1.ServiceSpec{Ports: nil},
 			},
 			deployment: k8sAppsV1.Deployment{
-				Spec: k8sAppsV1.DeploymentSpec{Template:v12.PodTemplateSpec{
+				Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
 				}}},
 			expected: emptyPorts,
@@ -87,4 +88,62 @@ func TestGetMeshPorts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateConfigmapBeforePutting(t *testing.T) {
+
+	legalStore := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+
+	illegalStore := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1","1.2.3.4"},
+	}
+
+	emptyCM := coreV1.ConfigMap{}
+	emptyCM.ResourceVersion = "123"
+
+	testCases := []struct{
+		name string
+		configMap	 *coreV1.ConfigMap
+		expectedError	error
+	}{
+		{
+			name: "should not throw error on legal configmap",
+			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, "123"),
+			expectedError: nil,
+		},
+		{
+			name: "should not throw error on empty configmap",
+			configMap:     &emptyCM,
+			expectedError: nil,
+		},
+		{
+			name: "should throw error on no resourceversion",
+			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, ""),
+			expectedError: errors.New("resourceversion required"),
+		},
+		{
+			name: "should throw error on length mismatch",
+			configMap:     buildFakeConfigMapFromAddressStore(&illegalStore, "123"),
+			expectedError: errors.New("address cache length mismatch"),
+		},
+
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			errorResult := ValidateConfigmapBeforePutting(c.configMap)
+			if errorResult==nil && c.expectedError==nil {
+				//we're fine
+			} else if c.expectedError == nil && errorResult != nil{
+				t.Errorf("Unexpected error. Err: %v", errorResult)
+			} else if errorResult.Error() != c.expectedError.Error() {
+				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
+			}
+		})
+	}
+
 }
