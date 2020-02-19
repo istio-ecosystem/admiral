@@ -62,7 +62,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Namespace to monitor for secrets defaults to admiral-secrets")
 	rootCmd.PersistentFlags().StringVar(&params.DependenciesNamespace, "dependency_namespace", "default",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
-	rootCmd.PersistentFlags().StringVar(&params.SyncNamespace, "sync_namespace", "admiral-sync",
+	rootCmd.PersistentFlags().StringVar(&params.SyncNamespace, "sync_namespace", "default",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
 	rootCmd.PersistentFlags().DurationVar(&params.CacheRefreshDuration, "sync_period", 5*time.Minute,
 		"Interval for syncing Kubernetes resources, defaults to 5 min")
