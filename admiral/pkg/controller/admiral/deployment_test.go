@@ -154,7 +154,7 @@ func TestNewDeploymentController(t *testing.T) {
 	stop := make(chan struct{})
 	depHandler := test.MockDeploymentHandler{}
 
-	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000), &common.LabelSet{})
+	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000))
 
 	if depCon == nil {
 		t.Errorf("Deployment controller should not be nil")
