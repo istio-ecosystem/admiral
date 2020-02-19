@@ -20,11 +20,10 @@ import (
 	"time"
 )
 
-func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	workloadIdentityKey := common.GetWorkloadIdentifier()
-	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
+	globalFqdn := common.GetCname(destDeployment, config.LabelSet.WorkloadIdentityLabel, config.HostnameSuffix)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -64,10 +63,10 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	}
 
 	var san []string
-	if common.GetEnableSAN() {
-		tmpSan := common.GetSAN(common.GetSANPrefix(), destDeployment, workloadIdentityKey)
+	if config.EnableSAN {
+		tmpSan := common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)
 		if len(tmpSan) > 0 {
-			san = []string{common.GetSAN(common.GetSANPrefix(), destDeployment, workloadIdentityKey)}
+			san = []string{common.GetSAN(config.SANPrefix, destDeployment, config.LabelSet.WorkloadIdentityLabel)}
 		}
 	} else {
 		san = nil
@@ -128,7 +127,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
 
-		cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), cname)
+		cname = common.GetCname(deploymentInstance[0], remoteRegistry.config.LabelSet.WorkloadIdentityLabel, cname)
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -137,7 +136,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		sourceDeployments[rc.ClusterID] = deploymentInstance[0]
 
-		createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+		createServiceEntry(rc, remoteRegistry.config, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
 
 	}
 
@@ -150,7 +149,8 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries)
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries,
+		remoteRegistry.config.SyncNamespace)
 
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	for sourceCluster, serviceInstance := range sourceServices {
@@ -166,7 +166,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
 					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
-						map[string]*networking.ServiceEntry{key: serviceEntry})
+						map[string]*networking.ServiceEntry{key: serviceEntry}, remoteRegistry.config.SyncNamespace)
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
 					ep.Ports = oldPorts
@@ -235,8 +235,8 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 	return allSes
 }
 
-func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
-	syncNamespace := common.GetSyncNamespace()
+func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry,
+	syncNamespace string) {
 	for _, se := range serviceEntries {
 
 		//add service entry
@@ -259,7 +259,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//Add a label
 			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+				newServiceEntry.Labels = map[string]string{common.DefaultGlobalIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
 			if err == nil {
