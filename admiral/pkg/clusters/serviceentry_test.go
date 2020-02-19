@@ -1,5 +1,10 @@
 package clusters
 
+import (
+	"github.com/ghodss/yaml"
+	v1 "k8s.io/api/core/v1"
+)
+
 //func TestCreateSeWithDrLabels(t *testing.T) {
 //
 //	se := networking.ServiceEntry{
@@ -263,17 +268,17 @@ package clusters
 //	}
 //}
 //
-//func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
-//	bytes,_ := yaml.Marshal(addressStore)
-//
-//	cm := v1.ConfigMap{
-//		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
-//	}
-//	cm.Name="se-address-configmap"
-//	cm.Namespace="admiral-remote-ctx"
-//	cm.ResourceVersion=resourceVersion
-//	return &cm
-//}
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
+	bytes,_ := yaml.Marshal(addressStore)
+
+	cm := v1.ConfigMap{
+		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
+	}
+	cm.Name="se-address-configmap"
+	cm.Namespace="admiral-remote-ctx"
+	cm.ResourceVersion=resourceVersion
+	return &cm
+}
 //
 //func TestCreateServiceEntry(t *testing.T) {
 //	admiralCache := AdmiralCache{}
