@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
-	)
+)
 
 func TestGetSAN(t *testing.T) {
 	t.Parallel()
@@ -16,7 +16,6 @@ func TestGetSAN(t *testing.T) {
 	domain := "preprd"
 
 	deployment := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal}}}}}
-	deploymentWithAnnotation := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: v12.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}}}}}
 
 	deploymentWithNoIdentifier := k8sAppsV1.Deployment{}
 
@@ -27,14 +26,8 @@ func TestGetSAN(t *testing.T) {
 		wantSAN    string
 	}{
 		{
-			name:       "should return valid SAN (from label)",
+			name:       "should return valid SAN",
 			deployment: deployment,
-			domain:     domain,
-			wantSAN:    "spiffe://" + domain + "/" + identifierVal,
-		},
-		{
-			name:       "should return valid SAN (from annotation)",
-			deployment: deploymentWithAnnotation,
 			domain:     domain,
 			wantSAN:    "spiffe://" + domain + "/" + identifierVal,
 		},
