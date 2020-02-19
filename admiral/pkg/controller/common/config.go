@@ -1,6 +1,7 @@
 package common
 
 import (
+	"istio.io/istio/pkg/log"
 	"sync"
 	"time"
 )
@@ -12,10 +13,16 @@ var admiralParams = AdmiralParams{
 var once sync.Once
 
 func InitializeConfig(params AdmiralParams) {
+	var initHappened = false
 	once.Do(func() {
 		admiralParams = params
+		initHappened = true
 	})
+	if !initHappened {
+		log.Warn("InitializeConfig was called but didn't take effect. It can only be called once, and thus has already been initialized. Please ensure you aren't re-initializing the config.")
+	}
 }
+
 
 func GetAdmiralParams() AdmiralParams {
 	return admiralParams
