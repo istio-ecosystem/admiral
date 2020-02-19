@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
-)
+	)
 
 func TestGetSAN(t *testing.T) {
 	t.Parallel()

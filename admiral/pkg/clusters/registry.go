@@ -24,9 +24,7 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 
 	log.Infof("Initializing Admiral with params: %v", params)
 
-	if params.LabelSet != nil {
-		common.OverrideDefaultWorkloadIdentifier(params.LabelSet.WorkloadIdentityKey)
-	}
+	common.InitializeConfig(params)
 
 	w := RemoteRegistry{
 		ctx: ctx,
@@ -42,7 +40,6 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
 	}
 
-	w.config = params
 	w.remoteControllers = make(map[string]*RemoteController)
 
 	w.AdmiralCache = &AdmiralCache{
@@ -55,14 +52,14 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}}}
 
-	configMapController, err := admiral.NewConfigMapController(w.config.KubeconfigPath, w.config.SyncNamespace)
+	configMapController, err := admiral.NewConfigMapController()
 	if err != nil {
 		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
-	err = createSecretController(ctx, &w, params)
+	err = createSecretController(ctx, &w)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with secret control init: %v", err)
 	}
@@ -72,10 +69,10 @@ func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, er
 	return &w, nil
 }
 
-func createSecretController(ctx context.Context, w *RemoteRegistry, params AdmiralParams) error {
+func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	var err error
 
-	w.secretClient, err = admiral.K8sClientFromPath(params.KubeconfigPath)
+	w.secretClient, err = admiral.K8sClientFromPath(common.GetKubeconfigPath())
 	if err != nil {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
@@ -83,8 +80,8 @@ func createSecretController(ctx context.Context, w *RemoteRegistry, params Admir
 	err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
 		w.deleteCacheController,
-		w.config.ClusterRegistriesNamespace,
-		ctx, params.SecretResolver)
+		common.GetClusterRegistriesNamespace(),
+		ctx, common.GetSecretResolver())
 
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)
@@ -112,14 +109,14 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting deployment controller clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
-	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
+	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)

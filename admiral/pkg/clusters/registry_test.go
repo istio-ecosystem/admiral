@@ -18,6 +18,7 @@ import (
 	"time"
 )
 
+
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 	w := RemoteRegistry{
@@ -94,7 +95,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
@@ -111,7 +112,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des, "sync", ".global", "identity")
+	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des)
 
 }
 
@@ -133,7 +134,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des, "sync", ".global", "identity")
+	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des)
 
 }
 
@@ -142,7 +143,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
+	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
 
@@ -192,23 +193,19 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 
 func TestCreateSecretController(t *testing.T) {
 
-	p := AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-
 	rr := RemoteRegistry{}
-	err := createSecretController(context.Background(), &rr, p)
+	err := createSecretController(context.Background(), &rr)
 
 	if err != nil {
 		t.Fail()
 	}
 
-	p = AdmiralParams{
-		KubeconfigPath: "fail",
-	}
+	common.SetKubeconfigPath("fail")
 
 	rr = RemoteRegistry{}
-	err = createSecretController(context.Background(), &rr, p)
+	err = createSecretController(context.Background(), &rr)
+
+	common.SetKubeconfigPath("testdata/fake.config")
 
 	if err == nil {
 		t.Fail()
@@ -217,7 +214,7 @@ func TestCreateSecretController(t *testing.T) {
 
 func TestInitAdmiral(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 		LabelSet: &common.LabelSet{},
 	}
@@ -233,14 +230,14 @@ func TestInitAdmiral(t *testing.T) {
 		t.Fail()
 	}
 
-	if common.GetWorkloadIdentifier() != "overridden-key" {
-		t.Errorf("Workload identity label override failed. Expected \"overridden-key\", git %v", common.GetWorkloadIdentifier())
+	if common.GetWorkloadIdentifier() != "identity" {
+		t.Errorf("Workload identity label override failed. Expected \"identity\", got %v", common.GetWorkloadIdentifier())
 	}
 }
 
 func TestAdded(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
@@ -285,7 +282,7 @@ func TestMakeVirtualService(t *testing.T) {
 
 func TestDeploymentHandler(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 
@@ -324,7 +321,7 @@ func TestDeploymentHandler(t *testing.T) {
 
 func TestPodHandler(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 

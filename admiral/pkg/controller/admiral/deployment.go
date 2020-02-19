@@ -126,11 +126,11 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 	return res, nil
 }
 
-func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
+func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
 
 	deploymentController := DeploymentController{}
 	deploymentController.DeploymentHandler = handler
-	deploymentController.labelSet = labelSet
+	deploymentController.labelSet = common.GetLabelSet()
 
 	deploymentCache := deploymentCache{}
 	deploymentCache.cache = make(map[string]*DeploymentClusterEntry)
