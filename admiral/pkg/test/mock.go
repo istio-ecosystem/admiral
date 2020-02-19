@@ -85,6 +85,10 @@ func (m *MockGlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 
 }
 
+func (m *MockGlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+
+}
+
 func (m *MockGlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 
 }
