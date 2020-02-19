@@ -3,14 +3,11 @@ package admiral
 import (
 	"errors"
 	"github.com/google/go-cmp/cmp"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	_ "github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 )
-
 
 func TestConfigMapController_GetConfigMap(t *testing.T) {
 	configmapController := ConfigMapController{
@@ -102,8 +99,7 @@ func TestNewConfigMapController(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			common.SetKubeconfigPath(c.kubeconfigPath)
-			controller, err := NewConfigMapController()
+			controller, err := NewConfigMapController(c.kubeconfigPath, c.namespace)
 			if err==nil && c.expectedError==nil {
 				//only do these in an error-less context
 				if c.namespace != controller.ConfigmapNamespace {
