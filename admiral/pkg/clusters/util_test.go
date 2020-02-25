@@ -135,14 +135,14 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			//errorResult := ValidateConfigmapBeforePutting(c.configMap)
-			//if errorResult==nil && c.expectedError==nil {
-			//	//we're fine
-			//} else if c.expectedError == nil && errorResult != nil{
-			//	t.Errorf("Unexpected error. Err: %v", errorResult)
-			//} else if errorResult.Error() != c.expectedError.Error() {
-			//	t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
-			//}
+			errorResult := ValidateConfigmapBeforePutting(c.configMap)
+			if errorResult==nil && c.expectedError==nil {
+				//we're fine
+			} else if c.expectedError == nil && errorResult != nil{
+				t.Errorf("Unexpected error. Err: %v", errorResult)
+			} else if errorResult.Error() != c.expectedError.Error() {
+				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
+			}
 		})
 	}
 

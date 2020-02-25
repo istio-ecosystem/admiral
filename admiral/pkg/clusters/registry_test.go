@@ -2,11 +2,13 @@ package clusters
 
 import (
 	"context"
+	"github.com/google/go-cmp/cmp"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	log "github.com/sirupsen/logrus"
 	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
@@ -274,88 +276,76 @@ func TestMakeVirtualService(t *testing.T) {
 	}
 }
 
-//func TestDeploymentHandler(t *testing.T) {
-//
-//	p := AdmiralParams{
-//		KubeconfigPath: "testdata/fake.config",
-//	}
-//
-//	rr, _ := InitAdmiral(context.Background(), p)
-//
-//	rc, _ := createMockRemoteController(func(i interface{}) {
-//		res := i.(istio.Config)
-//		se, ok := res.Spec.(*networking.ServiceEntry)
-//		if ok {
-//			if se.Hosts[0] != "dev.bar.global" {
-//				t.Fail()
-//			}
-//		}
-//	})
-//	rr.remoteControllers["test.cluster"] = rc
-//
-//	dh := DeploymentHandler{
-//		RemoteRegistry: rr,
-//	}
-//
-//	deployment := k8sAppsV1.Deployment{
-//		ObjectMeta: metav1.ObjectMeta{
-//			Name:      "test",
-//			Namespace: "test",
-//		},
-//		Spec: k8sAppsV1.DeploymentSpec{
-//			Selector: &metav1.LabelSelector{
-//				MatchLabels: map[string]string{"identity": "bar"},
-//			},
-//			Template: k8sCoreV1.PodTemplateSpec{
-//				ObjectMeta: metav1.ObjectMeta{
-//					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
-//				},
-//			},
-//		},
-//	}
-//
-//	dh.Added(&deployment)
-//
-//	dh.Deleted(&deployment)
-//}
+func TestDeploymentHandler(t *testing.T) {
 
-//func TestPodHandler(t *testing.T) {
-//
-//	p := AdmiralParams{
-//		KubeconfigPath: "testdata/fake.config",
-//	}
-//
-//	rr, _ := InitAdmiral(context.Background(), p)
-//
-//	rc, _ := createMockRemoteController(func(i interface{}) {
-//		res := i.(istio.Config)
-//		se, ok := res.Spec.(*networking.ServiceEntry)
-//		if ok {
-//			if se.Hosts[0] != "dev.bar.global" {
-//				t.Fail()
-//			}
-//		}
-//	})
-//	rr.remoteControllers["test.cluster"] = rc
-//
-//	ph := PodHandler{
-//		RemoteRegistry: rr,
-//	}
-//
-//	pod := k8sCoreV1.Pod{
-//		ObjectMeta: metav1.ObjectMeta{
-//			Name:      "test",
-//			Namespace: "test",
-//		},
-//		Spec: k8sCoreV1.PodSpec{
-//			Hostname: "test.local",
-//		},
-//	}
-//
-//	ph.Added(&pod)
-//
-//	ph.Deleted(&pod)
-//}
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	rr.remoteControllers["test.cluster"] = rc
+
+	dh := DeploymentHandler{
+		RemoteRegistry: rr,
+	}
+
+	deployment := k8sAppsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sAppsV1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: k8sCoreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	dh.Added(&deployment)
+
+	dh.Deleted(&deployment)
+}
+
+func TestPodHandler(t *testing.T) {
+
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	rr.remoteControllers["test.cluster"] = rc
+
+	ph := PodHandler{
+		RemoteRegistry: rr,
+	}
+
+	pod := k8sCoreV1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+		},
+		Spec: k8sCoreV1.PodSpec{
+			Hostname: "test.local",
+		},
+	}
+
+	ph.Added(&pod)
+
+	ph.Deleted(&pod)
+}
 
 func TestGetServiceForDeployment(t *testing.T) {
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
@@ -429,15 +419,15 @@ func TestGetServiceForDeployment(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			//resultingService := getServiceForDeployment(c.controller, c.deployment)
-			//if resultingService == nil && c.expectedService == nil {
-			//	//perfect
-			//} else {
-			//	if !cmp.Equal(resultingService, c.expectedService) {
-			//		log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
-			//		t.Errorf("Service mismatch. Got %v, expected %v",resultingService, c.expectedService)
-			//	}
-			//}
+			resultingService := getServiceForDeployment(c.controller, c.deployment)
+			if resultingService == nil && c.expectedService == nil {
+				//perfect
+			} else {
+				if !cmp.Equal(resultingService, c.expectedService) {
+					log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
+					t.Errorf("Service mismatch. Got %v, expected %v",resultingService, c.expectedService)
+				}
+			}
 		})
 	}
 }

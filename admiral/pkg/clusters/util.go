@@ -3,9 +3,9 @@ package clusters
 import (
 	"errors"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"gopkg.in/yaml.v2"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	"strconv"
 	"strings"
 
