@@ -27,7 +27,6 @@ data:
       server {
           listen       80;
           server_name  _;
-          add_header locality cluster_0
           location / {
               return 200 "Hello World! - Admiral!!";
 
