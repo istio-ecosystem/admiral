@@ -6,8 +6,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/prometheus/common/log"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -44,7 +43,7 @@ func createServiceEntry(rc *RemoteController, config AdmiralParams, admiralCache
 	}
 
 	if err != nil {
-		logrus.Errorf("Could not get unique address after %v retries. Failing to create serviceentry name=%v", maxRetries, globalFqdn)
+		log.Errorf("Could not get unique address after %v retries. Failing to create serviceentry name=%v", maxRetries, globalFqdn)
 		return nil
 	}
 
@@ -367,7 +366,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 	bytes, err := yaml.Marshal(data)
 
 	if err != nil {
-		logrus.Errorf("Failed to put service entry state into the configmap. %v", err)
+		log.Errorf("Failed to put service entry state into the configmap. %v", err)
 		return err
 	}
 
@@ -379,7 +378,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 
 	err = ValidateConfigmapBeforePutting(originalConfigmap)
 	if err != nil {
-		logrus.Errorf("Configmap failed validation. Something is wrong. Error: %v", err)
+		log.Errorf("Configmap failed validation. Something is wrong. Error: %v", err)
 		return err
 	}
 

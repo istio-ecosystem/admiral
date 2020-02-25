@@ -2,7 +2,7 @@ package admiral
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -37,7 +37,7 @@ func K8sClientFromPath(kubeConfigPath string) (kubernetes.Interface, error) {
 }
 
 func getConfig(kubeConfigPath string) (*rest.Config, error) {
-	logrus.Infof("getting kubeconfig from: %#v", kubeConfigPath)
+	log.Infof("getting kubeconfig from: %#v", kubeConfigPath)
 	// create the config from the path
 	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
 

@@ -10,7 +10,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 
 )
@@ -22,7 +22,7 @@ const (
 
 func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, error) {
 
-	logrus.Infof("Initializing Admiral with params: %v", params)
+	log.Infof("Initializing Admiral with params: %v", params)
 
 	w := RemoteRegistry{
 		ctx: ctx,
@@ -100,56 +100,56 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 
 	var err error
 
-	logrus.Infof("starting global traffic policy controller custerID: %v", clusterID)
+	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
 	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with GlobalTrafficController controller init: %v", err)
 	}
 
-	logrus.Infof("starting deployment controller clusterID: %v", clusterID)
+	log.Infof("starting deployment controller clusterID: %v", clusterID)
 	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
-	logrus.Infof("starting pod controller clusterID: %v", clusterID)
+	log.Infof("starting pod controller clusterID: %v", clusterID)
 	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod, r.config.LabelSet)
 
 	if err != nil {
 		return fmt.Errorf(" Error with PodController controller init: %v", err)
 	}
 
-	logrus.Infof("starting node controller clusterID: %v", clusterID)
+	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r}, clientConfig)
 
 	if err != nil {
 		return fmt.Errorf(" Error with NodeController controller init: %v", err)
 	}
 
-	logrus.Infof("starting service controller clusterID: %v", clusterID)
+	log.Infof("starting service controller clusterID: %v", clusterID)
 	rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with ServiceController controller init: %v", err)
 	}
 
-	logrus.Infof("starting service entry controller for custerID: %v", clusterID)
+	log.Infof("starting service entry controller for custerID: %v", clusterID)
 	rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with ServiceEntryController init: %v", err)
 	}
 
-	logrus.Infof("starting destination rule controller for custerID: %v", clusterID)
+	log.Infof("starting destination rule controller for custerID: %v", clusterID)
 	rc.DestinationRuleController, err = istio.NewDestinationRuleController(stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DestinationRuleController init: %v", err)
 	}
 
-	logrus.Infof("starting virtual service controller for custerID: %v", clusterID)
+	log.Infof("starting virtual service controller for custerID: %v", clusterID)
 	rc.VirtualServiceController, err = istio.NewVirtualServiceController(stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
@@ -160,7 +160,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	defer r.Unlock()
 	r.remoteControllers[clusterID] = &rc
 
-	logrus.Infof("Create Controller %s", clusterID)
+	log.Infof("Create Controller %s", clusterID)
 
 	return nil
 }
@@ -177,7 +177,7 @@ func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 	defer r.Unlock()
 	delete(r.remoteControllers, clusterID)
 
-	logrus.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
+	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
 	return nil
 }
 

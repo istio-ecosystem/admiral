@@ -7,7 +7,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
@@ -121,12 +121,12 @@ type ServiceHandler struct {
 
 func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
-	logrus.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
+	log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
 	sourceIdentity := obj.Spec.Source
 
 	if len(sourceIdentity) == 0 {
-		logrus.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
 	}
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
@@ -137,28 +137,28 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
-	logrus.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
-	logrus.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
-	logrus.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
-	logrus.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	logrus.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		logrus.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -172,12 +172,12 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {
-	logrus.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
 
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		logrus.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -190,21 +190,21 @@ func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
 }
 
 func (nc *NodeHandler) Added(obj *k8sV1.Node) {
-	//logrus.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+	//log.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
 func (pc *NodeHandler) Deleted(obj *k8sV1.Node) {
-	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
 func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
 
-	logrus.Infof(LogFormat, "Event", "service", obj.Name, "", "Received, doing nothing")
+	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Received, doing nothing")
 
 	//sourceIdentity := common.GetServiceGlobalIdentifier(obj)
 	//
 	//if len(sourceIdentity) == 0 {
-	//	logrus.Infof(LogFormat, "Event", "service", obj.Name, "", "Skipped as '" + common.GlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
+	//	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Skipped as '" + common.GlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
 	//	return
 	//}
 	//

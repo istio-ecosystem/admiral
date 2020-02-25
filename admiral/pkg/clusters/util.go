@@ -5,7 +5,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"gopkg.in/yaml.v2"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 
@@ -19,7 +19,7 @@ func GetMeshPorts(clusterName string, destService *k8sV1.Service,
 	var ports = make(map[string]uint32)
 	var meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
 	if len(meshPorts) == 0 {
-		logrus.Infof(LogFormat, "GetMeshPorts", "service", destService.Name, clusterName, "No mesh ports present, defaulting to first port")
+		log.Infof(LogFormat, "GetMeshPorts", "service", destService.Name, clusterName, "No mesh ports present, defaulting to first port")
 		if destService.Spec.Ports != nil && len(destService.Spec.Ports) > 0 {
 			var name = destService.Spec.Ports[0].Name
 			if len(name) == 0 {
@@ -41,7 +41,7 @@ func GetMeshPorts(clusterName string, destService *k8sV1.Service,
 	}
 	for _, servicePort := range destService.Spec.Ports {
 		if _, ok := meshPortMap[uint32(servicePort.Port)]; ok {
-			logrus.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port")
+			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port")
 			ports[common.Http] = uint32(servicePort.Port)
 		}
 	}
@@ -55,7 +55,7 @@ func GetServiceEntryStateFromConfigmap(configmap *k8sV1.ConfigMap) *ServiceEntry
 	err := yaml.Unmarshal(bytes, &addressStore)
 
 	if err != nil {
-		logrus.Errorf("Could not unmarshal configmap data. Double check the configmap format. %v", err)
+		log.Errorf("Could not unmarshal configmap data. Double check the configmap format. %v", err)
 		return nil
 	}
 	if addressStore.Addresses == nil {

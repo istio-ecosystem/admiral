@@ -7,7 +7,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +37,7 @@ func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCach
 	for _, dIdentity := range dr.Spec.Destinations {
 		identityDependencyCache.Put(dIdentity, sourceIdentity, sourceIdentity)
 	}
-	logrus.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
+	log.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
 }
 
 func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, config AdmiralParams, obj *v1.Dependency) {
@@ -95,7 +95,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 	}
 
 	if len(sourceClusters) == 0 || len(serviceEntries) == 0 {
-		logrus.Infof(LogFormat, "Event", "dependency-record", sourceIdentity, "", "skipped")
+		log.Infof(LogFormat, "Event", "dependency-record", sourceIdentity, "", "skipped")
 		return
 	}
 
@@ -167,15 +167,15 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 }
 
 func (ic *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
-	//logrus.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+	//log.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
 func (ic *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
-	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
 func (ic *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
-	//	logrus.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
@@ -216,19 +216,19 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	r := dh.RemoteRegistry
 
 	if obj.Namespace == syncNamespace || obj.Namespace == common.NamespaceKubeSystem {
-		logrus.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
+		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
 		return
 	}
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host)
 
 	if dependentClusters == nil {
-		logrus.Infof("Skipping event: %s from cluster %s for %v", "DestinationRule", clusterId, destinationRule)
-		logrus.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "No dependent clusters found")
+		log.Infof("Skipping event: %s from cluster %s for %v", "DestinationRule", clusterId, destinationRule)
+		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "No dependent clusters found")
 		return
 	}
 
-	logrus.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
+	log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
 
 	//Create label based service entry in source and dependent clusters for subset routing to work
 	host := destinationRule.Host
@@ -259,7 +259,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		if exist == nil || err != nil {
 
-			logrus.Warnf(LogFormat, "Find", "ServiceEntry", basicSEName, dependentCluster, "Failed")
+			log.Warnf(LogFormat, "Find", "ServiceEntry", basicSEName, dependentCluster, "Failed")
 
 		} else {
 
@@ -280,16 +280,16 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 		if event == common.Delete {
 
 			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(r.config.SyncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-			logrus.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
+			log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
 			rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Delete(seName, &v12.DeleteOptions{})
-			logrus.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+			log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
 			for _, subset := range destinationRule.Subsets {
 				sseName := seName + common.Dash + subset.Name
 				rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Delete(sseName, &v12.DeleteOptions{})
-				logrus.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+				log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
 			}
 			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(r.config.SyncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-			logrus.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+			log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
 
 		} else {
 
@@ -305,7 +305,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Get(_seName, v12.GetOptions{})
 					newServiceEntry = createServiceEntrySkeletion(*se, _seName, r.config.SyncNamespace)
 					if err != nil {
-						logrus.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
+						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
 					}
 					if newServiceEntry != nil {
 						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, r.config.SyncNamespace, rc)
@@ -332,7 +332,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
 	if deployment == nil || len(deployment.Deployments) == 0 {
-		logrus.Errorf(LogFormat, "Find", "deployment", identityId, remoteController.ClusterID, "Couldn't find deployment with identity")
+		log.Errorf(LogFormat, "Find", "deployment", identityId, remoteController.ClusterID, "Couldn't find deployment with identity")
 		return
 	}
 
@@ -350,7 +350,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		existsDestinationRule, err := remoteController.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(localDrName, v12.GetOptions{})
 		if err != nil {
-			logrus.Warnf(LogErrFormat, "Find", "DestinationRule", localDrName, clusterId, err)
+			log.Warnf(LogErrFormat, "Find", "DestinationRule", localDrName, clusterId, err)
 		}
 		newDestinationRule := createDestinationRulSkeletion(*destinationRule, localDrName, syncNamespace)
 
@@ -363,7 +363,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 
 func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) {
 
-	logrus.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
+	log.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
 
 	virtualService := obj.Spec
 
@@ -372,23 +372,23 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	r := vh.RemoteRegistry
 
 	if obj.Namespace == r.config.SyncNamespace {
-		logrus.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
+		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
 		return
 	}
 
 	if len(virtualService.Hosts) > 1 {
-		logrus.Errorf(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+obj.Namespace)
+		log.Errorf(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+obj.Namespace)
 		return
 	}
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0])
 
 	if dependentClusters == nil {
-		logrus.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "No dependent clusters found")
+		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "No dependent clusters found")
 		return
 	}
 
-	logrus.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
+	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
 
 	for _, dependentCluster := range dependentClusters.Map() {
 
@@ -397,7 +397,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 		if clusterId != dependentCluster {
 
 			if event == common.Delete {
-				logrus.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+				log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 				rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(r.config.SyncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 
 			} else {
@@ -443,9 +443,9 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 
 	if err != nil {
-		logrus.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
+		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
 	} else {
-		logrus.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
@@ -466,9 +466,9 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	}
 
 	if err != nil {
-		logrus.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
+		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
 	} else {
-		logrus.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
@@ -489,9 +489,9 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	}
 
 	if err != nil {
-		logrus.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
+		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
 	} else {
-		logrus.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
 	}
 }
 

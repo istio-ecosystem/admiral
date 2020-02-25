@@ -434,7 +434,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 			//	//perfect
 			//} else {
 			//	if !cmp.Equal(resultingService, c.expectedService) {
-			//		logrus.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
+			//		log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
 			//		t.Errorf("Service mismatch. Got %v, expected %v",resultingService, c.expectedService)
 			//	}
 			//}

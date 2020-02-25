@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 	"time"
 
@@ -108,14 +108,14 @@ func NewController(
 	var secretResolver resolver.SecretResolver
 	var err error
 	if len(secretResolverType) == 0  {
-		logrus.Info("Initializing default secret resolver")
+		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
 		err = errors.New(fmt.Sprintf("Unrecognized secret resolver type %v specified", secretResolverType))
 	}
 
 	if err != nil {
-		logrus.Errorf("Failed to initialize secret resolver: %v", err)
+		log.Errorf("Failed to initialize secret resolver: %v", err)
 		return nil
 	}
 
@@ -130,18 +130,18 @@ func NewController(
 		secretResolver: secretResolver,
 	}
 
-	logrus.Info("Setting up event handlers")
+	log.Info("Setting up event handlers")
 	secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
-			logrus.Infof("Processing add: %s", key)
+			log.Infof("Processing add: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			logrus.Infof("Processing delete: %s", key)
+			log.Infof("Processing delete: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
@@ -156,18 +156,18 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	logrus.Info("Starting Secrets controller")
+	log.Info("Starting Secrets controller")
 
 	go c.informer.Run(stopCh)
 
 	// Wait for the caches to be synced before starting workers
-	logrus.Info("Waiting for informer caches to sync")
+	log.Info("Waiting for informer caches to sync")
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
 		utilruntime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
 		return
 	}
 
-	logrus.Info("secret informer caches synced")
+	log.Info("secret informer caches synced")
 	wait.Until(c.runWorker, 5*time.Second, stopCh)
 }
 
@@ -201,10 +201,10 @@ func (c *Controller) processNextItem() bool {
 		// No error, reset the ratelimit counters
 		c.queue.Forget(secretName)
 	} else if c.queue.NumRequeues(secretName) < maxRetries {
-		logrus.Errorf("Error processing %s (will retry): %v", secretName, err)
+		log.Errorf("Error processing %s (will retry): %v", secretName, err)
 		c.queue.AddRateLimited(secretName)
 	} else {
-		logrus.Errorf("Error processing %s (giving up): %v", secretName, err)
+		log.Errorf("Error processing %s (giving up): %v", secretName, err)
 		c.queue.Forget(secretName)
 		utilruntime.HandleError(err)
 	}
@@ -232,7 +232,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		// clusterID must be unique even across multiple secrets
 		if _, ok := c.cs.remoteClusters[clusterID]; !ok {
 			if len(kubeConfig) == 0 {
-				logrus.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
+				log.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
 					clusterID, secretName, s.ObjectMeta.Namespace)
 				continue
 			}
@@ -240,20 +240,20 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			kubeConfig, err := c.secretResolver.FetchKubeConfig(clusterID, kubeConfig)
 
 			if err != nil {
-				logrus.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
+				log.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
 					clusterID, c.secretResolver, err)
 				continue
 			}
 
 			clusterConfig, err := LoadKubeConfig(kubeConfig)
 			if err != nil {
-				logrus.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
+				log.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
 					clusterID, secretName, s.ObjectMeta.Namespace, err)
-				logrus.Infof("KubeConfig: '%s'", string(kubeConfig))
+				log.Infof("KubeConfig: '%s'", string(kubeConfig))
 				continue
 			}
 
-			logrus.Infof("Adding new cluster member: %s", clusterID)
+			log.Infof("Adding new cluster member: %s", clusterID)
 			c.cs.remoteClusters[clusterID] = &RemoteCluster{}
 			c.cs.remoteClusters[clusterID].secretName = secretName
 			clientConfig := clientcmd.NewDefaultClientConfig(*clusterConfig, &clientcmd.ConfigOverrides{})
@@ -262,31 +262,31 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			restConfig, err = clientConfig.ClientConfig()
 
 			if err != nil {
-				logrus.Errorf("error during conversion of secret to client config: %v", err)
+				log.Errorf("error during conversion of secret to client config: %v", err)
 			}
 
 			err = c.addCallback(restConfig, clusterID, 2 * time.Minute)
 			if err != nil {
-				logrus.Errorf("error during create of clusterID: %s %v", clusterID, err)
+				log.Errorf("error during create of clusterID: %s %v", clusterID, err)
 			}
 		} else {
-			logrus.Infof("Cluster %s in the secret %s in namespace %s already exists",
+			log.Infof("Cluster %s in the secret %s in namespace %s already exists",
 				clusterID, c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
 		}
 	}
-	logrus.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
+	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
 }
 
 func (c *Controller) deleteMemberCluster(secretName string) {
 	for clusterID, cluster := range c.cs.remoteClusters {
 		if cluster.secretName == secretName {
-			logrus.Infof("Deleting cluster member: %s", clusterID)
+			log.Infof("Deleting cluster member: %s", clusterID)
 			err := c.removeCallback(clusterID)
 			if err != nil {
-				logrus.Errorf("error during cluster delete: %s %v", clusterID, err)
+				log.Errorf("error during cluster delete: %s %v", clusterID, err)
 			}
 			delete(c.cs.remoteClusters, clusterID)
 		}
 	}
-	logrus.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
+	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
 }
