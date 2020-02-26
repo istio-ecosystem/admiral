@@ -85,22 +85,29 @@ ifeq ($(BRANCH),master)
 override TAG=latest
 endif
 endif
+ifndef TAG
+override TAG=$(SHA)
+override DO_NOT_PUBLISH=1
+endif
 
 docker-build: set-tag
     #NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
 
 docker-publish:
-ifeq ($(TAG),)
+ifndef DO_NOT_PUBLISH
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
+endif
+ifeq ($(TAG),)
 	echo "This is not a Tag/Release, skipping docker publish"
 else
+ifndef DO_NOT_PUBLISH
 	docker push $(IMAGE):$(TAG)
+endif
 endif
 #no tag set and its master branch, in this case publish `latest` tag
 ifeq ($(TAG),)
 ifeq ($(BRANCH),master)
-	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 	docker push $(IMAGE):latest
 else
 	echo "This is not master branch, skipping to publish 'latest' tag"
