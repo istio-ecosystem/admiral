@@ -1,7 +1,7 @@
 package common
 
 import (
-	"istio.io/istio/pkg/log"
+	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )

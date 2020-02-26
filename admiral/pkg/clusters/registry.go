@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"k8s.io/client-go/rest"
 	"sync"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/rest"
 
 )
 
@@ -20,7 +20,7 @@ const (
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
 )
 
-func InitAdmiral(ctx context.Context, params AdmiralParams) (*RemoteRegistry, error) {
+func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
 
 	log.Infof("Initializing Admiral with params: %v", params)
 

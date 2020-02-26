@@ -97,7 +97,7 @@ func GetEnv(deployment *k8sAppsV1.Deployment) string {
 func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) string {
 	identifierVal := GetValueForKeyFromDeployment(identifier, deployment)
 	if len(identifierVal) == 0 {
-		logrus.Errorf("Unable to get SAN for deployment with name %v in namespace %v as it doesn't have the %v annotation or label", deployment.Name, deployment.Namespace, identifier)
+		log.Errorf("Unable to get SAN for deployment with name %v in namespace %v as it doesn't have the %v annotation or label", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
 	if len(domain) > 0 {

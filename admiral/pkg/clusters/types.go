@@ -102,7 +102,7 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, obj)
+	handleDependencyRecord(sourceIdentity, dh.RemoteRegistry, dh.RemoteRegistry.remoteControllers, obj)
 
 }
 
