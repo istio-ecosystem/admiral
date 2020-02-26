@@ -127,11 +127,11 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	return res, nil
 }
 
-func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration) (*PodController, error) {
+func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*PodController, error) {
 
 	podController := PodController{}
 	podController.PodHandler = handler
-	podController.labelSet = common.GetLabelSet()
+	podController.labelSet = labelSet
 
 	podCache := podCache{}
 	podCache.cache = make(map[string]*PodClusterEntry)
@@ -172,6 +172,6 @@ func (d *PodController) Added(ojb interface{}) {
 
 }
 
-func (d *PodController) Deleted(name string) {
+func (d *PodController) Deleted(ojb interface{}) {
 	//TODO deal with this
 }

@@ -3,9 +3,11 @@
 
 package model
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Dependency struct {
 	// REQUIRED: identifier for the source workload
@@ -34,16 +36,17 @@ func (m *Dependency) Reset()         { *m = Dependency{} }
 func (m *Dependency) String() string { return proto.CompactTextString(m) }
 func (*Dependency) ProtoMessage()    {}
 func (*Dependency) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dependency_507a6246af59cbf1, []int{0}
+	return fileDescriptor_394735771c16e617, []int{0}
 }
+
 func (m *Dependency) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Dependency.Unmarshal(m, b)
 }
 func (m *Dependency) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Dependency.Marshal(b, m, deterministic)
 }
-func (dst *Dependency) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Dependency.Merge(dst, src)
+func (m *Dependency) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Dependency.Merge(m, src)
 }
 func (m *Dependency) XXX_Size() int {
 	return xxx_messageInfo_Dependency.Size(m)
@@ -79,9 +82,9 @@ func init() {
 	proto.RegisterType((*Dependency)(nil), "admiral.global.v1alpha.Dependency")
 }
 
-func init() { proto.RegisterFile("dependency.proto", fileDescriptor_dependency_507a6246af59cbf1) }
+func init() { proto.RegisterFile("dependency.proto", fileDescriptor_394735771c16e617) }
 
-var fileDescriptor_dependency_507a6246af59cbf1 = []byte{
+var fileDescriptor_394735771c16e617 = []byte{
 	// 154 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x48, 0x49, 0x2d, 0x48,
 	0xcd, 0x4b, 0x49, 0xcd, 0x4b, 0xae, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0x4b, 0x4c,

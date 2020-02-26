@@ -4,7 +4,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -140,7 +140,7 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 		t.Errorf("Get Deployments returned too many values. Expected 1, got %v", len(resultingDeps))
 	}
 	if  !cmp.Equal(resultingDeps[0], &deployment) {
-		logrus.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
+		log.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
 		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
 	}
 
@@ -154,7 +154,7 @@ func TestNewDeploymentController(t *testing.T) {
 	stop := make(chan struct{})
 	depHandler := test.MockDeploymentHandler{}
 
-	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000))
+	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000), &common.LabelSet{})
 
 	if depCon == nil {
 		t.Errorf("Deployment controller should not be nil")

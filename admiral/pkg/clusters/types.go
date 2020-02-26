@@ -2,26 +2,56 @@ package clusters
 
 import (
 	"context"
+	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"istio.io/istio/pkg/log"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 
 	"sync"
+	"time"
 )
+
+type AdmiralParams struct {
+	KubeconfigPath             string
+	CacheRefreshDuration       time.Duration
+	ClusterRegistriesNamespace string
+	DependenciesNamespace      string
+	SyncNamespace              string
+	EnableSAN                  bool
+	SANPrefix                  string
+	SecretResolver             string
+	LabelSet                   *common.LabelSet
+	HostnameSuffix             string
+
+}
+
+func (b AdmiralParams) String() string {
+	return fmt.Sprintf("KubeconfigPath=%v ", b.KubeconfigPath) +
+		fmt.Sprintf("CacheRefreshDuration=%v ", b.CacheRefreshDuration) +
+		fmt.Sprintf("ClusterRegistriesNamespace=%v ", b.ClusterRegistriesNamespace) +
+		fmt.Sprintf("DependenciesNamespace=%v ", b.DependenciesNamespace) +
+		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
+		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
+		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
+		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
+}
+
 
 type RemoteController struct {
 	ClusterID            string
-	IstioConfigStore     istio.ConfigStoreCache
 	GlobalTraffic        *admiral.GlobalTrafficController
 	DeploymentController *admiral.DeploymentController
 	ServiceController    *admiral.ServiceController
 	PodController        *admiral.PodController
 	NodeController       *admiral.NodeController
+	ServiceEntryController *istio.ServiceEntryController
+	DestinationRuleController * istio.DestinationRuleController
+	VirtualServiceController * istio.VirtualServiceController
 	stop                 chan struct{}
 	//listener for normal types
 }
@@ -39,6 +69,7 @@ type AdmiralCache struct {
 }
 
 type RemoteRegistry struct {
+	config AdmiralParams
 	sync.Mutex
 	remoteControllers map[string]*RemoteController
 	secretClient      k8s.Interface
@@ -100,7 +131,7 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, obj)
+	handleDependencyRecord(sourceIdentity, dh.RemoteRegistry, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
 
 }
 
@@ -113,6 +144,10 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
+func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+}
+
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
@@ -123,7 +158,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -142,7 +177,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.DefaultGlobalIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 

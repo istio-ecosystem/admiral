@@ -7,11 +7,9 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	log "github.com/sirupsen/logrus"
 	networking "istio.io/api/networking/v1alpha3"
-	istioKube "istio.io/istio/pilot/pkg/serviceregistry/kube"
-	"istio.io/istio/pkg/log"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +17,6 @@ import (
 	"testing"
 	"time"
 )
-
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
@@ -64,31 +61,6 @@ func TestDeleteCacheController(t *testing.T) {
 	}
 }
 
-func TestAddUpdateIstioResource(t *testing.T) {
-
-	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{},
-	}
-
-	new := istio.Config{}
-
-	existing := istio.Config{}
-
-	configToSkipUpdate := istio.Config{
-		ConfigMeta: istio.ConfigMeta{
-			Labels: map[string]string{
-				"disable-update": "true",
-			},
-		},
-	}
-
-	addUpdateIstioResource(&rc, new, nil, "VirtualService", "default")
-
-	addUpdateIstioResource(&rc, new, &existing, "VirtualService", "default")
-
-	addUpdateIstioResource(&rc, new, &configToSkipUpdate, "VirtualService", "default")
-}
-
 func TestCopyServiceEntry(t *testing.T) {
 
 	se := networking.ServiceEntry{
@@ -122,19 +94,13 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
 
 	if e != nil {
 		t.Fail()
 	}
 
 	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{
-
-			TestHook: func(i interface{}) {
-				t.Fail()
-			},
-		},
 		DeploymentController: d,
 	}
 
@@ -145,7 +111,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des)
+	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des, "sync", ".global", "identity")
 
 }
 
@@ -153,10 +119,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 
 	rc, err := createMockRemoteController(
 		func(i interface{}) {
-			res := i.(istio.Config)
-			if res.Name != "local.name" {
-				t.Fail()
-			}
+
 		},
 	)
 
@@ -170,7 +133,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des)
+	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des, "sync", ".global", "identity")
 
 }
 
@@ -179,7 +142,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), &common.LabelSet{})
 	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
 
@@ -219,9 +182,6 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	s.Added(&service)
 
 	rc := RemoteController{
-		IstioConfigStore: &test.MockIstioConfigStore{
-			TestHook: f,
-		},
 		DeploymentController: d,
 		ServiceController:    s,
 		NodeController:       n,
@@ -232,19 +192,23 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 
 func TestCreateSecretController(t *testing.T) {
 
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
 	rr := RemoteRegistry{}
-	err := createSecretController(context.Background(), &rr)
+	err := createSecretController(context.Background(), &rr, p)
 
 	if err != nil {
 		t.Fail()
 	}
 
-	common.SetKubeconfigPath("fail")
+	p = AdmiralParams{
+		KubeconfigPath: "fail",
+	}
 
 	rr = RemoteRegistry{}
-	err = createSecretController(context.Background(), &rr)
-
-	common.SetKubeconfigPath("testdata/fake.config")
+	err = createSecretController(context.Background(), &rr, p)
 
 	if err == nil {
 		t.Fail()
@@ -253,11 +217,9 @@ func TestCreateSecretController(t *testing.T) {
 
 func TestInitAdmiral(t *testing.T) {
 
-	p := common.AdmiralParams{
+	p := AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &common.LabelSet{},
 	}
-
 
 	rr, err := InitAdmiral(context.Background(), p)
 
@@ -267,15 +229,11 @@ func TestInitAdmiral(t *testing.T) {
 	if len(rr.remoteControllers) != 0 {
 		t.Fail()
 	}
-
-	if common.GetWorkloadIdentifier() != "identity" {
-		t.Errorf("Workload identity label override failed. Expected \"identity\", got %v", common.GetWorkloadIdentifier())
-	}
 }
 
 func TestAdded(t *testing.T) {
 
-	p := common.AdmiralParams{
+	p := AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
@@ -308,31 +266,6 @@ func TestAdded(t *testing.T) {
 
 }
 
-func TestCreateIstioController(t *testing.T) {
-
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		t.Fail()
-	})
-	rr.remoteControllers["test.cluster"] = rc
-	config := rest.Config{
-		Host: "localhost",
-	}
-
-	opts := istioKube.ControllerOptions{
-		WatchedNamespace: metav1.NamespaceAll,
-		ResyncPeriod:     time.Second * time.Duration(300),
-		DomainSuffix:     ".cluster",
-	}
-
-	rr.createIstioController(&config, opts, rc, make(chan struct{}), "test.cluster")
-
-}
-
 func TestMakeVirtualService(t *testing.T) {
 	vs := makeVirtualService("test.local", "dest", 8080)
 	if vs.Hosts[0] != "test.local" {
@@ -345,20 +278,14 @@ func TestMakeVirtualService(t *testing.T) {
 
 func TestDeploymentHandler(t *testing.T) {
 
-	p := common.AdmiralParams{
+	p := AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 
 	rr, _ := InitAdmiral(context.Background(), p)
 
 	rc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Fail()
-			}
-		}
+
 	})
 	rr.remoteControllers["test.cluster"] = rc
 
@@ -390,20 +317,14 @@ func TestDeploymentHandler(t *testing.T) {
 
 func TestPodHandler(t *testing.T) {
 
-	p := common.AdmiralParams{
+	p := AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 
 	rr, _ := InitAdmiral(context.Background(), p)
 
 	rc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Fail()
-			}
-		}
+
 	})
 	rr.remoteControllers["test.cluster"] = rc
 
@@ -428,23 +349,23 @@ func TestPodHandler(t *testing.T) {
 
 func TestGetServiceForDeployment(t *testing.T) {
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-			}
-		}
+		//res := i.(istio.Config)
+		//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
+		//if ok {
+		//	if se.Hosts[0] != "dev.bar.global" {
+		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+		//	}
+		//}
 	})
 
 	rcWithService, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-			}
-		}
+		//res := i.(istio.Config)
+		//se, ok := res.Spec.(*networking.ServiceEntry)
+		//if ok {
+		//	if se.Hosts[0] != "dev.bar.global" {
+		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+		//	}
+		//}
 	})
 
 	service := k8sCoreV1.Service{}

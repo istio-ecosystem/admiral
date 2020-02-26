@@ -2,8 +2,7 @@ package admiral
 
 import (
 	"fmt"
-
-	"istio.io/istio/pkg/log"
+	log "github.com/sirupsen/logrus"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -20,7 +19,7 @@ const (
 // Handler interface contains the methods that are required
 type Delegator interface {
 	Added(interface{})
-	Deleted(name string)
+	Deleted(interface{})
 }
 
 type Controller struct {
@@ -55,7 +54,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			log.Debugf("Dependency Informer Delete: %v", obj)
+			log.Debugf("Informer Delete: %v", obj)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
 				controller.queue.Add(key)
@@ -127,7 +126,7 @@ func (c *Controller) processItem(name string) error {
 	if exists {
 		c.delegator.Added(obj)
 	} else {
-		c.delegator.Deleted(name)
+		c.delegator.Deleted(obj)
 	}
 
 	return nil
