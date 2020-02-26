@@ -56,7 +56,7 @@ func (in *Dependency) DeepCopyObject() runtime.Object {
 func (in *DependencyList) DeepCopyInto(out *DependencyList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]Dependency, len(*in))
@@ -133,7 +133,7 @@ func (in *GlobalTrafficPolicy) DeepCopyObject() runtime.Object {
 func (in *GlobalTrafficPolicyList) DeepCopyInto(out *GlobalTrafficPolicyList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]GlobalTrafficPolicy, len(*in))

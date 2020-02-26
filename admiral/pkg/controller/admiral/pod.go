@@ -172,6 +172,6 @@ func (d *PodController) Added(ojb interface{}) {
 
 }
 
-func (d *PodController) Deleted(name string) {
+func (d *PodController) Deleted(ojb interface{}) {
 	//TODO deal with this
 }

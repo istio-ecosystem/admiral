@@ -3,7 +3,7 @@ package admiral
 import (
 	"errors"
 	"github.com/google/go-cmp/cmp"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
@@ -68,7 +68,7 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
 			}
 			if !cmp.Equal(cm, c.expectedConfigMap) {
-				logrus.Info("Object Diff: " + cmp.Diff(cm, c.expectedConfigMap))
+				log.Info("Object Diff: " + cmp.Diff(cm, c.expectedConfigMap))
 				t.Errorf("Configmap Mismatch. Expected %v but got %v", c.expectedConfigMap, cm)
 			}
 

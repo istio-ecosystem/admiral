@@ -5,7 +5,7 @@ package admiral.global.v1alpha;
 option go_package = "model";
 
 // ```
-// apiVersion: admiral.global.traffic/v1alpha
+// apiVersion: admiral.io/v1alpha1
 // kind: Dependency
 // metadata:
 //   name: my-dependency
