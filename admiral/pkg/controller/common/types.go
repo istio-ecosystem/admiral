@@ -1,7 +1,9 @@
 package common
 
 import (
+	"fmt"
 	"sync"
+	"time"
 )
 
 type Map struct {
@@ -15,13 +17,39 @@ type MapOfMaps struct {
 	mutex *sync.Mutex
 }
 
+type AdmiralParams struct {
+	KubeconfigPath             string
+	CacheRefreshDuration       time.Duration
+	ClusterRegistriesNamespace string
+	DependenciesNamespace      string
+	SyncNamespace              string
+	EnableSAN                  bool
+	SANPrefix                  string
+	SecretResolver             string
+	LabelSet                   *LabelSet
+	HostnameSuffix             string
+
+}
+
+func (b AdmiralParams) String() string {
+	return fmt.Sprintf("KubeconfigPath=%v ", b.KubeconfigPath) +
+		fmt.Sprintf("CacheRefreshDuration=%v ", b.CacheRefreshDuration) +
+		fmt.Sprintf("ClusterRegistriesNamespace=%v ", b.ClusterRegistriesNamespace) +
+		fmt.Sprintf("DependenciesNamespace=%v ", b.DependenciesNamespace) +
+		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
+		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
+		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
+		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
+}
+
+
 type LabelSet struct {
 	DeploymentAnnotation                string
 	SubsetLabel                         string
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
-	WorkloadIdentityLabel      			string
+	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
 }
 
 func NewMap() *Map {

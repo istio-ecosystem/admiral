@@ -20,7 +20,7 @@ func TestNewPodController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockPodHandler{}
 
-	podController, err := NewPodController(stop, &handler, config, time.Duration(1000), &common.LabelSet{})
+	podController, err := NewPodController(stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

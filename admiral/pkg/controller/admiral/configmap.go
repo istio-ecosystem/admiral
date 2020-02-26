@@ -1,6 +1,7 @@
 package admiral
 
 import (
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -23,8 +24,9 @@ type ConfigMapController struct {
 
 //todo this is a temp state, eventually changes will have to be made to give each cluster it's own configmap
 
-func NewConfigMapController(kubeconfigPath string, namespaceToUse string) (*ConfigMapController, error) {
-
+func NewConfigMapController() (*ConfigMapController, error) {
+	kubeconfigPath := common.GetKubeconfigPath()
+	namespaceToUse := common.GetSyncNamespace()
 	if kubeconfigPath == "" {
 		config, err := rest.InClusterConfig()
 		if err != nil {
