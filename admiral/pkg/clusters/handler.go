@@ -40,7 +40,7 @@ func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCach
 	log.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
 }
 
-func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, config AdmiralParams, obj *v1.Dependency) {
+func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, obj *v1.Dependency) {
 
 	destinationIdentitys := obj.Spec.Destinations
 
@@ -78,7 +78,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					continue
 				}
 				//TODO pass deployment
-				tmpSe := createServiceEntry(rc, config, r.AdmiralCache, deployment[0], serviceEntries)
+				tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
 					continue
@@ -109,7 +109,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 	}
 
 	//add service entries for all dependencies in source cluster
-	AddServiceEntriesWithDr(r, sourceClusters, rcs, serviceEntries, config.SyncNamespace)
+	AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
 }
 
 func getIstioResourceName(host string, suffix string) string {
@@ -211,7 +211,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	var localIdentityId string
 
-	syncNamespace := dh.RemoteRegistry.config.SyncNamespace
+	syncNamespace := common.GetSyncNamespace()
 
 	r := dh.RemoteRegistry
 
@@ -253,7 +253,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		var drServiceEntries = make(map[string]*v1alpha32.ServiceEntry)
 
-		exist, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Get(basicSEName, v12.GetOptions{})
+		exist, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(basicSEName, v12.GetOptions{})
 
 		var identityId = ""
 
@@ -279,36 +279,36 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		if event == common.Delete {
 
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(r.config.SyncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 			log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-			rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Delete(seName, &v12.DeleteOptions{})
+			rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
 			log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
 			for _, subset := range destinationRule.Subsets {
 				sseName := seName + common.Dash + subset.Name
-				rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Delete(sseName, &v12.DeleteOptions{})
+				rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
 				log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
 			}
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(r.config.SyncNamespace).Delete(localDrName, &v12.DeleteOptions{})
+			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
 			log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
 
 		} else {
 
-			exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(r.config.SyncNamespace).Get(obj.Name, v12.GetOptions{})
+			exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
 
 			//copy destination rule only to other clusters
 			if dependentCluster != clusterId {
-				addUpdateDestinationRule(obj, exist, r.config.SyncNamespace, rc)
+				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
 
 			if drServiceEntries != nil {
 				for _seName, se := range drServiceEntries {
-					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(r.config.SyncNamespace).Get(_seName, v12.GetOptions{})
-					newServiceEntry = createServiceEntrySkeletion(*se, _seName, r.config.SyncNamespace)
+					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
+					newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
 					if err != nil {
 						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
 					}
 					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, r.config.SyncNamespace, rc)
+						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
 					}
 					//cache the subset service entries for updating them later for pod events
 					if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
@@ -319,7 +319,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 			if dependentCluster == clusterId {
 				//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-				createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule, r.config.SyncNamespace, r.config.HostnameSuffix, r.config.LabelSet.WorkloadIdentityLabel)
+				createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
 			}
 
 		}
@@ -327,7 +327,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *v1alpha32.DestinationRule, syncNamespace string, nameSuffix string, identifier string) {
+	destinationRule *v1alpha32.DestinationRule) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -343,9 +343,10 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		break
 	}
 
+	syncNamespace := common.GetSyncNamespace()
 	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance)
 
-	cname := common.GetCname(deploymentInstance, identifier, nameSuffix)
+	cname := common.GetCname(deploymentInstance, common.GetHostnameSuffix(), common.GetWorkloadIdentifier())
 	if cname == destinationRule.Host {
 		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		existsDestinationRule, err := remoteController.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(localDrName, v12.GetOptions{})
@@ -371,7 +372,9 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	r := vh.RemoteRegistry
 
-	if obj.Namespace == r.config.SyncNamespace {
+	syncNamespace := common.GetSyncNamespace()
+
+	if obj.Namespace == syncNamespace {
 		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
 		return
 	}
@@ -398,11 +401,11 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 			if event == common.Delete {
 				log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-				rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(r.config.SyncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 
 			} else {
 
-				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(r.config.SyncNamespace).Get(obj.Name, v12.GetOptions{})
+				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
 
 				//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
 				for _, httpRoute := range virtualService.Http {
@@ -419,7 +422,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 					}
 				}
 
-				addUpdateVirtualService(obj, exist, vh.RemoteRegistry.config.SyncNamespace, rc)
+				addUpdateVirtualService(obj, exist, syncNamespace, rc)
 			}
 		}
 
