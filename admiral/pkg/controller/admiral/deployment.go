@@ -166,7 +166,7 @@ func (d *DeploymentController) Added(ojb interface{}) {
 
 }
 
-func (d *DeploymentController) Deleted(name string) {
+func (d *DeploymentController) Deleted(ojb interface{}) {
 	//TODO deal with this
 }
 

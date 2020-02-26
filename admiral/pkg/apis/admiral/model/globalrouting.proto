@@ -8,7 +8,7 @@ option go_package = "model";
 
 
 // ```
-// apiVersion: navarch.global.traffic/v1alpha
+// apiVersion: admiral.io/v1alpha1
 // kind: GlobalTrafficPolicy
 // metadata:
 //   name: my-routing

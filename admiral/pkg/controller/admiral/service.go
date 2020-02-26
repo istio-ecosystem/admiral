@@ -140,7 +140,7 @@ func (s *ServiceController) Added(ojb interface{}) {
 	s.ServiceHandler.Added(service)
 }
 
-func (s *ServiceController) Deleted(name string) {
+func (s *ServiceController) Deleted(ojb interface{}) {
 	//pod := ojb.(*k8sV1.Pod)
 
 	//TODO figure this out

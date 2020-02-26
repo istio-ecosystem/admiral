@@ -62,6 +62,6 @@ func (p *NodeController) Added(obj interface{}) {
 
 }
 
-func (p *NodeController) Deleted(name string) {
+func (p *NodeController) Deleted(obj interface{}) {
 	p.NodeHandler.Deleted(nil)
 }

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 	"time"
 
@@ -32,9 +33,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
-
-	"istio.io/istio/pkg/kube"
-	"istio.io/istio/pkg/log"
 )
 
 const (
@@ -45,10 +43,6 @@ const (
 // LoadKubeConfig is a unit test override variable for loading the k8s config.
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
-
-// CreateInterfaceFromClusterConfig is a unit test override variable for interface create.
-// DO NOT USE - TEST ONLY.
-var CreateInterfaceFromClusterConfig = kube.CreateInterfaceFromClusterConfig
 
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error

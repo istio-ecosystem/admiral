@@ -107,7 +107,7 @@ func (d *DependencyController) Added(ojb interface{}) {
 	d.DepHandler.Added(dep)
 }
 
-func (d *DependencyController) Deleted(name string) {
-	dep := d.Cache.Get(name)
+func (d *DependencyController) Deleted(ojb interface{}) {
+	dep := ojb.(*v1.Dependency)
 	d.DepHandler.Deleted(dep)
 }

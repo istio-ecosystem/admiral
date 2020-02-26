@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	"strings"
@@ -26,6 +26,22 @@ const (
 	SpiffePrefix               = "spiffe://"
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
 	Default                    = "default"
+)
+
+type Event int
+
+const (
+	Add    Event = 0
+	Update Event = 1
+	Delete Event = 2
+)
+
+type ResourceType string
+
+const (
+	VirtualService  ResourceType = "VirtualService"
+	DestinationRule  ResourceType = "DestinationRule"
+	ServiceEntry  ResourceType = "ServiceEntry"
 )
 
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
@@ -54,11 +70,11 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 	var environment = GetEnv(deployment)
 	alias := deployment.Spec.Template.Labels[identifier]
 	if len(alias) == 0 {
-		logrus.Warnf("%v label missing on service %v in namespace %v. Falling back to annotation to create cname.", identifier, deployment.Name, deployment.Namespace)
+		log.Warnf("%v label missing on service %v in namespace %v. Falling back to annotation to create cname.", identifier, deployment.Name, deployment.Namespace)
 		alias = deployment.Spec.Template.Annotations[identifier]
 	}
 	if len(alias) == 0 {
-		logrus.Errorf("Unable to get cname for service with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
+		log.Errorf("Unable to get cname for service with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
 	return environment + Sep + alias + Sep + nameSuffix

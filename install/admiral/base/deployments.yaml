@@ -30,7 +30,7 @@ spec:
             - $(secret_resolver)
             - --secret_resolver_config_path
             - /etc/admiral/config.yaml
-          image: docker.io/admiralproj/admiral:v0.1-alpha
+          image: docker.io/admiralproj/admiral:v0.1-beta
           #          livenessProbe:
           #            failureThreshold: 5
           #            httpGet:
