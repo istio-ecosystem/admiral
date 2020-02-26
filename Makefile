@@ -21,7 +21,7 @@ PROTOC_ZIP=protoc-$(PROTOC_VER)-osx-x86_64.zip
 
 
 # ROOT_PACKAGE :: the package (relative to $GOPATH/src) that is the target for code generation
-ROOT_PACKAGE=github.com/admiral/admiral
+ROOT_PACKAGE=github.com/istio-ecosystem/admiral/admiral
 # CUSTOM_RESOURCE_NAME :: the name of the custom resource that we're generating client code for
 CUSTOM_RESOURCE_NAME=admiral
 # CUSTOM_RESOURCE_VERSION :: the version of the resource
@@ -66,12 +66,11 @@ api-gen:
 	go install github.com/golang/protobuf/protoc-gen-go
 	$(GOCMD) generate ./...
 	go install k8s.io/code-generator/cmd/deepcopy-gen
-	$(GOBIN)/deepcopy-gen --input-dirs ./admiral/pkg/apis/admiral/model --bounding-dirs ./admiral/pkg/apis/admiral/model -O zz_generated.deepcopy -o $(GOPATH)/src
 
 crd-gen:
-	#go get -d -u -fix k8s.io/code-generator
-	#go get -d -u -fix k8s.io/apimachinery
-	#go get -d -u -fix k8s.io/gengo
+	go get -d -u -fix k8s.io/code-generator
+	go get -d -u -fix k8s.io/apimachinery
+	go get -d -u -fix k8s.io/gengo
 	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
 
 # Cross compilation

@@ -7,7 +7,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"istio.io/istio/pkg/log"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
@@ -44,12 +44,14 @@ func (b AdmiralParams) String() string {
 
 type RemoteController struct {
 	ClusterID            string
-	IstioConfigStore     istio.ConfigStoreCache
 	GlobalTraffic        *admiral.GlobalTrafficController
 	DeploymentController *admiral.DeploymentController
 	ServiceController    *admiral.ServiceController
 	PodController        *admiral.PodController
 	NodeController       *admiral.NodeController
+	ServiceEntryController *istio.ServiceEntryController
+	DestinationRuleController * istio.DestinationRuleController
+	VirtualServiceController * istio.VirtualServiceController
 	stop                 chan struct{}
 	//listener for normal types
 }
@@ -129,7 +131,7 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(obj.Spec.IdentityLabel, sourceIdentity, dh.RemoteRegistry.AdmiralCache, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
+	handleDependencyRecord(sourceIdentity, dh.RemoteRegistry, dh.RemoteRegistry.remoteControllers, dh.RemoteRegistry.config, obj)
 
 }
 
@@ -140,6 +142,10 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+}
+
+func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
