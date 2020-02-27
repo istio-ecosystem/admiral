@@ -127,11 +127,11 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 	return res, nil
 }
 
-func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*PodController, error) {
+func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.Config, resyncPeriod time.Duration) (*PodController, error) {
 
 	podController := PodController{}
 	podController.PodHandler = handler
-	podController.labelSet = labelSet
+	podController.labelSet = common.GetLabelSet()
 
 	podCache := podCache{}
 	podCache.cache = make(map[string]*PodClusterEntry)
