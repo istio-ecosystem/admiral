@@ -9,7 +9,30 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
+	"time"
 )
+
+func init() {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{},
+		EnableSAN: true,
+		SANPrefix: "prefix",
+		HostnameSuffix: "mesh",
+		SyncNamespace: "ns",
+		CacheRefreshDuration: time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace: "default",
+		SecretResolver: "",
+
+	}
+
+	p.LabelSet.WorkloadIdentityKey="identity"
+
+	common.InitializeConfig(p)
+}
+
+
 
 func TestConfigMapController_GetConfigMap(t *testing.T) {
 	configmapController := ConfigMapController{
