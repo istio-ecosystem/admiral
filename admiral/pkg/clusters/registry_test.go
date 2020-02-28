@@ -18,6 +18,26 @@ import (
 	"time"
 )
 
+func init() {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{},
+		EnableSAN: true,
+		SANPrefix: "prefix",
+		HostnameSuffix: "mesh",
+		SyncNamespace: "ns",
+		CacheRefreshDuration: time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace: "default",
+		SecretResolver: "",
+
+	}
+
+	p.LabelSet.WorkloadIdentityKey="identity"
+
+	common.InitializeConfig(p)
+}
+
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
@@ -192,7 +212,6 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-
 	rr := RemoteRegistry{}
 	err := createSecretController(context.Background(), &rr)
 
