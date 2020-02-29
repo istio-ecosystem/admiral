@@ -455,7 +455,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
-	if exist == nil {
+	if exist == nil || exist.Spec.Hosts == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
