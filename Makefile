@@ -1,4 +1,4 @@
-DOCKER_REPO=istio-ecosystem
+DOCKER_REPO=admiralproj
 IMAGE=$(DOCKER_REPO)/admiral
 DOCKER_USER=aattuluri
 
