@@ -10,8 +10,6 @@ spec:
     spec:
       containers:
         - args:
-            - --log_output_level
-            - info
             - --dependency_namespace
             - admiral
             - --secret_namespace

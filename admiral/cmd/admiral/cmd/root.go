@@ -55,11 +55,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	rootCmd.PersistentFlags().StringVar(&params.KubeconfigPath, "kube_config", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
-	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "default",
+	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "admiral",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
-	rootCmd.PersistentFlags().StringVar(&params.DependenciesNamespace, "dependency_namespace", "default",
+	rootCmd.PersistentFlags().StringVar(&params.DependenciesNamespace, "dependency_namespace", "admiral",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
-	rootCmd.PersistentFlags().StringVar(&params.SyncNamespace, "sync_namespace", "default",
+	rootCmd.PersistentFlags().StringVar(&params.SyncNamespace, "sync_namespace", "admiral-sync",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
 	rootCmd.PersistentFlags().DurationVar(&params.CacheRefreshDuration, "sync_period", 5*time.Minute,
 		"Interval for syncing Kubernetes resources, defaults to 5 min")
