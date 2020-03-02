@@ -125,6 +125,9 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		deploymentInstance := deployment.Deployments[env]
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
+		if serviceInstance == nil {
+			continue
+		}
 
 		cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), cname)
 
