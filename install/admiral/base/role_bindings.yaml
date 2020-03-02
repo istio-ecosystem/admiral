@@ -4,6 +4,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: admiral-secret-role-binding
+  namespace: admiral
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -19,6 +20,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: admiral-dependency-role-binding
+  namespace: admiral
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

@@ -4,6 +4,7 @@ apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
   name: admiral
+  namespace: admiral
 spec:
   template:
 
@@ -15,5 +16,5 @@ spec:
             - --secret_namespace
             - admiral
             - --sync_namespace
-            - admiral
+            - admiral-sync
           name: admiral
