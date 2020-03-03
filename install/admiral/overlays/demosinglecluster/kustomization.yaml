@@ -3,7 +3,7 @@ kind: Kustomization
 
 images:
   - name: docker.io/admiralproj/admiral
-    newTag: v0.1-beta
+    newTag: latest
 
 bases:
   - ../../base
