@@ -17,4 +17,6 @@ spec:
             - admiral
             - --sync_namespace
             - admiral-sync
+            - --sync_period
+            - 20s
           name: admiral
