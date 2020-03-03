@@ -70,7 +70,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.SecretResolver, "secret_resolver", "",
 		"Type of resolver to use to fetch kubeconfig for monitored clusters")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.DeploymentAnnotation, "deployment_annotation", "sidecar.istio.io/inject",
-		"The annotation, on a deployment, which must be set to \"true\" for Admiral to listen on the deployment")
+		"The annotation, on a pod spec in a deployment, which must be set to \"true\" for Admiral to listen on the deployment")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.SubsetLabel, "subset_label", "subset",
 		"The label, on a deployment, tells admiral which target group this deployment is a part of. Used for traffic splits via the Global Traffic Policy object")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabel, "namespace_injected_label", "istio-injection",
