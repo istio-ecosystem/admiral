@@ -3,6 +3,7 @@ package clusters
 import (
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
@@ -275,7 +276,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				oldDestinationRule = nil
 			}
 
-			globalTrafficPolicy := getMatchingGlobalTrafficPolicy(rc, identityId)
+			var globalTrafficPolicy *v1.GlobalTrafficPolicy //TODO jsp fix this //getMatchingGlobalTrafficPolicy(rc, identityId)
 
 			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
 

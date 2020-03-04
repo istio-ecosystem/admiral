@@ -1,9 +1,11 @@
 package common
 
 import (
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	"sort"
 	"strings"
 )
 
@@ -11,7 +13,6 @@ const (
 	NamespaceKubeSystem        = "kube-system"
 	NamespaceIstioSystem       = "istio-system"
 	Env                        = "env"
-	Identity                   = "identity"
 	Http                       = "http"
 	DefaultMtlsPort            = 15443
 	DefaultHttpPort            = 80
@@ -119,4 +120,84 @@ func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) 
 		value = deployment.Spec.Template.Annotations[key]
 	}
 	return value
+}
+
+func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []*k8sAppsV1.Deployment) *k8sAppsV1.Deployment{
+	if gtp == nil || gtp.Name == "" {
+		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
+		return nil
+	}
+
+	//If one is found, return it.
+	if len(deployments) == 1 {
+		return deployments[0]
+	}
+
+	var envMatchedDeployments []*k8sAppsV1.Deployment
+
+	for _, deployment := range deployments {
+		if deployment.Labels[Env] == gtp.Labels[Env] {
+			envMatchedDeployments = append(envMatchedDeployments, deployment)
+		}
+	}
+
+	//if one matches the environment from the gtp, return it
+	if len(envMatchedDeployments) == 1 {
+		return envMatchedDeployments[0]
+	}
+
+	//if no deployments match the environment, we follow the same logic as if multiple did.
+	if len(envMatchedDeployments) == 0 {
+		envMatchedDeployments = deployments
+	}
+
+	sort.Slice(envMatchedDeployments, func(i, j int) bool {
+		iTime := envMatchedDeployments[i].CreationTimestamp.Nanosecond()
+		jTime := envMatchedDeployments[j].CreationTimestamp.Nanosecond()
+		return iTime>jTime
+	})
+
+	//return most recently created gtp
+	return envMatchedDeployments[0]
+
+}
+
+func MatchGTPsToDeployment(gtpList []*v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy{
+	if deployment == nil || deployment.Name == "" {
+		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
+		return nil
+	}
+
+	//If one is found, return it.
+	if len(gtpList) == 1 {
+		return gtpList[0]
+	}
+
+	var envMatchedGTPList []*v1.GlobalTrafficPolicy
+
+	for _, gtp := range gtpList {
+		if gtp.Labels[Env] == deployment.Labels[Env] {
+			envMatchedGTPList = append(envMatchedGTPList, gtp)
+		}
+	}
+
+	//if one matches the environment from the gtp, return it
+	if len(envMatchedGTPList) == 1 {
+		return envMatchedGTPList[0]
+	}
+
+	//if no GTPs match the environment, we follow the same logic as if multiple did.
+	if len(envMatchedGTPList) == 0 {
+		envMatchedGTPList = gtpList
+	}
+
+	sort.Slice(envMatchedGTPList, func(i, j int) bool {
+		iTime := envMatchedGTPList[i].CreationTimestamp.Nanosecond()
+		jTime := envMatchedGTPList[j].CreationTimestamp.Nanosecond()
+		return iTime>jTime
+	})
+
+	//return most recently created gtp
+	return envMatchedGTPList[0]
+
 }

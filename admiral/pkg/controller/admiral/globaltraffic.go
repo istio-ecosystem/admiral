@@ -3,10 +3,11 @@ package admiral
 import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"sync"
 	"time"
 
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
@@ -23,36 +24,8 @@ type GlobalTrafficHandler interface {
 type GlobalTrafficController struct {
 	CrdClient  clientset.Interface
 	GlobalTrafficHandler GlobalTrafficHandler
-	Cache      *globalTarfficCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
-}
-
-type globalTarfficCache struct {
-	//map of dependencies key=identity value array of onboarded identitys
-	cache map[string]*v1.GlobalTrafficPolicy
-	mutex *sync.Mutex
-}
-
-func (g *globalTarfficCache) Put(dep *v1.GlobalTrafficPolicy) {
-	defer g.mutex.Unlock()
-	g.mutex.Lock()
-	key := g.getKey(dep)
-	g.cache[key] = dep
-}
-
-func (d *globalTarfficCache) getKey(dep *v1.GlobalTrafficPolicy) string {
-	return dep.Spec.Selector["identity"]
-}
-
-func (g *globalTarfficCache) Get(identity string) *v1.GlobalTrafficPolicy {
-	return g.cache[identity]
-}
-
-func (g *globalTarfficCache) Delete(dep *v1.GlobalTrafficPolicy) {
-	defer g.mutex.Unlock()
-	g.mutex.Lock()
-	delete(g.cache, g.getKey(dep))
 }
 
 func (g *GlobalTrafficController) GetGlobalTrafficPolicies() ([]v1.GlobalTrafficPolicy, error) {
@@ -69,13 +42,8 @@ func (g *GlobalTrafficController) GetGlobalTrafficPolicies() ([]v1.GlobalTraffic
 func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
 
 	globalTrafficController := GlobalTrafficController{}
+
 	globalTrafficController.GlobalTrafficHandler = handler
-
-	gtpCache := globalTarfficCache{}
-	gtpCache.cache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.mutex = &sync.Mutex{}
-
-	globalTrafficController.Cache = &gtpCache
 
 	var err error
 
@@ -98,13 +66,11 @@ func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHan
 
 func (d *GlobalTrafficController) Added(ojb interface{}) {
 	dep := ojb.(*v1.GlobalTrafficPolicy)
-	d.Cache.Put(dep)
 	d.GlobalTrafficHandler.Added(dep)
 }
 
 func (d *GlobalTrafficController) Updated(ojb interface{}) {
 	dep := ojb.(*v1.GlobalTrafficPolicy)
-	d.Cache.Put(dep)
 	d.GlobalTrafficHandler.Updated(dep)
 }
 
@@ -112,3 +78,18 @@ func (d *GlobalTrafficController) Deleted(ojb interface{}) {
 	dep := ojb.(*v1.GlobalTrafficPolicy)
 	d.GlobalTrafficHandler.Deleted(dep)
 }
+
+func (g *GlobalTrafficController) GetGTPByLabel(labelValue string, namespace string) []v1.GlobalTrafficPolicy {
+	matchLabel := common.GetGlobalTrafficDeploymentLabel()
+	labelOptions := meta_v1.ListOptions{}
+	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+	matchedDeployments, err := g.CrdClient.AdmiralV1().GlobalTrafficPolicies(namespace).List(labelOptions)
+
+	if err != nil {
+		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
+		return nil
+	}
+
+	return matchedDeployments.Items
+}
+

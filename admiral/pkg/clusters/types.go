@@ -2,6 +2,8 @@ package clusters
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -72,7 +74,64 @@ type DependencyHandler struct {
 
 type GlobalTrafficHandler struct {
 	RemoteRegistry *RemoteRegistry
+	Cache      *globalTrafficCache //The cache needs to live in the handler because it needs access to deployments
 }
+
+type globalTrafficCache struct {
+	//map of global traffic policies key=environment.identity, value: GlobalTrafficPolicy object
+	identityCache map[string]*v1.GlobalTrafficPolicy
+
+	//map of dependencies. key=namespace.globaltrafficpolicy name. value Deployment object
+	dependencyCache map[string]*k8sAppsV1.Deployment
+
+	mutex *sync.Mutex
+}
+
+func (g *globalTrafficCache) GetFromIdentity(identity string, environment string) *v1.GlobalTrafficPolicy {
+	return g.identityCache[getCacheKey(environment, identity)]
+}
+
+func (g *globalTrafficCache) GetDeployment(gtpName string) *k8sAppsV1.Deployment {
+	return g.dependencyCache[gtpName]
+}
+
+func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) error {
+	if gtp.Name == "" {
+		//no GTP, throw error
+		return errors.New("cannot add an empty globaltrafficpolicy to the cache")
+	}
+	defer g.mutex.Unlock()
+	g.mutex.Lock()
+	if deployment.Labels != nil {
+		//we have a valid deployment
+		env := deployment.Labels[common.Env]
+		identity := deployment.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		g.identityCache[key] = gtp
+	}
+
+	g.dependencyCache[gtp.Name] = deployment
+	return nil
+}
+
+func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) {
+	if gtp.Name == "" {
+		//no GTP, nothing to delete
+		return
+	}
+	defer g.mutex.Unlock()
+	g.mutex.Lock()
+	if deployment.Labels != nil {
+		//we have a valid deployment
+		env := deployment.Labels[common.Env]
+		identity := deployment.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		delete(g.identityCache, key)
+	}
+
+	delete(g.dependencyCache, gtp.Name)
+}
+
 
 type DeploymentHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -112,6 +171,8 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 }
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
+	//todo jsp
+
 	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
@@ -185,4 +246,8 @@ func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
 
 func (sc *ServiceHandler) Deleted(obj *k8sV1.Service) {
 
+}
+
+func getCacheKey(environment string, identity string) string {
+	return fmt.Sprintf("%s.%s", environment, identity)
 }
