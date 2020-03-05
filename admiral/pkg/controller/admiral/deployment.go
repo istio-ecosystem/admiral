@@ -193,4 +193,4 @@ func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace
 	}
 
 	return matchedDeployments.Items
-}
+	}

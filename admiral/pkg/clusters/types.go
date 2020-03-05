@@ -40,6 +40,7 @@ type AdmiralCache struct {
 	SubsetServiceEntryIdentityCache *sync.Map
 	ServiceEntryAddressStore	 	*ServiceEntryAddressStore
 	ConfigMapController		     	admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
+	GlobalTrafficCache    			*globalTrafficCache //The cache needs to live in the handler because it needs access to deployments
 }
 
 type RemoteRegistry struct {
@@ -74,7 +75,6 @@ type DependencyHandler struct {
 
 type GlobalTrafficHandler struct {
 	RemoteRegistry *RemoteRegistry
-	Cache      *globalTrafficCache //The cache needs to live in the handler because it needs access to deployments
 }
 
 type globalTrafficCache struct {
@@ -114,13 +114,16 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	return nil
 }
 
-func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) {
+func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	if gtp.Name == "" {
 		//no GTP, nothing to delete
 		return
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
+
+	deployment := g.dependencyCache[gtp.Name]
+
 	if deployment.Labels != nil {
 		//we have a valid deployment
 		env := deployment.Labels[common.Env]
@@ -171,17 +174,48 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 }
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
-	//todo jsp
+	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "received")
 
-	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	var matchedDeployments []k8sAppsV1.Deployment
+
+	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
+	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
+		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+		}
+
+	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+
+	err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, deployment)
+	if err != nil {
+		log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
+		log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+	}
+
 }
 
 func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "received")
+
+	var matchedDeployments []k8sAppsV1.Deployment
+
+	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
+	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
+		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+	}
+
+	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+
+	err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, deployment)
+	if err != nil {
+		log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
+		log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "received")
+
+	gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(obj)
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
@@ -194,12 +228,27 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 		return
 	}
 
+	var matchedGTPs []v1.GlobalTrafficPolicy
+	for _, remoteCluster := range pc.RemoteRegistry.remoteControllers {
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+	}
+
+	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
+
+	if gtp != nil {
+		err := pc.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
+		if err != nil {
+			log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
+		}
+	}
+
 	env := common.GetEnv(obj)
 
 	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+
 	//TODO update subset service entries
 }
 

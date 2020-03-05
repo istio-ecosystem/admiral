@@ -14,7 +14,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
-
 )
 
 const (
@@ -44,6 +43,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	w.remoteControllers = make(map[string]*RemoteController)
 
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+	gtpCache.mutex = &sync.Mutex{}
+
 	w.AdmiralCache = &AdmiralCache{
 		IdentityClusterCache:            common.NewMapOfMaps(),
 		CnameClusterCache:               common.NewMapOfMaps(),
@@ -52,7 +56,9 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		IdentityDependencyCache:         common.NewMapOfMaps(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}}}
+		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
+		GlobalTrafficCache: 			 gtpCache,
+	}
 
 	configMapController, err := admiral.NewConfigMapController()
 	if err != nil {
@@ -104,11 +110,8 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	var err error
 
 	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
-	gtpCache := &globalTrafficCache{}
-	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-	gtpCache.mutex = &sync.Mutex{}
-	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r, Cache: gtpCache}, clientConfig, resyncPeriod)
+
+	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with GlobalTrafficController controller init: %v", err)

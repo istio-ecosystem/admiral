@@ -122,7 +122,7 @@ func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) 
 	return value
 }
 
-func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []*k8sAppsV1.Deployment) *k8sAppsV1.Deployment{
+func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) *k8sAppsV1.Deployment{
 	if gtp == nil || gtp.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
@@ -130,10 +130,10 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []*k8sAppsV1
 
 	//If one is found, return it.
 	if len(deployments) == 1 {
-		return deployments[0]
+		return &deployments[0]
 	}
 
-	var envMatchedDeployments []*k8sAppsV1.Deployment
+	var envMatchedDeployments []k8sAppsV1.Deployment
 
 	for _, deployment := range deployments {
 		if deployment.Labels[Env] == gtp.Labels[Env] {
@@ -143,7 +143,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []*k8sAppsV1
 
 	//if one matches the environment from the gtp, return it
 	if len(envMatchedDeployments) == 1 {
-		return envMatchedDeployments[0]
+		return &envMatchedDeployments[0]
 	}
 
 	//if no deployments match the environment, we follow the same logic as if multiple did.
@@ -158,11 +158,11 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []*k8sAppsV1
 	})
 
 	//return most recently created gtp
-	return envMatchedDeployments[0]
+	return &envMatchedDeployments[0]
 
 }
 
-func MatchGTPsToDeployment(gtpList []*v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy{
+func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy{
 	if deployment == nil || deployment.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
@@ -170,10 +170,10 @@ func MatchGTPsToDeployment(gtpList []*v1.GlobalTrafficPolicy, deployment *k8sApp
 
 	//If one is found, return it.
 	if len(gtpList) == 1 {
-		return gtpList[0]
+		return &gtpList[0]
 	}
 
-	var envMatchedGTPList []*v1.GlobalTrafficPolicy
+	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
 		if gtp.Labels[Env] == deployment.Labels[Env] {
@@ -183,7 +183,7 @@ func MatchGTPsToDeployment(gtpList []*v1.GlobalTrafficPolicy, deployment *k8sApp
 
 	//if one matches the environment from the gtp, return it
 	if len(envMatchedGTPList) == 1 {
-		return envMatchedGTPList[0]
+		return &envMatchedGTPList[0]
 	}
 
 	//if no GTPs match the environment, we follow the same logic as if multiple did.
@@ -198,6 +198,6 @@ func MatchGTPsToDeployment(gtpList []*v1.GlobalTrafficPolicy, deployment *k8sApp
 	})
 
 	//return most recently created gtp
-	return envMatchedGTPList[0]
+	return &envMatchedGTPList[0]
 
 }

@@ -26,6 +26,7 @@ type GlobalTrafficController struct {
 	GlobalTrafficHandler GlobalTrafficHandler
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
+	clusterName string
 }
 
 func (g *GlobalTrafficController) GetGlobalTrafficPolicies() ([]v1.GlobalTrafficPolicy, error) {
