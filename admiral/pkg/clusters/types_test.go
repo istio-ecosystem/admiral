@@ -1,9 +1,11 @@
 package clusters
 
 import (
+	"context"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	v12 "k8s.io/api/apps/v1"
@@ -385,120 +387,89 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	}
 }
 
-//todo figure out why the fake CRD client is unable to list k8s resources
-//func TestDeploymentHandler(t *testing.T) {
-//
-//	p := common.AdmiralParams{
-//		KubeconfigPath: "testdata/fake.config",
-//	}
-//
-//	registry, _ := InitAdmiral(context.Background(), p)
-//
-//	handler := DeploymentHandler{}
-//
-//	gtpCache := &globalTrafficCache{}
-//	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-//	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-//	gtpCache.mutex = &sync.Mutex{}
-//
-//	fakeCrdClient := admiralFake.NewSimpleClientset()
-//
-//	//setting up fake resources
-//	e2eGtp := v1.GlobalTrafficPolicy{}
-//	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
-//	e2eGtp.Namespace = "namespace"
-//	e2eGtp.Name = "myGTP1"
-//
-//	e2eGtpExtraLabel := v1.GlobalTrafficPolicy{}
-//	e2eGtpExtraLabel.Labels = map[string]string{"identity": "app1", "env":"e2e", "random": "foobar"}
-//	e2eGtpExtraLabel.Namespace = "namespace"
-//	e2eGtpExtraLabel.Name = "myGTP2"
-//
-//	noMatchGtp := v1.GlobalTrafficPolicy{}
-//	noMatchGtp.Labels = map[string]string{"identity": "app2", "env":"e2e"}
-//	noMatchGtp.Namespace = "namespace"
-//	noMatchGtp.Name = "myGTP3"
-//
-//	prfGtp := v1.GlobalTrafficPolicy{}
-//	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
-//	prfGtp.Namespace = "namespace"
-//	prfGtp.Name = "myGTP4"
-//
-//	_, err := fakeCrdClient.AdmiralV1().GlobalTrafficPolicies("namespace").Create(&e2eGtpExtraLabel)
-//	_, err = fakeCrdClient.AdmiralV1().GlobalTrafficPolicies("namespace").Create(&e2eGtp)
-//	_, err = fakeCrdClient.AdmiralV1().GlobalTrafficPolicies("namespace").Create(&noMatchGtp)
-//	_, err = fakeCrdClient.AdmiralV1().GlobalTrafficPolicies("namespace").Create(&prfGtp)
-//	if err != nil {
-//		log.Fatalf("Failed to set up mock CRD client. Failing test. Error=%v", err)
-//	}
-//
-//	gtpController := &admiral.GlobalTrafficController{CrdClient:fakeCrdClient}
-//	remoteController, _ := createMockRemoteController(func(i interface{}) {
-//
-//	})
-//	remoteController.GlobalTraffic = gtpController
-//
-//	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
-//
-//	registry.AdmiralCache.GlobalTrafficCache = gtpCache
-//	handler.RemoteRegistry = registry
-//
-//	deployment := v12.Deployment{
-//		ObjectMeta: time2.ObjectMeta{
-//			Name:      "test",
-//			Namespace: "namespace",
-//			Labels: map[string]string{"identity": "app1"},
-//		},
-//		Spec: v12.DeploymentSpec{
-//			Selector: &time2.LabelSelector{
-//				MatchLabels: map[string]string{"identity": "bar"},
-//			},
-//			Template: v13.PodTemplateSpec{
-//				ObjectMeta: time2.ObjectMeta{
-//					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
-//				},
-//			},
-//		},
-//	}
-//
-//
-//	//Struct of test case info. Name is required.
-//	testCases := []struct {
-//		name string
-//		addedDeployment *v12.Deployment
-//		expectedDeploymentCacheKey string
-//		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
-//		expectedDeploymentCacheValue *v12.Deployment
-//
-//	}{
-//		{
-//			name: "Should populate cache successfully on matching deployment",
-//			addedDeployment: &deployment,
-//			expectedDeploymentCacheKey: "myGTP1",
-//			expectedIdentityCacheValue: &e2eGtp,
-//			expectedDeploymentCacheValue: &deployment,
-//
-//		},
-//	}
-//
-//	//Run the test for every provided case
-//	for _, c := range testCases {
-//		t.Run(c.name, func(t *testing.T) {
-//			gtpCache = &globalTrafficCache{}
-//			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-//			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-//			gtpCache.mutex = &sync.Mutex{}
-//			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
-//
-//			handler.Added(&deployment)
-//			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.addedDeployment.Spec.Template.Labels["identity"], c.addedDeployment.Spec.Template.Labels["env"]), c.expectedIdentityCacheValue, ignoreUnexported) {
-//				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.addedDeployment.Spec.Template.Labels["identity"], c.addedDeployment.Spec.Template.Labels["env"]), ignoreUnexported))
-//			}
-//			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.expectedDeploymentCacheKey),  c.expectedDeploymentCacheValue, ignoreUnexported) {
-//				t.Fatalf("Deployment Mismatch. Diff: %v", cmp.Diff(c.expectedDeploymentCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.expectedDeploymentCacheKey), ignoreUnexported))
-//			}
-//
-//			handler.Deleted(&deployment)
-//		})
-//	}
-//}
+func TestDeploymentHandler(t *testing.T) {
+
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	registry, _ := InitAdmiral(context.Background(), p)
+
+	handler := DeploymentHandler{}
+
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+	gtpCache.mutex = &sync.Mutex{}
+
+
+
+	fakeCrdClient := admiralFake.NewSimpleClientset()
+
+	gtpController := &admiral.GlobalTrafficController{CrdClient:fakeCrdClient}
+	remoteController, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	remoteController.GlobalTraffic = gtpController
+
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+
+	registry.AdmiralCache.GlobalTrafficCache = gtpCache
+	handler.RemoteRegistry = registry
+
+	deployment := v12.Deployment{
+		ObjectMeta: time2.ObjectMeta{
+			Name:      "test",
+			Namespace: "namespace",
+			Labels: map[string]string{"identity": "app1"},
+		},
+		Spec: v12.DeploymentSpec{
+			Selector: &time2.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: v13.PodTemplateSpec{
+				ObjectMeta: time2.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		addedDeployment *v12.Deployment
+		expectedDeploymentCacheKey string
+		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
+		expectedDeploymentCacheValue *v12.Deployment
+
+	}{
+		{
+			name: "Shouldn't throw errors when called",
+			addedDeployment: &deployment,
+			expectedDeploymentCacheKey: "myGTP1",
+			expectedIdentityCacheValue: nil,
+			expectedDeploymentCacheValue: nil,
+
+		},
+	}
+
+	//Rather annoying, but wasn't able to get the autogenerated fake k8s client for GTP objects to allow me to list resources, so this test is only for not throwing errors. I'll be testing the rest of the fucntionality picemeal.
+	//Side note, if anyone knows how to fix `level=error msg="Failed to list deployments in cluster, error: no kind \"GlobalTrafficPolicyList\" is registered for version \"admiral.io/v1\" in scheme \"pkg/runtime/scheme.go:101\""`, I'd love to hear it!
+	//Already tried working through this: https://github.com/camilamacedo86/operator-sdk/blob/e40d7db97f0d132333b1e46ddf7b7f3cab1e379f/doc/user/unit-testing.md with no luck
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			gtpCache = &globalTrafficCache{}
+			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+			gtpCache.mutex = &sync.Mutex{}
+			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
+
+			handler.Added(&deployment)
+			handler.Deleted(&deployment)
+		})
+	}
+}
