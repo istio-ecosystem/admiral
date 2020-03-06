@@ -128,6 +128,10 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		return nil
 	}
 
+	if len(deployments) == 0 {
+		return nil
+	}
+
 	//If one is found, return it.
 	if len(deployments) == 1 {
 		return &deployments[0]
@@ -136,7 +140,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	var envMatchedDeployments []k8sAppsV1.Deployment
 
 	for _, deployment := range deployments {
-		if deployment.Labels[Env] == gtp.Labels[Env] {
+		if deployment.Spec.Template.Labels[Env] == gtp.Labels[Env] {
 			envMatchedDeployments = append(envMatchedDeployments, deployment)
 		}
 	}
@@ -154,7 +158,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	sort.Slice(envMatchedDeployments, func(i, j int) bool {
 		iTime := envMatchedDeployments[i].CreationTimestamp.Nanosecond()
 		jTime := envMatchedDeployments[j].CreationTimestamp.Nanosecond()
-		return iTime>jTime
+		return iTime<jTime
 	})
 
 	//return most recently created gtp
@@ -173,10 +177,14 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		return &gtpList[0]
 	}
 
+	if len(gtpList) == 0 {
+		return nil
+	}
+
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		if gtp.Labels[Env] == deployment.Labels[Env] {
+		if gtp.Labels[Env] == deployment.Spec.Template.Labels[Env] {
 			envMatchedGTPList = append(envMatchedGTPList, gtp)
 		}
 	}
@@ -194,7 +202,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	sort.Slice(envMatchedGTPList, func(i, j int) bool {
 		iTime := envMatchedGTPList[i].CreationTimestamp.Nanosecond()
 		jTime := envMatchedGTPList[j].CreationTimestamp.Nanosecond()
-		return iTime>jTime
+		return iTime<jTime
 	})
 
 	//return most recently created gtp

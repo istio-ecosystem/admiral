@@ -102,12 +102,19 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
-	if deployment.Labels != nil {
+	if deployment != nil && deployment.Labels != nil {
 		//we have a valid deployment
-		env := deployment.Labels[common.Env]
+		env := deployment.Spec.Template.Labels[common.Env]
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
+	} else if g.dependencyCache[gtp.Name] != nil{
+		//The old GTP matched a deployment, the new one doesn't. So we need to clear that cache.
+		oldDeployment := g.dependencyCache[gtp.Name]
+		env := oldDeployment.Spec.Template.Labels[common.Env]
+		identity := oldDeployment.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		delete(g.identityCache, key)
 	}
 
 	g.dependencyCache[gtp.Name] = deployment
@@ -124,9 +131,9 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 
 	deployment := g.dependencyCache[gtp.Name]
 
-	if deployment.Labels != nil {
+	if deployment != nil && deployment.Labels != nil {
 		//we have a valid deployment
-		env := deployment.Labels[common.Env]
+		env := deployment.Spec.Template.Labels[common.Env]
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)
@@ -180,7 +187,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 
 	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
-		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		}
 
 	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
@@ -200,7 +207,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 
 	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
-		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
 	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
@@ -230,7 +237,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 	var matchedGTPs []v1.GlobalTrafficPolicy
 	for _, remoteCluster := range pc.RemoteRegistry.remoteControllers {
-		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(common.GetGlobalTrafficDeploymentLabel(), obj.Namespace)...)
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
 	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
@@ -248,6 +255,8 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+	//todo remove from gtp cache
+
 
 	//TODO update subset service entries
 }

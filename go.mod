@@ -12,7 +12,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/groupcache v0.0.0-20191002201903-404acd9df4cc // indirect
 	github.com/golang/protobuf v1.3.2
-	github.com/google/go-cmp v0.3.1
+	github.com/google/go-cmp v0.4.0
 	github.com/gorilla/mux v1.7.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190212212710-3befbb6ad0cc // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
