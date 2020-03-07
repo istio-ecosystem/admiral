@@ -473,3 +473,93 @@ func TestDeploymentHandler(t *testing.T) {
 		})
 	}
 }
+
+
+func TestGlobalTrafficCache(t *testing.T) {
+	deployment := v12.Deployment{}
+	deployment.Namespace = "namespace"
+	deployment.Name = "fake-app-deployment-qal"
+	deployment.Spec = v12.DeploymentSpec{
+		Template: v13.PodTemplateSpec{
+			ObjectMeta: time2.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+			},
+		},
+	}
+	deployment.Labels = map[string]string{"identity": "app1"}
+
+	e2eGtp := v1.GlobalTrafficPolicy{}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Namespace = "namespace"
+	e2eGtp.Name = "myGTP"
+
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+	gtpCache.mutex = &sync.Mutex{}
+
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		gtp *v1.GlobalTrafficPolicy
+		deployment *v12.Deployment
+		identity string
+		environment string
+		gtpName string
+	}{
+		{
+			name: "Base case",
+			gtp: &e2eGtp,
+			deployment: &deployment,
+			identity: "app1",
+			environment: "e2e",
+			gtpName: "myGTP",
+		},
+		{
+			name: "No Deployment",
+			gtp: &e2eGtp,
+			deployment: nil,
+			identity: "app1",
+			environment: "e2e",
+			gtpName: "myGTP",
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+
+			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+			gtpCache.mutex = &sync.Mutex{}
+			err := gtpCache.Put(c.gtp, c.deployment)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			foundGtp := gtpCache.GetFromIdentity(c.identity, c.environment)
+			if c.deployment != nil && !cmp.Equal(foundGtp, c.gtp, ignoreUnexported) {
+				t.Fatalf("GTP Mismatch: %v", cmp.Diff(foundGtp, c.gtp, ignoreUnexported))
+			}
+
+			//no deployment means there should be nothing in the identity cache
+			if c.deployment == nil && foundGtp != nil {
+				t.Fatalf("GTP Mismatch: %v", cmp.Diff(foundGtp, nil, ignoreUnexported))
+			}
+
+			foundDeployment := gtpCache.GetDeployment(c.gtpName)
+			if !cmp.Equal(foundDeployment, c.deployment, ignoreUnexported) {
+				t.Fatalf("Deployment Mismatch: %v", cmp.Diff(foundDeployment, c.deployment, ignoreUnexported))
+			}
+
+			gtpCache.Delete(c.gtp)
+			if len(gtpCache.dependencyCache) != 0 {
+				t.Fatalf("Dependency cache not cleared properly on delete")
+			}
+			if len(gtpCache.identityCache) != 0 {
+				t.Fatalf("Identity cache not cleared properly on delete")
+			}
+		})
+	}
+
+}
