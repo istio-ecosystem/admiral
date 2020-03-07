@@ -30,6 +30,7 @@ func init() {
 	}
 
 	p.LabelSet.WorkloadIdentityKey="identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
 
 	InitializeConfig(p)
 }
