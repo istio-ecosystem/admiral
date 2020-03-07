@@ -87,8 +87,12 @@ func (g *GlobalTrafficController) GetGTPByLabel(labelValue string, namespace str
 	matchedDeployments, err := g.CrdClient.AdmiralV1().GlobalTrafficPolicies(namespace).List(labelOptions)
 
 	if err != nil {
-		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
+		logrus.Errorf("Failed to list GTPs in cluster, error: %v", err)
 		return nil
+	}
+
+	if matchedDeployments.Items == nil {
+		return []v1.GlobalTrafficPolicy{}
 	}
 
 	return matchedDeployments.Items

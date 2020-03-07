@@ -192,5 +192,9 @@ func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace
 		return nil
 	}
 
+	if matchedDeployments.Items == nil {
+		return []k8sAppsV1.Deployment{}
+	}
+
 	return matchedDeployments.Items
 	}

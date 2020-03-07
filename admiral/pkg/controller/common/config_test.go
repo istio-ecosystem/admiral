@@ -35,6 +35,7 @@ func TestConfigManagement(t *testing.T) {
 	}
 
 	p.LabelSet.WorkloadIdentityKey="BAD_LABEL"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "ANOTHER_BAD_LABEL"
 
 	InitializeConfig(p)
 
@@ -67,6 +68,9 @@ func TestConfigManagement(t *testing.T) {
 	}
 	if GetSecretResolver() != "" {
 		t.Errorf("Secret resolver mismatch, expected empty string, got %v", GetSecretResolver())
+	}
+	if GetGlobalTrafficDeploymentLabel() != "identity" {
+		t.Fatalf("GTP Deployment label mismatch. Expected identity, got %v", GetGlobalTrafficDeploymentLabel())
 	}
 
 }
