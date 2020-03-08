@@ -16,13 +16,19 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 
 Organizations below are **officially** using Admiral. Please send a PR with your organization name if you are using Admiral.
 
-1. [Intuit](https://www.intuit.com/)
+* [Intuit](https://www.intuit.com/)
 
-## Community Blogs and Presentations
+## Blogs and Presentations
 
-1. [Stitching a Service Mesh Across Hundreds of Discrete Networks](https://www.youtube.com/watch?v=EWyNbBn1vns)
+* [Multicluster Istio configuration and service discovery using Admiral](https://istio.io/blog/2020/multi-cluster-mesh-automation/)
 
-2. [Multicluster Istio configuration and service discovery using Admiral](https://istio.io/blog/2020/multi-cluster-mesh-automation/)
+* [Stitching a Service Mesh Across Hundreds of Discrete Networks](https://www.youtube.com/watch?v=EWyNbBn1vns)
+
+* [Scaling Service Mesh to an Enterprise Microservices Ecosystem](https://apiworld2019aidevworld2019.sched.com/event/SLIQ/pro-talk-scaling-service-mesh-to-an-enterprise-microservices-ecosystem)
+
+* [Admiral – Enabling Multi-Cluster Mesh](https://www.meetup.com/San-Diego-Cloud-Native-Computing-Meetup/events/262826967/)
+
+
 
 ## Collaboration and Communication
 
