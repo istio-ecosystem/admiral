@@ -125,8 +125,11 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		deploymentInstance := deployment.Deployments[env]
 
 		serviceInstance := getServiceForDeployment(rc, deploymentInstance[0])
+		if serviceInstance == nil {
+			continue
+		}
 
-		cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), cname)
+		cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
@@ -257,7 +260,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//Add a label
 			var identityId string
-			if identityId, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+			if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+				identityId = fmt.Sprint(identityValue)
 				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
