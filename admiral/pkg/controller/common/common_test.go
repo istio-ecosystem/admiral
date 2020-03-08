@@ -6,7 +6,30 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
-	)
+	"time"
+)
+
+func init() {
+	p := AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &LabelSet{},
+		EnableSAN: true,
+		SANPrefix: "prefix",
+		HostnameSuffix: "mesh",
+		SyncNamespace: "ns",
+		CacheRefreshDuration: time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace: "default",
+		SecretResolver: "",
+
+	}
+
+	p.LabelSet.WorkloadIdentityKey="identity"
+
+	InitializeConfig(p)
+}
+
+
 
 func TestGetSAN(t *testing.T) {
 	t.Parallel()
