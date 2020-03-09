@@ -384,6 +384,13 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 			expectedDeployment: nil,
 
 		},
+		{
+			name: "Should return nil when the GTP is invalid",
+			gtp: &v12.GlobalTrafficPolicy{},
+			deployments: &[]k8sAppsV1.Deployment{deployment},
+			expectedDeployment: nil,
+
+		},
 	}
 
 	//Run the test for every provided case
@@ -487,6 +494,13 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 			name: "Should return nil when there's no match",
 			gtp: &[]v12.GlobalTrafficPolicy{},
 			deployment: &deployment,
+			expectedGTP: nil,
+
+		},
+		{
+			name: "Should return nil the deployment is invalid",
+			gtp: &[]v12.GlobalTrafficPolicy{},
+			deployment: &k8sAppsV1.Deployment{},
 			expectedGTP: nil,
 
 		},
