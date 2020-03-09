@@ -105,6 +105,10 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	if deployment != nil && deployment.Labels != nil {
 		//we have a valid deployment
 		env := deployment.Spec.Template.Labels[common.Env]
+		if env == "" {
+			//No environment label, use default value
+			env = common.Default
+		}
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
@@ -134,6 +138,10 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	if deployment != nil && deployment.Labels != nil {
 		//we have a valid deployment
 		env := deployment.Spec.Template.Labels[common.Env]
+		if env == "" {
+			//No environment label, use default value
+			env = common.Default
+		}
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)

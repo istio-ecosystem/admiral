@@ -488,6 +488,18 @@ func TestGlobalTrafficCache(t *testing.T) {
 	}
 	deployment.Labels = map[string]string{"identity": "app1"}
 
+	deploymentNoEnv := v12.Deployment{}
+	deploymentNoEnv.Namespace = "namespace"
+	deploymentNoEnv.Name = "fake-app-deployment-qal"
+	deploymentNoEnv.Spec = v12.DeploymentSpec{
+		Template: v13.PodTemplateSpec{
+			ObjectMeta: time2.ObjectMeta{
+				Labels: map[string]string{"identity": "app1"},
+			},
+		},
+	}
+	deploymentNoEnv.Labels = map[string]string{"identity": "app1"}
+
 	e2eGtp := v1.GlobalTrafficPolicy{}
 	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
 	e2eGtp.Namespace = "namespace"
@@ -522,6 +534,14 @@ func TestGlobalTrafficCache(t *testing.T) {
 			deployment: nil,
 			identity: "app1",
 			environment: "e2e",
+			gtpName: "myGTP",
+		},
+		{
+			name: "Handles lack of environment label properly",
+			gtp: &e2eGtp,
+			deployment: &deploymentNoEnv,
+			identity: "app1",
+			environment: "default",
 			gtpName: "myGTP",
 		},
 	}
