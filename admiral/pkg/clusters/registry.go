@@ -3,7 +3,9 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	v12 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/rest"
 	"sync"
 	"time"
@@ -12,7 +14,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
-
 )
 
 const (
@@ -42,6 +43,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	w.remoteControllers = make(map[string]*RemoteController)
 
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+	gtpCache.mutex = &sync.Mutex{}
+
 	w.AdmiralCache = &AdmiralCache{
 		IdentityClusterCache:            common.NewMapOfMaps(),
 		CnameClusterCache:               common.NewMapOfMaps(),
@@ -50,7 +56,9 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		IdentityDependencyCache:         common.NewMapOfMaps(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}}}
+		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
+		GlobalTrafficCache: 			 gtpCache,
+	}
 
 	configMapController, err := admiral.NewConfigMapController()
 	if err != nil {
@@ -102,6 +110,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	var err error
 
 	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
+
 	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
 	if err != nil {

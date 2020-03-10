@@ -34,6 +34,7 @@ func init() {
 	}
 
 	p.LabelSet.WorkloadIdentityKey="identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
 
 	common.InitializeConfig(p)
 }
@@ -297,45 +298,6 @@ func TestMakeVirtualService(t *testing.T) {
 	if vs.Http[0].Route[0].Destination.Host != "dest" {
 		t.Fail()
 	}
-}
-
-func TestDeploymentHandler(t *testing.T) {
-
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-
-	})
-	rr.remoteControllers["test.cluster"] = rc
-
-	dh := DeploymentHandler{
-		RemoteRegistry: rr,
-	}
-
-	deployment := k8sAppsV1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "test",
-		},
-		Spec: k8sAppsV1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"identity": "bar"},
-			},
-			Template: k8sCoreV1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
-				},
-			},
-		},
-	}
-
-	dh.Added(&deployment)
-
-	dh.Deleted(&deployment)
 }
 
 func TestPodHandler(t *testing.T) {

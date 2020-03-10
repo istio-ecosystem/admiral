@@ -72,6 +72,10 @@ func GetWorkloadIdentifier() string {
 	return admiralParams.LabelSet.WorkloadIdentityKey
 }
 
+func GetGlobalTrafficDeploymentLabel() string {
+	return admiralParams.LabelSet.GlobalTrafficDeploymentLabel
+}
+
 ///Setters - be careful
 
 func SetKubeconfigPath(path string) {
