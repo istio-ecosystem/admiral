@@ -347,7 +347,7 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 		name string
 		gtp *v12.GlobalTrafficPolicy
 		deployments *[]k8sAppsV1.Deployment
-		expectedDeployments *[]k8sAppsV1.Deployment
+		expectedDeployments []k8sAppsV1.Deployment
 	}{
 		{
 			name: "Should return nil when none have a matching environment",
@@ -360,14 +360,14 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 			name: "Should return Match when there's one match",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment2},
-			expectedDeployments: &[]k8sAppsV1.Deployment{deployment2},
+			expectedDeployments: []k8sAppsV1.Deployment{deployment2},
 
 		},
 		{
 			name: "Should return Match when there's one match from a bigger list",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
-			expectedDeployments: &[]k8sAppsV1.Deployment{deployment2},
+			expectedDeployments: []k8sAppsV1.Deployment{deployment2},
 
 		},
 		{
@@ -388,7 +388,7 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 			name: "Returns multiple matches",
 			gtp: &prfGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
-			expectedDeployments: &[]k8sAppsV1.Deployment{deployment3, deployment4},
+			expectedDeployments: []k8sAppsV1.Deployment{deployment3, deployment4},
 
 		},
 

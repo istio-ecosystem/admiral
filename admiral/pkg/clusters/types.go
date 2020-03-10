@@ -228,9 +228,15 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 		for _, deployment := range deployments {
 			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, &deployment)
 			if err != nil {
-				log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
+				log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
 				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
 			}
+		}
+	} else {
+		err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, nil)
+		if err != nil {
+			log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
+			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
 		}
 	}
 }
