@@ -122,59 +122,75 @@ func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) 
 	return value
 }
 
-func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) *k8sAppsV1.Deployment{
+//Returns the list of deployments to which this GTP should apply. It is assumed that all inputs already are an identity match
+//If the GTP has an identity label, it should match all deployments which share that label
+//IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
+func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) *[]k8sAppsV1.Deployment{
 	if gtp == nil || gtp.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
+	}
+
+	gtpEnv := gtp.Labels[Env]
+	if gtpEnv == "" {
+		gtpEnv = Default
 	}
 
 	if len(deployments) == 0 {
 		return nil
 	}
 
-	//If one is found, return it.
-	if len(deployments) == 1 {
-		return &deployments[0]
-	}
-
 	var envMatchedDeployments []k8sAppsV1.Deployment
 
 	for _, deployment := range deployments {
-		if deployment.Spec.Template.Labels[Env] == gtp.Labels[Env] {
+		deploymentEnvironment:= deployment.Spec.Template.Labels[Env]
+		if deploymentEnvironment == "" {
+			//No environment label, use default value
+			deploymentEnvironment = Default
+		}
+		if deploymentEnvironment == gtpEnv {
 			envMatchedDeployments = append(envMatchedDeployments, deployment)
 		}
 	}
 
-	//if one matches the environment from the gtp, return it
-	if len(envMatchedDeployments) == 1 {
-		return &envMatchedDeployments[0]
-	}
 
-	//if no deployments match the environment, we follow the same logic as if multiple did.
 	if len(envMatchedDeployments) == 0 {
-		envMatchedDeployments = deployments
+		return nil
 	}
 
-	sort.Slice(envMatchedDeployments, func(i, j int) bool {
-		iTime := envMatchedDeployments[i].CreationTimestamp.Nanosecond()
-		jTime := envMatchedDeployments[j].CreationTimestamp.Nanosecond()
-		return iTime<jTime
-	})
-
-	//return most recently created gtp
-	return &envMatchedDeployments[0]
-
+	return &envMatchedDeployments
 }
 
+
+//Find the GTP that best matches the deployment.
+//It's assumed that the set of GTPs passed in has already been matched. Now it's our job to choose the best one.
+//In order:
+// - If one and only one GTP matches the env label of the deployment - use that one
+// - If multiple GTPs match the deployment label, use the oldest one (Using an old one has less chance of new behavior which could impact workflows)
+// - Use "default" as the default env label for all GTPs and deployments.
+//IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
 func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy{
 	if deployment == nil || deployment.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
 	}
+	deploymentEnvironment:= deployment.Spec.Template.Labels[Env]
+	if deploymentEnvironment == "" {
+		//No environment label, use default value
+		deploymentEnvironment = Default
+	}
 
-	//If one is found, return it.
+	//If one and only one GTP matches the env label of the deployment - use that one
 	if len(gtpList) == 1 {
-		return &gtpList[0]
+		gtpEnv := gtpList[0].Labels[Env]
+		if gtpEnv == "" {
+			gtpEnv = Default
+		}
+		if gtpList[0].Labels[Env] == deploymentEnvironment{
+			return &gtpList[0]
+		} else {
+			return nil
+		}
 	}
 
 	if len(gtpList) == 0 {
@@ -184,7 +200,11 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		if gtp.Labels[Env] == deployment.Spec.Template.Labels[Env] {
+		gtpEnv := gtp.Labels[Env]
+		if gtpEnv == "" {
+			gtpEnv = Default
+		}
+		if gtpEnv == deploymentEnvironment {
 			envMatchedGTPList = append(envMatchedGTPList, gtp)
 		}
 	}
@@ -194,9 +214,9 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		return &envMatchedGTPList[0]
 	}
 
-	//if no GTPs match the environment, we follow the same logic as if multiple did.
+	//We want to make sure we aren't returning a situation where GTP is e2e and deployment is prod
 	if len(envMatchedGTPList) == 0 {
-		envMatchedGTPList = gtpList
+		return nil
 	}
 
 	sort.Slice(envMatchedGTPList, func(i, j int) bool {
@@ -205,7 +225,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		return iTime<jTime
 	})
 
-	//return most recently created gtp
+	//return oldest gtp
 	return &envMatchedGTPList[0]
 
 }

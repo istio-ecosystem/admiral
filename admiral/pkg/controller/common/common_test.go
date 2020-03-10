@@ -347,58 +347,59 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 		name string
 		gtp *v12.GlobalTrafficPolicy
 		deployments *[]k8sAppsV1.Deployment
-		expectedDeployment *k8sAppsV1.Deployment
+		expectedDeployments *[]k8sAppsV1.Deployment
 	}{
 		{
-			name: "Should return oldest deployment when none have a matching env",
+			name: "Should return nil when none have a matching environment",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment, deployment3, deployment4},
-			expectedDeployment: &deployment4,
+			expectedDeployments: nil,
 
 		},
 		{
 			name: "Should return Match when there's one match",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment2},
-			expectedDeployment: &deployment2,
+			expectedDeployments: &[]k8sAppsV1.Deployment{deployment2},
 
 		},
 		{
 			name: "Should return Match when there's one match from a bigger list",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
-			expectedDeployment: &deployment2,
-
-		},
-		{
-			name: "Should handle multiple matches properly",
-			gtp: &prfGtp,
-			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
-			expectedDeployment: &deployment4,
+			expectedDeployments: &[]k8sAppsV1.Deployment{deployment2},
 
 		},
 		{
 			name: "Should return nil when there's no match",
 			gtp: &e2eGtp,
 			deployments: &[]k8sAppsV1.Deployment{},
-			expectedDeployment: nil,
+			expectedDeployments: nil,
 
 		},
 		{
 			name: "Should return nil when the GTP is invalid",
 			gtp: &v12.GlobalTrafficPolicy{},
 			deployments: &[]k8sAppsV1.Deployment{deployment},
-			expectedDeployment: nil,
+			expectedDeployments: nil,
 
 		},
+		{
+			name: "Returns multiple matches",
+			gtp: &prfGtp,
+			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
+			expectedDeployments: &[]k8sAppsV1.Deployment{deployment3, deployment4},
+
+		},
+
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			returned := MatchDeploymentsToGTP(c.gtp, *c.deployments)
-			if !cmp.Equal(returned, c.expectedDeployment) {
-				t.Fatalf("Deployment mismatch. Diff: %v", cmp.Diff(returned, c.expectedDeployment))
+			if !cmp.Equal(returned, c.expectedDeployments) {
+				t.Fatalf("Deployment mismatch. Diff: %v", cmp.Diff(returned, c.expectedDeployments))
 			}
 		})
 	}
@@ -432,6 +433,19 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 	}
 	otherEnvDeployment.Labels = map[string]string{"identity": "app1"}
 
+	noEnvDeployment := k8sAppsV1.Deployment{}
+	noEnvDeployment.Namespace = "namespace"
+	noEnvDeployment.Name = "fake-app-deployment-qal"
+	noEnvDeployment.CreationTimestamp = v1.Now()
+	noEnvDeployment.Spec = k8sAppsV1.DeploymentSpec{
+		Template: k8sCoreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1"},
+			},
+		},
+	}
+	noEnvDeployment.Labels = map[string]string{"identity": "app1"}
+
 	e2eGtp := v12.GlobalTrafficPolicy{}
 	e2eGtp.CreationTimestamp = v1.Now()
 	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
@@ -456,6 +470,19 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 	qalGtpOld.Namespace = "namespace"
 	qalGtpOld.Name = "myGTP"
 
+	noEnvGTP := v12.GlobalTrafficPolicy{}
+	noEnvGTP.CreationTimestamp = v1.Now()
+	noEnvGTP.Labels = map[string]string{"identity": "app1"}
+	noEnvGTP.Namespace = "namespace"
+	noEnvGTP.Name = "myGTP"
+
+	noEnvGTPOld := v12.GlobalTrafficPolicy{}
+	noEnvGTPOld.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
+	noEnvGTPOld.Labels = map[string]string{"identity": "app1"}
+	noEnvGTPOld.Namespace = "namespace"
+	noEnvGTPOld.Name = "myGTP"
+
+
 	testCases := []struct {
 		name string
 		gtp *[]v12.GlobalTrafficPolicy
@@ -463,10 +490,24 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 		expectedGTP *v12.GlobalTrafficPolicy
 	}{
 		{
-			name: "Should return oldest deployment when none have a matching env",
+			name: "Should return no deployment when none have a matching env",
 			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld},
 			deployment: &otherEnvDeployment,
-			expectedGTP: &qalGtpOld,
+			expectedGTP: nil,
+
+		},
+		{
+			name: "Should return no deployment when the GTP doesn't have an environment",
+			gtp: &[]v12.GlobalTrafficPolicy{noEnvGTP, noEnvGTPOld},
+			deployment: &otherEnvDeployment,
+			expectedGTP: nil,
+
+		},
+		{
+			name: "Should match a GTP and deployment when both have no env label",
+			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld, noEnvGTP, noEnvGTPOld},
+			deployment: &noEnvDeployment,
+			expectedGTP: &noEnvGTPOld,
 
 		},
 		{
