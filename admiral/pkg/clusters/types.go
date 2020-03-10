@@ -198,12 +198,16 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		}
 
-	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	deployments := *common.MatchDeploymentsToGTP(obj, matchedDeployments)
 
-	err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, deployment)
-	if err != nil {
-		log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
-		log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+	if len(deployments) != 0 {
+		for _, deployment := range deployments {
+			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, &deployment)
+			if err != nil {
+				log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
+				log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			}
+		}
 	}
 
 }
@@ -218,12 +222,16 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
-	deployment := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	deployments := *common.MatchDeploymentsToGTP(obj, matchedDeployments)
 
-	err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, deployment)
-	if err != nil {
-		log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
-		log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+	if len(deployments) != 0 {
+		for _, deployment := range deployments {
+			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, &deployment)
+			if err != nil {
+				log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
+				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			}
+		}
 	}
 }
 
