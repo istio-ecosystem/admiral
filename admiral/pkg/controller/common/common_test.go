@@ -504,6 +504,13 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 
 		},
 		{
+			name: "Should return no deployment when no deployments have an environment",
+			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp},
+			deployment: &noEnvDeployment,
+			expectedGTP: nil,
+
+		},
+		{
 			name: "Should match a GTP and deployment when both have no env label",
 			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld, noEnvGTP, noEnvGTPOld},
 			deployment: &noEnvDeployment,
