@@ -17,16 +17,16 @@ import (
 )
 
 type RemoteController struct {
-	ClusterID            string
-	GlobalTraffic        *admiral.GlobalTrafficController
-	DeploymentController *admiral.DeploymentController
-	ServiceController    *admiral.ServiceController
-	PodController        *admiral.PodController
-	NodeController       *admiral.NodeController
-	ServiceEntryController *istio.ServiceEntryController
-	DestinationRuleController * istio.DestinationRuleController
-	VirtualServiceController * istio.VirtualServiceController
-	stop                 chan struct{}
+	ClusterID                 string
+	GlobalTraffic             *admiral.GlobalTrafficController
+	DeploymentController      *admiral.DeploymentController
+	ServiceController         *admiral.ServiceController
+	PodController             *admiral.PodController
+	NodeController            *admiral.NodeController
+	ServiceEntryController    *istio.ServiceEntryController
+	DestinationRuleController *istio.DestinationRuleController
+	VirtualServiceController  *istio.VirtualServiceController
+	stop                      chan struct{}
 	//listener for normal types
 }
 
@@ -38,9 +38,9 @@ type AdmiralCache struct {
 	ClusterLocalityCache            *common.MapOfMaps
 	IdentityDependencyCache         *common.MapOfMaps
 	SubsetServiceEntryIdentityCache *sync.Map
-	ServiceEntryAddressStore	 	*ServiceEntryAddressStore
-	ConfigMapController		     	admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
-	GlobalTrafficCache    			*globalTrafficCache //The cache needs to live in the handler because it needs access to deployments
+	ServiceEntryAddressStore        *ServiceEntryAddressStore
+	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
+	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 }
 
 type RemoteRegistry struct {
@@ -64,8 +64,8 @@ func (r *RemoteRegistry) shutdown() {
 }
 
 type ServiceEntryAddressStore struct {
-	EntryAddresses	map[string]string `yaml:"entry-addresses,omitempty"`
-	Addresses		[]string   `yaml:"addresses,omitempty"` //trading space for efficiency - this will give a quick way to validate that the address is unique
+	EntryAddresses map[string]string `yaml:"entry-addresses,omitempty"`
+	Addresses      []string          `yaml:"addresses,omitempty"` //trading space for efficiency - this will give a quick way to validate that the address is unique
 }
 
 type DependencyHandler struct {
@@ -112,7 +112,7 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
-	} else if g.dependencyCache[gtp.Name] != nil{
+	} else if g.dependencyCache[gtp.Name] != nil {
 		//The old GTP matched a deployment, the new one doesn't. So we need to clear that cache.
 		oldDeployment := g.dependencyCache[gtp.Name]
 		env := oldDeployment.Spec.Template.Labels[common.Env]
@@ -150,7 +150,6 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	delete(g.dependencyCache, gtp.Name)
 }
 
-
 type DeploymentHandler struct {
 	RemoteRegistry *RemoteRegistry
 }
@@ -183,7 +182,6 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 }
 
-
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
@@ -196,7 +194,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
-		}
+	}
 
 	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
 
@@ -208,6 +206,8 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 				log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
 			}
 		}
+	} else {
+		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
 	}
 
 }
@@ -237,6 +237,8 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 		if err != nil {
 			log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
 			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+		} else {
+			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
 		}
 	}
 }
@@ -268,6 +270,8 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 		err := pc.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
 		if err != nil {
 			log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
+		} else {
+			log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
 		}
 	}
 
@@ -277,8 +281,8 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Skipped, not implemented")
 	//todo remove from gtp cache
-
 
 	//TODO update subset service entries
 }
