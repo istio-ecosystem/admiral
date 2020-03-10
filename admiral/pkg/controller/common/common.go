@@ -125,7 +125,7 @@ func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) 
 //Returns the list of deployments to which this GTP should apply. It is assumed that all inputs already are an identity match
 //If the GTP has an identity label, it should match all deployments which share that label
 //IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
-func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) *[]k8sAppsV1.Deployment{
+func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) []k8sAppsV1.Deployment{
 	if gtp == nil || gtp.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
@@ -136,7 +136,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		gtpEnv = Default
 	}
 
-	if len(deployments) == 0 {
+	if deployments == nil || len(deployments) == 0 {
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		return nil
 	}
 
-	return &envMatchedDeployments
+	return envMatchedDeployments
 }
 
 

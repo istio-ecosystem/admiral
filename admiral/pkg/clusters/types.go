@@ -198,7 +198,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		}
 
-	deployments := *common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
@@ -222,7 +222,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
-	deployments := *common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
