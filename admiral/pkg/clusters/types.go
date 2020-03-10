@@ -114,7 +114,7 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
 	} else if g.dependencyCache[gtp.Name] != nil {
-		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", deployment.Name, gtp.Name,gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name,gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
 		//The old GTP matched a deployment, the new one doesn't. So we need to clear that cache.
 		oldDeployment := g.dependencyCache[gtp.Name]
 		env := oldDeployment.Spec.Template.Labels[common.Env]
