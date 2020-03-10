@@ -116,11 +116,6 @@ func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-//TODO use selector on pod, instead of hardcoded identityId
-func getMatchingGlobalTrafficPolicy(rc *RemoteController, identityId string) *v1.GlobalTrafficPolicy {
-	return rc.GlobalTraffic.Cache.Get(identityId)
-}
-
 func makeVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
 	return &v1alpha32.VirtualService{Hosts: []string{host},
 		Gateways: []string{common.MulticlusterIngressGateway},
