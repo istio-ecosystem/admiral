@@ -102,6 +102,7 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
+	log.Infof("Adding Deployment with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", deployment.Name, gtp.Name,gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
 	if deployment != nil && deployment.Labels != nil {
 		//we have a valid deployment
 		env := deployment.Spec.Template.Labels[common.Env]
@@ -132,10 +133,12 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
+	log.Infof("Deleting gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name,gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
 
 	deployment := g.dependencyCache[gtp.Name]
 
 	if deployment != nil && deployment.Labels != nil {
+		
 		//we have a valid deployment
 		env := deployment.Spec.Template.Labels[common.Env]
 		if env == "" {
