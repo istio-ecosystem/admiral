@@ -230,6 +230,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		return iTime<jTime
 	})
 
+	log.Warnf("Multiple GTPs found that match the deployment with name=%v in namespace %v. Using the oldest one, you may want to clean up your configs to prevent this in the future", deployment.Name, deployment.Namespace)
 	//return oldest gtp
 	log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, envMatchedGTPList[0].Name, deployment.Namespace, deploymentEnvironment)
 	return &envMatchedGTPList[0]
