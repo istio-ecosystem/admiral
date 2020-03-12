@@ -10,6 +10,7 @@ Also refer to [Collaboration](./README.md#Collaboration and Communication) for c
 * Clone the repo and set ADMIRAL_HOME env variable
 ```bash
 git clone https://github.com/istio-ecosystem/admiral.git
+cd admiral
 export ADMIRAL_HOME=$(pwd)
 ```
 * Run a k8s cluster using [minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) (you can use any k8s cluster if one exists already)
@@ -24,7 +25,7 @@ $ADMIRAL_HOME/install/scripts/dev_setup.sh
 ```
 * Run `admiral` from your IDE (assumes that the kubeconfig is for the cluster is at `~/.kube/config`)
 ```
-/admiral/cmd/admiral/main.go --kube_config "<Path_to_Kubeconfig>"
+$ADMIRAL_HOME/admiral/cmd/admiral/main.go --kube_config "<Path_to_Kubeconfig>"
 ```
 
 * `Optional`: Adding a second cluster for admiral to monitor (for multi-cluster)
