@@ -2,6 +2,7 @@ package test
 
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 )
@@ -90,5 +91,50 @@ func (m *MockGlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 }
 
 func (m *MockGlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
+
+}
+
+type MockServiceEntryHandler struct {
+}
+
+func (m *MockServiceEntryHandler) Added(obj *v1alpha32.ServiceEntry) {
+
+}
+
+func (m *MockServiceEntryHandler) Updated(obj *v1alpha32.ServiceEntry) {
+
+}
+
+func (m *MockServiceEntryHandler) Deleted(obj *v1alpha32.ServiceEntry) {
+
+}
+
+type MockVirtualServiceHandler struct {
+}
+
+func (m *MockVirtualServiceHandler) Added(obj *v1alpha32.VirtualService) {
+
+}
+
+func (m *MockVirtualServiceHandler) Updated(obj *v1alpha32.VirtualService) {
+
+}
+
+func (m *MockVirtualServiceHandler) Deleted(obj *v1alpha32.VirtualService) {
+
+}
+
+type MockDestinationRuleHandler struct {
+}
+
+func (m *MockDestinationRuleHandler) Added(obj *v1alpha32.DestinationRule) {
+
+}
+
+func (m *MockDestinationRuleHandler) Updated(obj *v1alpha32.DestinationRule) {
+
+}
+
+func (m *MockDestinationRuleHandler) Deleted(obj *v1alpha32.DestinationRule) {
 
 }

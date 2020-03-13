@@ -161,40 +161,77 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 	return dr
 }
 
-func (ic *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
-	//log.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 }
 
-func (ic *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
-	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 }
 
-func (ic *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
-	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
+func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
 }
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
+	if IgnoreIstioResource(obj.Spec.ExportTo) {
+		return
+	}
 	handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+}
+
+func IgnoreIstioResource(exportTo []string) bool {
+	if exportTo == nil || len(exportTo) == 0 {
+		return false
+	} else {
+		for _, namespace := range exportTo {
+			if namespace == "*" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRuleHandler, event common.Event, resourceType common.ResourceType) {
@@ -491,10 +528,6 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	} else {
 		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
 	}
-}
-
-func createVirtualServiceSkeletion(vs v1alpha32.VirtualService, name string, namespace string) *v1alpha3.VirtualService {
-	return &v1alpha3.VirtualService{Spec:vs, ObjectMeta: v12.ObjectMeta{Name:name, Namespace: namespace}}
 }
 
 func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
