@@ -3,6 +3,7 @@ package admiral
 import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
@@ -179,3 +180,21 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 	}
 	return false //labels are fine, we should not ignore
 }
+
+func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace string) []k8sAppsV1.Deployment {
+	matchLabel := common.GetGlobalTrafficDeploymentLabel()
+	labelOptions := meta_v1.ListOptions{}
+	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
+
+	if err != nil {
+		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
+		return nil
+	}
+
+	if matchedDeployments.Items == nil {
+		return []k8sAppsV1.Deployment{}
+	}
+
+	return matchedDeployments.Items
+	}
