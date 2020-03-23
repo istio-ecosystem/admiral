@@ -49,11 +49,11 @@ func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
 type MockPodHandler struct {
 }
 
-func (m MockPodHandler) Added (obj *k8sCoreV1.Pod) {
+func (m MockPodHandler) Added(obj *k8sCoreV1.Pod) {
 
 }
 
-func (m MockPodHandler) Deleted (obj *k8sCoreV1.Pod) {
+func (m MockPodHandler) Deleted(obj *k8sCoreV1.Pod) {
 
 }
 
@@ -136,5 +136,20 @@ func (m *MockDestinationRuleHandler) Updated(obj *v1alpha32.DestinationRule) {
 }
 
 func (m *MockDestinationRuleHandler) Deleted(obj *v1alpha32.DestinationRule) {
+
+}
+
+type MockSidecarHandler struct {
+}
+
+func (m *MockSidecarHandler) Added(obj *v1alpha32.Sidecar) {
+
+}
+
+func (m *MockSidecarHandler) Updated(obj *v1alpha32.Sidecar) {
+
+}
+
+func (m *MockSidecarHandler) Deleted(obj *v1alpha32.Sidecar) {
 
 }

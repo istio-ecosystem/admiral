@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,13 +29,13 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	//Handling retries for getting/putting service entries from/in cache
 
 	//initializations
-	var err error =  nil
+	var err error = nil
 	maxRetries := 3
 	counter := 0
 	address := ""
 	needsCacheUpdate := false
 
-	for err==nil && counter<maxRetries {
+	for err == nil && counter < maxRetries {
 		address, needsCacheUpdate, err = GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
 
 		if err != nil {
@@ -44,7 +45,7 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 
 		//random expo backoff
 		timeToBackoff := rand.Intn(int(math.Pow(100.0, float64(counter)))) //get a random number between 0 and 100^counter. Will always be 0 the first time, will be 0-100 the second, and 0-1000 the third
-		time.Sleep(time.Duration(timeToBackoff)*time.Millisecond)
+		time.Sleep(time.Duration(timeToBackoff) * time.Millisecond)
 
 		counter++
 	}
@@ -189,9 +190,88 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 			//} else {
 			//	log.Errorf(LogErrFormat, "Create", istioModel.VirtualService.Type, virtualServiceName, rc.ClusterID, err)
 			//}
+			if common.GetWorkloadSidecarUpdates() == "enabled" {
+				for _, val := range dependents.Map() {
+					remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+				}
+
+				for _, sidecarEgress := range remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity) {
+					modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, sidecarEgress.Namespace, sidecarEgress.FQDN, rc)
+				}
+			}
 		}
 	}
 	return serviceEntries
+}
+
+func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependencyNamespace string, localFqdn string, rc *RemoteController) {
+
+	//get existing sidecar from the cluster
+	sidecarConfig := rc.SidecarController
+
+	if sidecarConfig == nil {
+		return
+	}
+	// sidecarConfig := rc.IstioConfigStore.Get(istioModel.Sidecar.Type, SidecarName, sidecarNamespace)
+
+	//sidecar := &networking.Sidecar{}
+
+	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(SidecarName, v12.GetOptions{})
+	//if err := proto.Unmarshal(data, sidecar); err != nil {
+	//	log.Errorf("Failed to parse Sidecar in namespace %v, reason: %v", sidecarNamespace, err)
+	//	return
+	//}
+
+	//copy and add our new local FQDN
+	newSidecar := copySidecar(sidecar, rc)
+
+	egressHost := dependencyNamespace + "/" + localFqdn
+
+	if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
+		newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
+	}
+
+	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, SidecarName, sidecarNamespace)
+
+	//insert into cluster
+	if newSidecarConfig != nil {
+		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc)
+	}
+	//else {
+	//	log.Errorf(LogErrFormat, "Create", Sidecar.Type, sidecarNamespace + "-" + SidecarName, rc.ClusterID, err)
+	//}
+
+}
+
+func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
+	var err error
+	var op string
+	if exist == nil {
+		obj.Namespace = namespace
+		obj.ResourceVersion = ""
+		_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Create(obj)
+		op = "Add"
+	} else {
+		exist.Labels = obj.Labels
+		exist.Annotations = obj.Annotations
+		exist.Spec = obj.Spec
+		op = "Update"
+		_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
+	}
+
+	if err != nil {
+		log.Infof(LogErrFormat, op, "Sidecar", obj.Name, rc.ClusterID, err)
+	} else {
+		log.Infof(LogErrFormat, op, "Sidecar", obj.Name, rc.ClusterID, "Success")
+	}
+}
+
+func copySidecar(sidecar *v1alpha3.Sidecar, rc *RemoteController) *v1alpha3.Sidecar {
+	newSidecarObj := &v1alpha3.Sidecar{}
+	newSidecarObj.Spec.WorkloadSelector = sidecar.Spec.WorkloadSelector
+	newSidecarObj.Spec.Ingress = sidecar.Spec.Ingress
+	newSidecarObj.Spec.Egress = sidecar.Spec.Egress
+	return newSidecarObj
 }
 
 func createSeWithDrLabels(remoteController *RemoteController, localCluster bool, identityId string, seName string, se *networking.ServiceEntry,
@@ -201,7 +281,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 
 	address, _, err := GetLocalAddressForSe(seName, seAddressCache, configmapController)
 	if err != nil {
-		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v",err)
+		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v", err)
 		return nil
 	}
 	newSe.Addresses = []string{address}
@@ -280,7 +360,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
 
-			newDestinationRule  := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
+			newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
 			addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 		}
@@ -326,7 +406,7 @@ func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStor
 }
 
 //an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
-func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface)  (string, error){
+func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
 	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
 	cm, err := configMapController.GetConfigMap()
 	if err != nil {
@@ -336,7 +416,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 	newAddressState := GetServiceEntryStateFromConfigmap(cm)
 
 	if newAddressState == nil {
-		return "",  errors.New("could not unmarshall configmap yaml")
+		return "", errors.New("could not unmarshall configmap yaml")
 	}
 
 	if val, ok := newAddressState.EntryAddresses[seName]; ok { //Someone else updated the address state, so we'll use that
@@ -348,11 +428,11 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 	address := common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 
 	for util.Contains(newAddressState.Addresses, address) {
-		if firstIndex<255 {
+		if firstIndex < 255 {
 			firstIndex++
 		} else {
 			secondIndex++
-			firstIndex=0
+			firstIndex = 0
 		}
 		address = common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 	}

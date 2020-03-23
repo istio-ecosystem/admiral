@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ctx, cancel    = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(context.Background())
 )
 
 // GetRootCmd returns the root of the cobra command-tree.
@@ -85,6 +85,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The workload identity  key, on deployment which holds identity value used to generate cname by admiral. Default label key will be \"identity\" Admiral will look for a label with this key. If present, that will be used. If not, it will try an annotation (for use cases where an identity is longer than 63 chars)")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GlobalTrafficDeploymentLabel, "globaltraffic_deployment_label", "identity",
 		"The label key which will be used to tie globaltrafficpolicy objects to deployments. Configured separately to the workload identity key because this one won't fall back to annotations.")
+	rootCmd.PersistentFlags().StringVar(&params.WorkloadSidecarUpdates, "workload_sidecar_updates", "disabled",
+		"The parameter will be used to decide whether to update workload sidecar resource or not. By default these updates will be disabled.")
 
 	return rootCmd
 }
