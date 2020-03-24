@@ -75,8 +75,12 @@ func GetGlobalTrafficDeploymentLabel() string {
 	return admiralParams.LabelSet.GlobalTrafficDeploymentLabel
 }
 
-func GetWorkloadSidecarUpdates() string {
-	return admiralParams.WorkloadSidecarUpdates
+func GetWorkloadSidecarUpdate() string {
+	return admiralParams.WorkloadSidecarUpdate
+}
+
+func GetWorkloadSidecarName() string {
+	return admiralParams.WorkloadSidecarName
 }
 
 ///Setters - be careful

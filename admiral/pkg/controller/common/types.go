@@ -37,7 +37,8 @@ type AdmiralParams struct {
 	SecretResolver             string
 	LabelSet                   *LabelSet
 	HostnameSuffix             string
-	WorkloadSidecarUpdates     string
+	WorkloadSidecarUpdate      string
+	WorkloadSidecarName        string
 }
 
 func (b AdmiralParams) String() string {

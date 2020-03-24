@@ -176,25 +176,11 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 				}
 			}
 
-			//add virtual service for routing locally in within the cluster
-			//virtualServiceName := getIstioResourceName(cname, "-default-vs")
-			//
-			//oldVirtualService := rc.IstioConfigStore.Get(istioModel.VirtualService.Type, virtualServiceName, remoteRegistry.config.SyncNamespace)
-			//
-			//virtualService := makeVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
-			//
-			//newVirtualService, err := createIstioConfig(istio.VirtualServiceProto, virtualService, virtualServiceName, remoteRegistry.config.SyncNamespace)
-			//
-			//if err == nil {
-			//	addUpdateIstioResource(rc, *newVirtualService, oldVirtualService, virtualServiceName, syncNamespace)
-			//} else {
-			//	log.Errorf(LogErrFormat, "Create", istioModel.VirtualService.Type, virtualServiceName, rc.ClusterID, err)
-			//}
-			if common.GetWorkloadSidecarUpdates() == "enabled" {
-				for _, val := range dependents.Map() {
-					remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
-				}
+			for _, val := range dependents.Map() {
+				remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+			}
 
+			if common.GetWorkloadSidecarUpdate() == "enabled" {
 				for _, sidecarEgress := range remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity) {
 					modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, sidecarEgress.Namespace, sidecarEgress.FQDN, rc)
 				}
@@ -212,18 +198,15 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependen
 	if sidecarConfig == nil {
 		return
 	}
-	// sidecarConfig := rc.IstioConfigStore.Get(istioModel.Sidecar.Type, SidecarName, sidecarNamespace)
 
-	//sidecar := &networking.Sidecar{}
+	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
 
-	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(SidecarName, v12.GetOptions{})
-	//if err := proto.Unmarshal(data, sidecar); err != nil {
-	//	log.Errorf("Failed to parse Sidecar in namespace %v, reason: %v", sidecarNamespace, err)
-	//	return
-	//}
+	if sidecar == nil {
+		return
+	}
 
 	//copy and add our new local FQDN
-	newSidecar := copySidecar(sidecar, rc)
+	newSidecar := copySidecar(sidecar)
 
 	egressHost := dependencyNamespace + "/" + localFqdn
 
@@ -231,42 +214,29 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependen
 		newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
 	}
 
-	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, SidecarName, sidecarNamespace)
+	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
 
 	//insert into cluster
 	if newSidecarConfig != nil {
 		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc)
 	}
-	//else {
-	//	log.Errorf(LogErrFormat, "Create", Sidecar.Type, sidecarNamespace + "-" + SidecarName, rc.ClusterID, err)
-	//}
-
 }
 
 func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
 	var err error
-	var op string
-	if exist == nil {
-		obj.Namespace = namespace
-		obj.ResourceVersion = ""
-		_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Create(obj)
-		op = "Add"
-	} else {
-		exist.Labels = obj.Labels
-		exist.Annotations = obj.Annotations
-		exist.Spec = obj.Spec
-		op = "Update"
-		_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
-	}
+	exist.Labels = obj.Labels
+	exist.Annotations = obj.Annotations
+	exist.Spec = obj.Spec
+	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "Sidecar", obj.Name, rc.ClusterID, err)
+		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "Sidecar", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
-func copySidecar(sidecar *v1alpha3.Sidecar, rc *RemoteController) *v1alpha3.Sidecar {
+func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	newSidecarObj := &v1alpha3.Sidecar{}
 	newSidecarObj.Spec.WorkloadSelector = sidecar.Spec.WorkloadSelector
 	newSidecarObj.Spec.Ingress = sidecar.Spec.Ingress
