@@ -201,7 +201,7 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependen
 
 	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
 
-	if sidecar == nil {
+	if sidecar == nil || sidecar.Spec.Egress == nil {
 		return
 	}
 

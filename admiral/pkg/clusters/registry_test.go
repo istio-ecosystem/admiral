@@ -32,6 +32,7 @@ func init() {
 		DependenciesNamespace:      "default",
 		SecretResolver:             "",
 		WorkloadSidecarUpdate:      "enabled",
+		WorkloadSidecarName:        "default",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"

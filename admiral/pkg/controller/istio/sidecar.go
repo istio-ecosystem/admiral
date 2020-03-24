@@ -26,7 +26,7 @@ type SidecarEntry struct {
 }
 
 type SidecarController struct {
-	IstioClient    *versioned.Clientset
+	IstioClient    versioned.Interface
 	SidecarHandler SidecarHandler
 	informer       cache.SharedIndexInformer
 	ctl            *admiral.Controller

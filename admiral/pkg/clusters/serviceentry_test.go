@@ -1,8 +1,18 @@
 package clusters
 
 import (
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
-	v1 "k8s.io/api/core/v1"
+	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	"k8s.io/api/core/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	"testing"
+	"time"
 )
 
 //func TestCreateSeWithDrLabels(t *testing.T) {
@@ -268,17 +278,78 @@ import (
 //	}
 //}
 //
-func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
-	bytes,_ := yaml.Marshal(addressStore)
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap {
+	bytes, _ := yaml.Marshal(addressStore)
 
 	cm := v1.ConfigMap{
 		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
 	}
-	cm.Name="se-address-configmap"
-	cm.Namespace="admiral-remote-ctx"
-	cm.ResourceVersion=resourceVersion
+	cm.Name = "se-address-configmap"
+	cm.Namespace = "admiral-remote-ctx"
+	cm.ResourceVersion = resourceVersion
 	return &cm
 }
+
+func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
+	config, error := clientcmd.BuildConfigFromFlags("", "../test/resources/admins@fake-cluster.k8s.local")
+
+	if error != nil {
+		t.Errorf("%v", error)
+	}
+	stop := make(chan struct{})
+	handler := test.MockSidecarHandler{}
+
+	sidecarController, _ := istio.NewSidecarController(stop, &handler, config, time.Duration(1000))
+
+	remoteController := &RemoteController{SidecarController: sidecarController}
+
+	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", "test-dependency-namespace", "test-local-fqdn", remoteController)
+
+	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
+
+	if sidecarObj == nil || sidecarObj.Spec.Egress != nil {
+		t.Fail()
+	}
+}
+
+func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
+
+	sidecarController := &istio.SidecarController{}
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+
+	remoteController := &RemoteController{}
+	remoteController.SidecarController = sidecarController
+
+	existingSidecarObj := &v1alpha3.Sidecar{}
+	existingSidecarObj.ObjectMeta.Namespace = "test-sidecar-namespace"
+	existingSidecarObj.ObjectMeta.Name = "default"
+
+	istioEgress := istionetworkingv1alpha3.IstioEgressListener{
+		Hosts: []string{"test-host"},
+	}
+
+	existingSidecarObj.Spec = istionetworkingv1alpha3.Sidecar{
+		Egress: []*istionetworkingv1alpha3.IstioEgressListener{&istioEgress},
+	}
+
+	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(existingSidecarObj)
+
+	if createdSidecar != nil {
+
+		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", "test-dependency-namespace", "test-local-fqdn", remoteController)
+
+		updatedSidecar, error := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
+
+		if error != nil || updatedSidecar == nil {
+			t.Fail()
+		}
+
+		if len(updatedSidecar.Spec.Egress[0].Hosts) != 2 {
+			t.Fail()
+		}
+	}
+}
+
 //
 //func TestCreateServiceEntry(t *testing.T) {
 //	admiralCache := AdmiralCache{}
