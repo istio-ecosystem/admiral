@@ -51,7 +51,7 @@ kubectl create secret generic cacerts -n istio-system \
 ```
 #Generate, install and verify Istio CRDs
 
-helm template istio-1.4.3/install/kubernetes/helm/istio-init --name istio-init --namespace istio-system | kubectl apply -f -
+helm template istio-1.4.3/install/kubernetes/helm/istio-init --namespace istio-system | kubectl apply -f -
 
 #Make sure Istio crds are installed
 
@@ -60,7 +60,7 @@ kubectl get crds | grep 'istio.io' | wc -l
 ```
 #Generate & Install Istio
 
-helm template istio-1.4.3/install/kubernetes/helm/istio --name istio --namespace istio-system \
+helm template istio-1.4.3/install/kubernetes/helm/istio --namespace istio-system \
     -f istio-1.4.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
 
 #Verify that istio pods are up
