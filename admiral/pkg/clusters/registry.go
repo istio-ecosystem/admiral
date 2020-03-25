@@ -54,10 +54,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		CnameDependentClusterCache:      common.NewMapOfMaps(),
 		ClusterLocalityCache:            common.NewMapOfMaps(),
 		IdentityDependencyCache:         common.NewMapOfMaps(),
+		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
-		GlobalTrafficCache: 			 gtpCache,
+		GlobalTrafficCache:              gtpCache,
 	}
 
 	configMapController, err := admiral.NewConfigMapController()
@@ -146,24 +147,30 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting service entry controller for custerID: %v", clusterID)
-	rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
+	rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with ServiceEntryController init: %v", err)
 	}
 
 	log.Infof("starting destination rule controller for custerID: %v", clusterID)
-	rc.DestinationRuleController, err = istio.NewDestinationRuleController(stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
+	rc.DestinationRuleController, err = istio.NewDestinationRuleController(stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DestinationRuleController init: %v", err)
 	}
 
 	log.Infof("starting virtual service controller for custerID: %v", clusterID)
-	rc.VirtualServiceController, err = istio.NewVirtualServiceController(stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID:clusterID}, clientConfig, resyncPeriod)
+	rc.VirtualServiceController, err = istio.NewVirtualServiceController(stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with VirtualServiceController init: %v", err)
+	}
+
+	rc.SidecarController, err = istio.NewSidecarController(stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf(" Error with DestinationRuleController init: %v", err)
 	}
 
 	r.Lock()
@@ -190,4 +197,3 @@ func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
 	return nil
 }
-

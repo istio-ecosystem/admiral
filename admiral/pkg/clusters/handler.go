@@ -15,22 +15,26 @@ import (
 
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-
 )
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
-	ClusterID string
+	ClusterID      string
 }
 
 type DestinationRuleHandler struct {
 	RemoteRegistry *RemoteRegistry
-	ClusterID string
+	ClusterID      string
 }
 
 type VirtualServiceHandler struct {
 	RemoteRegistry *RemoteRegistry
-	ClusterID string
+	ClusterID      string
+}
+
+type SidecarHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *v1.Dependency) {
@@ -152,9 +156,9 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 			dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
-				BaseEjectionTime: &types.Duration{Seconds: 120},
+				BaseEjectionTime:  &types.Duration{Seconds: 120},
 				ConsecutiveErrors: 10,
-				Interval: &types.Duration{Seconds: 60},
+				Interval:          &types.Duration{Seconds: 60},
 			}
 		}
 	}
@@ -219,6 +223,18 @@ func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
 		return
 	}
 	handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+}
+
+func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {
+	return
+}
+
+func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {
+	return
+}
+
+func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {
+	return
 }
 
 func IgnoreIstioResource(exportTo []string) bool {
@@ -387,7 +403,6 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		}
 		newDestinationRule := createDestinationRulSkeletion(*destinationRule, localDrName, syncNamespace)
 
-
 		if newDestinationRule != nil {
 			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
 		}
@@ -531,11 +546,15 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 }
 
 func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
-	return &v1alpha3.ServiceEntry{Spec:se, ObjectMeta: v12.ObjectMeta{Name:name, Namespace: namespace}}
+	return &v1alpha3.ServiceEntry{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
+}
+
+func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace string) *v1alpha3.Sidecar {
+	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
 func createDestinationRulSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
-	return &v1alpha3.DestinationRule{Spec:dr, ObjectMeta: v12.ObjectMeta{Name:name, Namespace: namespace}}
+	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
