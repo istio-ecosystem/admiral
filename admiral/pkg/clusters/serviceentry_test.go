@@ -1,18 +1,16 @@
 package clusters
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	"k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/clientcmd"
 	"testing"
-	"time"
 )
 
 //func TestCreateSeWithDrLabels(t *testing.T) {
@@ -291,24 +289,18 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, 
 }
 
 func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
-	config, error := clientcmd.BuildConfigFromFlags("", "../test/resources/admins@fake-cluster.k8s.local")
+	sidecarController := &istio.SidecarController{}
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 
-	if error != nil {
-		t.Errorf("%v", error)
-	}
-	stop := make(chan struct{})
-	handler := test.MockSidecarHandler{}
-
-	sidecarController, _ := istio.NewSidecarController(stop, &handler, config, time.Duration(1000))
-
-	remoteController := &RemoteController{SidecarController: sidecarController}
+	remoteController := &RemoteController{}
+	remoteController.SidecarController = sidecarController
 
 	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", "test-dependency-namespace", "test-local-fqdn", remoteController)
 
 	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
 
-	if sidecarObj == nil || sidecarObj.Spec.Egress != nil {
-		t.Fail()
+	if sidecarObj != nil {
+		t.Fatalf("Modify non existing resource failed, as no new resource should be created.")
 	}
 }
 
@@ -344,9 +336,14 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 			t.Fail()
 		}
 
-		if len(updatedSidecar.Spec.Egress[0].Hosts) != 2 {
-			t.Fail()
+		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn")
+		createdSidecar.Spec.Egress[0].Hosts = hostList
+
+		if !cmp.Equal(updatedSidecar, createdSidecar) {
+			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
 		}
+	} else {
+		t.Error("sidecar resource could not be created")
 	}
 }
 
