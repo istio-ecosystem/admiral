@@ -23,7 +23,6 @@ func InitializeConfig(params AdmiralParams) {
 	}
 }
 
-
 func GetAdmiralParams() AdmiralParams {
 	return admiralParams
 }
@@ -74,6 +73,14 @@ func GetWorkloadIdentifier() string {
 
 func GetGlobalTrafficDeploymentLabel() string {
 	return admiralParams.LabelSet.GlobalTrafficDeploymentLabel
+}
+
+func GetWorkloadSidecarUpdate() string {
+	return admiralParams.WorkloadSidecarUpdate
+}
+
+func GetWorkloadSidecarName() string {
+	return admiralParams.WorkloadSidecarName
 }
 
 ///Setters - be careful

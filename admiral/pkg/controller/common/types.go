@@ -11,9 +11,18 @@ type Map struct {
 	mutex *sync.Mutex
 }
 
-
 type MapOfMaps struct {
 	cache map[string]*Map
+	mutex *sync.Mutex
+}
+
+type SidecarEgress struct {
+	Namespace string
+	FQDN      string
+}
+
+type SidecarEgressMap struct {
+	cache map[string][]SidecarEgress
 	mutex *sync.Mutex
 }
 
@@ -28,7 +37,8 @@ type AdmiralParams struct {
 	SecretResolver             string
 	LabelSet                   *LabelSet
 	HostnameSuffix             string
-
+	WorkloadSidecarUpdate      string
+	WorkloadSidecarName        string
 }
 
 func (b AdmiralParams) String() string {
@@ -42,7 +52,6 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
 }
 
-
 type LabelSet struct {
 	DeploymentAnnotation                string
 	SubsetLabel                         string
@@ -50,14 +59,21 @@ type LabelSet struct {
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
 	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
-	GlobalTrafficDeploymentLabel		string //label used to tie together deployments and globaltrafficpolicy objects. Configured seperately from the identity key because this one _must_ be a label
+	GlobalTrafficDeploymentLabel        string //label used to tie together deployments and globaltrafficpolicy objects. Configured seperately from the identity key because this one _must_ be a label
+}
+
+func NewSidecarEgressMap() *SidecarEgressMap {
+	n := new(SidecarEgressMap)
+	n.cache = make(map[string][]SidecarEgress)
+	n.mutex = &sync.Mutex{}
+	return n
 }
 
 func NewMap() *Map {
-  n := new(Map)
-  n.cache = make(map[string]string)
-  n.mutex = &sync.Mutex{}
-  return n
+	n := new(Map)
+	n.cache = make(map[string]string)
+	n.mutex = &sync.Mutex{}
+	return n
 }
 
 func NewMapOfMaps() *MapOfMaps {
@@ -84,7 +100,11 @@ func (s *Map) Delete(key string) {
 }
 
 func (s *Map) Map() map[string]string {
-	return s.cache
+	if s != nil {
+		return s.cache
+	} else {
+		return nil
+	}
 }
 
 func (s *MapOfMaps) Put(pkey string, key string, value string) {
@@ -112,3 +132,27 @@ func (s *MapOfMaps) Map() map[string]*Map {
 	return s.cache
 }
 
+func (s *SidecarEgressMap) Put(asset string, namespace string, fqdn string) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	var mapVal = s.cache[asset]
+	if mapVal == nil {
+		mapVal = make([]SidecarEgress, 0)
+	}
+	mapVal = append(mapVal, SidecarEgress{Namespace: namespace, FQDN: fqdn})
+	s.cache[asset] = mapVal
+}
+
+func (s *SidecarEgressMap) Get(key string) []SidecarEgress {
+	return s.cache[key]
+}
+
+func (s *SidecarEgressMap) Delete(key string) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	delete(s.cache, key)
+}
+
+func (s *SidecarEgressMap) Map() map[string][]SidecarEgress {
+	return s.cache
+}
