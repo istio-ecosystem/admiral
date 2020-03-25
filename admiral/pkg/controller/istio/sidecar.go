@@ -46,12 +46,12 @@ func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config
 
 	ic, err := versioned.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create destination rule controller k8s client: %v", err)
+		return nil, fmt.Errorf("failed to create sidecar controller k8s client: %v", err)
 	}
 
 	sidecarController.IstioClient = ic
 
-	sidecarController.informer = informers.NewDestinationRuleInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
+	sidecarController.informer = informers.NewSidecarInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
 	admiral.NewController(stopCh, &sidecarController, sidecarController.informer)
 
