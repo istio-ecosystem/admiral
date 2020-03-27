@@ -295,7 +295,10 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	remoteController := &RemoteController{}
 	remoteController.SidecarController = sidecarController
 
-	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", "test-dependency-namespace", "test-local-fqdn", remoteController)
+	sidecarEgressMap := make(map[string]common.SidecarEgress)
+	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+
+	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
 
 	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
 
@@ -328,7 +331,9 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 
 	if createdSidecar != nil {
 
-		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", "test-dependency-namespace", "test-local-fqdn", remoteController)
+		sidecarEgressMap := make(map[string]common.SidecarEgress)
+		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
 
 		updatedSidecar, error := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
 

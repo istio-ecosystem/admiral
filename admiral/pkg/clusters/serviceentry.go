@@ -175,27 +175,25 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 					ep.Ports = oldPorts
 				}
 			}
+		}
 
-			for _, val := range dependents.Map() {
-				remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
-			}
+		for _, val := range dependents.Map() {
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+		}
 
-			if common.GetWorkloadSidecarUpdate() == "enabled" {
-				for _, sidecarEgress := range remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity) {
-					modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, sidecarEgress.Namespace, sidecarEgress.FQDN, rc)
-				}
-			}
+		if common.GetWorkloadSidecarUpdate() == "enabled" {
+			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
 		}
 	}
 	return serviceEntries
 }
 
-func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependencyNamespace string, localFqdn string, rc *RemoteController) {
+func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
 
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
 
-	if sidecarConfig == nil {
+	if sidecarConfig == nil || sidecarEgressMap == nil {
 		return
 	}
 
@@ -208,10 +206,11 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, dependen
 	//copy and add our new local FQDN
 	newSidecar := copySidecar(sidecar)
 
-	egressHost := dependencyNamespace + "/" + localFqdn
-
-	if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
-		newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
+	for _, sidecarEgress := range sidecarEgressMap {
+		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
+		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
+			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
+		}
 	}
 
 	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
