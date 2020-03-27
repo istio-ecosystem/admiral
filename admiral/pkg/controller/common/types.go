@@ -22,7 +22,7 @@ type SidecarEgress struct {
 }
 
 type SidecarEgressMap struct {
-	cache map[string][]SidecarEgress
+	cache map[string]map[string]SidecarEgress
 	mutex *sync.Mutex
 }
 
@@ -64,7 +64,7 @@ type LabelSet struct {
 
 func NewSidecarEgressMap() *SidecarEgressMap {
 	n := new(SidecarEgressMap)
-	n.cache = make(map[string][]SidecarEgress)
+	n.cache = make(map[string]map[string]SidecarEgress)
 	n.mutex = &sync.Mutex{}
 	return n
 }
@@ -137,13 +137,13 @@ func (s *SidecarEgressMap) Put(asset string, namespace string, fqdn string) {
 	s.mutex.Lock()
 	var mapVal = s.cache[asset]
 	if mapVal == nil {
-		mapVal = make([]SidecarEgress, 0)
+		mapVal = make(map[string]SidecarEgress, 0)
 	}
-	mapVal = append(mapVal, SidecarEgress{Namespace: namespace, FQDN: fqdn})
+	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn}
 	s.cache[asset] = mapVal
 }
 
-func (s *SidecarEgressMap) Get(key string) []SidecarEgress {
+func (s *SidecarEgressMap) Get(key string) map[string]SidecarEgress {
 	return s.cache[key]
 }
 
@@ -153,6 +153,6 @@ func (s *SidecarEgressMap) Delete(key string) {
 	delete(s.cache, key)
 }
 
-func (s *SidecarEgressMap) Map() map[string][]SidecarEgress {
+func (s *SidecarEgressMap) Map() map[string]map[string]SidecarEgress {
 	return s.cache
 }
