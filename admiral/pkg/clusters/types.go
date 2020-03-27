@@ -174,18 +174,30 @@ type ServiceHandler struct {
 
 func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
-	log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
+	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
+	HandleDependencyRecord(obj, dh.RemoteRegistry)
+
+}
+
+func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
+
+	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
+
+	HandleDependencyRecord(obj, dh.RemoteRegistry)
+
+}
+
+func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry)  {
 	sourceIdentity := obj.Spec.Source
 
 	if len(sourceIdentity) == 0 {
 		log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
 	}
 
-	updateIdentityDependencyCache(sourceIdentity, dh.RemoteRegistry.AdmiralCache.IdentityDependencyCache, obj)
+	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(sourceIdentity, dh.RemoteRegistry, dh.RemoteRegistry.remoteControllers, obj)
-
+	handleDependencyRecord(sourceIdentity, remoteRegitry, remoteRegitry.remoteControllers, obj)
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
