@@ -21,6 +21,7 @@ type SidecarEgress struct {
 	FQDN      string
 }
 
+//maintains a map from workload identity -> map[namespace]SidecarEgress
 type SidecarEgressMap struct {
 	cache map[string]map[string]SidecarEgress
 	mutex *sync.Mutex
@@ -132,15 +133,15 @@ func (s *MapOfMaps) Map() map[string]*Map {
 	return s.cache
 }
 
-func (s *SidecarEgressMap) Put(asset string, namespace string, fqdn string) {
+func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
-	var mapVal = s.cache[asset]
+	var mapVal = s.cache[identity]
 	if mapVal == nil {
 		mapVal = make(map[string]SidecarEgress, 0)
 	}
 	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn}
-	s.cache[asset] = mapVal
+	s.cache[identity] = mapVal
 }
 
 func (s *SidecarEgressMap) Get(key string) map[string]SidecarEgress {
