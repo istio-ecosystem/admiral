@@ -113,8 +113,8 @@ func (s *MapOfMaps) Put(pkey string, key string, value string) {
 	var mapVal = s.cache[pkey]
 	if mapVal == nil {
 		mapVal = NewMap()
-		mapVal.Put(key, value)
 	}
+	mapVal.Put(key, value)
 	s.cache[pkey] = mapVal
 }
 
