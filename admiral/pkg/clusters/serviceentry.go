@@ -3,6 +3,7 @@ package clusters
 import (
 	"errors"
 	"fmt"
+	"github.com/ghodss/yaml"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
@@ -175,14 +176,14 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 					ep.Ports = oldPorts
 				}
 			}
+		}
 
-			for _, val := range dependents.Map() {
-				remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
-			}
+		for _, val := range dependents.Map() {
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+		}
 
-			if common.GetWorkloadSidecarUpdate() == "enabled" {
-				modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
-			}
+		if common.GetWorkloadSidecarUpdate() == "enabled" {
+			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
 		}
 	}
 	return serviceEntries
