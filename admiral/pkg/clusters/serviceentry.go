@@ -3,7 +3,6 @@ package clusters
 import (
 	"errors"
 	"fmt"
-	"github.com/ghodss/yaml"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
