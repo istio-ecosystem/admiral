@@ -10,6 +10,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	log "github.com/sirupsen/logrus"
 	networking "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,25 +21,25 @@ import (
 
 func init() {
 	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &common.LabelSet{},
-		EnableSAN: true,
-		SANPrefix: "prefix",
-		HostnameSuffix: "mesh",
-		SyncNamespace: "ns",
-		CacheRefreshDuration: time.Minute,
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &common.LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
 		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace: "default",
-		SecretResolver: "",
-
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+		WorkloadSidecarUpdate:      "enabled",
+		WorkloadSidecarName:        "default",
 	}
 
-	p.LabelSet.WorkloadIdentityKey="identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
 	common.InitializeConfig(p)
 }
-
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
@@ -108,6 +109,22 @@ func TestCopyEndpoint(t *testing.T) {
 		t.Fail()
 	}
 
+}
+
+func TestCopySidecar(t *testing.T) {
+	spec := networking.Sidecar{
+		WorkloadSelector: &networking.WorkloadSelector{
+			Labels: map[string]string{"TestLabel": "TestValue"},
+		},
+	}
+
+	sidecar := v1alpha3.Sidecar{Spec: spec}
+
+	newSidecar := copySidecar(&sidecar)
+
+	if newSidecar.Spec.WorkloadSelector != spec.WorkloadSelector {
+		t.Fail()
+	}
 }
 
 func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
@@ -236,10 +253,10 @@ func TestInitAdmiral(t *testing.T) {
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &common.LabelSet{},
+		LabelSet:       &common.LabelSet{},
 	}
 
-	p.LabelSet.WorkloadIdentityKey="overridden-key"
+	p.LabelSet.WorkloadIdentityKey = "overridden-key"
 
 	rr, err := InitAdmiral(context.Background(), p)
 
@@ -361,43 +378,43 @@ func TestGetServiceForDeployment(t *testing.T) {
 			Port: 8090,
 		},
 	}
-	service.Spec.Selector = map[string]string{"under-test":"true"}
+	service.Spec.Selector = map[string]string{"under-test": "true"}
 	rcWithService.ServiceController.Cache.Put(&service)
 
 	deploymentWithNoSelector := k8sAppsV1.Deployment{}
 	deploymentWithNoSelector.Name = "dep1"
-	deploymentWithNoSelector.Namespace ="under-test"
+	deploymentWithNoSelector.Namespace = "under-test"
 	deploymentWithNoSelector.Spec.Selector = &metav1.LabelSelector{}
 
 	deploymentWithSelector := k8sAppsV1.Deployment{}
 	deploymentWithSelector.Name = "dep2"
 	deploymentWithSelector.Namespace = "under-test"
-	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"under-test":"true"}}
+	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"under-test": "true"}}
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		controller *RemoteController
-		deployment *k8sAppsV1.Deployment
+		name            string
+		controller      *RemoteController
+		deployment      *k8sAppsV1.Deployment
 		expectedService *k8sCoreV1.Service
 	}{
 		{
-			name: "Should return nil with nothing in the cache",
-			controller:baseRc,
-			deployment:nil,
-			expectedService:nil,
+			name:            "Should return nil with nothing in the cache",
+			controller:      baseRc,
+			deployment:      nil,
+			expectedService: nil,
 		},
 		{
-			name: "Should not match if selectors don't match",
-			controller:rcWithService,
-			deployment:&deploymentWithNoSelector,
-			expectedService:nil,
+			name:            "Should not match if selectors don't match",
+			controller:      rcWithService,
+			deployment:      &deploymentWithNoSelector,
+			expectedService: nil,
 		},
 		{
-			name: "Should return proper service",
-			controller:rcWithService,
-			deployment:&deploymentWithSelector,
-			expectedService:&service,
+			name:            "Should return proper service",
+			controller:      rcWithService,
+			deployment:      &deploymentWithSelector,
+			expectedService: &service,
 		},
 	}
 
@@ -410,7 +427,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 			} else {
 				if !cmp.Equal(resultingService, c.expectedService) {
 					log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
-					t.Errorf("Service mismatch. Got %v, expected %v",resultingService, c.expectedService)
+					t.Errorf("Service mismatch. Got %v, expected %v", resultingService, c.expectedService)
 				}
 			}
 		})
