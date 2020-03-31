@@ -5,7 +5,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"istio.io/api/networking/v1alpha3"
+	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"testing"
 )
 
@@ -177,6 +179,79 @@ func TestGetDestinationRule(t *testing.T) {
 			result := getDestinationRule(c.host, c.locality, c.gtp)
 			if !cmp.Equal(result, c.destinationRule) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.destinationRule))
+			}
+		})
+	}
+}
+
+
+func TestHandleVirtualServiceEvent(t *testing.T) {
+	//Do setup here
+	syncNs := v1alpha32.VirtualService{}
+	syncNs.Namespace = "ns"
+
+	tooManyHosts := v1alpha32.VirtualService{
+		Spec: v1alpha3.VirtualService{
+			Hosts: []string{"qa.blah.global", "e2e.blah.global"},
+		},
+	}
+	tooManyHosts.Namespace = "other-ns"
+
+	happyPath := v1alpha32.VirtualService{
+		Spec: v1alpha3.VirtualService{
+			Hosts: []string{"e2e.blah.global"},
+		},
+	}
+	happyPath.Namespace = "other-ns"
+
+	cnameCache := common.NewMapOfMaps()
+	noDependencClustersHandler := VirtualServiceHandler{
+		RemoteRegistry: &RemoteRegistry{
+			remoteControllers: map[string]*RemoteController{},
+			AdmiralCache: &AdmiralCache{
+				CnameDependentClusterCache: cnameCache,
+			},
+		},
+	}
+
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		vs *v1alpha32.VirtualService
+		handler *VirtualServiceHandler
+		expectedError error
+		event common.Event
+	}{
+		{
+			name: "Virtual Service in sync namespace",
+			vs: &syncNs,
+			expectedError: nil,
+			handler: &noDependencClustersHandler,
+			event: 0,
+		},
+		{
+			name: "Virtual Service with multiple hosts",
+			vs: &tooManyHosts,
+			expectedError: nil,
+			handler: &noDependencClustersHandler,
+			event: 0,
+		},
+		{
+			name: "No dependent clusters",
+			vs: &happyPath,
+			expectedError: nil,
+			handler: &noDependencClustersHandler,
+			event: 0,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			err := handleVirtualServiceEvent(c.vs, c.handler, c.event, common.VirtualService)
+			if err != c.expectedError {
+				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
 			}
 		})
 	}
