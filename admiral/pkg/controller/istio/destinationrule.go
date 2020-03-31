@@ -26,7 +26,7 @@ type DestinationRuleEntry struct {
 }
 
 type DestinationRuleController struct {
-	IstioClient  *versioned.Clientset
+	IstioClient  versioned.Interface
 	DestinationRuleHandler DestinationRuleHandler
 	informer   cache.SharedIndexInformer
 	ctl        *admiral.Controller
