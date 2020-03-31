@@ -455,10 +455,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 			} else {
 
-				exist, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				if err != nil {
-					return err
-				}
+				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
 
 				//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
 				for _, httpRoute := range virtualService.Http {

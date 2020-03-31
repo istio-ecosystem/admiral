@@ -6,9 +6,13 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
+
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 )
 
 func TestIgnoreIstioResource(t *testing.T) {
@@ -203,6 +207,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		},
 	}
 	happyPath.Namespace = "other-ns"
+	happyPath.Name = "vs-name"
 
 	cnameCache := common.NewMapOfMaps()
 	noDependencClustersHandler := VirtualServiceHandler{
@@ -214,6 +219,47 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		},
 	}
 
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	goodCnameCache := common.NewMapOfMaps()
+	goodCnameCache.Put("e2e.blah.global", "cluster.k8s.global", "cluster.k8s.global")
+	handlerEmptyClient := VirtualServiceHandler{
+		RemoteRegistry: &RemoteRegistry{
+			remoteControllers: map[string]*RemoteController{
+				"cluster.k8s.global": &RemoteController{
+					VirtualServiceController: &istio.VirtualServiceController{
+						IstioClient: fakeIstioClient,
+					},
+				},
+			},
+			AdmiralCache: &AdmiralCache{
+				CnameDependentClusterCache: goodCnameCache,
+			},
+		},
+	}
+
+	fullFakeIstioClient := istiofake.NewSimpleClientset()
+	fullFakeIstioClient.NetworkingV1alpha3().VirtualServices("ns").Create(&v1alpha32.VirtualService{
+		ObjectMeta: v12.ObjectMeta{
+			Name: "vs-name",
+		},
+		Spec: v1alpha3.VirtualService{
+			Hosts: []string{"e2e.blah.global"},
+		},
+	})
+	handlerFullClient := VirtualServiceHandler{
+		RemoteRegistry: &RemoteRegistry{
+			remoteControllers: map[string]*RemoteController{
+				"cluster.k8s.global": &RemoteController{
+					VirtualServiceController: &istio.VirtualServiceController{
+						IstioClient: fullFakeIstioClient,
+					},
+				},
+			},
+			AdmiralCache: &AdmiralCache{
+				CnameDependentClusterCache: goodCnameCache,
+			},
+		},
+	}
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
@@ -243,6 +289,27 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			expectedError: nil,
 			handler: &noDependencClustersHandler,
 			event: 0,
+		},
+		{
+			name: "New Virtual Service",
+			vs: &happyPath,
+			expectedError: nil,
+			handler: &handlerEmptyClient,
+			event: 0,
+		},
+		{
+			name: "Existing Virtual Service",
+			vs: &happyPath,
+			expectedError: nil,
+			handler: &handlerFullClient,
+			event: 1,
+		},
+		{
+			name: "Deleted Virtual Service",
+			vs: &happyPath,
+			expectedError: nil,
+			handler: &handlerFullClient,
+			event: 2,
 		},
 	}
 
