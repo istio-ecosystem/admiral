@@ -409,7 +409,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	}
 }
 
-func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) {
+func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) error {
 
 	log.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
 
@@ -423,19 +423,19 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	if obj.Namespace == syncNamespace {
 		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
-		return
+		return nil
 	}
 
 	if len(virtualService.Hosts) > 1 {
 		log.Errorf(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+obj.Namespace)
-		return
+		return nil
 	}
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0])
 
 	if dependentClusters == nil {
 		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "No dependent clusters found")
-		return
+		return nil
 	}
 
 	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
@@ -448,7 +448,10 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 			if event == common.Delete {
 				log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-				rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				if err != nil {
+					return err
+				}
 
 			} else {
 
@@ -474,6 +477,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 		}
 
 	}
+	return nil
 }
 
 func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
