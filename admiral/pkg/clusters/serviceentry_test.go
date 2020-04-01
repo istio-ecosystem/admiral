@@ -390,64 +390,82 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	}
 }
 
-//
-//func TestCreateServiceEntry(t *testing.T) {
-//	admiralCache := AdmiralCache{}
-//
-//	localAddress := common.LocalAddressPrefix + ".10.1"
-//
-//	cnameIdentityCache := sync.Map{}
-//	cnameIdentityCache.Store("dev.bar.global", "bar")
-//	admiralCache.CnameIdentityCache = &cnameIdentityCache
-//
-//	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
-//		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":localAddress},
-//		Addresses: []string{localAddress},
-//	}
-//
-//	admiralCache.CnameClusterCache = common.NewMapOfMaps()
-//
-//	rc, _ := createMockRemoteController(func(i interface{}) {
-//		res := i.(istio.Config)
-//		se, ok := res.Spec.(*networking.ServiceEntry)
-//		if ok {
-//			if se.Hosts[0] != "dev.bar.global" {
-//				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-//			}
-//		}
-//	})
-//
-//	params := AdmiralParams{
-//		EnableSAN: true,
-//		SANPrefix: "prefix",
-//		LabelSet:&common.LabelSet{WorkloadIdentityLabel:"identity"},
-//		HostnameSuffix: "mesh",
-//	}
-//
-//	cacheWithEntry := ServiceEntryAddressStore{
-//		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
-//		Addresses: []string{localAddress},
-//	}
-//
-//	cacheController := &test.FakeConfigMapController{
-//		GetError: nil,
-//		PutError: nil,
-//		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
-//	}
-//
-//	admiralCache.ConfigMapController = cacheController
-//
-//	deployment := v12.Deployment{}
-//	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
-//
-//	resultingEntry := createServiceEntry(rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
-//
-//	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
-//		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
-//	}
-//
-//	if resultingEntry.Addresses[0] != localAddress {
-//		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
-//	}
-//
-//}
+
+func TestCreateServiceEntry(t *testing.T) {
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+	stop := make(chan struct{})
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fatalf("%v", e)
+	}
+
+	admiralCache := AdmiralCache{}
+
+	localAddress := common.LocalAddressPrefix + ".10.1"
+
+	cnameIdentityCache := sync.Map{}
+	cnameIdentityCache.Store("dev.bar.global", "bar")
+	admiralCache.CnameIdentityCache = &cnameIdentityCache
+
+	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":localAddress},
+		Addresses: []string{localAddress},
+	}
+
+	admiralCache.CnameClusterCache = common.NewMapOfMaps()
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceController: s,
+	}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
+		Addresses: []string{localAddress},
+	}
+
+	cacheController := &test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
+	}
+
+	admiralCache.ConfigMapController = cacheController
+
+	deployment := v14.Deployment{}
+	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+
+	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+
+	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
+		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	}
+
+	if resultingEntry.Addresses[0] != localAddress {
+		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+	}
+
+	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
+		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
+	}
+
+	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
+		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
+	}
+
+}
