@@ -26,7 +26,7 @@ type ServiceEntryEntry struct {
 }
 
 type ServiceEntryController struct {
-	IstioClient  *versioned.Clientset
+	IstioClient  versioned.Interface
 	ServiceEntryHandler ServiceEntryHandler
 	informer   cache.SharedIndexInformer
 	ctl        *admiral.Controller
