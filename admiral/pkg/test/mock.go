@@ -75,6 +75,10 @@ func (m *MockDependencyHandler) Added(obj *v1.Dependency) {
 
 }
 
+func (m *MockDependencyHandler) Updated(obj *v1.Dependency) {
+
+}
+
 func (m *MockDependencyHandler) Deleted(obj *v1.Dependency) {
 
 }

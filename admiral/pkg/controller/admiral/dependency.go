@@ -16,6 +16,7 @@ import (
 // Handler interface contains the methods that are required
 type DepHandler interface {
 	Added(obj *v1.Dependency)
+	Updated(obj *v1.Dependency)
 	Deleted(obj *v1.Dependency)
 }
 
@@ -102,6 +103,12 @@ func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configP
 }
 
 func (d *DependencyController) Added(ojb interface{}) {
+	dep := ojb.(*v1.Dependency)
+	d.Cache.Put(dep)
+	d.DepHandler.Added(dep)
+}
+
+func (d *DependencyController) Updated(ojb interface{}) {
 	dep := ojb.(*v1.Dependency)
 	d.Cache.Put(dep)
 	d.DepHandler.Added(dep)

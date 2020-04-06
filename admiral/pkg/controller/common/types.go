@@ -21,8 +21,9 @@ type SidecarEgress struct {
 	FQDN      string
 }
 
+//maintains a map from workload identity -> map[namespace]SidecarEgress
 type SidecarEgressMap struct {
-	cache map[string][]SidecarEgress
+	cache map[string]map[string]SidecarEgress
 	mutex *sync.Mutex
 }
 
@@ -64,7 +65,7 @@ type LabelSet struct {
 
 func NewSidecarEgressMap() *SidecarEgressMap {
 	n := new(SidecarEgressMap)
-	n.cache = make(map[string][]SidecarEgress)
+	n.cache = make(map[string]map[string]SidecarEgress)
 	n.mutex = &sync.Mutex{}
 	return n
 }
@@ -113,8 +114,8 @@ func (s *MapOfMaps) Put(pkey string, key string, value string) {
 	var mapVal = s.cache[pkey]
 	if mapVal == nil {
 		mapVal = NewMap()
-		mapVal.Put(key, value)
 	}
+	mapVal.Put(key, value)
 	s.cache[pkey] = mapVal
 }
 
@@ -132,18 +133,18 @@ func (s *MapOfMaps) Map() map[string]*Map {
 	return s.cache
 }
 
-func (s *SidecarEgressMap) Put(asset string, namespace string, fqdn string) {
+func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
-	var mapVal = s.cache[asset]
+	var mapVal = s.cache[identity]
 	if mapVal == nil {
-		mapVal = make([]SidecarEgress, 0)
+		mapVal = make(map[string]SidecarEgress, 0)
 	}
-	mapVal = append(mapVal, SidecarEgress{Namespace: namespace, FQDN: fqdn})
-	s.cache[asset] = mapVal
+	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn}
+	s.cache[identity] = mapVal
 }
 
-func (s *SidecarEgressMap) Get(key string) []SidecarEgress {
+func (s *SidecarEgressMap) Get(key string) map[string]SidecarEgress {
 	return s.cache[key]
 }
 
@@ -153,6 +154,6 @@ func (s *SidecarEgressMap) Delete(key string) {
 	delete(s.cache, key)
 }
 
-func (s *SidecarEgressMap) Map() map[string][]SidecarEgress {
+func (s *SidecarEgressMap) Map() map[string]map[string]SidecarEgress {
 	return s.cache
 }

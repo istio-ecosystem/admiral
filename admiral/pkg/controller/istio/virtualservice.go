@@ -21,7 +21,7 @@ type VirtualServiceHandler interface {
 }
 
 type VirtualServiceController struct {
-	IstioClient  *versioned.Clientset
+	IstioClient  versioned.Interface
 	VirtualServiceHandler VirtualServiceHandler
 	informer   cache.SharedIndexInformer
 	ctl        *admiral.Controller
