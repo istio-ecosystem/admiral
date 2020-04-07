@@ -175,6 +175,18 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 					ep.Ports = oldPorts
 				}
 			}
+			//add virtual service for routing locally in within the cluster
+			virtualServiceName := getIstioResourceName(cname, "-default-vs")
+
+			oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{});
+
+			//TODO handle non http ports
+			virtualService := makeVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
+
+			newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
+
+			addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc);
+
 		}
 
 		for _, val := range dependents.Map() {
