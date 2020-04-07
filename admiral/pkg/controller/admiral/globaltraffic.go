@@ -70,7 +70,7 @@ func (d *GlobalTrafficController) Added(ojb interface{}) {
 	d.GlobalTrafficHandler.Added(dep)
 }
 
-func (d *GlobalTrafficController) Updated(ojb interface{}) {
+func (d *GlobalTrafficController) Updated(ojb interface{}, oldObj interface{}) {
 	dep := ojb.(*v1.GlobalTrafficPolicy)
 	d.GlobalTrafficHandler.Updated(dep)
 }

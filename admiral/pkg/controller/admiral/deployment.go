@@ -157,14 +157,21 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 	return &deploymentController, nil
 }
 
-func (d *DeploymentController) Added(ojb interface{}) {
+func (d *DeploymentController) Added(obj interface{}) {
+	HandleAddUpdateDeployment(obj, d)
+}
+
+func (d *DeploymentController) Updated(obj interface{}, oldObj interface{}) {
+	HandleAddUpdateDeployment(obj, d)
+}
+
+func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
 	if len(key) > 0 && !d.shouldIgnoreBasedOnLabels(deployment) {
 		d.Cache.AppendDeploymentToCluster(key, deployment)
 		d.DeploymentHandler.Added(deployment)
 	}
-
 }
 
 func (d *DeploymentController) Deleted(ojb interface{}) {

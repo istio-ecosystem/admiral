@@ -103,12 +103,14 @@ func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configP
 }
 
 func (d *DependencyController) Added(ojb interface{}) {
-	dep := ojb.(*v1.Dependency)
-	d.Cache.Put(dep)
-	d.DepHandler.Added(dep)
+	HandleAddUpdateDependency(ojb, d)
 }
 
-func (d *DependencyController) Updated(ojb interface{}) {
+func (d *DependencyController) Updated(obj interface{}, oldObj interface{}) {
+	HandleAddUpdateDependency(obj, d)
+}
+
+func HandleAddUpdateDependency(ojb interface{}, d *DependencyController) {
 	dep := ojb.(*v1.Dependency)
 	d.Cache.Put(dep)
 	d.DepHandler.Added(dep)

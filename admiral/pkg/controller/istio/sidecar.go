@@ -63,13 +63,13 @@ func (sec *SidecarController) Added(ojb interface{}) {
 	sec.SidecarHandler.Added(sidecar)
 }
 
-func (sec *SidecarController) Updated(ojb interface{}) {
+func (sec *SidecarController) Updated(ojb interface{}, oldObj interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Added(sidecar)
+	sec.SidecarHandler.Updated(sidecar)
 }
 
 func (sec *SidecarController) Deleted(ojb interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Added(sidecar)
+	sec.SidecarHandler.Deleted(sidecar)
 
 }

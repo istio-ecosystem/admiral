@@ -63,13 +63,13 @@ func (sec *ServiceEntryController) Added(ojb interface{}) {
 	sec.ServiceEntryHandler.Added(se)
 }
 
-func (sec *ServiceEntryController) Updated(ojb interface{}) {
+func (sec *ServiceEntryController) Updated(ojb interface{}, oldObj interface{}) {
 	se := ojb.(*networking.ServiceEntry)
-	sec.ServiceEntryHandler.Added(se)
+	sec.ServiceEntryHandler.Updated(se)
 }
 
 func (sec *ServiceEntryController) Deleted(ojb interface{}) {
 	se := ojb.(*networking.ServiceEntry)
-	sec.ServiceEntryHandler.Added(se)
+	sec.ServiceEntryHandler.Deleted(se)
 
 }
