@@ -176,5 +176,5 @@ func (d *PodController) Updated(obj interface{}, oldObj interface{}) {
 }
 
 func (d *PodController) Deleted(ojb interface{}) {
-	//TODO deal with this
+	//TODO
 }

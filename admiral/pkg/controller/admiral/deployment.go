@@ -175,7 +175,7 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 }
 
 func (d *DeploymentController) Deleted(ojb interface{}) {
-	//TODO deal with this
+	//TODO
 }
 
 func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
