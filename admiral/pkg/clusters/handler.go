@@ -121,15 +121,12 @@ func getIstioResourceName(host string, suffix string) string {
 }
 
 func makeIngressOnlyVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
-	return &v1alpha32.VirtualService{Hosts: []string{host},
-		Gateways: []string{common.MulticlusterIngressGateway},
-		ExportTo: []string{"*"},
-		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
+	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port);
 }
 
-func makeVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
+func makeVirtualService(host string, gateways [] string, destination string, port uint32) *v1alpha32.VirtualService {
 	return &v1alpha32.VirtualService{Hosts: []string{host},
-		Gateways: []string{common.MulticlusterIngressGateway},
+		Gateways: gateways,
 		ExportTo: []string{"*"},
 		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
 }

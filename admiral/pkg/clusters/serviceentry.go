@@ -181,7 +181,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 			oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{});
 
 			//TODO handle non http ports
-			virtualService := makeVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
+			virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
 
 			newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
 

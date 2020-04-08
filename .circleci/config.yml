@@ -19,6 +19,8 @@ jobs:
         name: Build
         command: |
           make build
+          (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_SHA1}")
+          pwd
     - run:
         name: Tests
         command: |
@@ -53,6 +55,7 @@ jobs:
           make download-kustomize
           echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
           source $BASH_ENV
+          (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
           make gen-yaml
           mkdir ./artifact
           cd out && tar -zcvf ../artifact/admiral-install-${CIRCLE_TAG}.tar.gz * && cd ..
