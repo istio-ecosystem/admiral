@@ -116,5 +116,6 @@ func (d *DependencyController) Updated(obj interface{}, oldObj interface{}) {
 
 func (d *DependencyController) Deleted(ojb interface{}) {
 	dep := ojb.(*v1.Dependency)
+	d.Cache.Delete(dep)
 	d.DepHandler.Deleted(dep)
 }
