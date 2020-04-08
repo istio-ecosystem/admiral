@@ -19,9 +19,6 @@ jobs:
         name: Build
         command: |
           make build
-          make download-kustomize
-          (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_SHA1}")
-          pwd
     - run:
         name: Tests
         command: |
