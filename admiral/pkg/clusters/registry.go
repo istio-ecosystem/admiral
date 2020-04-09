@@ -125,6 +125,13 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
+	log.Infof("starting rollout controller clusterID: %v", clusterID)
+	rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf(" Error with Rollout controller init: %v", err)
+	}
+
 	log.Infof("starting pod controller clusterID: %v", clusterID)
 	rc.PodController, err = admiral.NewPodController(stop, &PodHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
