@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
+	github.com/argoproj/argo-rollouts v0.7.2
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/emicklei/go-restful v2.11.2+incompatible // indirect
 	github.com/go-openapi/spec v0.19.6 // indirect

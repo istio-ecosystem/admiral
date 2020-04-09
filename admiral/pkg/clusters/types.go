@@ -12,8 +12,8 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
-
 	"sync"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 type RemoteController struct {
@@ -27,6 +27,7 @@ type RemoteController struct {
 	DestinationRuleController *istio.DestinationRuleController
 	VirtualServiceController  *istio.VirtualServiceController
 	SidecarController         *istio.SidecarController
+	RolloutController         *admiral.RolloutController
 	stop                      chan struct{}
 	//listener for normal types
 }
@@ -76,6 +77,10 @@ type DependencyHandler struct {
 }
 
 type GlobalTrafficHandler struct {
+	RemoteRegistry *RemoteRegistry
+}
+
+type RolloutHandler struct {
 	RemoteRegistry *RemoteRegistry
 }
 
@@ -352,4 +357,45 @@ func (sc *ServiceHandler) Deleted(obj *k8sV1.Service) {
 
 func getCacheKey(environment string, identity string) string {
 	return fmt.Sprintf("%s.%s", environment, identity)
+}
+
+func (rh *RolloutHandler) Added(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Added", "rollout", obj.Name, obj.ClusterName, "received")
+
+	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "rollout", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	var matchedGTPs []v1.GlobalTrafficPolicy
+	for _, remoteCluster := range rh.RemoteRegistry.remoteControllers {
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+	}
+
+	gtp := common.MatchGTPsToRollout(matchedGTPs, obj)
+
+	if gtp != nil {
+		//TODO:- GTP support for rollout
+/*		err := rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
+		if err != nil {
+			log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
+		} else {
+			log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+		}*/
+	}
+
+	env := common.GetEnvForRollout(obj)
+
+	createServiceEntryForNewServiceOrPodRelatedtoRollout(env, globalIdentifier, rh.RemoteRegistry)
+}
+
+func (gtp *RolloutHandler) Updated(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
+
+}
+
+func (gtp *RolloutHandler) Deleted(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Deleted", "rollout", obj.Name, obj.ClusterName, "received")
 }

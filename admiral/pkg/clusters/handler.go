@@ -15,7 +15,10 @@ import (
 
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
+
+const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -139,6 +142,8 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 		gtpTrafficPolicy := gtp.Policy[0]
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
+
+
 			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
 				targetTrafficMap := make(map[string]uint32)
@@ -616,4 +621,56 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
 	return &v1alpha32.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
+}
+
+
+func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Service {
+
+	if rollout == nil {
+		return nil
+	}
+	//TODO:- Use active service /passive service /rollout stratergy
+	cachedService := rc.ServiceController.Cache.Get(rollout.Namespace)
+
+	if cachedService == nil {
+		return nil
+	}
+	rolloutStrategy := rollout.Spec.Strategy
+
+	if rolloutStrategy.BlueGreen == nil && rolloutStrategy.Canary == nil {
+		//TODO:- Add a log ?
+		return nil
+	}
+
+	var blueGreenActiveService string
+	if rolloutStrategy.BlueGreen != nil {
+		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
+	}
+	var matchedService *k8sV1.Service
+	for _, service := range cachedService.Service[rollout.Namespace] {
+		var match = true
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name!= blueGreenActiveService{
+           continue
+		}
+		for lkey, lvalue := range service.Spec.Selector {
+			// Rollout spec will not contain
+			if(lkey == ROLLOUT_POD_HASH_LABEL){
+				continue;
+			}
+			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
+			if !ok || value != lvalue {
+				match = false
+				break
+			}
+		}
+		//make sure the service matches the rollout Selector and also has a mesh port in the port spec
+		if match {
+			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
+			if len(ports) > 0 {
+				matchedService = service
+				break
+			}
+		}
+	}
+	return matchedService
 }
