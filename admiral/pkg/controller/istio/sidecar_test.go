@@ -2,6 +2,9 @@ package istio
 
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	v1alpha32 "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"testing"
 	"time"
@@ -24,4 +27,12 @@ func TestNewSidecarController(t *testing.T) {
 	if sidecarController == nil {
 		t.Errorf("Sidecar controller should never be nil without an error thrown")
 	}
+
+	sc := &v1alpha3.Sidecar{Spec: v1alpha32.Sidecar{}, ObjectMeta: v1.ObjectMeta{Name: "sc1", Namespace: "namespace1"}}
+
+	sidecarController.Added(sc)
+
+	sidecarController.Updated(sc, sc)
+
+	sidecarController.Deleted(sc)
 }

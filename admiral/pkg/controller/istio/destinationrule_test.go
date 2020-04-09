@@ -2,6 +2,9 @@ package istio
 
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	v1alpha32 "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	"testing"
 	"time"
@@ -24,4 +27,12 @@ func TestNewDestinationRuleController(t *testing.T) {
 	if destinationRuleController == nil {
 		t.Errorf("DestinationRule controller should never be nil without an error thrown")
 	}
+
+	dstRule := &v1alpha3.DestinationRule{Spec: v1alpha32.DestinationRule{}, ObjectMeta: v1.ObjectMeta{Name: "dr1", Namespace: "namespace1"}}
+
+	destinationRuleController.Added(dstRule)
+
+	destinationRuleController.Updated(dstRule, dstRule)
+
+	destinationRuleController.Deleted(dstRule)
 }

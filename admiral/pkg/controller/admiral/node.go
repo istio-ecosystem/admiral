@@ -67,5 +67,5 @@ func (p *NodeController) Updated(obj interface{}, oldObj interface{}) {
 }
 
 func (p *NodeController) Deleted(obj interface{}) {
-	p.NodeHandler.Deleted(nil)
+	//ignore
 }

@@ -114,7 +114,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-	}
+}
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
@@ -468,4 +468,73 @@ func TestCreateServiceEntry(t *testing.T) {
 		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
 	}
 
+}
+
+func TestCreateIngressOnlyVirtualService(t *testing.T) {
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rcCreate := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClient,
+		},
+	}
+
+	rcUpdate:= &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClient,
+		},
+	}
+
+	cname := "qa.mysvc.global"
+
+	vsname := cname + "-default-vs"
+
+	localFqdn := "mysvc.newmynamespace.svc.cluster.local"
+	localFqdn2 := "mysvc.mynamespace.svc.cluster.local"
+
+	//test create
+	createIngressOnlyVirtualService(rcCreate, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, localFqdn, map[string]uint32 {common.Http : 80})
+
+	vs, err := fakeIstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
+
+	if err != nil {
+		t.Errorf("Virtual service create failed with err: %v", err)
+		t.FailNow()
+	}
+
+	if vs == nil || vs.Spec.Http[0].Route[0].Destination.Host != localFqdn {
+		if vs != nil {
+			t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn, vs.Spec.Http[0].Route[0].Destination.Host)
+		}
+		t.FailNow()
+	}
+
+	if len(vs.Spec.Gateways) > 1 || vs.Spec.Gateways[0] != common.MulticlusterIngressGateway {
+		t.Errorf("Virtual service gateway expected: %v, got: %v", common.MulticlusterIngressGateway, vs.Spec.Gateways)
+	}
+
+	fakeIstioClient.NetworkingV1alpha3().VirtualServices("mynamespace").Create(&v1alpha3.VirtualService{
+		Spec:istionetworkingv1alpha3.VirtualService{},
+		ObjectMeta: v12.ObjectMeta{Name: vsname, Namespace: "mynamespace"}})
+
+	//test update
+	createIngressOnlyVirtualService(rcUpdate, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, localFqdn2, map[string]uint32 {common.Http : 80})
+
+	vs, err = fakeIstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
+
+	if err != nil {
+		t.Errorf("Virtual service updated failed with err: %v", err)
+		t.FailNow()
+	}
+
+	if vs == nil || vs.Spec.Http[0].Route[0].Destination.Host != localFqdn2 {
+		if vs != nil {
+			t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
+		}
+		t.FailNow()
+	}
+
+	if len(vs.Spec.Gateways) > 1 || vs.Spec.Gateways[0] != common.MulticlusterIngressGateway {
+		t.Errorf("Virtual service gateway expected: %v, got: %v", common.MulticlusterIngressGateway, vs.Spec.Gateways)
+	}
 }

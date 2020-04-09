@@ -32,11 +32,6 @@ type DestinationRuleController struct {
 	ctl        *admiral.Controller
 }
 
-func (d *ServiceEntryController) GetDestinationRules() ([]*networking.DestinationRule, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRuleHandler, config *rest.Config, resyncPeriod time.Duration) (*DestinationRuleController, error) {
 
 	drController := DestinationRuleController{}

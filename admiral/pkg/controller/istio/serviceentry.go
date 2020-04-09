@@ -32,11 +32,6 @@ type ServiceEntryController struct {
 	ctl        *admiral.Controller
 }
 
-func (d *ServiceEntryController) GetServiceEntries() ([]*networking.ServiceEntry, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {
 
 	seController := ServiceEntryController{}

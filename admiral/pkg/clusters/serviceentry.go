@@ -176,16 +176,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 				}
 			}
 			//add virtual service for routing locally in within the cluster
-			virtualServiceName := getIstioResourceName(cname, "-default-vs")
-
-			oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{});
-
-			//TODO handle non http ports
-			virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
-
-			newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
-
-			addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc);
+			createIngressOnlyVirtualService(rc, cname, serviceEntry, localFqdn, meshPorts)
 
 		}
 
@@ -198,6 +189,19 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		}
 	}
 	return serviceEntries
+}
+
+func createIngressOnlyVirtualService(rc *RemoteController, cname string, serviceEntry *networking.ServiceEntry, localFqdn string, meshPorts map[string]uint32) {
+	virtualServiceName := getIstioResourceName(cname, "-default-vs")
+
+	oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{});
+
+	//TODO handle non http ports
+	virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
+
+	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
+
+	addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc);
 }
 
 func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {

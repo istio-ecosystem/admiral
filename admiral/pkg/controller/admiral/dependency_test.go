@@ -38,12 +38,6 @@ func TestGetDependencies(t *testing.T) {
 		t.Errorf("Dependency controller should never be nil without an error thrown")
 	}
 
-	//test add
-	depName := "dep1"
-	dep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments"}, Source: "webapp"}
-	depObj := makeK8sDependencyObj(depName, "namespace1", dep)
-	dependencyController.Added(depObj)
-
 	deps, _  := dependencyController.GetDependencies()
 
 	if deps != nil {

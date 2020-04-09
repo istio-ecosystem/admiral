@@ -32,11 +32,6 @@ type SidecarController struct {
 	ctl            *admiral.Controller
 }
 
-func (d *SidecarController) GetSidecars() ([]*networking.Sidecar, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration) (*SidecarController, error) {
 
 	sidecarController := SidecarController{}
