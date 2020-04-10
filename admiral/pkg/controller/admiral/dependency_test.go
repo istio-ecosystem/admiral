@@ -25,39 +25,6 @@ func TestNewDependencyController(t *testing.T) {
 	}
 }
 
-func TestGetDependencies(t *testing.T) {
-	stop := make(chan struct{})
-	handler := test.MockDependencyHandler{}
-
-	dependencyController, err := NewDependencyController(stop, &handler, "../../test/resources/admins@fake-cluster.k8s.local", "ns", time.Duration(1000))
-
-	if err != nil {
-		t.Errorf("Unexpected err %v", err)
-	}
-
-	if dependencyController == nil {
-		t.Errorf("Dependency controller should never be nil without an error thrown")
-	}
-
-	deps, _  := dependencyController.GetDependencies()
-
-	if deps != nil {
-		t.Errorf("deps is not nil")
-	}
-
-	dep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
-	depObj := makeK8sDependencyObj("mydep", "namespace1", dep)
-
-	dependencyController.DepCrdClient.AdmiralV1().Dependencies("namespace1").Create(depObj);
-
-	deps, _  = dependencyController.GetDependencies()
-
-	if deps == nil || len(deps) == 0{
-		t.Errorf("deps should be non empty")
-	}
-
-}
-
 func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockDependencyHandler{}
@@ -80,7 +47,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 
 	newDepObj := dependencyController.Cache.Get(depName)
 
-	if !cmp.Equal(depObj, newDepObj) {
+	if !cmp.Equal(depObj.Spec, newDepObj.Spec) {
 		t.Errorf("dep update failed, expected: %v got %v", depObj, newDepObj)
 	}
 
@@ -91,7 +58,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 
 	updatedDepObj := dependencyController.Cache.Get(depName)
 
-	if !cmp.Equal(updatedObj, updatedDepObj) {
+	if !cmp.Equal(updatedObj.Spec, updatedDepObj.Spec) {
 		t.Errorf("dep update failed, expected: %v got %v", updatedObj, updatedDepObj)
 	}
 

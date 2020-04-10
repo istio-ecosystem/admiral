@@ -29,17 +29,6 @@ type GlobalTrafficController struct {
 	clusterName string
 }
 
-func (g *GlobalTrafficController) GetGlobalTrafficPolicies() ([]v1.GlobalTrafficPolicy, error) {
-
-	gtp := g.CrdClient.AdmiralV1().GlobalTrafficPolicies(meta_v1.NamespaceAll)
-	dl, err := gtp.List(meta_v1.ListOptions{})
-
-	if err != nil {
-		return nil, err
-	}
-	return dl.Items, err
-}
-
 func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
 
 	globalTrafficController := GlobalTrafficController{}
