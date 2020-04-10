@@ -4,7 +4,7 @@ We welcome contributions :)
 
 ## Submitting PRs
 * Make sure to check existing issues and file an issue before starting to work on a feature/bug. This will help prevent duplication of work. 
-Also refer to [Collaboration](./README.md#Collaboration and Communication) for communication channels.
+Also refer to [Collaboration](./README.md) for communication channels.
 
 ## Setting up for local Development
 * Clone the repo and set ADMIRAL_HOME env variable
