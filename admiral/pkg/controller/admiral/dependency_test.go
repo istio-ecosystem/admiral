@@ -1,6 +1,7 @@
 package admiral
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
@@ -44,6 +45,17 @@ func TestGetDependencies(t *testing.T) {
 		t.Errorf("deps is not nil")
 	}
 
+	dep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
+	depObj := makeK8sDependencyObj("mydep", "namespace1", dep)
+
+	dependencyController.DepCrdClient.AdmiralV1().Dependencies("namespace1").Create(depObj);
+
+	deps, _  = dependencyController.GetDependencies()
+
+	if deps == nil || len(deps) == 0{
+		t.Errorf("deps should be non empty")
+	}
+
 }
 
 func TestDependencyAddUpdateAndDelete(t *testing.T) {
@@ -68,18 +80,19 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 
 	newDepObj := dependencyController.Cache.Get(depName)
 
-	if newDepObj == nil || newDepObj.Spec.Source != "webapp" {
-		t.Errorf("dep add failed")
+	if !cmp.Equal(depObj, newDepObj) {
+		t.Errorf("dep update failed, expected: %v got %v", depObj, newDepObj)
 	}
 
 	//test update
 	updatedDep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
+	updatedObj := makeK8sDependencyObj(depName, "namespace1", updatedDep)
 	dependencyController.Updated(makeK8sDependencyObj(depName, "namespace1", updatedDep), depObj)
 
 	updatedDepObj := dependencyController.Cache.Get(depName)
 
-	if updatedDepObj == nil || updatedDepObj.Spec.Source != "webapp" ||  len(updatedDepObj.Spec.Destinations) != 3 {
-		t.Errorf("dep update failed")
+	if !cmp.Equal(updatedObj, updatedDepObj) {
+		t.Errorf("dep update failed, expected: %v got %v", updatedObj, updatedDepObj)
 	}
 
 	//test delete

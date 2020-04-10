@@ -4,7 +4,7 @@ kind: Kustomization
 images:
 - name: docker.io/admiralproj/admiral
   newName: docker.io/admiralproj/admiral
-  newTag: kubecon
+  newTag: latest
 
 
 patchesStrategicMerge:

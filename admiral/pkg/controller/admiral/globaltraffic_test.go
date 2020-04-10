@@ -3,6 +3,7 @@ package admiral
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -68,6 +69,8 @@ func TestGlobalTrafficGetGtps(t *testing.T) {
 
 	globalTrafficController, err := NewGlobalTrafficController(stop, &handler, config, time.Duration(1000))
 
+	globalTrafficController.CrdClient = fake.NewSimpleClientset()
+
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
 	}
@@ -80,6 +83,22 @@ func TestGlobalTrafficGetGtps(t *testing.T) {
 
 	if gtps != nil {
 		t.Errorf("gtps is not nil")
+	}
+
+	gtpName := "gtp1"
+	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy:[]*model.TrafficPolicy{}}
+	gtpObj := makeK8sGtpObj(gtpName, "namespace1", gtp)
+
+	globalTrafficController.CrdClient.AdmiralV1().GlobalTrafficPolicies("namespace1").Create(gtpObj);
+
+	gtps, err  = globalTrafficController.GetGlobalTrafficPolicies()
+
+	if err != nil {
+		t.Errorf("get gtps shouldn't error out, got: %v", err)
+	}
+
+	if gtps == nil || len(gtps) == 0 {
+		t.Errorf("gtps should be non empty")
 	}
 }
 
@@ -105,6 +124,18 @@ func TestGlobalTrafficGetByLabel(t *testing.T) {
 
 	if gtps != nil || len(gtps) > 0 {
 		t.Errorf("gtps is not empty")
+	}
+
+	gtpName := "gtp1"
+	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy:[]*model.TrafficPolicy{}}
+	gtpObj := makeK8sGtpObj(gtpName, "namespace1", gtp)
+
+	globalTrafficController.CrdClient.AdmiralV1().GlobalTrafficPolicies("namespace1").Create(gtpObj);
+
+	gtps  = globalTrafficController.GetGTPByLabel("payments", "namespace1")
+
+	if gtps == nil || len(gtps) == 0 {
+		t.Errorf("gtps should be non empty")
 	}
 }
 
