@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -32,7 +33,20 @@ func TestNewServiceEntryController(t *testing.T) {
 
 	serviceEntryController.Added(serviceEntry)
 
-	serviceEntryController.Updated(serviceEntry, serviceEntry)
+	if !cmp.Equal(serviceEntry.Spec, handler.Obj.Spec) {
+		t.Errorf("Handler should have the added obj")
+	}
+
+	updatedServiceEntry := &v1alpha32.ServiceEntry{Spec: v1alpha3.ServiceEntry{Hosts:[]string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "se1", Namespace: "namespace1"}}
+	serviceEntryController.Updated(updatedServiceEntry, serviceEntry)
+
+	if !cmp.Equal(updatedServiceEntry.Spec, handler.Obj.Spec) {
+		t.Errorf("Handler should have the updated obj")
+	}
 
 	serviceEntryController.Deleted(serviceEntry)
+
+	if handler.Obj != nil {
+		t.Errorf("Handler should have no obj")
+	}
 }

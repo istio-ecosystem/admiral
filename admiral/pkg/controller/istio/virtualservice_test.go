@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -32,7 +33,21 @@ func TestNewVirtualServiceController(t *testing.T) {
 
 	virtualServiceController.Added(vs)
 
-	virtualServiceController.Updated(vs, vs)
+	if !cmp.Equal(vs.Spec, handler.Obj.Spec) {
+		t.Errorf("Handler should have the added obj")
+	}
+
+	updatedVs := &v1alpha3.VirtualService{Spec: v1alpha32.VirtualService{Hosts:[]string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "vs1", Namespace: "namespace1"}}
+
+	virtualServiceController.Updated(updatedVs, vs)
+
+	if !cmp.Equal(updatedVs.Spec, handler.Obj.Spec) {
+		t.Errorf("Handler should have the updated obj")
+	}
 
 	virtualServiceController.Deleted(vs)
+
+	if handler.Obj != nil {
+		t.Errorf("Handler should have no obj")
+	}
 }

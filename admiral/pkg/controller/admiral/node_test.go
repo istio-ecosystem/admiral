@@ -57,13 +57,13 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	}
 
 	nodeController.Updated(nodeObj, nodeObj)
-	//should make no difference
+	//update should make no difference
 	if locality.Region != region {
 		t.Errorf("region expected %v, got: %v", region, locality.Region)
 	}
 
 	nodeController.Deleted(nodeObj)
-	//should make no difference
+	//delete should make no difference
 	if locality.Region != region {
 		t.Errorf("region expected %v, got: %v", region, locality.Region)
 	}
