@@ -72,5 +72,23 @@ func TestConfigManagement(t *testing.T) {
 	if GetGlobalTrafficDeploymentLabel() != "identity" {
 		t.Fatalf("GTP Deployment label mismatch. Expected identity, got %v", GetGlobalTrafficDeploymentLabel())
 	}
+	if GetGlobalTrafficDeploymentLabel() != "identity" {
+		t.Fatalf("GTP Deployment label mismatch. Expected identity, got %v", GetGlobalTrafficDeploymentLabel())
+	}
+	if GetWorkloadSidecarName() != "default" {
+		t.Fatalf("Workload Sidecar Name mismatch. Expected default, got %v", GetWorkloadSidecarName())
+	}
+	if GetWorkloadSidecarUpdate() != "disabled" {
+		t.Fatalf("Workload Sidecar Name mismatch. Expected disabled, got %v", GetWorkloadSidecarUpdate())
+	}
+	if GetWorkloadSidecarUpdate() != "disabled" {
+		t.Fatalf("Workload Sidecar Name mismatch. Expected disabled, got %v", GetWorkloadSidecarUpdate())
+	}
+
+	SetKubeconfigPath("/mypath/custom/kubeconfig")
+
+	if GetKubeconfigPath() != "/mypath/custom/kubeconfig" {
+		t.Fatalf("Workload Sidecar Name mismatch. Expected /mypath/custom/kubeconfig, got %v", GetKubeconfigPath())
+	}
 
 }

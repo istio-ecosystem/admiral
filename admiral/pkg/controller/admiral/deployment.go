@@ -41,25 +41,12 @@ type deploymentCache struct {
 	mutex *sync.Mutex
 }
 
-func (p *deploymentCache) Put(deploymentEntry *DeploymentClusterEntry) {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-
-	p.cache[deploymentEntry.Identity] = deploymentEntry
-}
-
 func (p *deploymentCache) getKey(deployment *k8sAppsV1.Deployment) string {
 	return common.GetDeploymentGlobalIdentifier(deployment)
 }
 
 func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
 	return p.cache[key]
-}
-
-func (p *deploymentCache) Delete(pod *DeploymentClusterEntry) {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-	delete(p.cache, pod.Identity)
 }
 
 func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sAppsV1.Deployment) {
