@@ -323,33 +323,6 @@ func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
 	//TODO update subset service entries
 }
 
-func (nc *NodeHandler) Added(obj *k8sV1.Node) {
-	//log.Infof("New Pod %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
-}
-
-func (pc *NodeHandler) Deleted(obj *k8sV1.Node) {
-	//	log.Infof("Pod deleted %s on cluster: %s in namespace: %s", obj.Name, obj.ClusterName, obj.Namespace)
-}
-
-func (sc *ServiceHandler) Added(obj *k8sV1.Service) {
-
-	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Received, doing nothing")
-
-	//sourceIdentity := common.GetServiceGlobalIdentifier(obj)
-	//
-	//if len(sourceIdentity) == 0 {
-	//	log.Infof(LogFormat, "Event", "service", obj.Name, "", "Skipped as '" + common.GlobalIdentifier() + " was not found', namespace=" + obj.Namespace)
-	//	return
-	//}
-	//
-	//createServiceEntryForNewServiceOrPod(obj.Namespace, sourceIdentity, sc.RemoteRegistry, sc.RemoteRegistry.config.SyncNamespace)
-
-}
-
-func (sc *ServiceHandler) Deleted(obj *k8sV1.Service) {
-
-}
-
 func getCacheKey(environment string, identity string) string {
 	return fmt.Sprintf("%s.%s", environment, identity)
 }

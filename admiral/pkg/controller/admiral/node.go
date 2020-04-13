@@ -13,8 +13,6 @@ import (
 
 // Handler interface contains the methods that are required
 type NodeHandler interface {
-	Added(obj *k8sV1.Node)
-	Deleted(obj *k8sV1.Node)
 }
 
 type NodeController struct {
@@ -58,8 +56,6 @@ func (p *NodeController) Added(obj interface{}) {
 	if p.Locality == nil {
 		p.Locality = &Locality{Region: common.GetNodeLocality(node)}
 	}
-	p.NodeHandler.Added(node)
-
 }
 
 func (p *NodeController) Updated(obj interface{}, oldObj interface{}) {
