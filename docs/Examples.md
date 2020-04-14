@@ -99,10 +99,10 @@ kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.9/admiral-install-v0.9.tar.gz
-tar xvf admiral-install-v0.9.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
+tar xvf admiral-install-v0.1-beta.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v0.9
+export ADMIRAL_HOME=./admiral-install-v0.1-beta
 ```
 
 ```
