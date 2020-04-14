@@ -93,30 +93,12 @@ func TestGlobalTrafficGetByLabel(t *testing.T) {
 		t.Errorf("GlobalTraffic controller should never be nil without an error thrown")
 	}
 
-	gtpName := "gtp1"
-	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy:[]*model.TrafficPolicy{}}
-	gtpObj := makeK8sGtpObj(gtpName, "namespace1", gtp)
-
-	//objs := []runtime.Object{gtpObj}
-	//
-	//s := scheme.Scheme
-	//
-	//s.AddKnownTypes(v1.SchemeGroupVersion, gtpObj)
-
 	globalTrafficController.CrdClient = fake.NewSimpleClientset()
 
 	gtps  := globalTrafficController.GetGTPByLabel("payments", "namespace1")
 
 	if gtps != nil || len(gtps) > 0 {
 		t.Errorf("gtps is not empty")
-	}
-
-	globalTrafficController.CrdClient.AdmiralV1().GlobalTrafficPolicies("namespace1").Create(gtpObj);
-
-	gtps  = globalTrafficController.GetGTPByLabel("payments", "namespace1")
-
-	if gtps == nil || len(gtps) == 0 {
-		t.Errorf("gtps should be non empty")
 	}
 }
 
