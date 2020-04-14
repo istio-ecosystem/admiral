@@ -11,7 +11,7 @@ One or more k8s clusters will need the following steps executed
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 * Install [minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
-* Install [helm](https://github.com/helm/helm/blob/master/docs/install.md)
+* Install [helm](https://helm.sh/docs/intro/install/)
 * Install [wget](https://www.gnu.org/software/wget/)
 
 #### Install Istio

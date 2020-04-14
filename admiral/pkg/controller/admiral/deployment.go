@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/rest"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -175,8 +176,23 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 	if deployment.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
+
 	if deployment.Spec.Template.Annotations[d.labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
-			return true
+		return true
+	}
+
+	if deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		return true
+	}
+
+	ns, err := d.K8sClient.CoreV1().Namespaces().Get(deployment.Namespace, meta_v1.GetOptions{})
+	if err != nil {
+		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+		return false
+	}
+
+	if ns.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		return true
 	}
 	return false //labels are fine, we should not ignore
 }
