@@ -4,7 +4,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
@@ -92,8 +91,6 @@ func TestGlobalTrafficGetByLabel(t *testing.T) {
 	if globalTrafficController == nil {
 		t.Errorf("GlobalTraffic controller should never be nil without an error thrown")
 	}
-
-	globalTrafficController.CrdClient = fake.NewSimpleClientset()
 
 	gtps  := globalTrafficController.GetGTPByLabel("payments", "namespace1")
 

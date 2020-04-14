@@ -79,10 +79,7 @@ func TestConfigManagement(t *testing.T) {
 		t.Fatalf("Workload Sidecar Name mismatch. Expected default, got %v", GetWorkloadSidecarName())
 	}
 	if GetWorkloadSidecarUpdate() != "disabled" {
-		t.Fatalf("Workload Sidecar Name mismatch. Expected disabled, got %v", GetWorkloadSidecarUpdate())
-	}
-	if GetWorkloadSidecarUpdate() != "disabled" {
-		t.Fatalf("Workload Sidecar Name mismatch. Expected disabled, got %v", GetWorkloadSidecarUpdate())
+		t.Fatalf("Workload Sidecar Update mismatch. Expected disabled, got %v", GetWorkloadSidecarUpdate())
 	}
 
 	SetKubeconfigPath("/mypath/custom/kubeconfig")
