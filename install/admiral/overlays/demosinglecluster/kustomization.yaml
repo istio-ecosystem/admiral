@@ -1,15 +1,17 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
+apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 images:
-- name: docker.io/admiralproj/admiral
-  newName: docker.io/admiralproj/admiral
-  newTag: latest
+  - name: docker.io/admiralproj/admiral
+    newTag: latest
 
+bases:
+  - ../../base
 
 patchesStrategicMerge:
-- envconfig_values.yaml
+  - envconfig_values.yaml
 
 resources:
-- ns.yaml
-- ../../base
+  - ns.yaml
+
+
