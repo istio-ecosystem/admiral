@@ -112,7 +112,6 @@ func (d *RolloutController) GetRollouts() ([]*argo.Rollout, error) {
 
 	for _, v := range istioEnabledNs.Items {
 
-		//rollouts := d.K8sClient.AppsV1().Deployments(v.Name)
 		rollouts := d.RolloutClient.Rollouts(v.Name)
 		rolloutsList, err := rollouts.List(meta_v1.ListOptions{})
 		if err != nil {

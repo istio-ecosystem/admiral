@@ -3,7 +3,9 @@ kind: Kustomization
 
 namespace: sample-rollout-bluegreen
 
+bases:
+  - ../../base
+
 resources:
-  - namespace.yaml
   - greeting.yaml
-  - webapp.yaml
+  - namespace.yaml
