@@ -1,11 +1,11 @@
 apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: sample
+namespace: sample-rollout-canary
 
 bases:
   - ../../base
 
-patchesStrategicMerge:
+resources:
   - greeting.yaml
-
+  - namespace.yaml

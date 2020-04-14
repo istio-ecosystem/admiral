@@ -6,6 +6,5 @@ namespace: sample
 bases:
   - ../../base
 
-patchesStrategicMerge:
+resources:
   - greeting.yaml
-

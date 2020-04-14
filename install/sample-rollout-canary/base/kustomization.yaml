@@ -1,9 +1,0 @@
-apiversion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-namespace: sample-rollout-canary
-
-resources:
-  - namespace.yaml
-  - greeting.yaml
-  - webapp.yaml
