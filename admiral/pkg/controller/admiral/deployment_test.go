@@ -68,6 +68,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
+			depController.K8sClient = fake.NewSimpleClientset()
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			depController.Added(c.deployment)
 			if c.expectedDeployment == nil {
