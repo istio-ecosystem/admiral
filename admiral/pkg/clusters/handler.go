@@ -81,7 +81,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 				if deployments == nil || len(deployments.Deployments) == 0 {
 					continue
 				}
-				//TODO pass deployment
+
 				tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
 
 				if tmpSe == nil {
@@ -120,9 +120,13 @@ func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-func makeVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
+func makeIngressOnlyVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
+	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port);
+}
+
+func makeVirtualService(host string, gateways [] string, destination string, port uint32) *v1alpha32.VirtualService {
 	return &v1alpha32.VirtualService{Hosts: []string{host},
-		Gateways: []string{common.MulticlusterIngressGateway},
+		Gateways: gateways,
 		ExportTo: []string{"*"},
 		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
 }
@@ -483,7 +487,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
 	var err error
 	var op string
-	if exist == nil {
+	if exist == nil || len(exist.Spec.Hosts) == 0 {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(obj)
@@ -559,6 +563,10 @@ func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace st
 
 func createDestinationRulSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
+}
+
+func createVirtualServiceSkeletion(se v1alpha32.VirtualService, name string, namespace string) *v1alpha3.VirtualService {
+	return &v1alpha3.VirtualService{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
