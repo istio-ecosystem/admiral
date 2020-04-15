@@ -135,5 +135,4 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
-	cp ./install/scripts/cluster-secret.sh ./out/scripts/cluster-secret.sh
-	cp ./install/scripts/redirect-dns.sh ./out/scripts/redirect-dns.sh
+	cp ./install/scripts/*.sh ./out/scripts/

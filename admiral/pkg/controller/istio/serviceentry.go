@@ -32,11 +32,6 @@ type ServiceEntryController struct {
 	ctl        *admiral.Controller
 }
 
-func (d *ServiceEntryController) GetServiceEntries() ([]*networking.ServiceEntry, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {
 
 	seController := ServiceEntryController{}
@@ -63,13 +58,13 @@ func (sec *ServiceEntryController) Added(ojb interface{}) {
 	sec.ServiceEntryHandler.Added(se)
 }
 
-func (sec *ServiceEntryController) Updated(ojb interface{}) {
+func (sec *ServiceEntryController) Updated(ojb interface{}, oldObj interface{}) {
 	se := ojb.(*networking.ServiceEntry)
-	sec.ServiceEntryHandler.Added(se)
+	sec.ServiceEntryHandler.Updated(se)
 }
 
 func (sec *ServiceEntryController) Deleted(ojb interface{}) {
 	se := ojb.(*networking.ServiceEntry)
-	sec.ServiceEntryHandler.Added(se)
+	sec.ServiceEntryHandler.Deleted(se)
 
 }

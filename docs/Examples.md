@@ -1,90 +1,16 @@
 
 ## Install
 
-### Prerequisite
+### Prerequisites
 
-One or more k8s clusters will need the following steps executed
-
-#### Install the below utilities
-
-`Note`: If running in windows, a bash shell is required (cygwin)
-
-* Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-* Install [minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
-* Install [helm](https://helm.sh/docs/intro/install/)
-* Install [wget](https://www.gnu.org/software/wget/)
-
-#### Install Istio
-
-```
-#Download
-
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-osx.tar.gz
-OR
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-linux.tar.gz
-OR
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-win.tar.gz
-
-#Extract
-
-tar -xf istio-1.4.3-osx.tar.gz
-OR
-tar -xf istio-1.4.3-linux.tar.gz
-OR
-tar -xf istio-1.4.3-win.tar.gz
-```
-
-```
-#Create istio-system namespace
-
-kubectl create ns istio-system
-```
-```
-#Create k8s secret to be used by Citadel for mTLS cert generation
-
-kubectl create secret generic cacerts -n istio-system \
-    --from-file=istio-1.4.3/samples/certs/ca-cert.pem \
-    --from-file=istio-1.4.3/samples/certs/ca-key.pem \
-    --from-file=istio-1.4.3/samples/certs/root-cert.pem \
-    --from-file=istio-1.4.3/samples/certs/cert-chain.pem
-```
-```
-#Generate, install and verify Istio CRDs
-
-helm template istio-1.4.3/install/kubernetes/helm/istio-init --namespace istio-system | kubectl apply -f -
-
-#Make sure Istio crds are installed
-
-kubectl get crds | grep 'istio.io' | wc -l
-```
-```
-#Generate & Install Istio
-
-helm template istio-1.4.3/install/kubernetes/helm/istio --namespace istio-system \
-    -f istio-1.4.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
-
-#Verify that istio pods are up
-
-kubectl get pods -n istio-system
-```
-
-#### DNS setup
-In a k8s cluster, you will have a DNS component that would resolve names. Admiral generates names ending in global (Ex: `stage.greeting.global`) which can be resolved by istiocoredns (as its watching Istio ServiceEntries created by Admiral with those names) installed as part of Istio.
-So you have to point DNS resolution for names ending in `global` to point to `ClusterIp` of istiocoredns service. The below step is to point coredns in a k8s cluster to istiocoredns. If you are using kube-dns, you can tweak this script.
-
-```Note: The below script wipes out existing codedns config map, please manually edit it if you want to try this in a cluster with real services/traffic```
-
-```
-#Run the below script for having coredns point to istiocoredns for dns lookups of names ending in global
-
-./admiral-install-v0.1-beta/scripts/redirect-dns.sh
-```
-
-#### Remove envoy cluster rewrite filter
+* One or more k8s clusters with version 1.13 or above
+* [Install istio control plane](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster) on each of these k8s clusters
+* [Configure DNS redirect](https://istio.io/docs/setup/install/multicluster/gateways/#setup-dns) for entries ending in `global`
+* Remove envoy cluster rewrite filter
 Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
 ```
-# Delete envoy filter for translating `global` to `svc.cluster.local`
-kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+    # Delete envoy filter for translating `global` to `svc.cluster.local`
+    kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
@@ -99,26 +25,23 @@ kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
-tar xvf admiral-install-v0.1-beta.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.9/admiral-install-v0.9.tar.gz
+tar xvf admiral-install-v0.9.tar.gz
+
+export ADMIRAL_HOME=./admiral-install-v0.9
 ```
 
 ```
 #Install admiral
+$ADMIRAL_HOME/scripts/install_admiral.sh $ADMIRAL_HOME
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/demosinglecluster.yaml
-
-#Verify admiral is running
-
-kubectl get pods -n admiral
 ```
 
 ```
 #Create the secret for admiral to monitor.
 
 #Since this is for a single cluster demo the remote and local context are the same
-./admiral-install-v0.1-beta/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+$ADMIRAL_HOME/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 ```
 ```
 #Verify the secret
@@ -128,18 +51,9 @@ kubectl get secrets -n admiral
 #### Deploy Sample Services
 
 ```
-#Install test services
+#Install test services & verify admiral did it's magic
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample.yaml
-```
-```
-#Install the dependency CR (this is optional)
-
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample_dep.yaml
-
-#Verify that admiral created service names for 'greeting' service
-
-kubectl get serviceentry -n admiral-sync
+$ADMIRAL_HOME/scripts/install_sample_services.sh $ADMIRAL_HOME
 
 ```
 
@@ -223,7 +137,7 @@ export CLUSTER_2=<path_to_kubeconfig_for_cluster_2>
 # Switch kubectx to Cluster 2
 export KUBECONFIG=$CLUSTER_2
 # Create admiral role and bindings on Cluster 2
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster.yaml
 ```
 
 ```
@@ -231,7 +145,7 @@ kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
 export KUBECONFIG=$CLUSTER_1
 
 # Create the k8s secret for admiral to monitor Cluster 2.
-./admiral-install-v0.1-beta/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
+$ADMIRAL_HOME/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
 ```
 
 At this point, admiral is watching `Cluster 2`
@@ -243,7 +157,7 @@ export KUBECONFIG=$CLUSTER_2
 
 #Install test services in Cluster 2
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster_sample.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster_sample.yaml
 ```
 
 #### Verify
@@ -264,6 +178,20 @@ Now run the below request multiple times and see the requests being load balance
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
 
+### Global traffic policy
+
+Multicluster example is a prerequisite for the below example with Cluster 2 hosted in us-east-2 region.
+
+You can add a global traffic policy for the Greeting service to distribute traffic between clusters in a certain ratio. 
+
+```bash
+kubectl apply -f $ADMIRAL_HOME/yaml/gtp.yaml
+```
+
+Now, when you re-run demo requests, you should see 80% of them being served from the us-west-2 cluster (Cluster 1) and 20% of them being served from us-east-2 (Cluster 2).
+
+`Note`: You can add locality to your pods in Cluster 2 by using K8s standard region labels if your cluster if not running on a cloud provider like AWS. See these [requirements](https://istio.io/docs/ops/configuration/traffic-management/locality-load-balancing/#requirements)
+
 #### Argo-Rollouts 
 
 #### Install Argo-rollouts
@@ -281,7 +209,7 @@ Refer [this](https://argoproj.github.io/argo-rollouts/features/bluegreen/) for d
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample-greeting-rollout-bluegreen.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample-greeting-rollout-bluegreen.yaml
 ```
 #### Demo
 
@@ -298,7 +226,7 @@ Refer [this](https://argoproj.github.io/argo-rollouts/features/canary/) for deta
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample-greeting-rollout-canary.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample-greeting-rollout-canary.yaml
 ```
 
 #### Demo
@@ -307,4 +235,12 @@ Now, run the command below that uses the CNAME generated by Admiral
 ```
 kubectl exec --namespace=sample-rollout-canary -it $(kubectl get pod -l "app=webapp" --namespace=sample-rollout-canary -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://canary.greeting.global
 
+```
+
+### Cleanup
+
+Run the following script to cleanup admiral and its associated resources
+
+```bash
+$ADMIRAL_HOME/scripts/cleanup.sh
 ```
