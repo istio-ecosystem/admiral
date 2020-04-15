@@ -40,6 +40,14 @@ func TestDeploymentController_Added(t *testing.T) {
 	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
 	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithIgnoreAnnotations := k8sAppsV1.Deployment{}
+	deploymentWithIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
+	deploymentWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore":"true"}
+	deploymentWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithNsIgnoreAnnotations := k8sAppsV1.Deployment{}
+	deploymentWithNsIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
+	deploymentWithNsIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithNsIgnoreAnnotations.Namespace = "test-ns"
 
 	testCases := []struct {
 		name               string
@@ -60,8 +68,20 @@ func TestDeploymentController_Added(t *testing.T) {
 			expectedCacheSize:  0,
 		},
 		{
-			name:               "Expects ignored deployment to not be added to the cache",
+			name:               "Expects ignored deployment identified by label to not be added to the cache",
 			deployment:         &deploymentWithIgnoreLabels,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
+		{
+			name:               "Expects ignored deployment identified by deployment annotation to not be added to the cache",
+			deployment:         &deploymentWithIgnoreAnnotations,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
+		{
+			name:               "Expects ignored deployment identified by namespace annotation to not be added to the cache",
+			deployment:         &deploymentWithNsIgnoreAnnotations,
 			expectedDeployment: nil,
 			expectedCacheSize:  0,
 		},
@@ -69,6 +89,12 @@ func TestDeploymentController_Added(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			depController.K8sClient = fake.NewSimpleClientset()
+			if c.name == "Expects ignored deployment identified by namespace annotation to not be added to the cache" {
+				ns := coreV1.Namespace{}
+				ns.Name = "test-ns"
+				ns.Annotations = map[string]string{"admiral.io/ignore":"true"}
+				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
+			}
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			depController.Added(c.deployment)
 			if c.expectedDeployment == nil {
