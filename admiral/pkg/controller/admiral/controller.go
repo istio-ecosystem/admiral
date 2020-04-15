@@ -67,7 +67,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 	return controller
 }
 
-// Run starts the controller until it receves a message over stopCh
+// Run starts the controller until it receives a message over stopCh
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
