@@ -53,13 +53,13 @@ func (sec *VirtualServiceController) Added(ojb interface{}) {
 	sec.VirtualServiceHandler.Added(dr)
 }
 
-func (sec *VirtualServiceController) Updated(ojb interface{}) {
+func (sec *VirtualServiceController) Updated(ojb interface{}, oldObj interface{}) {
 	dr := ojb.(*networking.VirtualService)
-	sec.VirtualServiceHandler.Added(dr)
+	sec.VirtualServiceHandler.Updated(dr)
 }
 
 func (sec *VirtualServiceController) Deleted(ojb interface{}) {
 	dr := ojb.(*networking.VirtualService)
-	sec.VirtualServiceHandler.Added(dr)
+	sec.VirtualServiceHandler.Deleted(dr)
 
 }

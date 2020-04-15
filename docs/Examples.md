@@ -77,7 +77,7 @@ So you have to point DNS resolution for names ending in `global` to point to `Cl
 ```
 #Run the below script for having coredns point to istiocoredns for dns lookups of names ending in global
 
-./admiral-install-v0.1-beta/scripts/redirect-dns.sh
+$ADMIRAL_HOME/scripts/redirect-dns.sh
 ```
 
 #### Remove envoy cluster rewrite filter
@@ -101,13 +101,15 @@ kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 
 wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
 tar xvf admiral-install-v0.1-beta.tar.gz
+
+export ADMIRAL_HOME=./admiral-install-v0.1-beta
 ```
 
 ```
 #Install admiral
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/demosinglecluster.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/demosinglecluster.yaml
 
 #Verify admiral is running
 
@@ -118,7 +120,7 @@ kubectl get pods -n admiral
 #Create the secret for admiral to monitor.
 
 #Since this is for a single cluster demo the remote and local context are the same
-./admiral-install-v0.1-beta/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+$ADMIRAL_HOME/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 ```
 ```
 #Verify the secret
@@ -130,12 +132,12 @@ kubectl get secrets -n admiral
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample.yaml
 ```
 ```
 #Install the dependency CR (this is optional)
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample_dep.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample_dep.yaml
 
 #Verify that admiral created service names for 'greeting' service
 
@@ -223,7 +225,7 @@ export CLUSTER_2=<path_to_kubeconfig_for_cluster_2>
 # Switch kubectx to Cluster 2
 export KUBECONFIG=$CLUSTER_2
 # Create admiral role and bindings on Cluster 2
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster.yaml
 ```
 
 ```
@@ -231,7 +233,7 @@ kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster.yaml
 export KUBECONFIG=$CLUSTER_1
 
 # Create the k8s secret for admiral to monitor Cluster 2.
-./admiral-install-v0.1-beta/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
+$ADMIRAL_HOME/scripts/cluster-secret.sh $CLUSTER_1 $CLUSTER_2 admiral
 ```
 
 At this point, admiral is watching `Cluster 2`
@@ -243,7 +245,7 @@ export KUBECONFIG=$CLUSTER_2
 
 #Install test services in Cluster 2
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/remotecluster_sample.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster_sample.yaml
 ```
 
 #### Verify
@@ -263,3 +265,12 @@ Now run the below request multiple times and see the requests being load balance
 ```
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
+
+### Cleanup
+
+Run the following script to cleanup admiral and its associated resources
+
+```bash
+$ADMIRAL_HOME/scripts/cleanup.sh
+```
+

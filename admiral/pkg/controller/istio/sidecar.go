@@ -32,11 +32,6 @@ type SidecarController struct {
 	ctl            *admiral.Controller
 }
 
-func (d *SidecarController) GetSidecars() ([]*networking.Sidecar, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration) (*SidecarController, error) {
 
 	sidecarController := SidecarController{}
@@ -63,13 +58,13 @@ func (sec *SidecarController) Added(ojb interface{}) {
 	sec.SidecarHandler.Added(sidecar)
 }
 
-func (sec *SidecarController) Updated(ojb interface{}) {
+func (sec *SidecarController) Updated(ojb interface{}, oldObj interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Added(sidecar)
+	sec.SidecarHandler.Updated(sidecar)
 }
 
 func (sec *SidecarController) Deleted(ojb interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Added(sidecar)
+	sec.SidecarHandler.Deleted(sidecar)
 
 }

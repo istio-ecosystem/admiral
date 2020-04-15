@@ -26,6 +26,8 @@ func init() {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace: "default",
 		SecretResolver: "",
+		WorkloadSidecarName: "default",
+		WorkloadSidecarUpdate: "disabled",
 
 	}
 
