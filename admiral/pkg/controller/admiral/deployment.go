@@ -3,11 +3,13 @@ package admiral
 import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -31,7 +33,7 @@ type DeploymentController struct {
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
 	ctl               *Controller
-	labelSet 		  common.LabelSet
+	labelSet 		  *common.LabelSet
 }
 
 type deploymentCache struct {
@@ -40,25 +42,12 @@ type deploymentCache struct {
 	mutex *sync.Mutex
 }
 
-func (p *deploymentCache) Put(deploymentEntry *DeploymentClusterEntry) {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-
-	p.cache[deploymentEntry.Identity] = deploymentEntry
-}
-
 func (p *deploymentCache) getKey(deployment *k8sAppsV1.Deployment) string {
 	return common.GetDeploymentGlobalIdentifier(deployment)
 }
 
 func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
 	return p.cache[key]
-}
-
-func (p *deploymentCache) Delete(pod *DeploymentClusterEntry) {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-	delete(p.cache, pod.Identity)
 }
 
 func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sAppsV1.Deployment) {
@@ -74,17 +63,16 @@ func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sA
 		}
 		p.cache[v.Identity] = v
 	}
+	env := common.GetEnv(deployment)
+	envDeployments := v.Deployments[env]
 
-	//TODO this is assuming globally unquie names name which might not alway be the case.  This would need a cluster name too
-	namespaceDeployments := v.Deployments[deployment.Namespace]
-
-	if namespaceDeployments == nil {
-		namespaceDeployments = make([]*k8sAppsV1.Deployment, 0)
+	if envDeployments == nil {
+		envDeployments = make([]*k8sAppsV1.Deployment, 0)
 	}
 
-	namespaceDeployments = append(namespaceDeployments, deployment)
+	envDeployments = append(envDeployments, deployment)
 
-	v.Deployments[deployment.Namespace] = namespaceDeployments
+	v.Deployments[env] = envDeployments
 
 }
 
@@ -131,6 +119,7 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 
 	deploymentController := DeploymentController{}
 	deploymentController.DeploymentHandler = handler
+	deploymentController.labelSet = common.GetLabelSet()
 
 	deploymentCache := deploymentCache{}
 	deploymentCache.cache = make(map[string]*DeploymentClusterEntry)
@@ -156,26 +145,66 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 	return &deploymentController, nil
 }
 
-func (d *DeploymentController) Added(ojb interface{}) {
+func (d *DeploymentController) Added(obj interface{}) {
+	HandleAddUpdateDeployment(obj, d)
+}
+
+func (d *DeploymentController) Updated(obj interface{}, oldObj interface{}) {
+	HandleAddUpdateDeployment(obj, d)
+}
+
+func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
 	if len(key) > 0 && !d.shouldIgnoreBasedOnLabels(deployment) {
 		d.Cache.AppendDeploymentToCluster(key, deployment)
 		d.DeploymentHandler.Added(deployment)
 	}
-
 }
 
-func (d *DeploymentController) Deleted(name string) {
-	//TODO deal with this
+func (d *DeploymentController) Deleted(ojb interface{}) {
+	//TODO
 }
 
 func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
 	if deployment.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
+
 	if deployment.Spec.Template.Annotations[d.labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
-			return true
+		return true
+	}
+
+	if deployment.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		return true
+	}
+
+	ns, err := d.K8sClient.CoreV1().Namespaces().Get(deployment.Namespace, meta_v1.GetOptions{})
+	if err != nil {
+		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
+		return false
+	}
+
+	if ns.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		return true
 	}
 	return false //labels are fine, we should not ignore
 }
+
+func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace string) []k8sAppsV1.Deployment {
+	matchLabel := common.GetGlobalTrafficDeploymentLabel()
+	labelOptions := meta_v1.ListOptions{}
+	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
+
+	if err != nil {
+		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
+		return nil
+	}
+
+	if matchedDeployments.Items == nil {
+		return []k8sAppsV1.Deployment{}
+	}
+
+	return matchedDeployments.Items
+	}

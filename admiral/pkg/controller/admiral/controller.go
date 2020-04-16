@@ -2,8 +2,7 @@ package admiral
 
 import (
 	"fmt"
-
-	"istio.io/istio/pkg/log"
+	log "github.com/sirupsen/logrus"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -20,7 +19,23 @@ const (
 // Handler interface contains the methods that are required
 type Delegator interface {
 	Added(interface{})
-	Deleted(name string)
+	Updated(interface{}, interface{})
+	Deleted(interface{})
+}
+
+type EventType string
+
+const (
+	Add    		EventType = "Add"
+	Update    	EventType = "Update"
+	Delete    	EventType = "Delete"
+)
+
+type InformerCacheObj struct {
+	key string
+	eventType EventType
+	obj interface{}
+	oldObj interface{}
 }
 
 type Controller struct {
@@ -43,7 +58,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 
 			if err == nil {
-				controller.queue.Add(key)
+				controller.queue.Add(InformerCacheObj{key:key, eventType: Add, obj: obj})
 			}
 
 		},
@@ -51,14 +66,14 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 			log.Debugf("Informer Update: %v", newObj)
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
 			if err == nil {
-				controller.queue.Add(key)
+				controller.queue.Add(InformerCacheObj{key:key, eventType: Update, obj: newObj, oldObj: oldObj})
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			log.Debugf("Dependency Informer Delete: %v", obj)
+			log.Debugf("Informer Delete: %v", obj)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
-				controller.queue.Add(key)
+				controller.queue.Add(InformerCacheObj{key:key, eventType: Delete, obj: obj})
 			}
 		},
 	})
@@ -68,7 +83,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 	return controller
 }
 
-// Run starts the controller until it receves a message over stopCh
+// Run starts the controller until it receives a message over stopCh
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
@@ -95,40 +110,37 @@ func (c *Controller) runWorker() {
 }
 
 func (c *Controller) processNextItem() bool {
-	depName, quit := c.queue.Get()
+	item, quit := c.queue.Get()
 
 	if quit {
 		return false
 	}
-	defer c.queue.Done(depName)
+	defer c.queue.Done(item)
 
-	err := c.processItem(depName.(string))
+	err := c.processItem(item.(InformerCacheObj))
 	if err == nil {
 		// No error, reset the ratelimit counters
-		c.queue.Forget(depName)
-	} else if c.queue.NumRequeues(depName) < maxRetries {
-		log.Errorf("Error processing %s (will retry): %v", depName, err)
-		c.queue.AddRateLimited(depName)
+		c.queue.Forget(item)
+	} else if c.queue.NumRequeues(item) < maxRetries {
+		log.Errorf("Error processing %s (will retry): %v", item, err)
+		c.queue.AddRateLimited(item)
 	} else {
-		log.Errorf("Error processing %s (giving up): %v", depName, err)
-		c.queue.Forget(depName)
+		log.Errorf("Error processing %s (giving up): %v", item, err)
+		c.queue.Forget(item)
 		utilruntime.HandleError(err)
 	}
 
 	return true
 }
 
-func (c *Controller) processItem(name string) error {
-	obj, exists, err := c.informer.GetIndexer().GetByKey(name)
-	if err != nil {
-		return fmt.Errorf("controller: error fetching object %s error: %v", name, err)
-	}
+func (c *Controller) processItem(informerCacheObj InformerCacheObj) error {
 
-	if exists {
-		c.delegator.Added(obj)
-	} else {
-		c.delegator.Deleted(name)
+	if informerCacheObj.eventType == Delete {
+		c.delegator.Deleted(informerCacheObj.obj)
+	} else if informerCacheObj.eventType == Update {
+		c.delegator.Updated(informerCacheObj.obj, informerCacheObj.oldObj)
+	} else if informerCacheObj.eventType == Add {
+		c.delegator.Added(informerCacheObj.obj)
 	}
-
 	return nil
 }

@@ -3,7 +3,6 @@ package admiral
 import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"sync"
@@ -16,6 +15,7 @@ import (
 // Handler interface contains the methods that are required
 type DepHandler interface {
 	Added(obj *v1.Dependency)
+	Updated(obj *v1.Dependency)
 	Deleted(obj *v1.Dependency)
 }
 
@@ -53,17 +53,6 @@ func (d *depCache) Delete(dep *v1.Dependency) {
 	defer d.mutex.Unlock()
 	d.mutex.Lock()
 	delete(d.cache, d.getKey(dep))
-}
-
-func (d *DependencyController) GetDependencies() ([]v1.Dependency, error) {
-
-	deps := d.DepCrdClient.AdmiralV1().Dependencies(meta_v1.NamespaceAll)
-	dl, err := deps.List(meta_v1.ListOptions{})
-
-	if err != nil {
-		return nil, err
-	}
-	return dl.Items, err
 }
 
 func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configPath string, namespace string, resyncPeriod time.Duration) (*DependencyController, error) {
@@ -107,7 +96,14 @@ func (d *DependencyController) Added(ojb interface{}) {
 	d.DepHandler.Added(dep)
 }
 
-func (d *DependencyController) Deleted(name string) {
-	dep := d.Cache.Get(name)
+func (d *DependencyController) Updated(obj interface{}, oldObj interface{}) {
+	dep := obj.(*v1.Dependency)
+	d.Cache.Put(dep)
+	d.DepHandler.Updated(dep)
+}
+
+func (d *DependencyController) Deleted(ojb interface{}) {
+	dep := ojb.(*v1.Dependency)
+	d.Cache.Delete(dep)
 	d.DepHandler.Deleted(dep)
 }

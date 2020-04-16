@@ -3,33 +3,39 @@ package clusters
 import (
 	"context"
 	"errors"
+	"github.com/google/go-cmp/cmp"
+	v13 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
-	v12 "k8s.io/api/apps/v1"
+	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	v14 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
-
-	networking "istio.io/api/networking/v1alpha3"
-	"strconv"
+	"time"
 )
 
 func TestCreateSeWithDrLabels(t *testing.T) {
 
-	se := networking.ServiceEntry{
+	se := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"test.com"},
-		Endpoints: []*networking.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
-	des := networking.DestinationRule{
+	des := istionetworkingv1alpha3.DestinationRule{
 		Host: "test.com",
-		Subsets: []*networking.Subset{
+		Subsets: []*istionetworkingv1alpha3.Subset{
 			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
 		},
 	}
@@ -72,52 +78,79 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
 
-	se := networking.ServiceEntry{
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v13.GlobalTrafficPolicy)
+	gtpCache.dependencyCache = make(map[string]*v14.Deployment)
+	gtpCache.mutex = &sync.Mutex{}
+	admiralCache.GlobalTrafficCache = gtpCache
+
+	se := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
-		Endpoints: []*networking.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-			}
-		}
-	})
+	seConfig := v1alpha3.ServiceEntry{
+		Spec: se,
+	}
+	seConfig.Name = "se1"
+	seConfig.Namespace = "admiral-sync"
 
-	seConfig, _ := createIstioConfig(istio.ServiceEntryProto, &se, "se1", "admiral-sync")
-	_, err := rc.IstioConfigStore.Create(*seConfig)
-	if err != nil {
-		t.Errorf("%v", err)
-
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(&seConfig)
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
 	}
 
-	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*networking.ServiceEntry{"se1": &se}, "admiral-sync")
-	}
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+}
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
-	p := AdmiralParams{
+	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
 
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Fail()
-			}
-		}
-	})
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fail()
+	}
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		DeploymentController: d,
+	}
 
 	rr.remoteControllers["test.cluster"] = rc
-	createServiceEntryForNewServiceOrPod("test", "bar", rr, "sync")
+	createServiceEntryForNewServiceOrPod("test", "bar", rr)
 
 }
 
@@ -281,57 +314,229 @@ func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
 	}
 }
 
-func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap{
-	bytes,_ := yaml.Marshal(addressStore)
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap {
+	bytes, _ := yaml.Marshal(addressStore)
 
 	cm := v1.ConfigMap{
 		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
 	}
-	cm.Name="se-address-configmap"
-	cm.Namespace="admiral-remote-ctx"
-	cm.ResourceVersion=resourceVersion
+	cm.Name = "se-address-configmap"
+	cm.Namespace = "admiral-remote-ctx"
+	cm.ResourceVersion = resourceVersion
 	return &cm
 }
 
+func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
+	sidecarController := &istio.SidecarController{}
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+
+	remoteController := &RemoteController{}
+	remoteController.SidecarController = sidecarController
+
+	sidecarEgressMap := make(map[string]common.SidecarEgress)
+	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+
+	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
+
+	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
+
+	if sidecarObj != nil {
+		t.Fatalf("Modify non existing resource failed, as no new resource should be created.")
+	}
+}
+
+func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
+
+	sidecarController := &istio.SidecarController{}
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+
+	remoteController := &RemoteController{}
+	remoteController.SidecarController = sidecarController
+
+	existingSidecarObj := &v1alpha3.Sidecar{}
+	existingSidecarObj.ObjectMeta.Namespace = "test-sidecar-namespace"
+	existingSidecarObj.ObjectMeta.Name = "default"
+
+	istioEgress := istionetworkingv1alpha3.IstioEgressListener{
+		Hosts: []string{"test-host"},
+	}
+
+	existingSidecarObj.Spec = istionetworkingv1alpha3.Sidecar{
+		Egress: []*istionetworkingv1alpha3.IstioEgressListener{&istioEgress},
+	}
+
+	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(existingSidecarObj)
+
+	if createdSidecar != nil {
+
+		sidecarEgressMap := make(map[string]common.SidecarEgress)
+		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
+
+		updatedSidecar, error := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
+
+		if error != nil || updatedSidecar == nil {
+			t.Fail()
+		}
+
+		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn")
+		createdSidecar.Spec.Egress[0].Hosts = hostList
+
+		if !cmp.Equal(updatedSidecar, createdSidecar) {
+			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
+		}
+	} else {
+		t.Error("sidecar resource could not be created")
+	}
+}
+
+
 func TestCreateServiceEntry(t *testing.T) {
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+	stop := make(chan struct{})
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fatalf("%v", e)
+	}
+
 	admiralCache := AdmiralCache{}
+
+	localAddress := common.LocalAddressPrefix + ".10.1"
 
 	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
 
 	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":"127.0.0.1"},
-		Addresses: []string{"127'.0.0.1"},
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":localAddress},
+		Addresses: []string{localAddress},
 	}
 
 	admiralCache.CnameClusterCache = common.NewMapOfMaps()
 
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		res := i.(istio.Config)
-		se, ok := res.Spec.(*networking.ServiceEntry)
-		if ok {
-			if se.Hosts[0] != "dev.bar.global" {
-				t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-			}
-		}
-	})
-
-	params := AdmiralParams{
-		EnableSAN: true,
-		SANPrefix: "prefix",
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceController: s,
 	}
 
-	deployment := v12.Deployment{}
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
+		Addresses: []string{localAddress},
+	}
+
+	cacheController := &test.FakeConfigMapController{
+		GetError: nil,
+		PutError: nil,
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
+	}
+
+	admiralCache.ConfigMapController = cacheController
+
+	deployment := v14.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
 
-	resultingEntry := createServiceEntry("identity", rc, params, &admiralCache, &deployment, map[string]*networking.ServiceEntry{})
+	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
 	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
 		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
 	}
-	if resultingEntry.Addresses[0] != "127.0.0.1" {
-		t.Errorf("Address mismatch. Got: %v, expected: 127.0.0.1", resultingEntry.Addresses[0])
+
+	if resultingEntry.Addresses[0] != localAddress {
+		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+	}
+
+	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
+		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
+	}
+
+	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
+		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
 	}
 
 }
+
+func TestCreateIngressOnlyVirtualService(t *testing.T) {
+
+	fakeIstioClientCreate := istiofake.NewSimpleClientset()
+	rcCreate := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClientCreate,
+		},
+	}
+	fakeIstioClientUpdate := istiofake.NewSimpleClientset()
+	rcUpdate:= &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClientUpdate,
+		},
+	}
+
+	cname := "qa.mysvc.global"
+
+	vsname := cname + "-default-vs"
+
+	localFqdn := "mysvc.newmynamespace.svc.cluster.local"
+	localFqdn2 := "mysvc.mynamespace.svc.cluster.local"
+
+	vsTobeUpdated := makeVirtualService(cname, []string{common.MulticlusterIngressGateway}, localFqdn, 80)
+
+	rcUpdate.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Create(&v1alpha3.VirtualService{
+		Spec: *vsTobeUpdated,
+		ObjectMeta: v12.ObjectMeta{Name: vsname, Namespace: common.GetSyncNamespace()}})
+
+	testCases := []struct {
+		name           	string
+		rc             	*RemoteController
+		localFqdn		string
+		expectedResult 	string
+	}{
+		{
+			name:           "Should return a created virtual service",
+			rc:       		rcCreate,
+			localFqdn:		localFqdn,
+			expectedResult: localFqdn,
+		},
+		{
+			name:           "Should return an updated virtual service",
+			rc:       		rcCreate,
+			localFqdn:		localFqdn2,
+			expectedResult: localFqdn2,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, map[string]uint32 {common.Http : 80})
+			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
+			if err != nil {
+				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
+			}
+			if vs == nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
+				if vs != nil {
+					t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
+				}
+				t.FailNow()
+			}
+			if len(vs.Spec.Gateways) > 1 || vs.Spec.Gateways[0] != common.MulticlusterIngressGateway {
+				t.Errorf("Virtual service gateway expected: %v, got: %v", common.MulticlusterIngressGateway, vs.Spec.Gateways)
+			}
+		})
+	}
+}
+
+

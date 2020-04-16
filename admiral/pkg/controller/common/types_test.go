@@ -1,6 +1,8 @@
 package common
 
 import (
+	"github.com/google/go-cmp/cmp"
+	"strings"
 	"testing"
 )
 
@@ -38,5 +40,47 @@ func TestMapOfMaps(t *testing.T) {
 	map3 := mapOfMaps.Get("pkey2")
 	if map3 != nil {
 		t.Fail()
+	}
+}
+
+func TestEgressMap(t *testing.T) {
+	egressMap := NewSidecarEgressMap()
+	payments, orders := "payments", "orders"
+	paymentsEnv, ordersEnv := "prod", "staging"
+	paymentsNs, ordersNs := payments + "-" + paymentsEnv, orders + "-" + ordersEnv
+	paymentsFqdn, ordersFqdn := payments + "." + paymentsNs + "." + "svc.cluster.local", orders + "." + ordersNs + "." + "svc.cluster.local"
+	paymentsSidecar, ordersSidecar := SidecarEgress{FQDN: paymentsFqdn, Namespace: paymentsNs}, SidecarEgress{FQDN: ordersFqdn, Namespace: ordersNs}
+	egressMap.Put(payments, paymentsNs, paymentsFqdn)
+	egressMap.Put(orders, ordersNs, ordersFqdn)
+
+	ordersEgress := egressMap.Get("orders");
+
+	if !cmp.Equal(ordersEgress[ordersNs], ordersSidecar) {
+		t.Errorf("Orders egress object should match expected %v, got %v", ordersSidecar, ordersEgress[ordersNs])
+		t.FailNow()
+	}
+
+	egressMap.Delete(orders);
+	ordersEgress = egressMap.Get("orders");
+
+	if ordersEgress != nil {
+		t.Errorf("Delete object should delete the object %v", ordersEgress)
+		t.FailNow()
+	}
+
+	egressMapForIter := egressMap.Map()
+
+	if len(egressMapForIter) != 1 {
+		t.Errorf("Egressmap should contains only one object %v", paymentsSidecar)
+		t.FailNow()
+	}
+}
+
+func TestAdmiralParams(t *testing.T) {
+	admiralParams := AdmiralParams{SANPrefix:"custom.san.prefix"}
+	admiralParamsStr := admiralParams.String()
+	expectedContainsStr := "SANPrefix=custom.san.prefix"
+	if !strings.Contains(admiralParamsStr, expectedContainsStr) {
+		t.Errorf("AdmiralParams String doesn't have the expected Stringified value expected to contain %v", expectedContainsStr)
 	}
 }

@@ -4,6 +4,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: admiral-dependency-role
+  namespace: admiral
 rules:
   - apiGroups: ["admiral.io"]
     resources: ["dependencies"]
@@ -15,7 +16,20 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: admiral-secret-role
+  namespace: admiral
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "watch", "list"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: admiral-configmap-role
+  namespace: admiral-sync
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "update", "create"]

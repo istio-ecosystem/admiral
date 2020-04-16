@@ -3,14 +3,13 @@ package clusters
 import (
 	"errors"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	"istio.io/istio/pkg/log"
 	"strconv"
 	"strings"
 
-	k8sV1 "k8s.io/api/core/v1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
 )
 
 func GetMeshPorts(clusterName string, destService *k8sV1.Service,
@@ -54,7 +53,7 @@ func GetServiceEntryStateFromConfigmap(configmap *k8sV1.ConfigMap) *ServiceEntry
 	err := yaml.Unmarshal(bytes, &addressStore)
 
 	if err != nil {
-		logrus.Errorf("Could not unmarshal configmap data. Double check the configmap format. %v", err)
+		log.Errorf("Could not unmarshal configmap data. Double check the configmap format. %v", err)
 		return nil
 	}
 	if addressStore.Addresses == nil {

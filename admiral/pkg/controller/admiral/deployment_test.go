@@ -4,11 +4,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +30,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	depController := DeploymentController{
 		DeploymentHandler: &mdh,
 		Cache:             &cache,
-		labelSet:          labelset,
+		labelSet:          &labelset,
 	}
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
@@ -38,6 +40,14 @@ func TestDeploymentController_Added(t *testing.T) {
 	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
 	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithIgnoreAnnotations := k8sAppsV1.Deployment{}
+	deploymentWithIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
+	deploymentWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore":"true"}
+	deploymentWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithNsIgnoreAnnotations := k8sAppsV1.Deployment{}
+	deploymentWithNsIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
+	deploymentWithNsIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+	deploymentWithNsIgnoreAnnotations.Namespace = "test-ns"
 
 	testCases := []struct {
 		name               string
@@ -58,14 +68,33 @@ func TestDeploymentController_Added(t *testing.T) {
 			expectedCacheSize:  0,
 		},
 		{
-			name:               "Expects ignored deployment to not be added to the cache",
+			name:               "Expects ignored deployment identified by label to not be added to the cache",
 			deployment:         &deploymentWithIgnoreLabels,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
+		{
+			name:               "Expects ignored deployment identified by deployment annotation to not be added to the cache",
+			deployment:         &deploymentWithIgnoreAnnotations,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
+		{
+			name:               "Expects ignored deployment identified by namespace annotation to not be added to the cache",
+			deployment:         &deploymentWithNsIgnoreAnnotations,
 			expectedDeployment: nil,
 			expectedCacheSize:  0,
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
+			depController.K8sClient = fake.NewSimpleClientset()
+			if c.name == "Expects ignored deployment identified by namespace annotation to not be added to the cache" {
+				ns := coreV1.Namespace{}
+				ns.Name = "test-ns"
+				ns.Annotations = map[string]string{"admiral.io/ignore":"true"}
+				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
+			}
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			depController.Added(c.deployment)
 			if c.expectedDeployment == nil {
@@ -74,9 +103,9 @@ func TestDeploymentController_Added(t *testing.T) {
 				}
 			} else if len(depController.Cache.cache)==0 && c.expectedCacheSize != 0 {
 				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
-			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[""]) != c.expectedCacheSize {
+			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[common.Default]) != c.expectedCacheSize {
 				t.Errorf("Deployment controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Deployments[""]), c.expectedCacheSize)
-			} else if depController.Cache.cache["id"].Deployments[""][0] != &deployment {
+			} else if depController.Cache.cache["id"].Deployments[common.Default][0] != &deployment {
 				t.Errorf("Incorrect deployment added to deployment controller cache. Got %v expected %v", depController.Cache.cache["id"].Deployments[""][0], deployment)
 			}
 
@@ -90,7 +119,7 @@ func TestDeploymentController_Added(t *testing.T) {
 func TestDeploymentController_GetDeployments(t *testing.T) {
 
 	depController := DeploymentController{
-		labelSet: common.LabelSet{
+		labelSet: &common.LabelSet{
 			DeploymentAnnotation:                "sidecar.istio.io/inject",
 			NamespaceSidecarInjectionLabel:      "istio-injection",
 			NamespaceSidecarInjectionLabelValue: "enabled",
@@ -140,7 +169,7 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 		t.Errorf("Get Deployments returned too many values. Expected 1, got %v", len(resultingDeps))
 	}
 	if  !cmp.Equal(resultingDeps[0], &deployment) {
-		logrus.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
+		log.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
 		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
 	}
 
@@ -158,5 +187,129 @@ func TestNewDeploymentController(t *testing.T) {
 
 	if depCon == nil {
 		t.Errorf("Deployment controller should not be nil")
+	}
+}
+
+func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
+	deployment := k8sAppsV1.Deployment{}
+	deployment.Namespace = "namespace"
+	deployment.Name = "fake-app-deployment-qal"
+	deployment.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"qal"},
+			},
+		},
+	}
+	deployment.Labels = map[string]string{"identity": "app1"}
+
+	deployment2 := k8sAppsV1.Deployment{}
+	deployment2.Namespace = "namespace"
+	deployment2.Name = "fake-app-deployment-e2e"
+	deployment2.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+			},
+		},
+	}
+	deployment2.Labels = map[string]string{"identity": "app1"}
+
+	deployment3 := k8sAppsV1.Deployment{}
+	deployment3.Namespace = "namespace"
+	deployment3.Name = "fake-app-deployment-prf-1"
+	deployment3.CreationTimestamp = v1.Now()
+	deployment3.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"prf"},
+			},
+		},
+	}
+	deployment3.Labels = map[string]string{"identity": "app1"}
+
+	deployment4 := k8sAppsV1.Deployment{}
+	deployment4.Namespace = "namespace"
+	deployment4.Name = "fake-app-deployment-prf-2"
+	deployment4.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
+	deployment4.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{
+				Labels: map[string]string{"identity": "app2", "env":"prf"},
+			},
+		},
+	}
+	deployment4.Labels = map[string]string{"identity": "app2"}
+
+	oneDeploymentClient := fake.NewSimpleClientset(&deployment)
+
+	allDeploymentsClient := fake.NewSimpleClientset(&deployment, &deployment2, &deployment3, &deployment4)
+
+	noDeploymentsClient := fake.NewSimpleClientset()
+
+	deploymentController := &DeploymentController{}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		expectedDeployments []k8sAppsV1.Deployment
+		fakeClient *fake.Clientset
+		labelValue string
+	}{
+		{
+			name: "Get one",
+			expectedDeployments: []k8sAppsV1.Deployment{deployment},
+			fakeClient:oneDeploymentClient,
+			labelValue: "app1",
+		},
+		{
+			name: "Get one from long list",
+			expectedDeployments: []k8sAppsV1.Deployment{deployment4},
+			fakeClient:allDeploymentsClient,
+			labelValue: "app2",
+		},
+		{
+			name: "Get many from long list",
+			expectedDeployments: []k8sAppsV1.Deployment{deployment, deployment3, deployment2},
+			fakeClient:allDeploymentsClient,
+			labelValue: "app1",
+		},
+		{
+			name: "Get none from long list",
+			expectedDeployments: []k8sAppsV1.Deployment{},
+			fakeClient:allDeploymentsClient,
+			labelValue: "app3",
+		},
+		{
+			name: "Get none from empty list",
+			expectedDeployments: []k8sAppsV1.Deployment{},
+			fakeClient:noDeploymentsClient,
+			labelValue: "app1",
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			deploymentController.K8sClient = c.fakeClient
+			returnedDeployments := deploymentController.GetDeploymentByLabel(c.labelValue, "namespace")
+
+			sort.Slice(returnedDeployments, func(i, j int) bool {
+				return returnedDeployments[i].Name > returnedDeployments[j].Name
+			})
+
+			sort.Slice(c.expectedDeployments, func(i, j int) bool {
+				return c.expectedDeployments[i].Name > c.expectedDeployments[j].Name
+			})
+
+			if len(returnedDeployments) != len(c.expectedDeployments) {
+				t.Fatalf("Returned the wrong number of deploymenrs. Found %v but expected %v", len(returnedDeployments), len(c.expectedDeployments))
+			}
+
+			if !cmp.Equal(returnedDeployments, c.expectedDeployments) {
+				t.Fatalf("Deployment mismatch. Diff: %v", cmp.Diff(returnedDeployments, c.expectedDeployments))
+			}
+
+		})
 	}
 }

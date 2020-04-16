@@ -5,6 +5,7 @@ metadata:
   labels:
     app: admiral
   name: admiral
+  namespace: admiral
 spec:
   replicas: 1
   selector:
@@ -18,19 +19,15 @@ spec:
       serviceAccountName: admiral
       containers:
         - args:
-            - --log_output_level
-            - $(log_output_level)
             - --dependency_namespace
-            - $(dependency_namespace)
+            - admiral
             - --secret_namespace
-            - $(secret_namespace)
-            - --san_domain
-            - $(san_domain)
-            - --secret_resolver
-            - $(secret_resolver)
-            - --secret_resolver_config_path
-            - /etc/admiral/config.yaml
-          image: docker.io/admiralproj/admiral:v0.1-alpha
+            - admiral
+            - --sync_namespace
+            - admiral-sync
+            - --sync_period
+            - 20s
+          image: docker.io/admiralproj/admiral:latest
           #          livenessProbe:
           #            failureThreshold: 5
           #            httpGet:

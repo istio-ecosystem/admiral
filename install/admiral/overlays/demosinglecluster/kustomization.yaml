@@ -1,7 +1,9 @@
 apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: admiral
+images:
+  - name: docker.io/admiralproj/admiral
+    newTag: latest
 
 bases:
   - ../../base

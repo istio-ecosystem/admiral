@@ -46,7 +46,7 @@ spec:
         sidecar.istio.io/inject: "true"
       labels:
         app: greeting
-        identity: greetin
+        identity: greeting
     spec:
       containers:
         - name: greeting

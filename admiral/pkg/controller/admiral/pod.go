@@ -32,7 +32,7 @@ type PodController struct {
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
 	ctl        *Controller
-	labelSet   common.LabelSet
+	labelSet   *common.LabelSet
 }
 
 type podCache struct {
@@ -131,6 +131,7 @@ func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.C
 
 	podController := PodController{}
 	podController.PodHandler = handler
+	podController.labelSet = common.GetLabelSet()
 
 	podCache := podCache{}
 	podCache.cache = make(map[string]*PodClusterEntry)
@@ -161,16 +162,19 @@ func NewPodController(stopCh <-chan struct{}, handler PodHandler, config *rest.C
 	return &podController, nil
 }
 
-func (d *PodController) Added(ojb interface{}) {
-	pod := ojb.(*k8sV1.Pod)
+func (d *PodController) Added(obj interface{}) {
+	pod := obj.(*k8sV1.Pod)
 	key := d.Cache.getKey(pod)
 	if len(key) > 0 && pod.Labels[d.labelSet.DeploymentAnnotation] == "true" {
 		d.Cache.AppendPodToCluster(key, pod)
 		d.PodHandler.Added(pod)
 	}
-
 }
 
-func (d *PodController) Deleted(name string) {
-	//TODO deal with this
+func (d *PodController) Updated(obj interface{}, oldObj interface{}) {
+	//ignore
+}
+
+func (d *PodController) Deleted(ojb interface{}) {
+	//TODO
 }
