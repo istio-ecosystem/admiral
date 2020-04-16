@@ -308,7 +308,7 @@ func TestAdded(t *testing.T) {
 }
 
 func TestMakeVirtualService(t *testing.T) {
-	vs := makeVirtualService("test.local", "dest", 8080)
+	vs := makeVirtualService("test.local", []string {common.MulticlusterIngressGateway}, "dest", 8080)
 	if vs.Hosts[0] != "test.local" {
 		t.Fail()
 	}

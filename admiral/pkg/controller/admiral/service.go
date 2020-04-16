@@ -15,12 +15,10 @@ import (
 )
 
 const IstioIngressServiceName = "istio-ingressgateway"
-const IstioSystemNameSpace = "istio-system"
 
 // Handler interface contains the methods that are required
 type ServiceHandler interface {
-	Added(obj *k8sV1.Service)
-	Deleted(obj *k8sV1.Service)
+
 }
 
 type ServiceClusterEntry struct {
@@ -134,10 +132,17 @@ func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config
 	return &serviceController, nil
 }
 
-func (s *ServiceController) Added(ojb interface{}) {
-	service := ojb.(*k8sV1.Service)
+func (s *ServiceController) Added(obj interface{}) {
+	HandleAddUpdateService(obj, s)
+}
+
+func (s *ServiceController) Updated(obj interface{}, oldObj interface{}) {
+	HandleAddUpdateService(obj, s)
+}
+
+func HandleAddUpdateService(obj interface{}, s *ServiceController) {
+	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
-	s.ServiceHandler.Added(service)
 }
 
 func (s *ServiceController) Deleted(ojb interface{}) {
@@ -145,6 +150,5 @@ func (s *ServiceController) Deleted(ojb interface{}) {
 
 	//TODO figure this out
 	//d.Cache.Delete(dep)
-	s.ServiceHandler.Deleted(nil)
 
 }
