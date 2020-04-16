@@ -32,11 +32,6 @@ type DestinationRuleController struct {
 	ctl        *admiral.Controller
 }
 
-func (d *ServiceEntryController) GetDestinationRules() ([]*networking.DestinationRule, error) {
-	//TODO
-	return nil, nil
-}
-
 func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRuleHandler, config *rest.Config, resyncPeriod time.Duration) (*DestinationRuleController, error) {
 
 	drController := DestinationRuleController{}
@@ -63,13 +58,13 @@ func (sec *DestinationRuleController) Added(ojb interface{}) {
 	sec.DestinationRuleHandler.Added(dr)
 }
 
-func (sec *DestinationRuleController) Updated(ojb interface{}) {
+func (sec *DestinationRuleController) Updated(ojb interface{}, oldObj interface{}) {
 	dr := ojb.(*networking.DestinationRule)
-	sec.DestinationRuleHandler.Added(dr)
+	sec.DestinationRuleHandler.Updated(dr)
 }
 
 func (sec *DestinationRuleController) Deleted(ojb interface{}) {
 	dr := ojb.(*networking.DestinationRule)
-	sec.DestinationRuleHandler.Added(dr)
+	sec.DestinationRuleHandler.Deleted(dr)
 
 }
