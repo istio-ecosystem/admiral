@@ -3,6 +3,8 @@ apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
   name: greeting
+  labels:
+    identity: greeting
 spec:
   replicas: 1
   selector:

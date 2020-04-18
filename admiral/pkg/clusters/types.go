@@ -91,6 +91,10 @@ type globalTrafficCache struct {
 	//map of dependencies. key=namespace.globaltrafficpolicy name. value Deployment object
 	dependencyCache map[string]*k8sAppsV1.Deployment
 
+
+	//map of dependencies. key=namespace.globaltrafficpolicy name. value Rollout object
+	dependencyRolloutCache map[string]*argo.Rollout
+
 	mutex *sync.Mutex
 }
 
@@ -100,6 +104,10 @@ func (g *globalTrafficCache) GetFromIdentity(identity string, environment string
 
 func (g *globalTrafficCache) GetDeployment(gtpName string) *k8sAppsV1.Deployment {
 	return g.dependencyCache[gtpName]
+}
+
+func (g *globalTrafficCache) GetRollout(gtpName string) *argo.Rollout {
+	return g.dependencyRolloutCache[gtpName]
 }
 
 func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) error {
@@ -134,6 +142,34 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	return nil
 }
 
+func (g *globalTrafficCache) PutRollout(gtp *v1.GlobalTrafficPolicy, rollout *argo.Rollout) error {
+	if gtp.Name == "" {
+		//no GTP, throw error
+		return errors.New("cannot add an empty globaltrafficpolicy to the cache")
+	}
+	defer g.mutex.Unlock()
+	g.mutex.Lock()
+	if rollout != nil && rollout.Labels != nil {
+		log.Infof("Adding Rollout with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", rollout.Name, gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		//we have a valid rollout
+		env := common.GetEnvForRollout(rollout)
+		identity := rollout.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		g.identityCache[key] = gtp
+	} else if g.dependencyRolloutCache[gtp.Name] != nil {
+		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		//The old GTP matched a rollout, the new one doesn't. So we need to clear that cache.
+		oldRollout := g.dependencyRolloutCache[gtp.Name]
+		env := common.GetEnvForRollout(oldRollout)
+		identity := oldRollout.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		delete(g.identityCache, key)
+	}
+
+	g.dependencyRolloutCache[gtp.Name] = rollout
+	return nil
+}
+
 func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	if gtp.Name == "" {
 		//no GTP, nothing to delete
@@ -157,8 +193,23 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)
 	}
+	rollout := g.dependencyRolloutCache[gtp.Name]
+
+	if rollout != nil && rollout.Labels != nil {
+
+		//we have a valid rollout
+		env := rollout.Spec.Template.Labels[common.Env]
+		if env == "" {
+			//No environment label, use default value
+			env = common.Default
+		}
+		identity := rollout.Labels[common.GetWorkloadIdentifier()]
+		key := getCacheKey(env, identity)
+		delete(g.identityCache, key)
+	}
 
 	delete(g.dependencyCache, gtp.Name)
+	delete(g.dependencyRolloutCache,gtp.Name)
 }
 
 type DeploymentHandler struct {
@@ -213,13 +264,16 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "received")
 
 	var matchedDeployments []k8sAppsV1.Deployment
+	var matchedRollouts []argo.Rollout
 
-	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
+	//IMPORTANT: The deployment/Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+		matchedRollouts = append(matchedRollouts, remoteCluster.RolloutController.GetRolloutByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
 	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	rollouts := common.MatchRolloutsToGTP(obj,matchedRollouts)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
@@ -229,8 +283,20 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 				log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
 			}
 		}
-	} else {
-		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
+	}
+
+	if len(rollouts) !=0 {
+		for _,rollout := range rollouts{
+			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj,&rollout)
+			if err !=nil {
+				log.Errorf("Failed to add new GTP to cache. Error=%v",err)
+				log.Errorf(LogErrFormat,"Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			}
+		}
+	}
+
+	if len(deployments) == 0  && len(rollouts) ==0 {
+		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments/rollouts")
 	}
 
 }
@@ -239,13 +305,16 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "received")
 
 	var matchedDeployments []k8sAppsV1.Deployment
+	var matchedRollouts []argo.Rollout
 
-	//IMPORTANT: The deployment matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
+	//IMPORTANT: The deployment//Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+		matchedRollouts = append(matchedRollouts, remoteCluster.RolloutController.GetRolloutByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
 	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
+	rollouts := common.MatchRolloutsToGTP(obj,matchedRollouts)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
@@ -264,6 +333,25 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
 		}
 	}
+
+
+	if len(rollouts) != 0 {
+		for _, rollout := range rollouts {
+			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, &rollout)
+			if err != nil {
+				log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
+				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			}
+		}
+	} else {
+		err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, nil)
+		if err != nil {
+			log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
+			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+		} else {
+			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched rollouts")
+		}
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
@@ -274,6 +362,8 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+	//TODO:- Remove return
+	return
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
@@ -377,13 +467,13 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 	gtp := common.MatchGTPsToRollout(matchedGTPs, obj)
 
 	if gtp != nil {
-		//TODO:- GTP support for rollout
-/*		err := rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
+
+		err := rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(gtp, obj)
 		if err != nil {
-			log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
+			log.Errorf("Failed to add Rollout to GTP cache. Error=%v", err)
 		} else {
-			log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
-		}*/
+			log.Infof(LogFormat, "Event", "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+		}
 	}
 
 	env := common.GetEnvForRollout(obj)

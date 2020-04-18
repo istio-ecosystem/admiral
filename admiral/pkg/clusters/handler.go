@@ -61,6 +61,113 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 		//for every cluster the source identity is running, add their istio ingress as service entry address
 		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
+		//If there is  no deployment, check if a rollout is available.
+		tempRollout := rc.RolloutController.Cache.Get(sourceIdentity)
+		if tempDeployment != nil || tempRollout !=nil {
+			sourceClusters[rc.ClusterID] = rc.ClusterID
+			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
+		}
+
+
+
+		//create and store destination service entries
+		for _, destinationCluster := range destinationIdentitys {
+			destDeployment := rc.DeploymentController.Cache.Get(destinationCluster)
+			destRollout := rc.RolloutController.Cache.Get(destinationCluster)
+
+			if destDeployment != nil {
+				//deployment can be in multiple clusters, create SEs for all clusters
+
+				for _, deployment := range destDeployment.Deployments {
+
+					r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
+
+					deployments := rc.DeploymentController.Cache.Get(destinationCluster)
+
+					if deployments == nil || len(deployments.Deployments) == 0 {
+						continue
+					}
+					//TODO pass deployment
+					tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
+
+					if tmpSe == nil {
+						continue
+					}
+
+					destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
+
+					r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
+
+					serviceEntries[tmpSe.Hosts[0]] = tmpSe
+				}
+			}
+
+			if destRollout != nil {
+				//rollouts can be in multiple clusters, create SEs for all clusters
+
+				for _, rollout := range destRollout.Rollouts {
+
+					r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
+
+					rollouts := rc.RolloutController.Cache.Get(destinationCluster)
+
+					if rollouts == nil || len(rollouts.Rollouts) == 0 {
+						continue
+					}
+					//TODO pass Rollout
+					tmpSe := createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
+
+					if tmpSe == nil {
+						continue
+					}
+
+					destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
+
+					r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
+
+					serviceEntries[tmpSe.Hosts[0]] = tmpSe
+				}
+			}
+		}
+	}
+
+	if len(sourceClusters) == 0 || len(serviceEntries) == 0 {
+		log.Infof(LogFormat, "Event", "dependency-record", sourceIdentity, "", "skipped")
+		return
+	}
+
+	for dCluster, globalFqdn := range destinationClusters {
+		for _, sCluster := range sourceClusters {
+			r.AdmiralCache.CnameClusterCache.Put(globalFqdn, dCluster, dCluster)
+			r.AdmiralCache.CnameDependentClusterCache.Put(globalFqdn, sCluster, sCluster)
+			//filter out the source clusters same as destinationClusters
+			delete(sourceClusters, dCluster)
+		}
+	}
+
+	//add service entries for all dependencies in source cluster
+	//TODO:- Remove below comment
+	//AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
+}
+
+
+
+
+
+/*func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, obj *v1.Dependency) {
+
+	destinationIdentitys := obj.Spec.Destinations
+
+	destinationClusters := make(map[string]string)
+
+	sourceClusters := make(map[string]string)
+
+	var serviceEntries = make(map[string]*v1alpha32.ServiceEntry)
+
+	for _, rc := range rcs {
+
+		//for every cluster the source identity is running, add their istio ingress as service entry address
+		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 		if tempDeployment != nil {
 			sourceClusters[rc.ClusterID] = rc.ClusterID
 			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
@@ -118,7 +225,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 	//add service entries for all dependencies in source cluster
 	AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
 }
-
+*/
 func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
