@@ -1,0 +1,45 @@
+#!/bin/bash
+
+[ $# -lt 2 ] && { echo "Usage: $0 <istio_version> [osx|linux]" ; exit 1; }
+
+istio_version=$1
+os=$2
+
+#Download & extract Istio
+
+#Downloading istio
+
+wget "https://github.com/istio/istio/releases/download/$istio_version/istio-$istio_version-$os.tar.gz"
+
+#Extracting istio
+tar -xf "istio-$istio_version-$os.tar.gz"
+
+#Create istio-system namespace
+
+kubectl create ns istio-system
+
+#Create k8s secret to be used by Citadel for mTLS cert generation
+kubectl create secret generic cacerts -n istio-system --from-file="istio-$istio_version/samples/certs/ca-cert.pem" --from-file="istio-$istio_version/samples/certs/ca-key.pem" --from-file="istio-$istio_version/samples/certs/root-cert.pem" --from-file="istio-$istio_version/samples/certs/cert-chain.pem"
+
+#Generate, install and verify Istio CRDs
+
+helm template "istio-$istio_version/install/kubernetes/helm/istio-init" --name istio-init --namespace istio-system | kubectl apply -f -
+
+#Make sure Istio crds are installed
+crds_count=0
+while [ $crds_count -lt 1 ]
+do
+  crds_count=$(kubectl get crds | grep 'istio.io' | wc -l)
+done
+
+helm template "istio-$istio_version/install/kubernetes/helm/istio" --name istio --namespace istio-system -f "istio-$istio_version/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml" | kubectl apply -f -
+
+#Verify that pilot is up and running
+kubectl rollout status deployment istio-pilot -n istio-system
+
+#Verify that sidecar injector is running
+kubectl rollout status deployment istio-sidecar-injector -n istio-system
+
+# Delete envoy filter for translating `global` to `svc.cluster.local`
+kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+
