@@ -58,17 +58,19 @@ func (m MockPodHandler) Deleted(obj *k8sCoreV1.Pod) {
 }
 
 type MockNodeHandler struct {
+	Obj *k8sCoreV1.Node
 }
 
 func (m *MockNodeHandler) Added(obj *k8sCoreV1.Node) {
-
+	m.Obj = obj
 }
 
 func (m *MockNodeHandler) Deleted(obj *k8sCoreV1.Node) {
-
+	m.Obj = nil
 }
 
 type MockDependencyHandler struct {
+
 }
 
 func (m *MockDependencyHandler) Added(obj *v1.Dependency) {
@@ -84,76 +86,81 @@ func (m *MockDependencyHandler) Deleted(obj *v1.Dependency) {
 }
 
 type MockGlobalTrafficHandler struct {
+	Obj *v1.GlobalTrafficPolicy
 }
 
 func (m *MockGlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
-
+	m.Obj = obj
 }
 
 func (m *MockGlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
-
+	m.Obj = obj
 }
 
 func (m *MockGlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
-
+	m.Obj = nil
 }
 
 type MockServiceEntryHandler struct {
+	Obj *v1alpha32.ServiceEntry
 }
 
 func (m *MockServiceEntryHandler) Added(obj *v1alpha32.ServiceEntry) {
-
+	m.Obj = obj
 }
 
 func (m *MockServiceEntryHandler) Updated(obj *v1alpha32.ServiceEntry) {
-
+	m.Obj = obj
 }
 
 func (m *MockServiceEntryHandler) Deleted(obj *v1alpha32.ServiceEntry) {
-
+	m.Obj = nil
 }
 
 type MockVirtualServiceHandler struct {
+	Obj  *v1alpha32.VirtualService
 }
 
 func (m *MockVirtualServiceHandler) Added(obj *v1alpha32.VirtualService) {
-
+	m.Obj = obj
 }
 
 func (m *MockVirtualServiceHandler) Updated(obj *v1alpha32.VirtualService) {
-
+	m.Obj = obj
 }
 
 func (m *MockVirtualServiceHandler) Deleted(obj *v1alpha32.VirtualService) {
-
+	m.Obj = nil
 }
 
 type MockDestinationRuleHandler struct {
+	Obj  *v1alpha32.DestinationRule
 }
 
 func (m *MockDestinationRuleHandler) Added(obj *v1alpha32.DestinationRule) {
-
+	m.Obj = obj
 }
 
 func (m *MockDestinationRuleHandler) Updated(obj *v1alpha32.DestinationRule) {
-
+	m.Obj = obj
 }
 
 func (m *MockDestinationRuleHandler) Deleted(obj *v1alpha32.DestinationRule) {
-
+	m.Obj = nil
 }
 
 type MockSidecarHandler struct {
+	Obj *v1alpha32.Sidecar
 }
 
 func (m *MockSidecarHandler) Added(obj *v1alpha32.Sidecar) {
-
+	m.Obj = obj
 }
 
 func (m *MockSidecarHandler) Updated(obj *v1alpha32.Sidecar) {
-
+	m.Obj = obj
 }
 
 func (m *MockSidecarHandler) Deleted(obj *v1alpha32.Sidecar) {
-
+	m.Obj = nil
 }

@@ -94,3 +94,38 @@ func TestSubset(t *testing.T) {
 	}
 
 }
+
+func TestContains(t *testing.T) {
+	t.Parallel()
+	var a1 = []string {"env", "stage", "version"}
+	var a2 = []string {"hello"}
+
+	testCases := []struct {
+		name string
+		array   []string
+		str   string
+		result  bool
+	}{
+		{
+			name: "a1 contains stage",
+			array: a1,
+			str: "stage",
+			result: true,
+		},
+		{
+			name: "a2 doesn't contain stage",
+			array: a2,
+			str: "stage",
+			result: false,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := Contains(c.array, c.str)
+			if c.result != result {
+				t.Errorf("Wanted result: %v, got: %v", c.result, result)
+			}
+		})
+	}
+}

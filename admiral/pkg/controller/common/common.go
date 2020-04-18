@@ -28,6 +28,7 @@ const (
 	SpiffePrefix               = "spiffe://"
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
 	Default                    = "default"
+	AdmiralIgnoreAnnotation    = "admiral.io/ignore"
 )
 
 type Event int

@@ -3,14 +3,12 @@ package clusters
 import (
 	"errors"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"strconv"
 	"strings"
 
-	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 )
@@ -113,35 +111,4 @@ func ValidateConfigmapBeforePutting(cm *k8sV1.ConfigMap) error {
 		return errors.New("address cache length mismatch") //should be impossible. We're in a state where the list of addresses doesn't match the map of se:address. Something's been missed and must be fixed
 	}
 	return nil
-}
-
-func MakeVirtualService(host string, destination string, port uint32) *networking.VirtualService {
-	return &networking.VirtualService{Hosts: []string{host},
-		Gateways: []string{common.Mesh, common.MulticlusterIngressGateway},
-		ExportTo: []string{"*"},
-		Http:     []*networking.HTTPRoute{{Route: []*networking.HTTPRouteDestination{{Destination: &networking.Destination{Host: destination, Port: &networking.PortSelector{Number: port}}}}}}}
-}
-
-func MakeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
-	return &networking.ServiceEntry_Endpoint{Address: address,
-		Locality: locality,
-		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
-}
-
-func GetDestinationRule(host string) *networking.DestinationRule {
-	return &networking.DestinationRule{Host: host,
-		TrafficPolicy: &networking.TrafficPolicy{Tls: &networking.TLSSettings{Mode: networking.TLSSettings_ISTIO_MUTUAL}}}
-}
-
-func CopyEndpoint(e *networking.ServiceEntry_Endpoint) *networking.ServiceEntry_Endpoint {
-	labels := make(map[string]string)
-	util.MapCopy(labels, e.Labels)
-	ports := make(map[string]uint32)
-	util.MapCopy(ports, e.Ports)
-	return &networking.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
-}
-
-func CopyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
-	return &networking.ServiceEntry{Ports: se.Ports, Resolution: se.Resolution, Hosts: se.Hosts, Location: se.Location,
-		SubjectAltNames: se.SubjectAltNames, ExportTo: se.ExportTo, Endpoints: se.Endpoints, Addresses: se.Addresses}
 }
