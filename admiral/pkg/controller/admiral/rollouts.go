@@ -7,6 +7,7 @@ import (
 	argoinformers "github.com/argoproj/argo-rollouts/pkg/client/informers/externalversions"
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -207,4 +208,22 @@ func (roc *RolloutController) Updated(ojb interface{}) {
 func (sec *RolloutController) Deleted(ojb interface{}) {
 	//TODO deal with this
 
+}
+
+func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace string) []argo.Rollout {
+	matchLabel := common.GetGlobalTrafficDeploymentLabel()
+	labelOptions := meta_v1.ListOptions{}
+	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+	matchedRollouts, err :=d.RolloutClient.Rollouts(namespace).List(labelOptions)
+
+	if err != nil {
+		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)
+		return nil
+	}
+
+	if matchedRollouts.Items == nil {
+		return []argo.Rollout{}
+	}
+
+	return matchedRollouts.Items
 }

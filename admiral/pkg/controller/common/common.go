@@ -204,6 +204,48 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	return envMatchedDeployments
 }
 
+//Returns the list of rollouts to which this GTP should apply. It is assumed that all inputs already are an identity match
+//If the GTP has an identity label, it should match all rollouts which share that label
+//If the GTP does not have an identity label, it should return all rollouts without an identity label
+//IMPORTANT: If an environment label is specified on either the GTP or the rollout, the same value must be specified on the other for them to match
+func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []argo.Rollout {
+	if gtp == nil || gtp.Name == "" {
+		log.Warn("Nil or empty GlobalTrafficPolicy provided for rollout match. Returning nil.")
+		return nil
+	}
+
+	gtpEnv := gtp.Labels[Env]
+	if gtpEnv == "" {
+		gtpEnv = Default
+	}
+
+	if rollouts == nil || len(rollouts) == 0 {
+		return nil
+	}
+
+	var envMatchedRollouts []argo.Rollout
+
+	for _, rollout := range rollouts {
+		rolloutEnvironment := rollout.Spec.Template.Labels[Env]
+		if rolloutEnvironment == "" {
+			//No environment label, use default value
+			rolloutEnvironment = Default
+		}
+		if rolloutEnvironment == gtpEnv {
+			envMatchedRollouts = append(envMatchedRollouts, rollout)
+		}
+	}
+
+	if len(envMatchedRollouts) == 0 {
+		return nil
+	}
+
+	for _, rollout := range rollouts {
+		log.Infof("Newly added GTP with name=%v matched with Rollout %v in namespace %v. Env=%v", gtp.Name, rollout.Name, rollout.Namespace, gtpEnv)
+	}
+	return envMatchedRollouts
+}
+
 
 //Find the GTP that best matches the deployment.
 //It's assumed that the set of GTPs passed in has already been matched via the GtpDeploymentLabel. Now it's our job to choose the best one.
