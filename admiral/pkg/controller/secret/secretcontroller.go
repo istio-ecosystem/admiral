@@ -47,6 +47,9 @@ var LoadKubeConfig = clientcmd.Load
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
 
+// updateSecretCallback prototype for the update secret callback function.
+type updateSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
+
 // removeSecretCallback prototype for the remove secret callback function.
 type removeSecretCallback func(dataKey string) error
 
@@ -58,6 +61,7 @@ type Controller struct {
 	queue          workqueue.RateLimitingInterface
 	informer       cache.SharedIndexInformer
 	addCallback    addSecretCallback
+	updateCallback updateSecretCallback
 	removeCallback removeSecretCallback
 	secretResolver resolver.SecretResolver
 }
@@ -86,6 +90,7 @@ func NewController(
 	namespace string,
 	cs *ClusterStore,
 	addCallback addSecretCallback,
+	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
 	secretResolverType string) *Controller {
 
@@ -126,6 +131,7 @@ func NewController(
 		informer:       secretsInformer,
 		queue:          queue,
 		addCallback:    addCallback,
+		updateCallback: updateCallback,
 		removeCallback: removeCallback,
 		secretResolver: secretResolver,
 	}
@@ -179,10 +185,17 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 // StartSecretController creates the secret controller.
-func StartSecretController(k8s kubernetes.Interface, addCallback addSecretCallback, removeCallback removeSecretCallback, namespace string, ctx context.Context, secretResolverType string) error {
+func StartSecretController(
+	k8s kubernetes.Interface,
+	addCallback addSecretCallback,
+	updateCallback updateSecretCallback,
+	removeCallback removeSecretCallback,
+	namespace string,
+	ctx context.Context,
+	secretResolverType string) error {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, removeCallback, secretResolverType)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
 
 	go controller.Run(ctx.Done())
 
@@ -234,59 +247,91 @@ func (c *Controller) processItem(secretName string) error {
 	return nil
 }
 
+func (c *Controller) createRemoteCluster(kubeConfig []byte, secretName string, clusterID string, namespace string) (*RemoteCluster, *rest.Config, error) {
+	if len(kubeConfig) == 0 {
+		log.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
+			clusterID, secretName, namespace)
+		return nil, nil, errors.New("kubeconfig is empty")
+	}
+
+	kubeConfig, err := c.secretResolver.FetchKubeConfig(clusterID, kubeConfig)
+
+	if err != nil {
+		log.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
+			clusterID, c.secretResolver, err)
+		return nil, nil, errors.New("kubeconfig cannot be fetched")
+	}
+
+	clusterConfig, err := LoadKubeConfig(kubeConfig)
+
+	if err != nil {
+		log.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
+			clusterID, secretName, namespace, err)
+		log.Infof("KubeConfig: '%s'", string(kubeConfig))
+		return nil, nil, errors.New("clusterConfig cannot be loaded")
+	}
+
+	clientConfig := clientcmd.NewDefaultClientConfig(*clusterConfig, &clientcmd.ConfigOverrides{})
+
+	var restConfig *rest.Config
+	restConfig, err = clientConfig.ClientConfig()
+
+	if err != nil {
+		log.Errorf("error during conversion of secret to client config: %v", err)
+		return nil, nil, errors.New("restConfig cannot be built")
+	}
+
+	return &RemoteCluster{
+		secretName:     secretName,
+	}, restConfig, nil
+}
+
 func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 	for clusterID, kubeConfig := range s.Data {
 		// clusterID must be unique even across multiple secrets
-		if _, ok := c.cs.remoteClusters[clusterID]; !ok {
-			log.Infof("Adding new cluster member: %s", clusterID)
-			c.cs.remoteClusters[clusterID] = &RemoteCluster{}
-			c.cs.remoteClusters[clusterID].secretName = secretName
-		} else {
-			log.Infof("Cluster %s in the secret %s in namespace %s already exists. Reloading secret...",
-				clusterID, c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
-		}
+		if prev, ok := c.cs.remoteClusters[clusterID]; !ok {
+			log.Infof("Adding cluster_id=%v from secret=%v", clusterID, secretName)
 
-		if len(kubeConfig) == 0 {
-			log.Infof("Data '%s' in the secret %s in namespace %s is empty, and disregarded ",
-				clusterID, secretName, s.ObjectMeta.Namespace)
-			continue
-		}
+			remoteCluster, restConfig, err := c.createRemoteCluster(kubeConfig, secretName, clusterID, s.ObjectMeta.Namespace)
 
-		kubeConfig, err := c.secretResolver.FetchKubeConfig(clusterID, kubeConfig)
+			if err != nil {
+				log.Errorf("Failed to add remote cluster from secret=%v for cluster_id=%v: %v",
+					secretName, clusterID, err)
+				continue
+			}
 
-		if err != nil {
-			log.Errorf("Failed to fetch kubeconfig for cluster '%s' using secret resolver: %v, err: %v",
-				clusterID, c.secretResolver, err)
-			continue
-		}
+			c.cs.remoteClusters[clusterID] = remoteCluster
 
-		clusterConfig, err := LoadKubeConfig(kubeConfig)
+			if err := c.addCallback(restConfig, clusterID, 2 * time.Minute); err != nil {
+				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
+				continue
+			}
 
-		if err != nil {
-			log.Infof("Data '%s' in the secret %s in namespace %s is not a kubeconfig: %v",
-				clusterID, secretName, s.ObjectMeta.Namespace, err)
-			log.Infof("KubeConfig: '%s'", string(kubeConfig))
-			continue
-		}
-
-		clientConfig := clientcmd.NewDefaultClientConfig(*clusterConfig, &clientcmd.ConfigOverrides{})
-
-		var restConfig *rest.Config
-		restConfig, err = clientConfig.ClientConfig()
-
-		if err != nil {
-			log.Errorf("error during conversion of secret to client config: %v", err)
-			continue
-		}
-
-		err = c.addCallback(restConfig, clusterID, 2 * time.Minute)
-
-		if err != nil {
-			log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
-			continue
-		}else{
 			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.",clusterID,c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
+
+		} else {
+			if prev.secretName != secretName {
+				log.Errorf("ClusterID reused in two different secrets: %v and %v. ClusterID "+
+					"must be unique across all secrets", prev.secretName, secretName)
+				continue
+			}
+
+			log.Infof("Updating cluster %v from secret %v", clusterID, secretName)
+
+			remoteCluster, restConfig, err := c.createRemoteCluster(kubeConfig, secretName, clusterID, s.ObjectMeta.Namespace)
+			if err != nil {
+				log.Errorf("Error updating cluster_id=%v from secret=%v: %v",
+					clusterID, secretName, err)
+				continue
+			}
+
+			c.cs.remoteClusters[clusterID] = remoteCluster
+			if err := c.updateCallback(restConfig, clusterID, 2 * time.Minute); err != nil {
+				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
+					clusterID, secretName, err)
+			}
 		}
+
 	}
 	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
 }
