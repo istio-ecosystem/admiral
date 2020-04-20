@@ -196,7 +196,7 @@ func (roc *RolloutController) Added(ojb interface{}) {
 	}
 }
 
-func (roc *RolloutController) Updated(ojb interface{}) {
+func (roc *RolloutController) Updated(ojb interface{},oldObj interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
