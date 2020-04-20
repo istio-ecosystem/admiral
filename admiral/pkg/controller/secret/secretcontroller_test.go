@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"sync"
 	"testing"
 	"time"
@@ -38,12 +37,56 @@ const secretNameSpace string = "istio-system"
 var testCreateControllerCalled bool
 var testDeleteControllerCalled bool
 
+
+func makeSecret(secret, clusterID string, kubeconfig []byte) *v1.Secret {
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secret,
+			Namespace: secretNameSpace,
+			Labels: map[string]string{
+				filterLabel: "true",
+			},
+		},
+		Data: map[string][]byte{
+			clusterID: kubeconfig,
+		},
+	}
+}
+
 var (
 	mu      sync.Mutex
 	added   string
 	updated string
 	deleted string
 )
+
+func addCallback(config *rest.Config, id string, resyncPeriod time.Duration) error {
+	mu.Lock()
+	defer mu.Unlock()
+	added = id
+	return nil
+}
+
+func updateCallback(config *rest.Config, id string, resyncPeriod time.Duration) error {
+	mu.Lock()
+	defer mu.Unlock()
+	updated = id
+	return nil
+}
+
+func deleteCallback(id string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	deleted = id
+	return nil
+}
+
+func resetCallbackData() {
+	added = ""
+	updated = ""
+	deleted = ""
+}
+
 
 func testCreateController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
 	testCreateControllerCalled = true
@@ -149,87 +192,33 @@ func Test_SecretController(t *testing.T) {
 	}
 }*/
 
-func resetCallbackData() {
-	added = ""
-	updated = ""
-	deleted = ""
-}
-
-func addCallback(config *rest.Config, id string, resyncPeriod time.Duration) error {
-	mu.Lock()
-	defer mu.Unlock()
-	added = id
-	return nil
-}
-
-func deleteCallback(id string) error {
-	mu.Lock()
-	defer mu.Unlock()
-	deleted = id
-	return nil
-}
-
-func TestMock(t *testing.T) {
-	config := clientcmdapi.NewConfig()
-	config.Clusters["clean"] = &clientcmdapi.Cluster{
-		Server:  "https://anything.com:8080",
-	}
-	/*
-	config.AuthInfos["clean"] = &clientcmdapi.AuthInfo{
-		Token: "the-token",
-	}*/
-	config.Contexts["clean"] = &clientcmdapi.Context{
-		Cluster:  "clean",
-		//AuthInfo: "clean",
-	}
-	config.CurrentContext = "clean"
-	clientConfig := NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
-	fmt.Println(clientConfig)
-	restConfig, err := clientConfig.ClientConfig()
-	fmt.Println(err)
-	fmt.Println(restConfig)
-}
-
-func makeSecret(secret, clusterID string, kubeconfig []byte) *v1.Secret {
-	return &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret,
-			Namespace: secretNameSpace,
-			Labels: map[string]string{
-				filterLabel: "true",
-			},
-		},
-		Data: map[string][]byte{
-			clusterID: kubeconfig,
-		},
-	}
-}
 
 func Test_SecretController(t *testing.T) {
 	g := NewWithT(t)
 
 	LoadKubeConfig = mockLoadKubeConfig
-	//NewDefaultClientConfig = mockNewDefaultClientConfig
 
 	clientset := fake.NewSimpleClientset()
 
 	var (
 		secret0                        = makeSecret("s0", "c0", []byte("kubeconfig0-0"))
-		//secret0UpdateKubeconfigSame    = makeSecret("s0", "c0", []byte("kubeconfig0-1"))
+		secret0UpdateKubeconfigChanged = makeSecret("s0", "c0", []byte("kubeconfig0-1"))
 		secret1                        = makeSecret("s1", "c1", []byte("kubeconfig1-0"))
 	)
-	//secret0UpdateKubeconfigSame.Annotations = map[string]string{"foo": "bar"}
 
 	steps := []struct {
 		// only set one of these per step. The others should be nil.
 		add    *v1.Secret
+		update *v1.Secret
 		delete *v1.Secret
 
 		// only set one of these per step. The others should be empty.
 		wantAdded   string
+		wantUpdated string
 		wantDeleted string
 	}{
 		{add: secret0, wantAdded: "c0"},
+		{update: secret0UpdateKubeconfigChanged, wantUpdated: "c0"},
 		{add: secret1, wantAdded: "c1"},
 		{delete: secret0, wantDeleted: "c0"},
 		{delete: secret1, wantDeleted: "c1"},
@@ -237,7 +226,7 @@ func Test_SecretController(t *testing.T) {
 
 	// Start the secret controller and sleep to allow secret process to start.
 	g.Expect(
-		StartSecretController(clientset, addCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
+		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
 		Should(Succeed())
 
 	for i, step := range steps {
@@ -249,6 +238,9 @@ func Test_SecretController(t *testing.T) {
 			switch {
 			case step.add != nil:
 				_, err := clientset.CoreV1().Secrets(secretNameSpace).Create(step.add)
+				g.Expect(err).Should(BeNil())
+			case step.update != nil:
+				_, err := clientset.CoreV1().Secrets(secretNameSpace).Update(step.update)
 				g.Expect(err).Should(BeNil())
 			case step.delete != nil:
 				g.Expect(clientset.CoreV1().Secrets(secretNameSpace).Delete(step.delete.Name, &metav1.DeleteOptions{})).
@@ -262,6 +254,12 @@ func Test_SecretController(t *testing.T) {
 					defer mu.Unlock()
 					return added
 				}, 10*time.Second).Should(Equal(step.wantAdded))
+			case step.wantUpdated != "":
+				g.Eventually(func() string {
+					mu.Lock()
+					defer mu.Unlock()
+					return updated
+				}, 10*time.Second).Should(Equal(step.wantUpdated))
 			case step.wantDeleted != "":
 				g.Eventually(func() string {
 					mu.Lock()
