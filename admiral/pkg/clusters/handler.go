@@ -662,9 +662,9 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 	return &v1alpha32.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
 }
 
-// A rollout can be one of 2 types :-
-// 1. Canary rollout- this contains only one service instance
-// 2. Blue green rollout- this contains 2 service instances in a namespace, an active service and a preview service. Admiral should always use the active service
+// A rollout can use one of 2 stratergies :-
+// 1. Canary stratergy- this contains only one service instance
+// 2. Blue green stratergy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral should always use the active service
 func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Service {
 
 	if rollout == nil {
@@ -683,16 +683,19 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Se
 
 	var blueGreenActiveService string
 	if rolloutStrategy.BlueGreen != nil {
+		// If rollout uses blue green strategy, use the active service
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
 	}
 	var matchedService *k8sV1.Service
 	for _, service := range cachedService.Service[rollout.Namespace] {
 		var match = true
+		// Both active and passive service have similar label selector. Use active service name to filter in case of blue green stratergy
 		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name!= blueGreenActiveService{
            continue
 		}
 		for lkey, lvalue := range service.Spec.Selector {
-			// Rollout spec will not contain
+			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
+			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
 			if(lkey == ROLLOUT_POD_HASH_LABEL){
 				continue;
 			}
