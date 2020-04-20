@@ -74,7 +74,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 		for _, destinationCluster := range destinationIdentitys {
 			destDeployment := rc.DeploymentController.Cache.Get(destinationCluster)
 			destRollout := rc.RolloutController.Cache.Get(destinationCluster)
-
+             // Assumption :- We will have either a deployment or  a rollout mapped to an identity but never both in a cluster
 			if destDeployment != nil {
 				//deployment can be in multiple clusters, create SEs for all clusters
 
@@ -100,9 +100,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 					serviceEntries[tmpSe.Hosts[0]] = tmpSe
 				}
-			}
-
-			if destRollout != nil {
+			}else if destRollout != nil {
 				//rollouts can be in multiple clusters, create SEs for all clusters
 
 				for _, rollout := range destRollout.Rollouts {
@@ -114,7 +112,6 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					//TODO pass Rollout
 					tmpSe := createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
 
 					if tmpSe == nil {
@@ -149,82 +146,6 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 	AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
 }
 
-
-
-
-
-/*func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[string]*RemoteController, obj *v1.Dependency) {
-
-	destinationIdentitys := obj.Spec.Destinations
-
-	destinationClusters := make(map[string]string)
-
-	sourceClusters := make(map[string]string)
-
-	var serviceEntries = make(map[string]*v1alpha32.ServiceEntry)
-
-	for _, rc := range rcs {
-
-		//for every cluster the source identity is running, add their istio ingress as service entry address
-		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-		if tempDeployment != nil {
-			sourceClusters[rc.ClusterID] = rc.ClusterID
-			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
-		}
-
-		//create and store destination service entries
-		for _, destinationCluster := range destinationIdentitys {
-			destDeployment := rc.DeploymentController.Cache.Get(destinationCluster)
-			if destDeployment == nil {
-				continue
-			}
-
-			//deployment can be in multiple clusters, create SEs for all clusters
-
-			for _, deployment := range destDeployment.Deployments {
-
-				r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
-
-				deployments := rc.DeploymentController.Cache.Get(destinationCluster)
-
-				if deployments == nil || len(deployments.Deployments) == 0 {
-					continue
-				}
-
-				tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
-
-				if tmpSe == nil {
-					continue
-				}
-
-				destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
-
-				r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
-
-				serviceEntries[tmpSe.Hosts[0]] = tmpSe
-			}
-
-		}
-	}
-
-	if len(sourceClusters) == 0 || len(serviceEntries) == 0 {
-		log.Infof(LogFormat, "Event", "dependency-record", sourceIdentity, "", "skipped")
-		return
-	}
-
-	for dCluster, globalFqdn := range destinationClusters {
-		for _, sCluster := range sourceClusters {
-			r.AdmiralCache.CnameClusterCache.Put(globalFqdn, dCluster, dCluster)
-			r.AdmiralCache.CnameDependentClusterCache.Put(globalFqdn, sCluster, sCluster)
-			//filter out the source clusters same as destinationClusters
-			delete(sourceClusters, dCluster)
-		}
-	}
-
-	//add service entries for all dependencies in source cluster
-	AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
-}
-*/
 func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
@@ -741,13 +662,14 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 	return &v1alpha32.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
 }
 
-
+// A rollout can be one of 2 types :-
+// 1. Canary rollout- this contains only one service instance
+// 2. Blue green rollout- this contains 2 service instances in a namespace, an active service and a preview service. Admiral should always use the active service
 func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Service {
 
 	if rollout == nil {
 		return nil
 	}
-	//TODO:- Use active service /passive service /rollout stratergy
 	cachedService := rc.ServiceController.Cache.Get(rollout.Namespace)
 
 	if cachedService == nil {
@@ -756,7 +678,6 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Se
 	rolloutStrategy := rollout.Spec.Strategy
 
 	if rolloutStrategy.BlueGreen == nil && rolloutStrategy.Canary == nil {
-		//TODO:- Add a log ?
 		return nil
 	}
 

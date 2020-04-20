@@ -41,7 +41,7 @@ type RolloutController struct {
 	ctl      *Controller
 	clusterName string
 	Cache    *rolloutCache
-	labelSet 		  *common.LabelSet
+	labelSet *common.LabelSet
 }
 
 
