@@ -146,8 +146,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 	}
 
 	//add service entries for all dependencies in source cluster
-	//TODO:- Remove below comment
-	//AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
+	AddServiceEntriesWithDr(r.AdmiralCache, sourceClusters, rcs, serviceEntries)
 }
 
 

@@ -362,8 +362,6 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
-	//TODO:- Remove return
-	return
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
@@ -451,7 +449,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 	env := common.GetEnvForRollout(obj)
 
-	createServiceEntryForNewServiceOrPodRelatedtoRollout(env, globalIdentifier, rh.RemoteRegistry)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
 }
 
 func (gtp *RolloutHandler) Updated(obj *argo.Rollout) {
