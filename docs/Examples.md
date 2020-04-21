@@ -283,7 +283,7 @@ Refer [this](https://argoproj.github.io/argo-rollouts/features/bluegreen/) for d
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample-greeting-rollout-bluegreen.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample-greeting-rollout-bluegreen.yaml
 ```
 #### Demo
 
@@ -300,7 +300,7 @@ Refer [this](https://argoproj.github.io/argo-rollouts/features/canary/) for deta
 ```
 #Install test services
 
-kubectl apply -f ./admiral-install-v0.1-beta/yaml/sample-greeting-rollout-canary.yaml
+kubectl apply -f $ADMIRAL_HOME/yaml/sample-greeting-rollout-canary.yaml
 ```
 
 #### Demo

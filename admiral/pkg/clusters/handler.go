@@ -12,7 +12,7 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
-
+	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -74,6 +74,8 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 		for _, destinationCluster := range destinationIdentitys {
 			destDeployment := rc.DeploymentController.Cache.Get(destinationCluster)
 			destRollout := rc.RolloutController.Cache.Get(destinationCluster)
+			var tmpSe *networking.ServiceEntry
+
              // Assumption :- We will have either a deployment or  a rollout mapped to an identity but never both in a cluster
 			if destDeployment != nil {
 				//deployment can be in multiple clusters, create SEs for all clusters
@@ -87,18 +89,12 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if deployments == nil || len(deployments.Deployments) == 0 {
 						continue
 					}
-					//TODO pass deployment
-					tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
+
+					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
 
 					if tmpSe == nil {
 						continue
 					}
-
-					destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
-
-					r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
-
-					serviceEntries[tmpSe.Hosts[0]] = tmpSe
 				}
 			}else if destRollout != nil {
 				//rollouts can be in multiple clusters, create SEs for all clusters
@@ -112,19 +108,18 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					tmpSe := createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
+					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
 
 					if tmpSe == nil {
 						continue
 					}
-
-					destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
-
-					r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
-
-					serviceEntries[tmpSe.Hosts[0]] = tmpSe
 				}
 			}
+			destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
+
+			r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
+
+			serviceEntries[tmpSe.Hosts[0]] = tmpSe
 		}
 	}
 
