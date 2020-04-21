@@ -11,6 +11,9 @@ source ./create_cluster.sh $k8s_version "virtualbox"
 ./dns_setup.sh $install_dir
 ./install_admiral.sh $install_dir
 ./install_sample_services.sh $install_dir
+
+#allow for stabilization of DNS and Istio SEs before running tests
+sleep 10
 ./test1.sh "webapp" "sample" "greeting"
 
-#./cleanup.sh
+#./cleanup.sh $istio_version

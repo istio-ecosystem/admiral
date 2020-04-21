@@ -4,7 +4,7 @@ kind: ServiceAccount
 metadata:
   name: webapp
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: webapp
@@ -12,6 +12,9 @@ metadata:
     #admiral.io/ignore: "true" #Uncommenting this line will cause admiral to ignore this deployment despite the fact that it's in the mesh
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: webapp
   template:
     metadata:
       annotations:

@@ -19,6 +19,10 @@ kubectl apply -f $install_dir/yaml/sample.yaml
 
 kubectl apply -f $install_dir/yaml/sample_dep.yaml
 
+#wait for the deployments to come up
+kubectl rollout status deployment greeting -n sample
+kubectl rollout status deployment webapp -n sample
+
 #Wait for admiral's magic
 sleep 5
 
