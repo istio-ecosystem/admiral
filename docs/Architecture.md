@@ -101,9 +101,9 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
     kind: GlobalTrafficPolicy
     metadata:
       name: gtp-service1
+      labels:
+        identity: service1
     spec:
-      selector:
-        app: service1
       policy:
       - dns: service1.global
         lbtype: TOPOLOGY
@@ -123,7 +123,25 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
           weight: 100
     ---
 
-In this example the service object with the app=service1 label will have 3 dns names created that map to it.
+In this example the service object with the identity=service1 label will have 3 dns names created that map to it.
 - service1.global - pins traffic the local region the traffic originated
 - service1-west.global - sends traffic to the west region and only to east if west in unavailable
 - service1-east.global - sends traffic to the east region and only to west if east in unavailable
+
+
+
+### Global Traffic Policy Linking
+
+A global traffic policy is matched to a deployment if and only if their values for the `workload_sidecar_update` labels match. The default label key for `workload_sidecar_update` is `identity`, meaning that in the default case you can just apply the same identity label that you're already using for your deployments to your global traffic policies.
+
+##### Label matching
+
+GTPs will only match with deployments in the same namespace. A lack of identity label is taken to mean "identity: default", so if both resources in the same namespace lack the label, they will match.
+
+| GTP Label            | Deployment Label     | Matching |
+|----------------------|----------------------|----------|
+| <none>               | <none>               | Yes      |
+| identity: "service1" | identity: "service1" | Yes      |
+| identity: "service1" | identity: "service2" | No       |
+| identity: "service1" | <none>               | No       |
+| <none>               | identity: "service1" | No       |
