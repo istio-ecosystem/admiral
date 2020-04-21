@@ -7,6 +7,7 @@ import (
 	argoinformers "github.com/argoproj/argo-rollouts/pkg/client/informers/externalversions"
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -98,50 +99,26 @@ func (p *rolloutCache) AppendRolloutToCluster(key string, rollout *argo.Rollout)
 
 }
 
-func (d *RolloutController) GetRollouts() ([]*argo.Rollout, error) {
-
-	ns := d.K8sClient.CoreV1().Namespaces()
-
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
-
-	if err != nil {
-		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-	}
-
-	var res []*argo.Rollout
-
-	for _, v := range istioEnabledNs.Items {
-
-		rollouts := d.RolloutClient.Rollouts(v.Name)
-		rolloutsList, err := rollouts.List(meta_v1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("error listing rollouts: %v", err)
-		}
-		var admiralRollouts []argo.Rollout
-		for _, rollout := range rolloutsList.Items {
-			if !d.shouldIgnoreBasedOnLabelsForRollout(&rollout) {
-				admiralRollouts = append(admiralRollouts, rollout)
-			}
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-		}
-
-		for _, pi := range admiralRollouts {
-			res = append(res, &pi)
-		}
-	}
-
-	return res, nil
-}
-
 func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Rollout) bool {
 	if rollout.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
+
 	if rollout.Spec.Template.Annotations[d.labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
+		return true
+	}
+
+	if rollout.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		return true
+	}
+
+	ns, err := d.K8sClient.CoreV1().Namespaces().Get(rollout.Namespace, meta_v1.GetOptions{})
+	if err != nil {
+		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", rollout.Namespace, err)
+		return false
+	}
+
+	if ns.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		return true
 	}
 	return false //labels are fine, we should not ignore

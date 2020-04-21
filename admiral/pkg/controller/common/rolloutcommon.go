@@ -90,8 +90,6 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 }
 
 
-//TODO :- Modify GetDeploymentGlobalIdentifier to support rollouts. Remove below duplicate method
-
 func GetRolloutGlobalIdentifier(rollout *argo.Rollout) string {
 	identity := rollout.Spec.Template.Labels[GetWorkloadIdentifier()]
 	if len(identity) == 0 {
@@ -102,8 +100,6 @@ func GetRolloutGlobalIdentifier(rollout *argo.Rollout) string {
 }
 
 
-
-//TODO :- Modify MatchGTPsToDeployment to support rollouts. Remove below duplicate method
 //Find the GTP that best matches the rollout.
 //It's assumed that the set of GTPs passed in has already been matched via the GtprolloutLabel. Now it's our job to choose the best one.
 //In order:
@@ -176,9 +172,6 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 
 }
 
-
-
-//TODO :- Modify GetEnv to support rollouts. Remove below duplicate method
 
 func GetEnvForRollout(rollout *argo.Rollout) string {
 	var environment = rollout.Spec.Template.Labels[Env]
