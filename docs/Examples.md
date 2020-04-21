@@ -1,90 +1,16 @@
 
 ## Install
 
-### Prerequisite
+### Prerequisites
 
-One or more k8s clusters will need the following steps executed
-
-#### Install the below utilities
-
-`Note`: If running in windows, a bash shell is required (cygwin)
-
-* Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-* Install [minikube](https://istio.io/docs/setup/platform-setup/minikube/) to bring up a k8s cluster locally (Make sure your `$KUBECONFIG` points to `minikube` before proceeding)
-* Install [helm](https://helm.sh/docs/intro/install/)
-* Install [wget](https://www.gnu.org/software/wget/)
-
-#### Install Istio
-
-```
-#Download
-
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-osx.tar.gz
-OR
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-linux.tar.gz
-OR
-wget https://github.com/istio/istio/releases/download/1.4.3/istio-1.4.3-win.tar.gz
-
-#Extract
-
-tar -xf istio-1.4.3-osx.tar.gz
-OR
-tar -xf istio-1.4.3-linux.tar.gz
-OR
-tar -xf istio-1.4.3-win.tar.gz
-```
-
-```
-#Create istio-system namespace
-
-kubectl create ns istio-system
-```
-```
-#Create k8s secret to be used by Citadel for mTLS cert generation
-
-kubectl create secret generic cacerts -n istio-system \
-    --from-file=istio-1.4.3/samples/certs/ca-cert.pem \
-    --from-file=istio-1.4.3/samples/certs/ca-key.pem \
-    --from-file=istio-1.4.3/samples/certs/root-cert.pem \
-    --from-file=istio-1.4.3/samples/certs/cert-chain.pem
-```
-```
-#Generate, install and verify Istio CRDs
-
-helm template istio-1.4.3/install/kubernetes/helm/istio-init --namespace istio-system | kubectl apply -f -
-
-#Make sure Istio crds are installed
-
-kubectl get crds | grep 'istio.io' | wc -l
-```
-```
-#Generate & Install Istio
-
-helm template istio-1.4.3/install/kubernetes/helm/istio --namespace istio-system \
-    -f istio-1.4.3/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml | kubectl apply -f -
-
-#Verify that istio pods are up
-
-kubectl get pods -n istio-system
-```
-
-#### DNS setup
-In a k8s cluster, you will have a DNS component that would resolve names. Admiral generates names ending in global (Ex: `stage.greeting.global`) which can be resolved by istiocoredns (as its watching Istio ServiceEntries created by Admiral with those names) installed as part of Istio.
-So you have to point DNS resolution for names ending in `global` to point to `ClusterIp` of istiocoredns service. The below step is to point coredns in a k8s cluster to istiocoredns. If you are using kube-dns, you can tweak this script.
-
-```Note: The below script wipes out existing codedns config map, please manually edit it if you want to try this in a cluster with real services/traffic```
-
-```
-#Run the below script for having coredns point to istiocoredns for dns lookups of names ending in global
-
-$ADMIRAL_HOME/scripts/redirect-dns.sh
-```
-
-#### Remove envoy cluster rewrite filter
+* One or more k8s clusters with version 1.13 or above
+* [Install istio control plane](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster) on each of these k8s clusters
+* [Configure DNS redirect](https://istio.io/docs/setup/install/multicluster/gateways/#setup-dns) for entries ending in `global`
+* Remove envoy cluster rewrite filter
 Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
 ```
-# Delete envoy filter for translating `global` to `svc.cluster.local`
-kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+    # Delete envoy filter for translating `global` to `svc.cluster.local`
+    kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
@@ -99,21 +25,16 @@ kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.1-beta.tar.gz
-tar xvf admiral-install-v0.1-beta.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.9.tar.gz
+tar xvf admiral-install-v0.9.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v0.1-beta
+export ADMIRAL_HOME=./admiral-install-v0.9
 ```
 
 ```
 #Install admiral
+$ADMIRAL_HOME/scripts/install_admiral.sh $ADMIRAL_HOME
 
-kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster.yaml
-kubectl apply -f $ADMIRAL_HOME/yaml/demosinglecluster.yaml
-
-#Verify admiral is running
-
-kubectl get pods -n admiral
 ```
 
 ```
@@ -130,18 +51,9 @@ kubectl get secrets -n admiral
 #### Deploy Sample Services
 
 ```
-#Install test services
+#Install test services & verify admiral did it's magic
 
-kubectl apply -f $ADMIRAL_HOME/yaml/sample.yaml
-```
-```
-#Install the dependency CR (this is optional)
-
-kubectl apply -f $ADMIRAL_HOME/yaml/sample_dep.yaml
-
-#Verify that admiral created service names for 'greeting' service
-
-kubectl get serviceentry -n admiral-sync
+$ADMIRAL_HOME/scripts/install_sample_services.sh $ADMIRAL_HOME
 
 ```
 

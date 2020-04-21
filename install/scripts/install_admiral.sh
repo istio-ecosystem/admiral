@@ -18,9 +18,3 @@ kubectl apply -f $install_dir/yaml/demosinglecluster.yaml
 
 #Verify admiral is running
 kubectl rollout status deployment admiral -n admiral
-
-#Create the secret for admiral to monitor.
-
-$install_dir/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
-
-kubectl get secrets -n admiral

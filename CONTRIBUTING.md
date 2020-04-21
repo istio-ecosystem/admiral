@@ -35,3 +35,16 @@ $ADMIRAL_HOME/install/scripts/cluster-secret.sh <Path_to_Kubeconfig_Admiral_Clus
 
 ## Protobuf code generation
 * If you've made changes to protobuf model objects and need to re-generate their clientsets, use `sh hack/update-codegen.sh` and checkin the generated files
+
+## Integration tests
+### Single cluster
+Single cluster integration tests can be run locally using minikube.
+```
+cd $ADMIRAL_HOME/tests
+./master_run.sh
+```
+* Multi-cluster 
+```
+TODO
+```
+  

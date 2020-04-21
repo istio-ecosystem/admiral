@@ -5,8 +5,8 @@ The below information is based on the testing done, please submit a PR if you ha
 
 | Admiral Version   | Min. Istio Version    | Max. Istio Version    | Min. K8s Version  |  Max. K8s Version
 |:-----------------:|:---------------------:|:---------------------:|:-----------------:|:-----------------:
-v0.1-beta           | 1.2.3                 | 1.4.6                 | 1.13              | 1.14
-v0.9                | 1.2.3                 | 1.5.1                 | 1.13              | 1.16
+v0.1-beta           | 1.2.3                 | 1.4.6                 | 1.13              | 1.14.2
+v0.9                | 1.2.3                 | 1.5.1                 | 1.13              | 1.18.0
 
 
 ## Admiral feature support by Istio Version
@@ -14,7 +14,7 @@ v0.9                | 1.2.3                 | 1.5.1                 | 1.13      
 | Admiral Version   | Syncing   | Dependency    | Global Traffic Policy
 |:-----------------:|:---------:|:-------------:|:--------------------:
 v0.1-beta           | Yes       | Yes           | No
-v0.9                | Yes       | Yes           | Yes
+v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1)
 
 
 ## Tested cloud vendors
