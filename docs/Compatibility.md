@@ -14,7 +14,7 @@ v0.9                | 1.2.3                 | 1.5.1                 | 1.13      
 | Admiral Version   | Syncing   | Dependency    | Global Traffic Policy
 |:-----------------:|:---------:|:-------------:|:--------------------:
 v0.1-beta           | Yes       | Yes           | No
-v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1)
+v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
 
 
 ## Tested cloud vendors

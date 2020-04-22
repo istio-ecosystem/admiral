@@ -3,8 +3,8 @@
 (cd ../; make gen-yaml)
 
 k8s_versions=(
-                "1.18.0"
-#               "1.16.8"
+#                "1.18.0"
+               "1.16.8"
 #               "1.14.2"
 )
 istio_versions=(
