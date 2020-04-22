@@ -11,7 +11,7 @@ Global traffic policies allow defining custom traffic routing behaviour for a Ad
 
 Try out this [example](./Examples.md#Global traffic policy)
 ### Lots of improvements to usability 
-* Only istio resources with `exportTo: *` or `exportTo` field missing are synced across clusters.
+* Only istio resources with `exportTo: *` or `exportTo` field missing are synced across clusters to obey the spec.
 * Added a feature to update Istio Sidecar resource in the client's namespace. This allows for Admiral based automation to filter what endpoint configuration to be loaded by a istio-proxy and keeping the footprint minimal and still manageable.
 * Annotation (`admiral.io/ignore`) to exempt k8s Deployments/Namespaces from Admiral processing. This would be useful for migration k8s Deployments into other clusters.
 ### Simplified installing the examples and organized them by use case   
@@ -24,7 +24,7 @@ Try out this [example](./Examples.md#Global traffic policy)
     -   missing k8s Service for a k8s Deployment
 
 ### Summary
-Complete list of [issues fixed in v0.9](https://github.com/istio-ecosystem/admiral/milestone/1?closed=1)
+Complete [list of issues](https://github.com/istio-ecosystem/admiral/milestone/1?closed=1) fixed in `v0.9`
 
 Report issues and/or post your questions via:
 * [Admiral slack channel](https://istio.slack.com/archives/CT3F18T08)
