@@ -135,4 +135,5 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
+	cp ./install/sample/gtp.yaml ./out/yaml/gtp.yaml
 	cp ./install/scripts/*.sh ./out/scripts/
