@@ -266,6 +266,16 @@ Now run the below request multiple times and see the requests being load balance
 kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c webapp -- curl -v http://default.greeting.global
 ```
 
+### Global traffic policy
+
+You can add a global traffic policy for the Greeting service to tie all requests to one of the clusters. 
+
+```bash
+kubectl apply -f $ADMIRAL_HOME/yaml/gtp.yaml
+```
+
+Now, when you re-run demo requests, you should see them all being served from the us-west-2 cluster (cluster 1).
+
 ### Cleanup
 
 Run the following script to cleanup admiral and its associated resources
