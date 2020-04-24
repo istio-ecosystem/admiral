@@ -132,7 +132,7 @@ In this example the service object with the identity=service1 label will have 3 
 
 ### Global Traffic Policy Linking
 
-A global traffic policy is matched to a deployment if and only if their values for the `workload_sidecar_update` labels match. The default label key for `workload_sidecar_update` is `identity`, meaning that in the default case you can just apply the same identity label that you're already using for your deployments to your global traffic policies.
+A global traffic policy is matched to a deployment if and only if their values for the `globaltraffic_deployment_label` labels match. The default label key for `globaltraffic_deployment_label` is `identity`, meaning that in the default case you can just apply the same identity label that you're already using for your deployments to your global traffic policies.
 
 ##### Label matching
 

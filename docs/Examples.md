@@ -274,7 +274,7 @@ You can add a global traffic policy for the Greeting service to tie all requests
 kubectl apply -f $ADMIRAL_HOME/yaml/gtp.yaml
 ```
 
-Now, when you re-run demo requests, you should see them all flowing to the us-west-2 cluster (cluster 1).
+Now, when you re-run demo requests, you should see them all being served from the us-west-2 cluster (cluster 1).
 
 ### Cleanup
 

@@ -8,9 +8,9 @@ metadata:
 spec:
   policy:
     - dns: default.greeting.global
-      lbtype: FAILOVER
+      lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
-        - region: uswest-2
+        - region: us-west-2
           weight: 100
-        - region: useast-2
+        - region: us-east-2
           weight: 0
