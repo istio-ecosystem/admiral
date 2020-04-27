@@ -25,7 +25,7 @@ Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at i
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.1-beta/admiral-install-v0.9.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v0.9/admiral-install-v0.9.tar.gz
 tar xvf admiral-install-v0.9.tar.gz
 
 export ADMIRAL_HOME=./admiral-install-v0.9
@@ -180,14 +180,17 @@ kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespac
 
 ### Global traffic policy
 
-You can add a global traffic policy for the Greeting service to tie all requests to one of the clusters. 
+Multicluster example is a prerequisite for the below example with Cluster 2 hosted in us-east-2 region.
+
+You can add a global traffic policy for the Greeting service to distribute traffic between clusters in a certain ratio. 
 
 ```bash
 kubectl apply -f $ADMIRAL_HOME/yaml/gtp.yaml
 ```
 
-Now, when you re-run demo requests, you should see them all being served from the us-west-2 cluster (cluster 1).
+Now, when you re-run demo requests, you should see 80% of them being served from the us-west-2 cluster (Cluster 1) and 20% of them being served from us-east-2 (Cluster 2).
 
+`Note`: You can add locality to your pods in Cluster 2 by using K8s standard region labels if your cluster if not running on a cloud provider like AWS. See these [requirements](https://istio.io/docs/ops/configuration/traffic-management/locality-load-balancing/#requirements)
 ### Cleanup
 
 Run the following script to cleanup admiral and its associated resources
