@@ -60,7 +60,11 @@ func TestIgnoreIstioResource(t *testing.T) {
 
 func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
-	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}}
+	outlierDetection := &v1alpha3.OutlierDetection{
+		BaseEjectionTime:  &types.Duration{Seconds: 120},
+		Consecutive_5XxErrors: &types.UInt32Value{Value:10},
+		Interval:          &types.Duration{Seconds: 5}}
+	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection,}
 
 	noGtpDr := v1alpha3.DestinationRule{
 		Host:          "qa.myservice.global",
@@ -75,11 +79,7 @@ func TestGetDestinationRule(t *testing.T) {
 				LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{},
 			},
-			OutlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			},
+			OutlierDetection: outlierDetection,
 		},
 	}
 
@@ -98,11 +98,7 @@ func TestGetDestinationRule(t *testing.T) {
 					},
 				},
 			},
-			OutlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			},
+			OutlierDetection: outlierDetection,
 		},
 	}
 
