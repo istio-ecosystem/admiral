@@ -189,12 +189,12 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 			}
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
-			dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			}
 		}
+	}
+	dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
+		BaseEjectionTime:  &types.Duration{Seconds: 120},
+		Consecutive_5XxErrors: &types.UInt32Value{Value: 10},
+		Interval:          &types.Duration{Seconds: 5},
 	}
 	return dr
 }

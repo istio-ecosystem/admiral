@@ -90,6 +90,7 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 
 	err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
+		w.updateCacheController,
 		w.deleteCacheController,
 		common.GetClusterRegistriesNamespace(),
 		ctx, common.GetSecretResolver())
@@ -189,6 +190,13 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	log.Infof("Create Controller %s", clusterID)
 
 	return nil
+}
+
+func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
+	if err := r.deleteCacheController(clusterID); err != nil {
+		return err
+	}
+	return r.createCacheController(clientConfig, clusterID, resyncPeriod)
 }
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
