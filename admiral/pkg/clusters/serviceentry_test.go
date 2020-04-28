@@ -8,6 +8,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
@@ -470,7 +471,33 @@ func TestCreateServiceEntry(t *testing.T) {
 		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
 	}
 
+	// Test for Rollout
+	rollout := argo.Rollout{}
+	rollout.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+
+	resultingEntry = createServiceEntryForRollout(rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+
+	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
+		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	}
+
+	if resultingEntry.Addresses[0] != localAddress {
+		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+	}
+
+	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
+		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
+	}
+
+	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
+		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
+	}
+
+
 }
+
+
+
 
 func TestCreateIngressOnlyVirtualService(t *testing.T) {
 
