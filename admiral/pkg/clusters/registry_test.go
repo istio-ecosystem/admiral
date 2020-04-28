@@ -184,6 +184,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
+	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		return nil, e
@@ -225,6 +226,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		ServiceController:    s,
 		NodeController:       n,
 		ClusterID:            "test.cluster",
+		RolloutController: r,
 	}
 	return &rc, nil
 }
