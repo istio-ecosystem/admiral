@@ -115,6 +115,9 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					}
 				}
 			}
+			if tmpSe == nil {
+				continue
+			}
 			destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
 
 			r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
