@@ -139,6 +139,7 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	}
 
 	g.dependencyCache[gtp.Name] = deployment
+
 	return nil
 }
 
@@ -166,7 +167,9 @@ func (g *globalTrafficCache) PutRollout(gtp *v1.GlobalTrafficPolicy, rollout *ar
 		delete(g.identityCache, key)
 	}
 
-	g.dependencyRolloutCache[gtp.Name] = rollout
+	if nil != rollout {
+		g.dependencyRolloutCache[gtp.Name] = rollout
+	}
 	return nil
 }
 

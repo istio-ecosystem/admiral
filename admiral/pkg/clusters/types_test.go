@@ -293,6 +293,10 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	remoteController := &RemoteController{}
 	remoteController.DeploymentController = deploymentController
 
+	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
+	rolloutController := &admiral.RolloutController{K8sClient:fakeClient,RolloutClient:noRolloutsClient}
+	remoteController.RolloutController = rolloutController
+
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	admiralCacle.GlobalTrafficCache = gtpCache
@@ -423,6 +427,7 @@ func TestDeploymentHandler(t *testing.T) {
 
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
+
 
 	deployment := v12.Deployment{
 		ObjectMeta: time2.ObjectMeta{
