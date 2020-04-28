@@ -128,6 +128,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
@@ -147,6 +148,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 			},
 		},
 		DeploymentController: d,
+		RolloutController:r,
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
