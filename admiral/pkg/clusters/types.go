@@ -452,11 +452,11 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
 }
 
-func (gtp *RolloutHandler) Updated(obj *argo.Rollout) {
+func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
 	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
 
 }
 
-func (gtp *RolloutHandler) Deleted(obj *argo.Rollout) {
+func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
 	log.Infof(LogFormat, "Deleted", "rollout", obj.Name, obj.ClusterName, "received")
 }
