@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
+	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	v12 "k8s.io/api/apps/v1"
@@ -114,9 +115,15 @@ func TestGlobalTrafficHandler(t *testing.T) {
 		log.Fatalf("Failed to set up mock k8s client. Failing test. Error=%v", err)
 	}
 
+
 	deploymentController := &admiral.DeploymentController{K8sClient:fakeClient}
 	remoteController := &RemoteController{}
 	remoteController.DeploymentController = deploymentController
+
+
+	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
+	rolloutController := &admiral.RolloutController{K8sClient:fakeClient,RolloutClient:noRolloutsClient}
+	remoteController.RolloutController = rolloutController
 
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
