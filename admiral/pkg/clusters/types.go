@@ -457,6 +457,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
 	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
+
 }
 
 func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
