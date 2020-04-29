@@ -7,15 +7,27 @@ import (
 	"gopkg.in/yaml.v2"
 	"strconv"
 	"strings"
-
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 )
 
 func GetMeshPorts(clusterName string, destService *k8sV1.Service,
 	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
-	var ports = make(map[string]uint32)
 	var meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	ports := getMeshPortsHelper(meshPorts,destService,clusterName)
+	return ports
+}
+
+func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
+	destRollout *argo.Rollout) map[string]uint32 {
+	var meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	ports := getMeshPortsHelper(meshPorts,destService,clusterName)
+	return ports
+}
+
+func getMeshPortsHelper (meshPorts string,destService *k8sV1.Service,clusterName string ) map[string]uint32{
+	var ports = make(map[string]uint32)
 	if len(meshPorts) == 0 {
 		log.Infof(LogFormat, "GetMeshPorts", "service", destService.Name, clusterName, "No mesh ports present, defaulting to first port")
 		if destService.Spec.Ports != nil && len(destService.Spec.Ports) > 0 {
@@ -45,6 +57,8 @@ func GetMeshPorts(clusterName string, destService *k8sV1.Service,
 	}
 	return ports
 }
+
+
 
 func GetServiceEntryStateFromConfigmap(configmap *k8sV1.ConfigMap) *ServiceEntryAddressStore {
 
