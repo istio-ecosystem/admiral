@@ -1,12 +1,9 @@
 ---
-apiVersion: apps/v1
+apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
   name: greeting
 spec:
-  selector:
-    matchLabels:
-      app: greeting
   replicas: 1
   template:
     metadata:
@@ -36,6 +33,7 @@ spec:
                 path: nginx.conf
         - name: log
           emptyDir: {}
+
 ---
 apiVersion: v1
 kind: Service
