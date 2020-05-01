@@ -309,7 +309,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	var matchedDeployments []k8sAppsV1.Deployment
 	var matchedRollouts []argo.Rollout
 
-	//IMPORTANT: The deployment//Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
+	//IMPORTANT: The deployment/Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
 	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		matchedRollouts = append(matchedRollouts, remoteCluster.RolloutController.GetRolloutByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
