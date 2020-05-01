@@ -145,6 +145,13 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 	return &deploymentController, nil
 }
 
+func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration,labelSet *common.LabelSet) (*DeploymentController, error) {
+
+	dc, err :=  NewDeploymentController(stopCh,handler,config,resyncPeriod)
+	dc.labelSet =labelSet
+	return dc,err
+}
+
 func (d *DeploymentController) Added(obj interface{}) {
 	HandleAddUpdateDeployment(obj, d)
 }

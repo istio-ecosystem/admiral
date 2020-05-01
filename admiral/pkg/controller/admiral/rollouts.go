@@ -163,6 +163,12 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	return &roController, nil
 }
 
+func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration,labelSet *common.LabelSet) (*RolloutController, error) {
+	rc, err :=  NewRolloutsController(stopCh,handler,config,resyncPeriod)
+	rc.labelSet =labelSet
+	return rc,err
+}
+
 func (roc *RolloutController) Added(ojb interface{}) {
 
 	rollout := ojb.(*argo.Rollout)

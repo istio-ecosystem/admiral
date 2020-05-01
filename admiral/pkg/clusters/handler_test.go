@@ -1,6 +1,8 @@
 package clusters
 
 import (
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
@@ -11,14 +13,16 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
-	"testing"
-	"time"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	coreV1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	"sync"
+	"testing"
+	"time"
+	k8sAppsV1 "k8s.io/api/apps/v1"
 )
 
 func TestIgnoreIstioResource(t *testing.T) {
@@ -759,6 +763,141 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T){
 			if !cmp.Equal(result.Name, c.result) {
 				t.Fatalf("Service Mismatch. Diff: %v", cmp.Diff(result, c.name))
 			}
+		})
+	}
+}
+
+func TestHandleDependencyRecord(t *testing.T){
+
+	fakeClient := fake.NewSimpleClientset()
+
+	stop := make(chan struct{})
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	labelset := common.LabelSet{
+		DeploymentAnnotation: "sidecar.istio.io/inject",
+		AdmiralIgnoreLabel:   "admiral-ignore",
+	}
+
+	ns := coreV1.Namespace{}
+	ns.Name ="namespace"
+	ns.Namespace ="namespace"
+
+
+	r, e := admiral.NewRolloutsControllerWithLabelOverride(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300),&labelset)
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	d,e := admiral.NewDeploymentControllerWithLabelOverride(stop, &test.MockDeploymentHandler{},&config,time.Second*time.Duration(300),&labelset)
+	n,e := admiral.NewNodeController(stop,&test.MockNodeHandler{},&config)
+	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
+	fakeClient.CoreV1().Namespaces().Create(&ns)
+
+	if e != nil {
+		t.Fatalf("Inititalization failed")
+	}
+
+	r.K8sClient =fakeClient
+	r.RolloutClient =noRolloutsClient
+	d.K8sClient = fakeClient
+
+	remoteController := &RemoteController{}
+	remoteController.DeploymentController = d
+	remoteController.RolloutController = r
+	remoteController.ServiceController = s
+	remoteController.NodeController = n
+
+	usecase1Rcs := make(map[string]*RemoteController)
+	usecase1Rcs["cluster-1"] =remoteController
+
+	registry := &RemoteRegistry{}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"qal.greeting.mesh-se": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+	cacheWithEntry.EntryAddresses["qal.payments.mesh-se"] =common.LocalAddressPrefix+"10.2"
+
+	admiralCache := &AdmiralCache{
+		IdentityClusterCache: common.NewMapOfMaps(),
+		ServiceEntryAddressStore : &cacheWithEntry,
+		CnameClusterCache: common.NewMapOfMaps(),
+		CnameIdentityCache: & sync.Map{},
+		CnameDependentClusterCache: common.NewMapOfMaps(),
+	}
+
+	registry.AdmiralCache = admiralCache
+
+	rollout := argo.Rollout{}
+	rollout.Namespace = "namespace"
+	rollout.Name = "fake-app-rollout-qal"
+	rollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	rollout.Labels = map[string]string{"identity": "app1"}
+
+
+
+	greetingRollout := argo.Rollout{}
+	greetingRollout.Namespace = "namespace"
+	greetingRollout.Name = "greetingRollout-qal"
+	greetingRollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "greeting", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	greetingRollout.Labels = map[string]string{"identity": "greeting"}
+
+
+	paymentDeployment := k8sAppsV1.Deployment{}
+	paymentDeployment.Namespace = "namespace"
+	paymentDeployment.Name = "payments-qal"
+	paymentDeployment.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "payments", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	paymentDeployment.Labels = map[string]string{"identity": "payments"}
+
+
+	r.Added(&rollout)
+	r.Added(&greetingRollout)
+
+	d.Added(&paymentDeployment)
+
+	dependency := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
+
+
+	testCases := []struct {
+		name string
+		sourceIdentity string
+		dep             *v1.Dependency
+		remoteRegistry *RemoteRegistry
+	}{
+		{
+			name : "handleDependencyRecord-NoDependency",
+			sourceIdentity:"app1",
+			dep: &v1.Dependency{ Spec:dependency},
+			remoteRegistry:registry,
+		},
+
+	}
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			handleDependencyRecord(c.sourceIdentity,c.remoteRegistry,c.remoteRegistry.remoteControllers,c.dep)
 		})
 	}
 }
