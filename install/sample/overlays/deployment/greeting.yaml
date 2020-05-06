@@ -1,10 +1,14 @@
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: greeting
+  namespace: sample
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: greeting
   template:
     metadata:
       annotations:
@@ -14,25 +18,25 @@ spec:
         identity: greeting
     spec:
       containers:
-        - name: greeting
-          image: nginx
+        - image: nginx
+          name: greeting
           ports:
             - containerPort: 80
           volumeMounts:
-            - mountPath: /etc/nginx # mount nginx-conf volumn to /etc/nginx
-              readOnly: true
+            - mountPath: /etc/nginx
               name: nginx-conf
+              readOnly: true
             - mountPath: /var/log/nginx
               name: log
       volumes:
-        - name: nginx-conf
-          configMap:
-            name: nginx-conf # place ConfigMap `nginx-conf` on /etc/nginx
+        - configMap:
             items:
               - key: nginx.conf
                 path: nginx.conf
-        - name: log
-          emptyDir: {}
+            name: nginx-conf
+          name: nginx-conf
+        - emptyDir: {}
+          name: log
 
 ---
 apiVersion: v1
