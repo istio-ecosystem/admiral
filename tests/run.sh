@@ -8,7 +8,6 @@ install_dir=$3
 
 source ./create_cluster.sh $k8s_version "virtualbox"
 ./install_istio.sh $istio_version "osx"
-export KUBECONFIG=/Users/sa/.kube/config
 ./dns_setup.sh $install_dir
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
