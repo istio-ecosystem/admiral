@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 
 	k8sV1 "k8s.io/api/core/v1"
 )
@@ -146,4 +147,81 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetMeshPortsForRollout(t *testing.T) {
+
+	annotatedPort := 8090
+	defaultServicePort := uint32(8080)
+
+	defaultK8sSvcPortNoName := k8sV1.ServicePort{Port: int32(defaultServicePort)}
+	defaultK8sSvcPort := k8sV1.ServicePort{Name: "default", Port: int32(defaultServicePort)}
+	meshK8sSvcPort := k8sV1.ServicePort{Name: "mesh", Port: int32(annotatedPort)}
+
+	serviceMeshPorts := []k8sV1.ServicePort{defaultK8sSvcPort, meshK8sSvcPort}
+
+	serviceMeshPortsOnlyDefault := []k8sV1.ServicePort{defaultK8sSvcPortNoName}
+
+	service := k8sV1.Service{
+		ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
+		Spec: k8sV1.ServiceSpec{Ports: serviceMeshPorts},
+	}
+	rollout := argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
+		}}}
+
+	ports := map[string]uint32{"http": uint32(annotatedPort)}
+
+	portsFromDefaultSvcPort := map[string]uint32{"http": defaultServicePort}
+
+	emptyPorts := map[string]uint32{}
+
+	testCases := []struct {
+		name   string
+		clusterName   string
+		service k8sV1.Service
+		rollout   argo.Rollout
+		expected map[string]uint32
+	}{
+		{
+			name:    "should return a port based on annotation",
+			service: service,
+			rollout: rollout,
+			expected: ports,
+		},
+		{
+			name:    "should return a default port",
+			service: k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec: k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
+			},
+			rollout: argo.Rollout{
+				Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				}}},
+			expected: portsFromDefaultSvcPort,
+		},
+		{
+			name:    "should return empty ports",
+			service: k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec: k8sV1.ServiceSpec{Ports: nil},
+			},
+			rollout: argo.Rollout{
+				Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				}}},
+			expected: emptyPorts,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			meshPorts := GetMeshPortsForRollout(c.clusterName, &c.service, &c.rollout)
+			if !reflect.DeepEqual(meshPorts, c.expected) {
+				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
+			}
+		})
+	}
 }

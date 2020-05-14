@@ -8,6 +8,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	coreV1 "k8s.io/api/core/v1"
 	"reflect"
 	"strconv"
 	"sync"
@@ -58,7 +60,7 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 		t.Fail()
 	}
 
-	newSe := res["test-se"]
+	newSe := res["test-se"]// Test for Rollout
 
 	value := newSe.Endpoints[0].Labels["foo"]
 
@@ -129,6 +131,8 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
 	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
+	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+
 	if e != nil {
 		t.Fail()
 	}
@@ -147,6 +151,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 			},
 		},
 		DeploymentController: d,
+		RolloutController:r,
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
@@ -468,6 +473,29 @@ func TestCreateServiceEntry(t *testing.T) {
 		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
 	}
 
+	// Test for Rollout
+	rollout := argo.Rollout{}
+	rollout.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+
+	resultingEntry = createServiceEntryForRollout(rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+
+	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
+		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	}
+
+	if resultingEntry.Addresses[0] != localAddress {
+		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+	}
+
+	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
+		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
+	}
+
+	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
+		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
+	}
+
+
 }
 
 func TestCreateIngressOnlyVirtualService(t *testing.T) {
@@ -537,6 +565,142 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
+
+	const  NAMESPACE = "test-test"
+	const  SERVICENAME  = "serviceNameActive"
+	const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+
+	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	v,e := istio.NewVirtualServiceController(make(chan struct{}),&test.MockVirtualServiceHandler{},&config,time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fail()
+	}
+	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"test.test.mesh-se": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		DeploymentController: d,
+		RolloutController:r,
+		ServiceController:s,
+		VirtualServiceController:v,
+	}
+	rc.ClusterID ="test.cluster"
+	rr.remoteControllers["test.cluster"] = rc
+
+	admiralCache := &AdmiralCache{
+		IdentityClusterCache: common.NewMapOfMaps(),
+		ServiceEntryAddressStore : &cacheWithEntry,
+		CnameClusterCache: common.NewMapOfMaps(),
+		CnameIdentityCache: & sync.Map{},
+		CnameDependentClusterCache: common.NewMapOfMaps(),
+		IdentityDependencyCache: common.NewMapOfMaps(),
+		GlobalTrafficCache : &globalTrafficCache{},
+		DependencyNamespaceCache : common.NewSidecarEgressMap(),
+	}
+	rr.AdmiralCache =admiralCache
+
+
+	rollout := argo.Rollout{}
+
+	rollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v12.ObjectMeta{
+				Labels: map[string]string{"identity": "test"},
+			},
+		},
+	}
+
+	rollout.Namespace =NAMESPACE
+	rollout.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{},
+	}
+	labelMap := make(map[string] string)
+	labelMap["identity"] = "test"
+
+
+	matchLabel4 := make(map[string] string)
+	matchLabel4["app"] ="test"
+
+	labelSelector4 := v12.LabelSelector{
+		MatchLabels:matchLabel4,
+	}
+	rollout.Spec.Selector = &labelSelector4
+
+
+	r.Cache.AppendRolloutToCluster("bar",&rollout)
+
+
+	selectorMap := make(map[string] string)
+	selectorMap["app"] ="test"
+	selectorMap[ROLLOUT_POD_HASH_LABEL] ="hash"
+
+	activeService := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	activeService.Name = SERVICENAME
+	activeService.Namespace = NAMESPACE
+	port1 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random1",
+	}
+
+	port2 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random2",
+	}
+
+	ports := []coreV1.ServicePort{port1, port2}
+	activeService.Spec.Ports = ports
+
+
+
+	s.Cache.Put(activeService)
+	se :=createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	if nil == se {
+		t.Fatalf("no service entries found" )
+	}
+	if len(se)!=1{
+		t.Fatalf("More than 1 service entries found. Expected 1" )
+	}
+	serviceEntryResp := se["test.test.mesh"]
+	if nil == serviceEntryResp {
+		t.Fatalf("Service entry returned should not be empty" )
+	}
+
 }
 
 
