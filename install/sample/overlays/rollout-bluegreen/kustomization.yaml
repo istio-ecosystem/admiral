@@ -1,14 +1,11 @@
 apiversion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: sample
+namespace: sample-rollout-bluegreen
 
 bases:
   - ../../base
 
-patchesStrategicMerge:
-  - greeting.yaml
-
 resources:
-  - greeting-deployment.yaml
-
+  - greeting.yaml
+  - namespace.yaml

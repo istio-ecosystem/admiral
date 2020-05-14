@@ -1,0 +1,55 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: greeting
+  namespace: sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: greeting
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+      labels:
+        app: greeting
+        identity: greeting
+    spec:
+      containers:
+        - image: nginx
+          name: greeting
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - mountPath: /etc/nginx
+              name: nginx-conf
+              readOnly: true
+            - mountPath: /var/log/nginx
+              name: log
+      volumes:
+        - configMap:
+            items:
+              - key: nginx.conf
+                path: nginx.conf
+            name: nginx-conf
+          name: nginx-conf
+        - emptyDir: {}
+          name: log
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: greeting
+    identity: greeting
+  name: greeting
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app: greeting
