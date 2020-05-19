@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -41,6 +42,11 @@ type serviceCache struct {
 }
 
 func (s *serviceCache) Put(service *k8sV1.Service) {
+	if service.Labels[common.GetLabelSet().AdmiralIgnoreLabel] == "true" {
+		return //Ignoring services with the ignore label
+	}
+
+
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	identity := s.getKey(service)

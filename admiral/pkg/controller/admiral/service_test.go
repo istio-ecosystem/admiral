@@ -89,8 +89,17 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	s2.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	s2.Status.LoadBalancer.Ingress = append(s2.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{IP:"1.2.3.4"})
 
+	ignoreService := &v1.Service{}
+	ignoreService.Name = "test-service-ignored"
+	ignoreService.Namespace = "ns"
+	ignoreService.Status = v1.ServiceStatus{}
+	ignoreService.Status.LoadBalancer = v1.LoadBalancerStatus{}
+	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
+	ignoreService.Labels = map[string]string{"admiral-ignore": "true"}
+
 	sc.Put(service)
 	sc.Put(s2)
+	sc.Put(ignoreService)
 
 
 	testCases := []struct {
@@ -120,6 +129,13 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key: "test-service-ip",
 			ns: "ns",
 			expectedReturn: "1.2.3.4",
+		},
+		{
+			name: "Successfully ignores services with the ignore label",
+			cache: &sc,
+			key: "test-service-ignored",
+			ns: "ns",
+			expectedReturn: "admiral_dummy.com",
 		},
 	}
 
