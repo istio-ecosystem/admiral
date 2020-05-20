@@ -44,7 +44,7 @@ func TestServiceCache_Put(t *testing.T) {
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][0], service) {
+	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
 		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
 	}
 
@@ -55,11 +55,11 @@ func TestServiceCache_Put(t *testing.T) {
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][0], service) {
+	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
 		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
 	}
-	if (length+1) != len(serviceCache.Get("ns").Service["ns"]) {
-		t.Errorf("Didn't add a second service, expected %v, got %v", length+1, len(serviceCache.Get("ns").Service["ns"]))
+	if (length) != len(serviceCache.Get("ns").Service["ns"]) {
+		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns").Service["ns"]))
 	}
 
 	serviceCache.Delete(serviceCache.Get("ns"))
@@ -97,9 +97,21 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
 	ignoreService.Labels = map[string]string{"admiral-ignore": "true"}
 
+	ignoreService2 := &v1.Service{}
+	ignoreService2.Name = "test-service-ignored-later"
+	ignoreService2.Namespace = "ns"
+	ignoreService2.Status = v1.ServiceStatus{}
+	ignoreService2.Status.LoadBalancer = v1.LoadBalancerStatus{}
+	ignoreService2.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
+
 	sc.Put(service)
 	sc.Put(s2)
 	sc.Put(ignoreService)
+	sc.Put(ignoreService2)
+
+	ignoreService2.Labels = map[string]string{"admiral-ignore": "true"}
+
+	sc.Put(ignoreService2) //Ensuring that if the ignore label is added to a service, it's no longer found
 
 
 	testCases := []struct {
@@ -134,6 +146,13 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			name: "Successfully ignores services with the ignore label",
 			cache: &sc,
 			key: "test-service-ignored",
+			ns: "ns",
+			expectedReturn: "admiral_dummy.com",
+		},
+		{
+			name: "Successfully ignores services when the ignore label is added after the service had been added to the cache for the first time",
+			cache: &sc,
+			key: "test-service-ignored-later",
 			ns: "ns",
 			expectedReturn: "admiral_dummy.com",
 		},
