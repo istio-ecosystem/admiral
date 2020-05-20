@@ -42,7 +42,7 @@ type serviceCache struct {
 }
 
 func (s *serviceCache) Put(service *k8sV1.Service) {
-	if service.Labels[common.GetLabelSet().AdmiralIgnoreLabel] == "true" {
+	if service.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		//removing from the cache if it already exists
 		identity := s.getKey(service)
 		existing := s.cache[identity]

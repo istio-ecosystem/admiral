@@ -95,7 +95,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService.Status = v1.ServiceStatus{}
 	ignoreService.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
-	ignoreService.Labels = map[string]string{"admiral-ignore": "true"}
+	ignoreService.Annotations = map[string]string{"admiral.io/ignore": "true"}
 
 	ignoreService2 := &v1.Service{}
 	ignoreService2.Name = "test-service-ignored-later"
@@ -109,7 +109,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	sc.Put(ignoreService)
 	sc.Put(ignoreService2)
 
-	ignoreService2.Labels = map[string]string{"admiral-ignore": "true"}
+	ignoreService2.Annotations = map[string]string{"admiral.io/ignore": "true"}
 
 	sc.Put(ignoreService2) //Ensuring that if the ignore label is added to a service, it's no longer found
 
