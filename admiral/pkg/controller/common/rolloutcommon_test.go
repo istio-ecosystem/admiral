@@ -30,7 +30,6 @@ func init() {
 
 	p.LabelSet.WorkloadIdentityKey="identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
-	p.LabelSet.AdmiralIgnoreLabel="admiral-ignore"
 
 	InitializeConfig(p)
 }
