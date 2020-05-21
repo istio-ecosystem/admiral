@@ -89,7 +89,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	s2.Status = v1.ServiceStatus{}
 	s2.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	s2.Status.LoadBalancer.Ingress = append(s2.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{IP:"1.2.3.4"})
-	service.Labels = map[string]string{"app":"test-service-ip"}
+	s2.Labels = map[string]string{"app":"test-service-ip"}
 
 	ignoreService := &v1.Service{}
 	ignoreService.Name = "test-service-ignored"
@@ -98,7 +98,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
 	ignoreService.Annotations = map[string]string{"admiral.io/ignore": "true"}
-	service.Labels = map[string]string{"app":"test-service-ignored"}
+	ignoreService.Labels = map[string]string{"app":"test-service-ignored"}
 
 	ignoreService2 := &v1.Service{}
 	ignoreService2.Name = "test-service-ignored-later"
@@ -106,7 +106,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService2.Status = v1.ServiceStatus{}
 	ignoreService2.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	ignoreService2.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
-	service.Labels = map[string]string{"app":"test-service-ignored-later"}
+	ignoreService2.Labels = map[string]string{"app":"test-service-ignored-later"}
 
 	ignoreService3 := &v1.Service{}
 	ignoreService3.Name = "test-service-unignored-later"
@@ -115,7 +115,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService3.Status.LoadBalancer = v1.LoadBalancerStatus{}
 	ignoreService3.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname:"hostname.com"})
 	ignoreService3.Annotations = map[string]string{"admiral.io/ignore": "true"}
-	service.Labels = map[string]string{"app":"test-service-unignored-later"}
+	ignoreService3.Labels = map[string]string{"app":"test-service-unignored-later"}
 
 	sc.Put(service)
 	sc.Put(s2)
