@@ -92,7 +92,7 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) string {
 		return lb
 	}
 	for _, service := range service.Service[namespace] {
-		if service.Name == key {
+		if service.Labels["app"] == key {
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
 				if len(loadBalancerStatus[0].Hostname) > 0 {
