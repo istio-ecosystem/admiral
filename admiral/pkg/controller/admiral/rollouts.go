@@ -114,7 +114,7 @@ func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Ro
 
 	ns, err := d.K8sClient.CoreV1().Namespaces().Get(rollout.Namespace, meta_v1.GetOptions{})
 	if err != nil {
-		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", rollout.Namespace, err)
+		log.Warnf("Failed to get namespace object for rollout with namespace %v, err: %v", rollout.Namespace, err)
 		return false
 	}
 
