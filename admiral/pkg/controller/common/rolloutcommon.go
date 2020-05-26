@@ -19,7 +19,12 @@ func GetCnameForRollout(rollout *argo.Rollout, identifier string, nameSuffix str
 		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", rollout.Name, rollout.Namespace, identifier)
 		return ""
 	}
-	return environment + Sep + alias + Sep + nameSuffix
+	cname:= environment + Sep + alias + Sep + nameSuffix
+	if rollout.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
+		log.Infof("admiral.io/cname-case-sensitive annotation enabled on rollout with name %v",rollout.Name)
+		return cname
+	}
+	return strings.ToLower(cname)
 }
 
 

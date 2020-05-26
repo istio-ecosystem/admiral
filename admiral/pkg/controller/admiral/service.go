@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -23,7 +24,7 @@ type ServiceHandler interface {
 
 type ServiceClusterEntry struct {
 	Identity string
-	Service  map[string][]*k8sV1.Service
+	Service  map[string]map[string]*k8sV1.Service //maps namespace to a map of service name:service object
 }
 
 type ServiceController struct {
@@ -41,22 +42,30 @@ type serviceCache struct {
 }
 
 func (s *serviceCache) Put(service *k8sV1.Service) {
+	if service.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		//removing from the cache if it already exists
+		identity := s.getKey(service)
+		existing := s.cache[identity]
+		delete(existing.Service[identity], service.Name)
+		return //Ignoring services with the ignore label
+	}
+
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	identity := s.getKey(service)
 	existing := s.cache[identity]
 	if existing == nil {
 		existing = &ServiceClusterEntry{
-			Service:  make(map[string][]*k8sV1.Service),
+			Service:  make(map[string]map[string]*k8sV1.Service),
 			Identity: s.getKey(service),
 		}
 		s.cache[identity] = existing
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
-		namespaceServices = make ([]*k8sV1.Service, 0)
+		namespaceServices = make (map[string]*k8sV1.Service, 0)
 	}
-	namespaceServices = append(namespaceServices, service)
+	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices
 
 }
@@ -83,7 +92,7 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) string {
 		return lb
 	}
 	for _, service := range service.Service[namespace] {
-		if service.Name == key {
+		if service.Labels["app"] == key {
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
 				if len(loadBalancerStatus[0].Hostname) > 0 {

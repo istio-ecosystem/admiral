@@ -8,6 +8,7 @@ import (
 	k8sCoreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,7 +99,7 @@ func TestGetCname(t *testing.T) {
 
 	nameSuffix := "global"
 	identifier := "identity"
-	identifierVal := "company.platform.server"
+	identifierVal := "COMPANY.platform.server"
 
 	testCases := []struct {
 		name       string
@@ -108,12 +109,20 @@ func TestGetCname(t *testing.T) {
 		{
 			name:       "should return valid cname (from label)",
 			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected:   strings.ToLower("stage." + identifierVal + ".global"),
+		},{
+			name:       "should return valid cname (from label) uses case sensitive DNS annotation -enabled",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"true"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   "stage." + identifierVal + ".global",
+		},{
+			name:       "should return valid cname (from label)  uses case sensitive DNS annotation -disabled",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"false"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return valid cname (from annotation)",
 			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}, Labels: map[string]string{"env": "stage"}}}}},
-			expected:   "stage." + identifierVal + ".global",
+			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return empty string",

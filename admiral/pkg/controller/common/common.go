@@ -28,6 +28,7 @@ const (
 	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
 	Default                    = "default"
 	AdmiralIgnoreAnnotation    = "admiral.io/ignore"
+	AdmiralCnameCaseSensitive  = "admiral.io/cname-case-sensitive"
 )
 
 type Event int
@@ -75,7 +76,12 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	return environment + Sep + alias + Sep + nameSuffix
+	cname:= environment + Sep + alias + Sep + nameSuffix
+	if deployment.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
+		log.Infof("admiral.io/cname-case-sensitive annotation enabled on rollout with name %v",deployment.Name)
+		return cname
+	}
+	return strings.ToLower(cname)
 }
 
 func GetEnv(deployment *k8sAppsV1.Deployment) string {

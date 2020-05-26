@@ -76,7 +76,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabel, "namespace_injected_label", "istio-injection",
 		"The label key, on a namespace, which tells Istio to perform sidecar injection")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.NamespaceSidecarInjectionLabelValue, "namespace_injected_value", "enabled",
-		"The label value, on a namespace, which tells Istio to perform sidecar injection")
+		"The label value, on a namespace or service, which tells Istio to perform sidecar injection")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.AdmiralIgnoreLabel, "admiral_ignore_label", "admiral-ignore",
 		"The label value, on a namespace, which tells Istio to perform sidecar injection")
 	rootCmd.PersistentFlags().StringVar(&params.HostnameSuffix, "hostname_suffix", "global",

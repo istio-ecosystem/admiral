@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -460,7 +461,7 @@ func TestGetCnameForRollout(t *testing.T) {
 
 	nameSuffix := "global"
 	identifier := "identity"
-	identifierVal := "company.platform.server"
+	identifierVal := "COMPANY.platform.server"
 
 	testCases := []struct {
 		name       string
@@ -470,12 +471,20 @@ func TestGetCnameForRollout(t *testing.T) {
 		{
 			name:       "should return valid cname (from label)",
 			rollout: argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
-			expected:   "stage." + identifierVal + ".global",
+			expected:   strings.ToLower("stage." + identifierVal + ".global"),
+		},{
+			name:       "should return valid cname (from label)- case sensitive cname annotation enabled",
+			rollout: argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"true"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected:  "stage." + identifierVal + ".global",
+		},{
+			name:       "should return valid cname (from label)- case sensitive cname annotation disabled",
+			rollout: argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"false"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected:  strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return valid cname (from annotation)",
 			rollout: argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}, Labels: map[string]string{"env": "stage"}}}}},
-			expected:   "stage." + identifierVal + ".global",
+			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return empty string",
