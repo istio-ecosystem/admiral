@@ -14,6 +14,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 const (
@@ -46,6 +47,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
+	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	w.AdmiralCache = &AdmiralCache{
@@ -88,6 +90,7 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 
 	err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
+		w.updateCacheController,
 		w.deleteCacheController,
 		common.GetClusterRegistriesNamespace(),
 		ctx, common.GetSecretResolver())
@@ -123,6 +126,13 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
+	}
+
+	log.Infof("starting rollout controller clusterID: %v", clusterID)
+	rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf(" Error with Rollout controller init: %v", err)
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
@@ -180,6 +190,13 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	log.Infof("Create Controller %s", clusterID)
 
 	return nil
+}
+
+func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
+	if err := r.deleteCacheController(clusterID); err != nil {
+		return err
+	}
+	return r.createCacheController(clientConfig, clusterID, resyncPeriod)
 }
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {

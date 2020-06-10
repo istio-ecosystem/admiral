@@ -9,3 +9,6 @@ bases:
 patchesStrategicMerge:
   - greeting.yaml
 
+resources:
+  - greeting-deployment.yaml
+

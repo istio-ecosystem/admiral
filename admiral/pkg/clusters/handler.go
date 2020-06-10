@@ -12,10 +12,13 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
-
+	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
+
+const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -58,43 +61,68 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 		//for every cluster the source identity is running, add their istio ingress as service entry address
 		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-		if tempDeployment != nil {
+		//If there is  no deployment, check if a rollout is available.
+		tempRollout := rc.RolloutController.Cache.Get(sourceIdentity)
+		if tempDeployment != nil || tempRollout !=nil {
 			sourceClusters[rc.ClusterID] = rc.ClusterID
 			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		}
 
+
+
 		//create and store destination service entries
 		for _, destinationCluster := range destinationIdentitys {
 			destDeployment := rc.DeploymentController.Cache.Get(destinationCluster)
-			if destDeployment == nil {
+			destRollout := rc.RolloutController.Cache.Get(destinationCluster)
+			var tmpSe *networking.ServiceEntry
+
+			// Assumption :- We will have either a deployment or  a rollout mapped to an identity but never both in a cluster
+			if destDeployment != nil {
+				//deployment can be in multiple clusters, create SEs for all clusters
+
+				for _, deployment := range destDeployment.Deployments {
+
+					r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
+
+					deployments := rc.DeploymentController.Cache.Get(destinationCluster)
+
+					if deployments == nil || len(deployments.Deployments) == 0 {
+						continue
+					}
+
+					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
+
+					if tmpSe == nil {
+						continue
+					}
+				}
+			}else if destRollout != nil {
+				//rollouts can be in multiple clusters, create SEs for all clusters
+
+				for _, rollout := range destRollout.Rollouts {
+
+					r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
+
+					rollouts := rc.RolloutController.Cache.Get(destinationCluster)
+
+					if rollouts == nil || len(rollouts.Rollouts) == 0 {
+						continue
+					}
+					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
+
+					if tmpSe == nil {
+						continue
+					}
+				}
+			}
+			if tmpSe == nil {
 				continue
 			}
+			destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
 
-			//deployment can be in multiple clusters, create SEs for all clusters
+			r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
 
-			for _, deployment := range destDeployment.Deployments {
-
-				r.AdmiralCache.IdentityClusterCache.Put(destinationCluster, rc.ClusterID, rc.ClusterID)
-
-				deployments := rc.DeploymentController.Cache.Get(destinationCluster)
-
-				if deployments == nil || len(deployments.Deployments) == 0 {
-					continue
-				}
-
-				tmpSe := createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
-
-				if tmpSe == nil {
-					continue
-				}
-
-				destinationClusters[rc.ClusterID] = tmpSe.Hosts[0] //Only single host supported
-
-				r.AdmiralCache.CnameIdentityCache.Store(tmpSe.Hosts[0], destinationCluster)
-
-				serviceEntries[tmpSe.Hosts[0]] = tmpSe
-			}
-
+			serviceEntries[tmpSe.Hosts[0]] = tmpSe
 		}
 	}
 
@@ -143,11 +171,16 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 		gtpTrafficPolicy := gtp.Policy[0]
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
+
+
 			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
 				targetTrafficMap := make(map[string]uint32)
 				for _, tg := range gtpTrafficPolicy.Target {
-					targetTrafficMap[tg.Region] = uint32(tg.Weight)
+					//skip 0 values from GTP as that's implicit for locality settings
+					if tg.Weight != int32(0) {
+						targetTrafficMap[tg.Region] = uint32(tg.Weight)
+					}
 				}
 				distribute = append(distribute, &v1alpha32.LocalityLoadBalancerSetting_Distribute{
 					From: locality + "/*",
@@ -159,12 +192,12 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 			}
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
-			dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			}
 		}
+	}
+	dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
+		BaseEjectionTime:  &types.Duration{Seconds: 120},
+		ConsecutiveErrors: int32(10),
+		Interval:          &types.Duration{Seconds: 5},
 	}
 	return dr
 }
@@ -628,4 +661,59 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
 	return &v1alpha32.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
+}
+
+// A rollout can use one of 2 stratergies :-
+// 1. Canary stratergy- this contains only one service instance
+// 2. Blue green stratergy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral should always use the active service
+func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Service {
+
+	if rollout == nil {
+		return nil
+	}
+	cachedService := rc.ServiceController.Cache.Get(rollout.Namespace)
+
+	if cachedService == nil {
+		return nil
+	}
+	rolloutStrategy := rollout.Spec.Strategy
+
+	if rolloutStrategy.BlueGreen == nil && rolloutStrategy.Canary == nil {
+		return nil
+	}
+
+	var blueGreenActiveService string
+	if rolloutStrategy.BlueGreen != nil {
+		// If rollout uses blue green strategy, use the active service
+		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
+	}
+	var matchedService *k8sV1.Service
+	for _, service := range cachedService.Service[rollout.Namespace] {
+		var match = true
+		// Both active and passive service have similar label selector. Use active service name to filter in case of blue green stratergy
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name!= blueGreenActiveService{
+			continue
+		}
+		for lkey, lvalue := range service.Spec.Selector {
+			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
+			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
+			if(lkey == ROLLOUT_POD_HASH_LABEL){
+				continue;
+			}
+			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
+			if !ok || value != lvalue {
+				match = false
+				break
+			}
+		}
+		//make sure the service matches the rollout Selector and also has a mesh port in the port spec
+		if match {
+			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
+			if len(ports) > 0 {
+				matchedService = service
+				break
+			}
+		}
+	}
+	return matchedService
 }

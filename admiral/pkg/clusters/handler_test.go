@@ -1,18 +1,28 @@
 package clusters
 
 import (
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
-
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	coreV1 "k8s.io/api/core/v1"
+	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	"sync"
+	"testing"
+	"time"
+	k8sAppsV1 "k8s.io/api/apps/v1"
 )
 
 func TestIgnoreIstioResource(t *testing.T) {
@@ -60,7 +70,11 @@ func TestIgnoreIstioResource(t *testing.T) {
 
 func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
-	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}}
+	outlierDetection := &v1alpha3.OutlierDetection{
+		BaseEjectionTime:  &types.Duration{Seconds: 120},
+		ConsecutiveErrors: int32(10),
+		Interval:          &types.Duration{Seconds: 5}}
+	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection,}
 
 	noGtpDr := v1alpha3.DestinationRule{
 		Host:          "qa.myservice.global",
@@ -75,11 +89,7 @@ func TestGetDestinationRule(t *testing.T) {
 				LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{},
 			},
-			OutlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			},
+			OutlierDetection: outlierDetection,
 		},
 	}
 
@@ -98,11 +108,7 @@ func TestGetDestinationRule(t *testing.T) {
 					},
 				},
 			},
-			OutlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:  &types.Duration{Seconds: 120},
-				ConsecutiveErrors: 10,
-				Interval:          &types.Duration{Seconds: 60},
-			},
+			OutlierDetection: outlierDetection,
 		},
 	}
 
@@ -134,6 +140,10 @@ func TestGetDestinationRule(t *testing.T) {
 					{
 						Region: "us-west-2",
 						Weight: 100,
+					},
+					{
+						Region: "us-east-2",
+						Weight: 0,
 					},
 				},
 			},
@@ -320,6 +330,578 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
 			}
+		})
+	}
+}
+
+
+func TestGetServiceForRolloutCanary(t *testing.T){
+	//Struct of test case info. Name is required.
+	const  NAMESPACE = "namespace"
+	const  SERVICENAME  = "serviceName"
+	config := rest.Config{
+		Host: "localhost",
+	}
+	stop := make(chan struct{})
+
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fatalf("Inititalization failed")
+	}
+
+	rcTemp := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{},
+		ServiceController: s,
+		RolloutController:r}
+
+	selectorMap := make(map[string] string)
+	selectorMap["app"] ="test"
+
+	service := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	service.Name = SERVICENAME
+	service.Namespace = NAMESPACE
+	port1 := coreV1.ServicePort {
+		Port : 8080,
+	}
+
+	port2 := coreV1.ServicePort {
+		Port : 8081,
+	}
+
+	ports := []coreV1.ServicePort{port1, port2}
+	service.Spec.Ports = ports
+
+
+	selectorMap1 := make(map[string] string)
+	selectorMap1["app"] ="test1"
+	service1 := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	service1.Name = "dummy"
+	service1.Namespace = "namespace1"
+	port3 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random3",
+	}
+
+	port4 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random4",
+	}
+
+	ports1 := []coreV1.ServicePort{port3, port4}
+	service1.Spec.Ports = ports1
+
+
+	selectorMap4 := make(map[string] string)
+	selectorMap4["app"] ="test"
+	service4 := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap4,
+		},
+	}
+	service4.Name = "dummy"
+	service4.Namespace = "namespace4"
+	port11 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random3",
+	}
+
+	port12 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random4",
+	}
+
+	ports11 := []coreV1.ServicePort{port11, port12}
+	service4.Spec.Ports = ports11
+
+	rcTemp.ServiceController.Cache.Put(service)
+	rcTemp.ServiceController.Cache.Put(service1)
+	rcTemp.ServiceController.Cache.Put(service4)
+
+
+	canaryRollout:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+	matchLabel := make(map[string] string)
+	matchLabel["app"] ="test"
+
+	labelSelector := v12.LabelSelector{
+		MatchLabels:matchLabel,
+	}
+	canaryRollout.Spec.Selector = &labelSelector
+
+	canaryRollout.Namespace =NAMESPACE
+	canaryRollout.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{},
+	}
+
+
+	canaryRolloutNS1:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+	matchLabel2 := make(map[string] string)
+	matchLabel2["app"] ="test1"
+
+	labelSelector2 := v12.LabelSelector{
+		MatchLabels:matchLabel2,
+	}
+	canaryRolloutNS1.Spec.Selector = &labelSelector2
+
+	canaryRolloutNS1.Namespace ="namespace1"
+	canaryRolloutNS1.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{},
+	}
+
+
+	canaryRolloutNS4:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+	matchLabel4 := make(map[string] string)
+	matchLabel4["app"] ="test"
+
+	labelSelector4 := v12.LabelSelector{
+		MatchLabels:matchLabel4,
+	}
+	canaryRolloutNS4.Spec.Selector = &labelSelector4
+
+	canaryRolloutNS4.Namespace ="namespace4"
+	canaryRolloutNS4.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{},
+	}
+
+	anotationsNS4Map := make(map[string]string)
+	anotationsNS4Map[common.SidecarEnabledPorts] ="8080"
+
+	canaryRolloutNS4.Spec.Template.Annotations = anotationsNS4Map
+
+	testCases := []struct {
+		name string
+		rollout         *argo.Rollout
+		rc             	*RemoteController
+		result          string
+	}{
+		{
+			name : "canaryRolloutHappyCaseMeshPortAnnotationOnRollout",
+			rollout :&canaryRolloutNS4,
+			rc : rcTemp,
+			result: "dummy",
+		},{
+			name : "canaryRolloutWithoutSelectorMatch",
+			rollout :&canaryRolloutNS1,
+			rc : rcTemp,
+			result: "",
+		},{
+			name : "canaryRolloutHappyCase",
+			rollout :&canaryRollout,
+			rc : rcTemp,
+			result: SERVICENAME,
+		},
+
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getServiceForRollout(c.rc,c.rollout)
+			if len(c.result) ==0 {
+				if result != nil {
+					t.Fatalf("Service expected to be nil. Value is = %v" , result)
+				}
+			}else
+			if !cmp.Equal(result.Name, c.result) {
+				t.Fatalf("Service Mismatch. Diff: %v", cmp.Diff(result.Name, c.name))
+			}
+		})
+	}
+}
+
+
+func TestGetServiceForRolloutBlueGreen(t *testing.T){
+	//Struct of test case info. Name is required.
+	const  NAMESPACE = "namespace"
+	const  SERVICENAME  = "serviceNameActive"
+	const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+	stop := make(chan struct{})
+
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+
+
+	emptyCacheService, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fatalf("Inititalization failed")
+	}
+
+	rc := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{},
+		ServiceController: s,
+		RolloutController:r}
+
+
+	bgRollout:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+
+	matchLabel := make(map[string] string)
+	matchLabel["app"] ="test"
+
+	labelSelector := v12.LabelSelector{
+		MatchLabels:matchLabel,
+	}
+	bgRollout.Spec.Selector = &labelSelector
+
+	bgRollout.Namespace =NAMESPACE
+	bgRollout.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{
+			ActiveService:SERVICENAME,
+			PreviewService:"previewService",
+		},
+	}
+
+	selectorMap := make(map[string] string)
+	selectorMap["app"] ="test"
+	selectorMap[ROLLOUT_POD_HASH_LABEL] ="hash"
+
+	activeService := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	activeService.Name = SERVICENAME
+	activeService.Namespace = NAMESPACE
+	port1 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random1",
+	}
+
+	port2 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random2",
+	}
+
+	ports := []coreV1.ServicePort{port1, port2}
+	activeService.Spec.Ports = ports
+
+
+
+	selectorMap1 := make(map[string] string)
+	selectorMap1["app"] ="test1"
+
+	service1 := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	service1.Name = "dummy"
+	service1.Namespace = NAMESPACE
+	port3 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random3",
+	}
+
+	port4 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random4",
+	}
+
+	ports1 := []coreV1.ServicePort{port3, port4}
+	service1.Spec.Ports = ports1
+
+
+
+
+	selectorMap2 := make(map[string] string)
+	selectorMap2["app"] ="test"
+	selectorMap2[ROLLOUT_POD_HASH_LABEL] ="hash"
+	previewService := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	previewService.Name = "previewService"
+	previewService.Namespace = NAMESPACE
+	port5 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random3",
+	}
+
+	port6 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random4",
+	}
+
+	ports2 := []coreV1.ServicePort{port5, port6}
+
+	previewService.Spec.Ports = ports2
+
+
+
+	serviceNS1 := &coreV1.Service{
+		Spec : coreV1.ServiceSpec{
+			Selector:selectorMap,
+		},
+	}
+	serviceNS1.Name = "dummy"
+	serviceNS1.Namespace = "namespace1"
+	port8 := coreV1.ServicePort {
+		Port : 8080,
+		Name: "random3",
+	}
+
+	port9 := coreV1.ServicePort {
+		Port : 8081,
+		Name: "random4",
+	}
+
+	ports12 := []coreV1.ServicePort{port8, port9}
+	serviceNS1.Spec.Ports = ports12
+
+
+	rc.ServiceController.Cache.Put(service1)
+	rc.ServiceController.Cache.Put(previewService)
+	rc.ServiceController.Cache.Put(activeService)
+	rc.ServiceController.Cache.Put(serviceNS1)
+
+
+
+	noStratergyRollout:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+	noStratergyRollout.Namespace =NAMESPACE
+
+
+	noStratergyRollout.Spec.Strategy = argo.RolloutStrategy{
+	}
+
+
+
+	bgRolloutNs1:= argo.Rollout{
+		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations:map[string]string{}},
+		}}};
+
+	matchLabel1 := make(map[string] string)
+	matchLabel1["app"] ="test"
+
+	labelSelector1 := v12.LabelSelector{
+		MatchLabels:matchLabel,
+	}
+	bgRolloutNs1.Spec.Selector = &labelSelector1
+
+	bgRolloutNs1.Namespace ="namespace1"
+	bgRolloutNs1.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{
+			ActiveService:SERVICENAME,
+			PreviewService:"previewService",
+		},
+	}
+
+	testCases := []struct {
+		name string
+		rollout         *argo.Rollout
+		rc             	*RemoteController
+		result          string
+	}{
+		{
+			name : "canaryRolloutNoLabelMatch",
+			rollout :&bgRolloutNs1,
+			rc : rc,
+			result: "",
+		},{
+			name : "canaryRolloutNoStratergy",
+			rollout :&noStratergyRollout,
+			rc : rc,
+			result: "",
+		},{
+			name : "canaryRolloutHappyCase",
+			rollout :&bgRollout,
+			rc : rc,
+			result: SERVICENAME,
+		},
+		{
+			name : "canaryRolloutNilRollout",
+			rollout :nil,
+			rc : rc,
+			result: "",
+		},
+		{
+			name : "canaryRolloutEmptyServiceCache",
+			rollout :&bgRollout,
+			rc : &RemoteController{
+				ServiceController:emptyCacheService,
+			},
+			result: "",
+		},
+
+	}
+
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getServiceForRollout(c.rc,c.rollout)
+			if len(c.result) ==0 {
+				if result != nil {
+					t.Fatalf("Service expected to be nil")
+				}
+			}else
+			if !cmp.Equal(result.Name, c.result) {
+				t.Fatalf("Service Mismatch. Diff: %v", cmp.Diff(result, c.name))
+			}
+		})
+	}
+}
+
+func TestHandleDependencyRecord(t *testing.T){
+
+	fakeClient := fake.NewSimpleClientset()
+
+	stop := make(chan struct{})
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	labelset := common.LabelSet{
+		DeploymentAnnotation: "sidecar.istio.io/inject",
+		AdmiralIgnoreLabel:   "admiral-ignore",
+	}
+
+	ns := coreV1.Namespace{}
+	ns.Name ="namespace"
+	ns.Namespace ="namespace"
+
+
+	r, e := admiral.NewRolloutsControllerWithLabelOverride(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300),&labelset)
+	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	d,e := admiral.NewDeploymentControllerWithLabelOverride(stop, &test.MockDeploymentHandler{},&config,time.Second*time.Duration(300),&labelset)
+	n,e := admiral.NewNodeController(stop,&test.MockNodeHandler{},&config)
+	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
+	fakeClient.CoreV1().Namespaces().Create(&ns)
+
+	if e != nil {
+		t.Fatalf("Inititalization failed")
+	}
+
+	r.K8sClient =fakeClient
+	r.RolloutClient =noRolloutsClient
+	d.K8sClient = fakeClient
+
+	remoteController := &RemoteController{}
+	remoteController.DeploymentController = d
+	remoteController.RolloutController = r
+	remoteController.ServiceController = s
+	remoteController.NodeController = n
+
+	usecase1Rcs := make(map[string]*RemoteController)
+	usecase1Rcs["cluster-1"] =remoteController
+
+	registry := &RemoteRegistry{}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"qal.greeting.mesh-se": common.LocalAddressPrefix + ".10.1"},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+	}
+	cacheWithEntry.EntryAddresses["qal.payments.mesh-se"] =common.LocalAddressPrefix+"10.2"
+
+	admiralCache := &AdmiralCache{
+		IdentityClusterCache: common.NewMapOfMaps(),
+		ServiceEntryAddressStore : &cacheWithEntry,
+		CnameClusterCache: common.NewMapOfMaps(),
+		CnameIdentityCache: & sync.Map{},
+		CnameDependentClusterCache: common.NewMapOfMaps(),
+	}
+
+	registry.AdmiralCache = admiralCache
+
+	rollout := argo.Rollout{}
+	rollout.Namespace = "namespace"
+	rollout.Name = "fake-app-rollout-qal"
+	rollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	rollout.Labels = map[string]string{"identity": "app1"}
+
+
+
+	greetingRollout := argo.Rollout{}
+	greetingRollout.Namespace = "namespace"
+	greetingRollout.Name = "greetingRollout-qal"
+	greetingRollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "greeting", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	greetingRollout.Labels = map[string]string{"identity": "greeting"}
+
+
+	paymentDeployment := k8sAppsV1.Deployment{}
+	paymentDeployment.Namespace = "namespace"
+	paymentDeployment.Name = "payments-qal"
+	paymentDeployment.Spec = k8sAppsV1.DeploymentSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{
+				Labels: map[string]string{"identity": "payments", "env":"qal"},
+				Annotations: map[string]string{"sidecar.istio.io/inject":"true"},
+			},
+		},
+	}
+	paymentDeployment.Labels = map[string]string{"identity": "payments"}
+
+
+	r.Added(&rollout)
+	r.Added(&greetingRollout)
+
+	d.Added(&paymentDeployment)
+
+	dependency := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
+
+
+	testCases := []struct {
+		name string
+		sourceIdentity string
+		dep             *v1.Dependency
+		remoteRegistry *RemoteRegistry
+	}{
+		{
+			name : "handleDependencyRecord-NoDependency",
+			sourceIdentity:"app1",
+			dep: &v1.Dependency{ Spec:dependency},
+			remoteRegistry:registry,
+		},
+
+	}
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			handleDependencyRecord(c.sourceIdentity,c.remoteRegistry,c.remoteRegistry.remoteControllers,c.dep)
 		})
 	}
 }

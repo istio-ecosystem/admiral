@@ -1,0 +1,11 @@
+apiversion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sample-rollout-bluegreen
+
+bases:
+  - ../../base
+
+resources:
+  - greeting.yaml
+  - namespace.yaml

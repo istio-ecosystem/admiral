@@ -27,12 +27,10 @@ SERVICE_ACCOUNT=admiral
 SECRET_NAME=$(kubectl get sa ${SERVICE_ACCOUNT} -n ${NAMESPACE_SYNC} -o jsonpath='{.secrets[].name}')
 CA_DATA=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['ca\.crt']}")
 RAW_TOKEN=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['token']}")
-echo 'RAW_TOKEN'
-echo $RAW_TOKEN
 TOKEN=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['token']}" | base64 --decode)
 
-echo 'TOKEN'
-echo $TOKEN
+#echo 'TOKEN'
+#echo $TOKEN
 
 #create kubeconfig for remote cluster
 cat <<EOF > ${KUBECFG_FILE}

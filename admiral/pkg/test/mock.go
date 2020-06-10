@@ -1,6 +1,7 @@
 package test
 
 import (
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -32,6 +33,21 @@ func (m *MockDeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (m *MockDeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+
+}
+
+type MockRolloutHandler struct {
+}
+
+func (m *MockRolloutHandler) Added(obj *argo.Rollout) {
+
+}
+
+func (m *MockRolloutHandler) Deleted(obj *argo.Rollout) {
+
+}
+
+func (m *MockRolloutHandler) Updated(obj *argo.Rollout) {
 
 }
 
