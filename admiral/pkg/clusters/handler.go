@@ -177,7 +177,10 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
 				targetTrafficMap := make(map[string]uint32)
 				for _, tg := range gtpTrafficPolicy.Target {
-					targetTrafficMap[tg.Region] = uint32(tg.Weight)
+					//skip 0 values from GTP as that's implicit for locality settings
+					if tg.Weight != int32(0) {
+						targetTrafficMap[tg.Region] = uint32(tg.Weight)
+					}
 				}
 				distribute = append(distribute, &v1alpha32.LocalityLoadBalancerSetting_Distribute{
 					From: locality + "/*",
@@ -193,7 +196,7 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 	}
 	dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
 		BaseEjectionTime:  &types.Duration{Seconds: 120},
-		Consecutive_5XxErrors: &types.UInt32Value{Value: 10},
+		ConsecutiveErrors: int32(10),
 		Interval:          &types.Duration{Seconds: 5},
 	}
 	return dr
