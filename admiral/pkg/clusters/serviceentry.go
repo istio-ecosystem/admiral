@@ -131,11 +131,10 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 			}
 			//add virtual service for routing locally in within the cluster
 			createIngressOnlyVirtualService(rc, cname, serviceEntry, localFqdn, meshPorts)
-
 		}
 
 		for _, val := range dependents.Map() {
-			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, map[string]string {cname: "1"})
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
@@ -176,8 +175,18 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 	//copy and add our new local FQDN
 	newSidecar := copySidecar(sidecar)
 
+	egressHosts := make(map[string]string)
+
 	for _, sidecarEgress := range sidecarEgressMap {
 		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
+		egressHosts[egressHost] = egressHost
+		for cname, _ := range sidecarEgress.CNAMEs {
+			scopedCname := sidecarEgress.Namespace + "/" + cname
+			egressHosts[scopedCname] = scopedCname
+		}
+	}
+
+	for egressHost, _ := range egressHosts {
 		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
 			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
 		}
