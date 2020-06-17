@@ -38,6 +38,7 @@ type AdmiralParams struct {
 	SANPrefix                  string
 	SecretResolver             string
 	LabelSet                   *LabelSet
+	LogLevel                   int
 	HostnameSuffix             string
 	WorkloadSidecarUpdate      string
 	WorkloadSidecarName        string
