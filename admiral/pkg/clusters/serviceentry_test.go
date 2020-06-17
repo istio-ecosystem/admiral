@@ -3,12 +3,12 @@ package clusters
 import (
 	"context"
 	"errors"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
 	v13 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
@@ -16,9 +16,9 @@ import (
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v14 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
+	coreV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	coreV1 "k8s.io/api/core/v1"
 	"reflect"
 	"strconv"
 	"sync"
@@ -44,15 +44,14 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 
 	cacheWithNoEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"test-se": "1.2.3.4"},
-		Addresses: []string{"1.2.3.4"},
+		Addresses:      []string{"1.2.3.4"},
 	}
 
 	emptyCacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry, "123"),
 	}
-
 
 	res := createSeWithDrLabels(nil, false, "", "test-se", &se, &des, &cacheWithNoEntry, &emptyCacheController)
 
@@ -60,7 +59,7 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 		t.Fail()
 	}
 
-	newSe := res["test-se"]// Test for Rollout
+	newSe := res["test-se"] // Test for Rollout
 
 	value := newSe.Endpoints[0].Labels["foo"]
 
@@ -115,7 +114,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 
-	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1":"cl1"}, map[string]*RemoteController{"cl1":rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
@@ -151,7 +150,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 			},
 		},
 		DeploymentController: d,
-		RolloutController:r,
+		RolloutController:    r,
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
@@ -163,116 +162,115 @@ func TestGetLocalAddressForSe(t *testing.T) {
 	t.Parallel()
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+		Addresses:      []string{common.LocalAddressPrefix + ".10.1"},
 	}
 	cacheWithNoEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		Addresses:      []string{},
 	}
 	cacheWith255Entries := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
-		Addresses: []string{},
+		Addresses:      []string{},
 	}
 
 	for i := 1; i <= 255; i++ {
-		address :=  common.LocalAddressPrefix + ".10." + strconv.Itoa(i)
-		cacheWith255Entries.EntryAddresses[strconv.Itoa(i) + ".mesh"] = address
+		address := common.LocalAddressPrefix + ".10." + strconv.Itoa(i)
+		cacheWith255Entries.EntryAddresses[strconv.Itoa(i)+".mesh"] = address
 		cacheWith255Entries.Addresses = append(cacheWith255Entries.Addresses, address)
 	}
 
 	emptyCacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry, "123"),
 	}
 
 	cacheController := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 	cacheControllerWith255Entries := test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWith255Entries, "123"),
 	}
 
 	cacheControllerGetError := test.FakeConfigMapController{
-		GetError: errors.New("BAD THINGS HAPPENED"),
-		PutError: nil,
+		GetError:          errors.New("BAD THINGS HAPPENED"),
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 	cacheControllerPutError := test.FakeConfigMapController{
-		PutError: errors.New("BAD THINGS HAPPENED"),
-		GetError: nil,
+		PutError:          errors.New("BAD THINGS HAPPENED"),
+		GetError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
-
 	testCases := []struct {
-		name   string
-		seName   string
-		seAddressCache  ServiceEntryAddressStore
-		wantAddess string
-		cacheController admiral.ConfigMapControllerInterface
+		name                string
+		seName              string
+		seAddressCache      ServiceEntryAddressStore
+		wantAddess          string
+		cacheController     admiral.ConfigMapControllerInterface
 		expectedCacheUpdate bool
-		wantedError error
+		wantedError         error
 	}{
 		{
-			name: "should return new available address",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWithNoEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.1",
-			cacheController: &emptyCacheController,
+			name:                "should return new available address",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWithNoEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.1",
+			cacheController:     &emptyCacheController,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return address from map",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWithEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.1",
-			cacheController: &cacheController,
+			name:                "should return address from map",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWithEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.1",
+			cacheController:     &cacheController,
 			expectedCacheUpdate: false,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return new available address",
-			seName: "e2e.b.mesh",
-			seAddressCache: cacheWithEntry,
-			wantAddess: common.LocalAddressPrefix + ".10.2",
-			cacheController: &cacheController,
+			name:                "should return new available address",
+			seName:              "e2e.b.mesh",
+			seAddressCache:      cacheWithEntry,
+			wantAddess:          common.LocalAddressPrefix + ".10.2",
+			cacheController:     &cacheController,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should return new available address in higher subnet",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: common.LocalAddressPrefix + ".11.1",
-			cacheController: &cacheControllerWith255Entries,
+			name:                "should return new available address in higher subnet",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          common.LocalAddressPrefix + ".11.1",
+			cacheController:     &cacheControllerWith255Entries,
 			expectedCacheUpdate: true,
-			wantedError: nil,
+			wantedError:         nil,
 		},
 		{
-			name: "should gracefully propagate get error",
-			seName: "e2e.a.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: "",
-			cacheController: &cacheControllerGetError,
+			name:                "should gracefully propagate get error",
+			seName:              "e2e.a.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          "",
+			cacheController:     &cacheControllerGetError,
 			expectedCacheUpdate: true,
-			wantedError: errors.New("BAD THINGS HAPPENED"),
+			wantedError:         errors.New("BAD THINGS HAPPENED"),
 		},
 		{
-			name: "Should not return address on put error",
-			seName: "e2e.abcdefghijklmnop.mesh",
-			seAddressCache: cacheWith255Entries,
-			wantAddess: "",
-			cacheController: &cacheControllerPutError,
+			name:                "Should not return address on put error",
+			seName:              "e2e.abcdefghijklmnop.mesh",
+			seAddressCache:      cacheWith255Entries,
+			wantAddess:          "",
+			cacheController:     &cacheControllerPutError,
 			expectedCacheUpdate: true,
-			wantedError: errors.New("BAD THINGS HAPPENED"),
+			wantedError:         errors.New("BAD THINGS HAPPENED"),
 		},
 	}
 
@@ -283,7 +281,7 @@ func TestGetLocalAddressForSe(t *testing.T) {
 				if !reflect.DeepEqual(seAddress, c.wantAddess) {
 					t.Errorf("Wanted se address: %s, got: %s", c.wantAddess, seAddress)
 				}
-				if err==nil && c.wantedError==nil {
+				if err == nil && c.wantedError == nil {
 					//we're fine
 				} else if err.Error() != c.wantedError.Error() {
 					t.Errorf("Error mismatch. Expected %v but got %v", c.wantedError, err)
@@ -306,7 +304,7 @@ func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
 	locality := "us-west-2"
 	portName := "port"
 
-	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName)
+	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName, common.DefaultMtlsPort)
 
 	if endpoint.Address != address {
 		t.Errorf("Address mismatch. Got: %v, expected: %v", endpoint.Address, address)
@@ -395,7 +393,6 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	}
 }
 
-
 func TestCreateServiceEntry(t *testing.T) {
 
 	config := rest.Config{
@@ -417,8 +414,8 @@ func TestCreateServiceEntry(t *testing.T) {
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
 
 	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se":localAddress},
-		Addresses: []string{localAddress},
+		EntryAddresses: map[string]string{"e2e.my-first-service.mesh-se": localAddress},
+		Addresses:      []string{localAddress},
 	}
 
 	admiralCache.CnameClusterCache = common.NewMapOfMaps()
@@ -441,19 +438,19 @@ func TestCreateServiceEntry(t *testing.T) {
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.my-first-service.mesh": localAddress},
-		Addresses: []string{localAddress},
+		Addresses:      []string{localAddress},
 	}
 
 	cacheController := &test.FakeConfigMapController{
-		GetError: nil,
-		PutError: nil,
+		GetError:          nil,
+		PutError:          nil,
 		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
 	}
 
 	admiralCache.ConfigMapController = cacheController
 
 	deployment := v14.Deployment{}
-	deployment.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+	deployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
 	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
@@ -462,7 +459,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	}
 
 	if resultingEntry.Addresses[0] != localAddress {
-		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+		t.Errorf("Address mismatch. Got: %v, expected: "+localAddress, resultingEntry.Addresses[0])
 	}
 
 	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
@@ -475,7 +472,7 @@ func TestCreateServiceEntry(t *testing.T) {
 
 	// Test for Rollout
 	rollout := argo.Rollout{}
-	rollout.Spec.Template.Labels = map[string]string{"env":"e2e", "identity":"my-first-service", }
+	rollout.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
 	resultingEntry = createServiceEntryForRollout(rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
@@ -484,7 +481,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	}
 
 	if resultingEntry.Addresses[0] != localAddress {
-		t.Errorf("Address mismatch. Got: %v, expected: " + localAddress, resultingEntry.Addresses[0])
+		t.Errorf("Address mismatch. Got: %v, expected: "+localAddress, resultingEntry.Addresses[0])
 	}
 
 	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
@@ -494,7 +491,6 @@ func TestCreateServiceEntry(t *testing.T) {
 	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
 		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
 	}
-
 
 }
 
@@ -507,7 +503,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		},
 	}
 	fakeIstioClientUpdate := istiofake.NewSimpleClientset()
-	rcUpdate:= &RemoteController{
+	rcUpdate := &RemoteController{
 		VirtualServiceController: &istio.VirtualServiceController{
 			IstioClient: fakeIstioClientUpdate,
 		},
@@ -523,25 +519,25 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 	vsTobeUpdated := makeVirtualService(cname, []string{common.MulticlusterIngressGateway}, localFqdn, 80)
 
 	rcUpdate.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Create(&v1alpha3.VirtualService{
-		Spec: *vsTobeUpdated,
+		Spec:       *vsTobeUpdated,
 		ObjectMeta: v12.ObjectMeta{Name: vsname, Namespace: common.GetSyncNamespace()}})
 
 	testCases := []struct {
-		name           	string
-		rc             	*RemoteController
-		localFqdn		string
-		expectedResult 	string
+		name           string
+		rc             *RemoteController
+		localFqdn      string
+		expectedResult string
 	}{
 		{
 			name:           "Should return a created virtual service",
-			rc:       		rcCreate,
-			localFqdn:		localFqdn,
+			rc:             rcCreate,
+			localFqdn:      localFqdn,
 			expectedResult: localFqdn,
 		},
 		{
 			name:           "Should return an updated virtual service",
-			rc:       		rcCreate,
-			localFqdn:		localFqdn2,
+			rc:             rcCreate,
+			localFqdn:      localFqdn2,
 			expectedResult: localFqdn2,
 		},
 	}
@@ -549,7 +545,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, map[string]uint32 {common.Http : 80})
+			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, map[string]uint32{common.Http: 80})
 			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
 			if err != nil {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
@@ -569,9 +565,9 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 
 func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
-	const  NAMESPACE = "test-test"
-	const  SERVICENAME  = "serviceNameActive"
-	const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+	const NAMESPACE = "test-test"
+	const SERVICENAME = "serviceNameActive"
+	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -586,7 +582,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
 	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	v,e := istio.NewVirtualServiceController(make(chan struct{}),&test.MockVirtualServiceHandler{},&config,time.Second*time.Duration(300))
+	v, e := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
@@ -595,7 +591,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"test.test.mesh-se": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+		Addresses:      []string{common.LocalAddressPrefix + ".10.1"},
 	}
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
@@ -611,26 +607,25 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 				Region: "us-west-2",
 			},
 		},
-		DeploymentController: d,
-		RolloutController:r,
-		ServiceController:s,
-		VirtualServiceController:v,
+		DeploymentController:     d,
+		RolloutController:        r,
+		ServiceController:        s,
+		VirtualServiceController: v,
 	}
-	rc.ClusterID ="test.cluster"
+	rc.ClusterID = "test.cluster"
 	rr.remoteControllers["test.cluster"] = rc
 
 	admiralCache := &AdmiralCache{
-		IdentityClusterCache: common.NewMapOfMaps(),
-		ServiceEntryAddressStore : &cacheWithEntry,
-		CnameClusterCache: common.NewMapOfMaps(),
-		CnameIdentityCache: & sync.Map{},
+		IdentityClusterCache:       common.NewMapOfMaps(),
+		ServiceEntryAddressStore:   &cacheWithEntry,
+		CnameClusterCache:          common.NewMapOfMaps(),
+		CnameIdentityCache:         &sync.Map{},
 		CnameDependentClusterCache: common.NewMapOfMaps(),
-		IdentityDependencyCache: common.NewMapOfMaps(),
-		GlobalTrafficCache : &globalTrafficCache{},
-		DependencyNamespaceCache : common.NewSidecarEgressMap(),
+		IdentityDependencyCache:    common.NewMapOfMaps(),
+		GlobalTrafficCache:         &globalTrafficCache{},
+		DependencyNamespaceCache:   common.NewSidecarEgressMap(),
 	}
-	rr.AdmiralCache =admiralCache
-
+	rr.AdmiralCache = admiralCache
 
 	rollout := argo.Rollout{}
 
@@ -642,65 +637,58 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		},
 	}
 
-	rollout.Namespace =NAMESPACE
+	rollout.Namespace = NAMESPACE
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{},
 	}
-	labelMap := make(map[string] string)
+	labelMap := make(map[string]string)
 	labelMap["identity"] = "test"
 
-
-	matchLabel4 := make(map[string] string)
-	matchLabel4["app"] ="test"
+	matchLabel4 := make(map[string]string)
+	matchLabel4["app"] = "test"
 
 	labelSelector4 := v12.LabelSelector{
-		MatchLabels:matchLabel4,
+		MatchLabels: matchLabel4,
 	}
 	rollout.Spec.Selector = &labelSelector4
 
+	r.Cache.AppendRolloutToCluster("bar", &rollout)
 
-	r.Cache.AppendRolloutToCluster("bar",&rollout)
-
-
-	selectorMap := make(map[string] string)
-	selectorMap["app"] ="test"
-	selectorMap[ROLLOUT_POD_HASH_LABEL] ="hash"
+	selectorMap := make(map[string]string)
+	selectorMap["app"] = "test"
+	selectorMap[ROLLOUT_POD_HASH_LABEL] = "hash"
 
 	activeService := &coreV1.Service{
-		Spec : coreV1.ServiceSpec{
-			Selector:selectorMap,
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
 		},
 	}
 	activeService.Name = SERVICENAME
 	activeService.Namespace = NAMESPACE
-	port1 := coreV1.ServicePort {
-		Port : 8080,
+	port1 := coreV1.ServicePort{
+		Port: 8080,
 		Name: "random1",
 	}
 
-	port2 := coreV1.ServicePort {
-		Port : 8081,
+	port2 := coreV1.ServicePort{
+		Port: 8081,
 		Name: "random2",
 	}
 
 	ports := []coreV1.ServicePort{port1, port2}
 	activeService.Spec.Ports = ports
 
-
-
 	s.Cache.Put(activeService)
-	se :=createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	se := createServiceEntryForNewServiceOrPod("test", "bar", rr)
 	if nil == se {
-		t.Fatalf("no service entries found" )
+		t.Fatalf("no service entries found")
 	}
-	if len(se)!=1{
-		t.Fatalf("More than 1 service entries found. Expected 1" )
+	if len(se) != 1 {
+		t.Fatalf("More than 1 service entries found. Expected 1")
 	}
 	serviceEntryResp := se["test.test.mesh"]
 	if nil == serviceEntryResp {
-		t.Fatalf("Service entry returned should not be empty" )
+		t.Fatalf("Service entry returned should not be empty")
 	}
 
 }
-
-
