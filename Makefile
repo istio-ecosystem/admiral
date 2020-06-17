@@ -1,19 +1,21 @@
-DOCKER_REPO=admiralproj
-IMAGE=$(DOCKER_REPO)/admiral
-DOCKER_USER=aattuluri
+DOCKER_REPO?=admiralproj
+IMAGE?=$(DOCKER_REPO)/admiral
+DOCKER_USER?=aattuluri
+
+DOCKERFILE?=Dockerfile.admiral
 
 SHELL := /bin/bash
 # Go parameters
-GOCMD=go
-GOBUILD=$(GOCMD) build
-GOCLEAN=$(GOCMD) clean
-GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
-GOBIN=$(GOPATH)/bin
-OUT=./out/
+GOCMD?=go
+GOBUILD?=$(GOCMD) build
+GOCLEAN?=$(GOCMD) clean
+GOTEST?=$(GOCMD) test
+GOGET?=$(GOCMD) get
+GOBIN?=$(GOPATH)/bin
+OUT?=./out/
 
-BINARY_NAME=$(OUT)admiral
-BINARY_DARWIN=$(BINARY_NAME)_darwin
+BINARY_NAME?=$(OUT)admiral
+BINARY_DARWIN?=$(BINARY_NAME)_darwin
 
 #Protoc
 PROTOC_VER=3.9.1
@@ -92,7 +94,7 @@ endif
 
 docker-build: set-tag
     #NOTE: Assumes binary has already been built (admiral)
-	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/Dockerfile.admiral .
+	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/$(DOCKERFILE) .
 
 docker-publish:
 ifndef DO_NOT_PUBLISH
@@ -125,7 +127,7 @@ download-kustomize:
 	mv kustomize_kustomize.*_$(OPSYS)_amd64 kustomize
 	chmod u+x kustomize
 
-gen-yaml: 
+gen-yaml:
 	mkdir -p ./out/yaml
 	mkdir -p ./out/scripts
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
