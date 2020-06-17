@@ -21,15 +21,15 @@ type ServiceEntryHandler interface {
 }
 
 type ServiceEntryEntry struct {
-	Identity string
+	Identity     string
 	ServiceEntry *networking.ServiceEntry
 }
 
 type ServiceEntryController struct {
-	IstioClient  versioned.Interface
+	IstioClient         versioned.Interface
 	ServiceEntryHandler ServiceEntryHandler
-	informer   cache.SharedIndexInformer
-	ctl        *admiral.Controller
+	informer            cache.SharedIndexInformer
+	ctl                 *admiral.Controller
 }
 
 func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {

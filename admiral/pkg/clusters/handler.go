@@ -2,23 +2,23 @@ package clusters
 
 import (
 	"fmt"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
+	networking "istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
-const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -63,12 +63,10 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 		//If there is  no deployment, check if a rollout is available.
 		tempRollout := rc.RolloutController.Cache.Get(sourceIdentity)
-		if tempDeployment != nil || tempRollout !=nil {
+		if tempDeployment != nil || tempRollout != nil {
 			sourceClusters[rc.ClusterID] = rc.ClusterID
 			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		}
-
-
 
 		//create and store destination service entries
 		for _, destinationCluster := range destinationIdentitys {
@@ -96,7 +94,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 				}
-			}else if destRollout != nil {
+			} else if destRollout != nil {
 				//rollouts can be in multiple clusters, create SEs for all clusters
 
 				for _, rollout := range destRollout.Rollouts {
@@ -149,10 +147,10 @@ func getIstioResourceName(host string, suffix string) string {
 }
 
 func makeIngressOnlyVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
-	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port);
+	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port)
 }
 
-func makeVirtualService(host string, gateways [] string, destination string, port uint32) *v1alpha32.VirtualService {
+func makeVirtualService(host string, gateways []string, destination string, port uint32) *v1alpha32.VirtualService {
 	return &v1alpha32.VirtualService{Hosts: []string{host},
 		Gateways: gateways,
 		ExportTo: []string{"*"},
@@ -171,7 +169,6 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 		gtpTrafficPolicy := gtp.Policy[0]
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
-
 
 			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
@@ -691,14 +688,14 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Se
 	for _, service := range cachedService.Service[rollout.Namespace] {
 		var match = true
 		// Both active and passive service have similar label selector. Use active service name to filter in case of blue green stratergy
-		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name!= blueGreenActiveService{
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService {
 			continue
 		}
 		for lkey, lvalue := range service.Spec.Selector {
 			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
 			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if(lkey == ROLLOUT_POD_HASH_LABEL){
-				continue;
+			if lkey == ROLLOUT_POD_HASH_LABEL {
+				continue
 			}
 			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
 			if !ok || value != lvalue {

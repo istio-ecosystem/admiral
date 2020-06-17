@@ -21,15 +21,15 @@ type DestinationRuleHandler interface {
 }
 
 type DestinationRuleEntry struct {
-	Identity string
+	Identity        string
 	DestinationRule *networking.DestinationRule
 }
 
 type DestinationRuleController struct {
-	IstioClient  versioned.Interface
+	IstioClient            versioned.Interface
 	DestinationRuleHandler DestinationRuleHandler
-	informer   cache.SharedIndexInformer
-	ctl        *admiral.Controller
+	informer               cache.SharedIndexInformer
+	ctl                    *admiral.Controller
 }
 
 func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRuleHandler, config *rest.Config, resyncPeriod time.Duration) (*DestinationRuleController, error) {

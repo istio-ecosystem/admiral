@@ -37,7 +37,6 @@ const secretNameSpace string = "istio-system"
 var testCreateControllerCalled bool
 var testDeleteControllerCalled bool
 
-
 func makeSecret(secret, clusterID string, kubeconfig []byte) *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -87,7 +86,6 @@ func resetCallbackData() {
 	deleted = ""
 }
 
-
 func testCreateController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
 	testCreateControllerCalled = true
 	return nil
@@ -127,10 +125,10 @@ func deleteMultiClusterSecret(k8s *fake.Clientset) error {
 func mockLoadKubeConfig(kubeconfig []byte) (*clientcmdapi.Config, error) {
 	config := clientcmdapi.NewConfig()
 	config.Clusters["clean"] = &clientcmdapi.Cluster{
-		Server:  "https://anything.com:8080",
+		Server: "https://anything.com:8080",
 	}
 	config.Contexts["clean"] = &clientcmdapi.Context{
-		Cluster:  "clean",
+		Cluster: "clean",
 	}
 	config.CurrentContext = "clean"
 	return config, nil
@@ -191,7 +189,6 @@ func Test_SecretController(t *testing.T) {
 		t.Fatalf("Test failed on delete secret, create callback function called")
 	}
 }*/
-
 
 func Test_SecretController(t *testing.T) {
 	g := NewWithT(t)

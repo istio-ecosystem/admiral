@@ -37,7 +37,7 @@ func TestNewSidecarController(t *testing.T) {
 		t.Errorf("Handler should have the added obj")
 	}
 
-	updatedSc := &v1alpha3.Sidecar{Spec: v1alpha32.Sidecar{WorkloadSelector: &v1alpha32.WorkloadSelector{Labels:map[string]string{"this": "that"}}}, ObjectMeta: v1.ObjectMeta{Name: "sc1", Namespace: "namespace1"}}
+	updatedSc := &v1alpha3.Sidecar{Spec: v1alpha32.Sidecar{WorkloadSelector: &v1alpha32.WorkloadSelector{Labels: map[string]string{"this": "that"}}}, ObjectMeta: v1.ObjectMeta{Name: "sc1", Namespace: "namespace1"}}
 	sidecarController.Updated(updatedSc, sc)
 
 	if !cmp.Equal(updatedSc.Spec, handler.Obj.Spec) {

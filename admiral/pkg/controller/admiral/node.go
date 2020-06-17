@@ -16,17 +16,16 @@ type NodeHandler interface {
 }
 
 type NodeController struct {
-	K8sClient  kubernetes.Interface
+	K8sClient   kubernetes.Interface
 	NodeHandler NodeHandler
-	Locality	*Locality
-	informer   cache.SharedIndexInformer
-	ctl        *Controller
+	Locality    *Locality
+	informer    cache.SharedIndexInformer
+	ctl         *Controller
 }
 
 type Locality struct {
 	Region string
 }
-
 
 func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest.Config) (*NodeController, error) {
 

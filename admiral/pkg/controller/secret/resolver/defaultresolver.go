@@ -7,7 +7,6 @@ func (r DefaultResolver) FetchKubeConfig(secretName string, kubeConfig []byte) (
 }
 
 type DefaultResolver struct {
-
 }
 
 func NewDefaultResolver() (SecretResolver, error) {

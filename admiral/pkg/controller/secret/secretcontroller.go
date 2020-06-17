@@ -112,7 +112,7 @@ func NewController(
 
 	var secretResolver resolver.SecretResolver
 	var err error
-	if len(secretResolverType) == 0  {
+	if len(secretResolverType) == 0 {
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
@@ -282,7 +282,7 @@ func (c *Controller) createRemoteCluster(kubeConfig []byte, secretName string, c
 	}
 
 	return &RemoteCluster{
-		secretName:     secretName,
+		secretName: secretName,
 	}, restConfig, nil
 }
 
@@ -302,12 +302,12 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 
 			c.cs.remoteClusters[clusterID] = remoteCluster
 
-			if err := c.addCallback(restConfig, clusterID, 2 * time.Minute); err != nil {
+			if err := c.addCallback(restConfig, clusterID, 2*time.Minute); err != nil {
 				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
 				continue
 			}
 
-			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.",clusterID,c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
+			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.", clusterID, c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
 
 		} else {
 			if prev.secretName != secretName {
@@ -326,7 +326,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			}
 
 			c.cs.remoteClusters[clusterID] = remoteCluster
-			if err := c.updateCallback(restConfig, clusterID, 2 * time.Minute); err != nil {
+			if err := c.updateCallback(restConfig, clusterID, 2*time.Minute); err != nil {
 				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
 					clusterID, secretName, err)
 			}

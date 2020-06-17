@@ -33,7 +33,7 @@ type DeploymentController struct {
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
 	ctl               *Controller
-	labelSet 		  *common.LabelSet
+	labelSet          *common.LabelSet
 }
 
 type deploymentCache struct {
@@ -80,7 +80,7 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel + "=" + d.labelSet.NamespaceSidecarInjectionLabelValue
 	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
 
 	if err != nil {
@@ -145,11 +145,11 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 	return &deploymentController, nil
 }
 
-func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration,labelSet *common.LabelSet) (*DeploymentController, error) {
+func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
 
-	dc, err :=  NewDeploymentController(stopCh,handler,config,resyncPeriod)
-	dc.labelSet =labelSet
-	return dc,err
+	dc, err := NewDeploymentController(stopCh, handler, config, resyncPeriod)
+	dc.labelSet = labelSet
+	return dc, err
 }
 
 func (d *DeploymentController) Added(obj interface{}) {
@@ -214,4 +214,4 @@ func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace
 	}
 
 	return matchedDeployments.Items
-	}
+}

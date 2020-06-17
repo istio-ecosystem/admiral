@@ -41,7 +41,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 
 	//test add
 	depName := "dep1"
-	dep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments"}, Source: "webapp"}
+	dep := model.Dependency{IdentityLabel: "identity", Destinations: []string{"greeting", "payments"}, Source: "webapp"}
 	depObj := makeK8sDependencyObj(depName, "namespace1", dep)
 	dependencyController.Added(depObj)
 
@@ -52,7 +52,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	}
 
 	//test update
-	updatedDep := model.Dependency{IdentityLabel: "identity", Destinations:[]string{"greeting", "payments", "newservice"}, Source: "webapp"}
+	updatedDep := model.Dependency{IdentityLabel: "identity", Destinations: []string{"greeting", "payments", "newservice"}, Source: "webapp"}
 	updatedObj := makeK8sDependencyObj(depName, "namespace1", updatedDep)
 	dependencyController.Updated(makeK8sDependencyObj(depName, "namespace1", updatedDep), depObj)
 
@@ -73,6 +73,6 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 
 }
 
-func makeK8sDependencyObj (name string, namespace string, dependency model.Dependency) *v1.Dependency {
+func makeK8sDependencyObj(name string, namespace string, dependency model.Dependency) *v1.Dependency {
 	return &v1.Dependency{Spec: dependency, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }

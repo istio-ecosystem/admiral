@@ -14,7 +14,6 @@ func TestMapOfMaps(t *testing.T) {
 	mapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.1")
 	mapOfMaps.Put("pkey3", "stage.a.global", "127.0.10.1")
 
-
 	map1 := mapOfMaps.Get("pkey1")
 	if map1 == nil || map1.Get("dev.a.global1") != "127.0.10.1" {
 		t.Fail()
@@ -47,21 +46,21 @@ func TestEgressMap(t *testing.T) {
 	egressMap := NewSidecarEgressMap()
 	payments, orders := "payments", "orders"
 	paymentsEnv, ordersEnv := "prod", "staging"
-	paymentsNs, ordersNs := payments + "-" + paymentsEnv, orders + "-" + ordersEnv
-	paymentsFqdn, ordersFqdn := payments + "." + paymentsNs + "." + "svc.cluster.local", orders + "." + ordersNs + "." + "svc.cluster.local"
+	paymentsNs, ordersNs := payments+"-"+paymentsEnv, orders+"-"+ordersEnv
+	paymentsFqdn, ordersFqdn := payments+"."+paymentsNs+"."+"svc.cluster.local", orders+"."+ordersNs+"."+"svc.cluster.local"
 	paymentsSidecar, ordersSidecar := SidecarEgress{FQDN: paymentsFqdn, Namespace: paymentsNs}, SidecarEgress{FQDN: ordersFqdn, Namespace: ordersNs}
 	egressMap.Put(payments, paymentsNs, paymentsFqdn)
 	egressMap.Put(orders, ordersNs, ordersFqdn)
 
-	ordersEgress := egressMap.Get("orders");
+	ordersEgress := egressMap.Get("orders")
 
 	if !cmp.Equal(ordersEgress[ordersNs], ordersSidecar) {
 		t.Errorf("Orders egress object should match expected %v, got %v", ordersSidecar, ordersEgress[ordersNs])
 		t.FailNow()
 	}
 
-	egressMap.Delete(orders);
-	ordersEgress = egressMap.Get("orders");
+	egressMap.Delete(orders)
+	ordersEgress = egressMap.Get("orders")
 
 	if ordersEgress != nil {
 		t.Errorf("Delete object should delete the object %v", ordersEgress)
@@ -77,7 +76,7 @@ func TestEgressMap(t *testing.T) {
 }
 
 func TestAdmiralParams(t *testing.T) {
-	admiralParams := AdmiralParams{SANPrefix:"custom.san.prefix"}
+	admiralParams := AdmiralParams{SANPrefix: "custom.san.prefix"}
 	admiralParamsStr := admiralParams.String()
 	expectedContainsStr := "SANPrefix=custom.san.prefix"
 	if !strings.Contains(admiralParamsStr, expectedContainsStr) {

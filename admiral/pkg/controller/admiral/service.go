@@ -19,7 +19,6 @@ const IstioIngressServiceName = "istio-ingressgateway"
 
 // Handler interface contains the methods that are required
 type ServiceHandler interface {
-
 }
 
 type ServiceClusterEntry struct {
@@ -63,7 +62,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
-		namespaceServices = make (map[string]*k8sV1.Service, 0)
+		namespaceServices = make(map[string]*k8sV1.Service, 0)
 	}
 	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices
