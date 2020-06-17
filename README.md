@@ -17,6 +17,7 @@ Istio has a very robust set of multi-cluster capabilities.  Managing this config
 Organizations below are **officially** using Admiral. Please send a PR with your organization name if you are using Admiral.
 
 * [Intuit](https://www.intuit.com/)
+* [Reddit](https://www.reddit.com/)
 
 ## Blogs and Presentations
 
