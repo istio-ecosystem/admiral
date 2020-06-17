@@ -19,7 +19,6 @@ const IstioIngressServiceName = "istio-ingressgateway"
 
 // Handler interface contains the methods that are required
 type ServiceHandler interface {
-
 }
 
 type ServiceClusterEntry struct {
@@ -63,7 +62,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
-		namespaceServices = make (map[string]*k8sV1.Service, 0)
+		namespaceServices = make(map[string]*k8sV1.Service, 0)
 	}
 	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices
@@ -84,27 +83,36 @@ func (s *serviceCache) Delete(pod *ServiceClusterEntry) {
 	delete(s.cache, pod.Identity)
 }
 
-func (s *serviceCache) GetLoadBalancer(key string, namespace string) string {
-
-	var lb = "admiral_dummy.com"
+func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, int) {
+	var (
+		lb     = "admiral_dummy.com"
+		lbPort = common.DefaultMtlsPort
+	)
 	service := s.Get(namespace)
 	if service == nil || service.Service[namespace] == nil {
-		return lb
+		return lb, 0
 	}
 	for _, service := range service.Service[namespace] {
 		if service.Labels["app"] == key {
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
 				if len(loadBalancerStatus[0].Hostname) > 0 {
-					return loadBalancerStatus[0].Hostname
+					return loadBalancerStatus[0].Hostname, common.DefaultMtlsPort
 				} else {
-					return loadBalancerStatus[0].IP
+					return loadBalancerStatus[0].IP, common.DefaultMtlsPort
+				}
+			} else if len(service.Spec.ExternalIPs) > 0 {
+				lb = service.Spec.ExternalIPs[0]
+				for _, port := range service.Spec.Ports {
+					if port.Port == common.DefaultMtlsPort {
+						lbPort = int(port.NodePort)
+						return lb, lbPort
+					}
 				}
 			}
 		}
 	}
-	return lb
-
+	return lb, lbPort
 }
 
 func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
