@@ -48,9 +48,10 @@ func TestEgressMap(t *testing.T) {
 	paymentsEnv, ordersEnv := "prod", "staging"
 	paymentsNs, ordersNs := payments+"-"+paymentsEnv, orders+"-"+ordersEnv
 	paymentsFqdn, ordersFqdn := payments+"."+paymentsNs+"."+"svc.cluster.local", orders+"."+ordersNs+"."+"svc.cluster.local"
-	paymentsSidecar, ordersSidecar := SidecarEgress{FQDN: paymentsFqdn, Namespace: paymentsNs}, SidecarEgress{FQDN: ordersFqdn, Namespace: ordersNs}
-	egressMap.Put(payments, paymentsNs, paymentsFqdn)
-	egressMap.Put(orders, ordersNs, ordersFqdn)
+	paymentsCname, ordersCname := paymentsEnv+"."+payments+".global", ordersEnv+"."+orders+".global"
+	paymentsSidecar, ordersSidecar := SidecarEgress{FQDN: paymentsFqdn, Namespace: paymentsNs, CNAMEs: map[string]string{paymentsCname: paymentsCname}}, SidecarEgress{FQDN: ordersFqdn, Namespace: ordersNs, CNAMEs: map[string]string{ordersCname: ordersCname}}
+	egressMap.Put(payments, paymentsNs, paymentsFqdn, map[string]string{paymentsCname: paymentsCname})
+	egressMap.Put(orders, ordersNs, ordersFqdn, map[string]string{ordersCname: ordersCname})
 
 	ordersEgress := egressMap.Get("orders")
 
