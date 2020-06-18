@@ -56,7 +56,9 @@ jobs:
           (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
           make gen-yaml
           mkdir ./artifact
-          cd out && tar -zcvf ../artifact/admiral-install-${CIRCLE_TAG}.tar.gz * && cd ..
+          mkdir admiral-install-${CIRCLE_TAG}
+          cp -R out/* admiral-install-${CIRCLE_TAG}
+          tar -zcvf ./artifact/admiral-install-${CIRCLE_TAG}.tar.gz admiral-install-${CIRCLE_TAG}
     - run:
         name: Publish Release on GitHub
         command: |
