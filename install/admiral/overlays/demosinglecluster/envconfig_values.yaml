@@ -19,4 +19,4 @@ spec:
             - admiral-sync
             - --sync_period
             - 20s
-          name: admiral
+          name: admiraladmiral/pkg/controller/admiral/service_test.go

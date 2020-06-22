@@ -163,9 +163,13 @@ func (d *DeploymentController) Updated(obj interface{}, oldObj interface{}) {
 func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
-	if len(key) > 0 && !d.shouldIgnoreBasedOnLabels(deployment) {
-		d.Cache.AppendDeploymentToCluster(key, deployment)
-		d.DeploymentHandler.Added(deployment)
+	if len(key) > 0 {
+		if !d.shouldIgnoreBasedOnLabels(deployment) {
+			d.Cache.AppendDeploymentToCluster(key, deployment)
+			d.DeploymentHandler.Added(deployment)
+		} else {
+			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
+		}
 	}
 }
 

@@ -2,8 +2,10 @@ package admiral
 
 import (
 	"github.com/google/go-cmp/cmp"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/clientcmd"
 	"sync"
 	"testing"
@@ -91,6 +93,23 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	s2.Status.LoadBalancer.Ingress = append(s2.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{IP: "1.2.3.4"})
 	s2.Labels = map[string]string{"app": "test-service-ip"}
 
+	// The primary use case is to support ingress gateways for local development
+	externalIPService := &v1.Service{}
+	externalIPService.Name = "test-service-externalip"
+	externalIPService.Namespace = "ns"
+	externalIPService.Spec = v1.ServiceSpec{}
+	externalIPService.Spec.ExternalIPs = []string{"1.2.3.4"}
+	externalIPService.Spec.Ports = []v1.ServicePort{
+		{
+			"http",
+			v1.ProtocolTCP,
+			common.DefaultMtlsPort,
+			intstr.FromInt(80),
+			30800,
+		},
+	}
+	externalIPService.Labels = map[string]string{"app": "test-service-externalip"}
+
 	ignoreService := &v1.Service{}
 	ignoreService.Name = "test-service-ignored"
 	ignoreService.Namespace = "ns"
@@ -119,6 +138,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	sc.Put(service)
 	sc.Put(s2)
+	sc.Put(externalIPService)
 	sc.Put(ignoreService)
 	sc.Put(ignoreService2)
 	sc.Put(ignoreService3)
@@ -135,6 +155,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 		key            string
 		ns             string
 		expectedReturn string
+		expectedPort   int
 	}{
 		{
 			name:           "Find service load balancer when present",
@@ -142,6 +163,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service",
 			ns:             "ns",
 			expectedReturn: "hostname.com",
+			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
 			name:           "Return default when service not present",
@@ -149,6 +171,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service",
 			ns:             "ns-incorrect",
 			expectedReturn: "admiral_dummy.com",
+			expectedPort:   0,
 		},
 		{
 			name:           "Falls back to IP",
@@ -156,6 +179,15 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service-ip",
 			ns:             "ns",
 			expectedReturn: "1.2.3.4",
+			expectedPort:   common.DefaultMtlsPort,
+		},
+		{
+			name:           "Falls back to externalIP",
+			cache:          &sc,
+			key:            "test-service-externalip",
+			ns:             "ns",
+			expectedReturn: "1.2.3.4",
+			expectedPort:   30800,
 		},
 		{
 			name:           "Successfully ignores services with the ignore label",
@@ -163,6 +195,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service-ignored",
 			ns:             "ns",
 			expectedReturn: "admiral_dummy.com",
+			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
 			name:           "Successfully ignores services when the ignore label is added after the service had been added to the cache for the first time",
@@ -170,6 +203,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service-ignored-later",
 			ns:             "ns",
 			expectedReturn: "admiral_dummy.com",
+			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
 			name:           "Successfully finds services when the ignore label is added initially, then removed",
@@ -177,14 +211,15 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			key:            "test-service-unignored-later",
 			ns:             "ns",
 			expectedReturn: "hostname.com",
+			expectedPort:   common.DefaultMtlsPort,
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			loadBalancer := c.cache.GetLoadBalancer(c.key, c.ns)
-			if loadBalancer != c.expectedReturn {
-				t.Errorf("Unexpected load balancer returned. Got %v, expected %v", loadBalancer, c.expectedReturn)
+			loadBalancer, port := c.cache.GetLoadBalancer(c.key, c.ns)
+			if loadBalancer != c.expectedReturn || port != c.expectedPort {
+				t.Errorf("Unexpected load balancer returned. Got %v:%v, expected %v:%v", loadBalancer, port, c.expectedReturn, c.expectedPort)
 			}
 		})
 	}

@@ -304,7 +304,7 @@ func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
 	locality := "us-west-2"
 	portName := "port"
 
-	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName)
+	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName, common.DefaultMtlsPort)
 
 	if endpoint.Address != address {
 		t.Errorf("Address mismatch. Got: %v, expected: %v", endpoint.Address, address)

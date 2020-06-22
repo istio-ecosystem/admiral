@@ -114,7 +114,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 		for key, serviceEntry := range serviceEntries {
 			for _, ep := range serviceEntry.Endpoints {
-				clusterIngress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					ep.Address = localFqdn
@@ -313,10 +313,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	}
 }
 
-func makeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
+func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int) *networking.ServiceEntry_Endpoint {
 	return &networking.ServiceEntry_Endpoint{Address: address,
 		Locality: locality,
-		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
+		Ports:    map[string]uint32{portName: uint32(portNumber)}} //
 }
 
 func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
@@ -519,13 +519,13 @@ func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string, rc *Rem
 		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
 	}
 
-	endpointAddress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
 	var locality string
 	if rc.NodeController.Locality != nil {
 		locality = rc.NodeController.Locality.Region
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
-		locality, common.Http)
+		locality, common.Http, port)
 	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
 	serviceEntries[globalFqdn] = tmpSe
