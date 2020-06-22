@@ -57,6 +57,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		fmt.Sprintf("Set log verbosity, defaults to 'Info'. Must be between %v and %v", int(log.PanicLevel), int(log.TraceLevel)))
 	rootCmd.PersistentFlags().StringVar(&params.KubeconfigPath, "kube_config", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
+	rootCmd.PersistentFlags().BoolVar(&params.ArgoRolloutsEnabled, "argo_rollouts", false,
+		"Use argo rollout configurations")
 	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "admiral",
 		"Namespace to monitor for secrets defaults to admiral-secrets")
 	rootCmd.PersistentFlags().StringVar(&params.DependenciesNamespace, "dependency_namespace", "admiral",

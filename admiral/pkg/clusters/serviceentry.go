@@ -3,10 +3,13 @@ package clusters
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
+	"strconv"
+	"strings"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
@@ -14,11 +17,10 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math"
-	"math/rand"
-	"strconv"
-	"strings"
-	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
 
 func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
@@ -52,11 +54,15 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 	var cname string
 	var serviceInstance *k8sV1.Service
+	var rollout *admiral.RolloutClusterEntry
 
 	for _, rc := range remoteRegistry.remoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-		rollout := rc.RolloutController.Cache.Get(sourceIdentity)
+
+		if rc.RolloutController != nil {
+			rollout = rc.RolloutController.Cache.Get(sourceIdentity)
+		}
 
 		if deployment != nil && deployment.Deployments[env] != nil {
 			deploymentInstance := deployment.Deployments[env]
@@ -132,7 +138,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		}
 
 		for _, val := range dependents.Map() {
-			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, map[string]string {cname: "1"})
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, map[string]string{cname: "1"})
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {

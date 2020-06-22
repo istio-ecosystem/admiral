@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -13,7 +14,6 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"sync"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 type RemoteController struct {
@@ -44,6 +44,8 @@ type AdmiralCache struct {
 	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
+
+	argoRolloutsEnabled bool
 }
 
 type RemoteRegistry struct {
@@ -90,7 +92,6 @@ type globalTrafficCache struct {
 
 	//map of dependencies. key=namespace.globaltrafficpolicy name. value Deployment object
 	dependencyCache map[string]*k8sAppsV1.Deployment
-
 
 	//map of dependencies. key=namespace.globaltrafficpolicy name. value Rollout object
 	dependencyRolloutCache map[string]*argo.Rollout
@@ -211,7 +212,7 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	}
 
 	delete(g.dependencyCache, gtp.Name)
-	delete(g.dependencyRolloutCache,gtp.Name)
+	delete(g.dependencyRolloutCache, gtp.Name)
 }
 
 type DeploymentHandler struct {
@@ -246,7 +247,7 @@ func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
 
 }
 
-func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry)  {
+func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	sourceIdentity := obj.Spec.Source
 
 	if len(sourceIdentity) == 0 {
@@ -275,7 +276,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	}
 
 	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
-	rollouts := common.MatchRolloutsToGTP(obj,matchedRollouts)
+	rollouts := common.MatchRolloutsToGTP(obj, matchedRollouts)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
@@ -287,17 +288,17 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 		}
 	}
 
-	if len(rollouts) !=0 {
-		for _,rollout := range rollouts{
-			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj,&rollout)
-			if err !=nil {
-				log.Errorf("Failed to add new GTP to cache. Error=%v",err)
-				log.Errorf(LogErrFormat,"Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+	if len(rollouts) != 0 {
+		for _, rollout := range rollouts {
+			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, &rollout)
+			if err != nil {
+				log.Errorf("Failed to add new GTP to cache. Error=%v", err)
+				log.Errorf(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
 			}
 		}
 	}
 
-	if len(deployments) == 0  && len(rollouts) ==0 {
+	if len(deployments) == 0 && len(rollouts) == 0 {
 		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments/rollouts")
 	}
 
@@ -316,7 +317,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	}
 
 	deployments := common.MatchDeploymentsToGTP(obj, matchedDeployments)
-	rollouts := common.MatchRolloutsToGTP(obj,matchedRollouts)
+	rollouts := common.MatchRolloutsToGTP(obj, matchedRollouts)
 
 	if len(deployments) != 0 {
 		for _, deployment := range deployments {
@@ -335,7 +336,6 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
 		}
 	}
-
 
 	if len(rollouts) != 0 {
 		for _, rollout := range rollouts {

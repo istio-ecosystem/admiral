@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 const (
@@ -61,6 +61,12 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
+
+		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
+	}
+
+	if !params.ArgoRolloutsEnabled {
+		log.Info("argo rollouts disabled")
 	}
 
 	configMapController, err := admiral.NewConfigMapController()
@@ -128,11 +134,13 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
-	log.Infof("starting rollout controller clusterID: %v", clusterID)
-	rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	if r.AdmiralCache.argoRolloutsEnabled {
+		log.Infof("starting rollout controller clusterID: %v", clusterID)
+		rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
-	if err != nil {
-		return fmt.Errorf(" Error with Rollout controller init: %v", err)
+		if err != nil {
+			return fmt.Errorf(" Error with Rollout controller init: %v", err)
+		}
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
