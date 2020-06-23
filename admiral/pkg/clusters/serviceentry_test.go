@@ -382,7 +382,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 			t.Fail()
 		}
 
-		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test.myservice.global", "test-dependency-namespace/test-local-fqdn")
+		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn", "test-dependency-namespace/test.myservice.global")
 		createdSidecar.Spec.Egress[0].Hosts = hostList
 
 		if !cmp.Equal(updatedSidecar, createdSidecar) {
