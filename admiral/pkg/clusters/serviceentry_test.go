@@ -408,8 +408,8 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 			if matched != nil {
 				oldHosts := listener.Hosts
 				newHosts := matched.Hosts
-				oldHosts = oldHosts[:0]
-				newHosts = newHosts[:0]
+				listener.Hosts = listener.Hosts[:0]
+				matched.Hosts = matched.Hosts[:0]
 				assert.ElementsMatch(t, oldHosts, newHosts, "hosts should match")
 				if !cmp.Equal(listener, matched) {
 					t.Fatalf("Listeners do not match. Details - %v", cmp.Diff(listener, matched))
