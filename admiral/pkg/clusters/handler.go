@@ -184,9 +184,8 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 					To:   targetTrafficMap,
 				})
 				localityLbSettings.Distribute = distribute
-			} else {
-				//this will have default behavior
 			}
+			// else default behavior
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 		}
@@ -242,37 +241,40 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
-func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
 
 func IgnoreIstioResource(exportTo []string) bool {
-	if exportTo == nil || len(exportTo) == 0 {
+	if len(exportTo) == 0 {
 		return false
 	} else {
 		for _, namespace := range exportTo {
@@ -361,17 +363,33 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		if event == common.Delete {
 
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-			rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+			err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
+			err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
 			for _, subset := range destinationRule.Subsets {
 				sseName := seName + common.Dash + subset.Name
-				rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
-				log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+				if err != nil {
+					log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+				} else {
+					log.Error(LogFormat, err)
+				}
 			}
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+			err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
 
 		} else {
 
@@ -382,20 +400,18 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
 
-			if drServiceEntries != nil {
-				for _seName, se := range drServiceEntries {
-					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
-					newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
-					if err != nil {
-						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
-					}
-					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
-					}
-					//cache the subset service entries for updating them later for pod events
-					if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
-						r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
-					}
+			for _seName, se := range drServiceEntries {
+				existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
+				newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
+				if err != nil {
+					log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
+				}
+				if newServiceEntry != nil {
+					addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
+				}
+				//cache the subset service entries for updating them later for pod events
+				if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
+					r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
 				}
 			}
 
@@ -637,7 +653,7 @@ func getDependentClusters(dependents *common.Map, identityClusterCache *common.M
 	//TODO optimize this map construction
 	if dependents != nil {
 		for identity, clusters := range identityClusterCache.Map() {
-			for depIdentity, _ := range dependents.Map() {
+			for depIdentity := range dependents.Map() {
 				if identity == depIdentity {
 					for _, clusterId := range clusters.Map() {
 						_, ok := sourceServices[clusterId]

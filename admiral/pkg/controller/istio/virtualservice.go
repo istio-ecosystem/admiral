@@ -24,7 +24,6 @@ type VirtualServiceController struct {
 	IstioClient           versioned.Interface
 	VirtualServiceHandler VirtualServiceHandler
 	informer              cache.SharedIndexInformer
-	ctl                   *admiral.Controller
 }
 
 func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*VirtualServiceController, error) {

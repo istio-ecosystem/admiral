@@ -39,8 +39,6 @@ type RolloutController struct {
 	RolloutClient  argoprojv1alpha1.ArgoprojV1alpha1Interface
 	RolloutHandler RolloutHandler
 	informer       cache.SharedIndexInformer
-	ctl            *Controller
-	clusterName    string
 	Cache          *rolloutCache
 	labelSet       *common.LabelSet
 }

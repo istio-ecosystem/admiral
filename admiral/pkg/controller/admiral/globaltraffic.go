@@ -25,8 +25,6 @@ type GlobalTrafficController struct {
 	CrdClient            clientset.Interface
 	GlobalTrafficHandler GlobalTrafficHandler
 	informer             cache.SharedIndexInformer
-	ctl                  *Controller
-	clusterName          string
 }
 
 func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {

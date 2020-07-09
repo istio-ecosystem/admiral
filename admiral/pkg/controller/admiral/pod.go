@@ -31,7 +31,6 @@ type PodController struct {
 	PodHandler PodHandler
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
-	ctl        *Controller
 	labelSet   *common.LabelSet
 }
 

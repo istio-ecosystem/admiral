@@ -116,7 +116,7 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 }
 
 func GetNodeLocality(node *k8sV1.Node) string {
-	region, _ := node.Labels[NodeRegionLabel]
+	region := node.Labels[NodeRegionLabel]
 	return region
 }
 
@@ -144,7 +144,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		gtpEnv = Default
 	}
 
-	if deployments == nil || len(deployments) == 0 {
+	if len(deployments) == 0 {
 		return nil
 	}
 

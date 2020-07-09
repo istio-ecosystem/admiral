@@ -20,7 +20,6 @@ type NodeController struct {
 	NodeHandler NodeHandler
 	Locality    *Locality
 	informer    cache.SharedIndexInformer
-	ctl         *Controller
 }
 
 type Locality struct {

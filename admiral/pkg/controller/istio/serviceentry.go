@@ -29,7 +29,6 @@ type ServiceEntryController struct {
 	IstioClient         versioned.Interface
 	ServiceEntryHandler ServiceEntryHandler
 	informer            cache.SharedIndexInformer
-	ctl                 *admiral.Controller
 }
 
 func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {

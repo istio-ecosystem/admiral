@@ -66,7 +66,7 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 		gtpEnv = Default
 	}
 
-	if rollouts == nil || len(rollouts) == 0 {
+	if len(rollouts) == 0 {
 		return nil
 	}
 
