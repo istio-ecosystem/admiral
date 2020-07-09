@@ -373,7 +373,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	if createdSidecar != nil {
 
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
-		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs:map[string]string{"test.myservice.global": "1"}}
+		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
 		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
 
 		updatedSidecar, error := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
@@ -385,7 +385,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn", "test-dependency-namespace/test.myservice.global")
 		createdSidecar.Spec.Egress[0].Hosts = hostList
 
-		if !cmp.Equal(updatedSidecar, createdSidecar) {
+		if !cmp.ElementsMatch(updatedSidecar, createdSidecar) {
 			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
 		}
 	} else {
