@@ -397,13 +397,26 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		}
 		var matched *istionetworkingv1alpha3.IstioEgressListener
 		for _, listener := range createdSidecarEgress {
+			matched = nil
+
 			for j, newListener := range updatedSidecarEgress {
 				if listener.Bind == newListener.Bind && listener.Port == newListener.Port && listener.CaptureMode == newListener.CaptureMode {
 					matched = newListener
 					updatedSidecarEgress = append(updatedSidecarEgress[:j], updatedSidecarEgress[j+1:]...)
 				}
 			}
-			assert.ElementsMatch(t, listener.Hosts, matched.Hosts, "hosts should match")
+			if matched != nil {
+				oldHosts := listener.Hosts
+				newHosts := matched.Hosts
+				oldHosts = oldHosts[:0]
+				newHosts = newHosts[:0]
+				assert.ElementsMatch(t, oldHosts, newHosts, "hosts should match")
+				if !cmp.Equal(listener, matched) {
+					t.Fatalf("Listeners do not match. Details - %v", cmp.Diff(listener, matched))
+				}
+			} else {
+				t.Fatalf("Corresponding listener on updated sidecar not found. Details - %v", cmp.Diff(createdSidecarEgress, updatedSidecarEgress))
+			}
 		}
 	} else {
 		t.Error("sidecar resource could not be created")
