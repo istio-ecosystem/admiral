@@ -10,6 +10,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -376,17 +377,33 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
 		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
 
-		updatedSidecar, error := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
+		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
 
-		if error != nil || updatedSidecar == nil {
+		if err != nil || updatedSidecar == nil {
 			t.Fail()
 		}
 
 		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn", "test-dependency-namespace/test.myservice.global")
 		createdSidecar.Spec.Egress[0].Hosts = hostList
 
-		if !cmp.ElementsMatch(updatedSidecar, createdSidecar) {
+		// Egress host order doesn't matter but will cause tests to fail. Move these values to their own lists for comparision
+		createdSidecarEgress := createdSidecar.Spec.Egress
+		updatedSidecarEgress := updatedSidecar.Spec.Egress
+		createdSidecar.Spec.Egress = createdSidecar.Spec.Egress[:0]
+		updatedSidecar.Spec.Egress = updatedSidecar.Spec.Egress[:0]
+
+		if !cmp.Equal(updatedSidecar, createdSidecar) {
 			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
+		}
+		var matched *istionetworkingv1alpha3.IstioEgressListener
+		for _, listener := range createdSidecarEgress {
+			for j, newListener := range updatedSidecarEgress {
+				if listener.Bind == newListener.Bind && listener.Port == newListener.Port && listener.CaptureMode == newListener.CaptureMode {
+					matched = newListener
+					updatedSidecarEgress = append(updatedSidecarEgress[:j], updatedSidecarEgress[j+1:]...)
+				}
+			}
+			assert.ElementsMatch(t, listener.Hosts, matched.Hosts, "hosts should match")
 		}
 	} else {
 		t.Error("sidecar resource could not be created")
