@@ -32,7 +32,6 @@ type DeploymentController struct {
 	DeploymentHandler DeploymentHandler
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
-	ctl               *Controller
 	labelSet          *common.LabelSet
 }
 

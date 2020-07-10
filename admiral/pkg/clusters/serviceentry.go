@@ -101,7 +101,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
 
 	//update cname dependent cluster cache
-	for clusterId, _ := range dependentClusters {
+	for clusterId := range dependentClusters {
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
@@ -184,13 +184,13 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 	for _, sidecarEgress := range sidecarEgressMap {
 		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
 		egressHosts[egressHost] = egressHost
-		for cname, _ := range sidecarEgress.CNAMEs {
+		for cname := range sidecarEgress.CNAMEs {
 			scopedCname := sidecarEgress.Namespace + "/" + cname
 			egressHosts[scopedCname] = scopedCname
 		}
 	}
 
-	for egressHost, _ := range egressHosts {
+	for egressHost := range egressHosts {
 		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
 			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
 		}
@@ -288,6 +288,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
+			if err != nil {
+				log.Error(LogFormat, err)
+				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
+			}
 
 			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
 

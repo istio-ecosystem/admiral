@@ -31,7 +31,6 @@ type ServiceController struct {
 	ServiceHandler ServiceHandler
 	Cache          *serviceCache
 	informer       cache.SharedIndexInformer
-	ctl            *Controller
 }
 
 type serviceCache struct {
@@ -62,7 +61,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
-		namespaceServices = make(map[string]*k8sV1.Service, 0)
+		namespaceServices = make(map[string]*k8sV1.Service)
 	}
 	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices

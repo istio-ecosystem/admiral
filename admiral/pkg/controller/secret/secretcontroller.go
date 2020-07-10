@@ -116,7 +116,7 @@ func NewController(
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
-		err = errors.New(fmt.Sprintf("Unrecognized secret resolver type %v specified", secretResolverType))
+		err = fmt.Errorf("unrecognized secret resolver type %v specified", secretResolverType)
 	}
 
 	if err != nil {

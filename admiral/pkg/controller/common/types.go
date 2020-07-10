@@ -141,7 +141,7 @@ func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string, c
 	s.mutex.Lock()
 	var mapVal = s.cache[identity]
 	if mapVal == nil {
-		mapVal = make(map[string]SidecarEgress, 0)
+		mapVal = make(map[string]SidecarEgress)
 	}
 	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn, CNAMEs: cnames}
 	s.cache[identity] = mapVal

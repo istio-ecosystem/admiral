@@ -86,7 +86,6 @@ func (m *MockNodeHandler) Deleted(obj *k8sCoreV1.Node) {
 }
 
 type MockDependencyHandler struct {
-
 }
 
 func (m *MockDependencyHandler) Added(obj *v1.Dependency) {
@@ -134,7 +133,7 @@ func (m *MockServiceEntryHandler) Deleted(obj *v1alpha32.ServiceEntry) {
 }
 
 type MockVirtualServiceHandler struct {
-	Obj  *v1alpha32.VirtualService
+	Obj *v1alpha32.VirtualService
 }
 
 func (m *MockVirtualServiceHandler) Added(obj *v1alpha32.VirtualService) {
@@ -150,7 +149,7 @@ func (m *MockVirtualServiceHandler) Deleted(obj *v1alpha32.VirtualService) {
 }
 
 type MockDestinationRuleHandler struct {
-	Obj  *v1alpha32.DestinationRule
+	Obj *v1alpha32.DestinationRule
 }
 
 func (m *MockDestinationRuleHandler) Added(obj *v1alpha32.DestinationRule) {

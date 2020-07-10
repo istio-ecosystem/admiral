@@ -14,26 +14,23 @@ import (
 
 func init() {
 	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &common.LabelSet{},
-		EnableSAN: true,
-		SANPrefix: "prefix",
-		HostnameSuffix: "mesh",
-		SyncNamespace: "ns",
-		CacheRefreshDuration: time.Minute,
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &common.LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
 		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace: "default",
-		SecretResolver: "",
-
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
 	}
 
-	p.LabelSet.WorkloadIdentityKey="identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
 	common.InitializeConfig(p)
 }
-
-
 
 func TestConfigMapController_GetConfigMap(t *testing.T) {
 	configmapController := ConfigMapController{
@@ -43,14 +40,13 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cm := v1.ConfigMap{}
 	cm.Name = "se-address-configmap"
-	cm.Namespace="admiral"
-	cm.Labels= map[string]string{"foo":"bar"}//differentiating from a new/empty cm
+	cm.Namespace = "admiral"
+	cm.Labels = map[string]string{"foo": "bar"} //differentiating from a new/empty cm
 	_, err := client.CoreV1().ConfigMaps("admiral").Create(&cm)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	configmapController.K8sClient = client
-
 
 	emptyConfigmapController := ConfigMapController{
 		ConfigmapNamespace: "admiral",
@@ -59,34 +55,33 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	emptyClient := fake.NewSimpleClientset()
 	emptyCM := v1.ConfigMap{}
 	emptyCM.Name = "se-address-configmap"
-	emptyCM.Namespace="admiral"
+	emptyCM.Namespace = "admiral"
 	emptyConfigmapController.K8sClient = emptyClient
 
-	testCases := []struct{
-		name string
-		configMapController	 *ConfigMapController
-		expectedConfigMap 	*v1.ConfigMap
-		expectedError	error
+	testCases := []struct {
+		name                string
+		configMapController *ConfigMapController
+		expectedConfigMap   *v1.ConfigMap
+		expectedError       error
 	}{
 		{
-			name: "should return confirmap",
-			configMapController:     &configmapController,
-			expectedConfigMap: &cm,
-			expectedError: nil,
+			name:                "should return confirmap",
+			configMapController: &configmapController,
+			expectedConfigMap:   &cm,
+			expectedError:       nil,
 		},
 		{
-			name: "should return newly created configmap",
-			configMapController:     &emptyConfigmapController,
-			expectedConfigMap: &emptyCM,
-			expectedError: nil,
+			name:                "should return newly created configmap",
+			configMapController: &emptyConfigmapController,
+			expectedConfigMap:   &emptyCM,
+			expectedError:       nil,
 		},
-
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			cm, err := c.configMapController.GetConfigMap()
-			if err==nil && c.expectedError==nil {
+			if err == nil && c.expectedError == nil {
 				//we're fine
 			} else if c.expectedError == nil && err != nil {
 				t.Errorf("Unexpected error. Err: %v", err)
@@ -104,22 +99,22 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 
 func TestNewConfigMapController(t *testing.T) {
 	testCases := []struct {
-		name string
+		name           string
 		kubeconfigPath string
-		namespace string
-		expectedError error
+		namespace      string
+		expectedError  error
 	}{
 		{
-			name: "Fails creating an in-cluster config while out of a cluster",
+			name:           "Fails creating an in-cluster config while out of a cluster",
 			kubeconfigPath: "",
-			namespace: "ns",
-			expectedError: errors.New("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
+			namespace:      "ns",
+			expectedError:  errors.New("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
 		},
 		{
-			name: "Kubeconfig config",
+			name:           "Kubeconfig config",
 			kubeconfigPath: "../../test/resources/admins@fake-cluster.k8s.local",
-			namespace: "ns",
-			expectedError: nil,
+			namespace:      "ns",
+			expectedError:  nil,
 		},
 	}
 
@@ -127,7 +122,7 @@ func TestNewConfigMapController(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			common.SetKubeconfigPath(c.kubeconfigPath)
 			controller, err := NewConfigMapController()
-			if err==nil && c.expectedError==nil {
+			if err == nil && c.expectedError == nil {
 				//only do these in an error-less context
 				if c.namespace != controller.ConfigmapNamespace {
 					t.Errorf("Namespace mismatch. Expected %v but got %v", c.namespace, controller.ConfigmapNamespace)
@@ -151,14 +146,14 @@ func TestConfigMapController_PutConfigMap(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	cm := v1.ConfigMap{}
 	cm.Name = "se-address-configmap"
-	cm.Namespace="admiral-remote-ctx"
+	cm.Namespace = "admiral-remote-ctx"
 	_, err := client.CoreV1().ConfigMaps("admiral-remote-ctx").Create(&cm)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
 	configmapController.K8sClient = client
 
-	cm.Data = map[string]string{"Foo":"Bar"}
+	cm.Data = map[string]string{"Foo": "Bar"}
 
 	err = configmapController.PutConfigMap(&cm)
 
