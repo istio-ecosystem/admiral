@@ -43,8 +43,8 @@ type ResourceType string
 
 const (
 	VirtualService  ResourceType = "VirtualService"
-	DestinationRule  ResourceType = "DestinationRule"
-	ServiceEntry  ResourceType = "ServiceEntry"
+	DestinationRule ResourceType = "DestinationRule"
+	ServiceEntry    ResourceType = "ServiceEntry"
 )
 
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
@@ -76,9 +76,9 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	cname:= environment + Sep + alias + Sep + nameSuffix
+	cname := environment + Sep + alias + Sep + nameSuffix
 	if deployment.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
-		log.Infof("admiral.io/cname-case-sensitive annotation enabled on deployment with name %v",deployment.Name)
+		log.Infof("admiral.io/cname-case-sensitive annotation enabled on deployment with name %v", deployment.Name)
 		return cname
 	}
 	return strings.ToLower(cname)
@@ -116,7 +116,7 @@ func GetSAN(domain string, deployment *k8sAppsV1.Deployment, identifier string) 
 }
 
 func GetNodeLocality(node *k8sV1.Node) string {
-	region, _ := node.Labels[NodeRegionLabel]
+	region := node.Labels[NodeRegionLabel]
 	return region
 }
 
@@ -144,7 +144,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		gtpEnv = Default
 	}
 
-	if deployments == nil || len(deployments) == 0 {
+	if len(deployments) == 0 {
 		return nil
 	}
 
@@ -171,19 +171,18 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	return envMatchedDeployments
 }
 
-
 //Find the GTP that best matches the deployment.
 //It's assumed that the set of GTPs passed in has already been matched via the GtpDeploymentLabel. Now it's our job to choose the best one.
 //In order:
 // - If one and only one GTP matches the env label of the deployment - use that one. Use "default" as the default env label for all GTPs and deployments.
 // - If multiple GTPs match the deployment label, use the oldest one (Using an old one has less chance of new behavior which could impact workflows)
 //IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
-func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy{
+func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy {
 	if deployment == nil || deployment.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
 	}
-	deploymentEnvironment:= deployment.Spec.Template.Labels[Env]
+	deploymentEnvironment := deployment.Spec.Template.Labels[Env]
 	if deploymentEnvironment == "" {
 		//No environment label, use default value
 		deploymentEnvironment = Default
@@ -195,7 +194,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		if gtpEnv == "" {
 			gtpEnv = Default
 		}
-		if gtpEnv == deploymentEnvironment{
+		if gtpEnv == deploymentEnvironment {
 			log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, gtpList[0].Name, deployment.Namespace, gtpEnv)
 			return &gtpList[0]
 		} else {
@@ -234,7 +233,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	sort.Slice(envMatchedGTPList, func(i, j int) bool {
 		iTime := envMatchedGTPList[i].CreationTimestamp.Nanosecond()
 		jTime := envMatchedGTPList[j].CreationTimestamp.Nanosecond()
-		return iTime<jTime
+		return iTime < jTime
 	})
 
 	log.Warnf("Multiple GTPs found that match the deployment with name=%v in namespace %v. Using the oldest one, you may want to clean up your configs to prevent this in the future", deployment.Name, deployment.Namespace)

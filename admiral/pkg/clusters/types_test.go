@@ -2,11 +2,12 @@ package clusters
 
 import (
 	"context"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
-	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	v12 "k8s.io/api/apps/v1"
@@ -17,32 +18,29 @@ import (
 	"sync"
 	"testing"
 	"time"
-	 argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(v1.GlobalTrafficPolicy{}.Status)
 
 func init() {
 	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &common.LabelSet{},
-		EnableSAN: true,
-		SANPrefix: "prefix",
-		HostnameSuffix: "mesh",
-		SyncNamespace: "ns",
-		CacheRefreshDuration: time.Minute,
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &common.LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
 		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace: "default",
-		SecretResolver: "",
-
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
 	}
 
-	p.LabelSet.WorkloadIdentityKey="identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
 	common.InitializeConfig(p)
 }
-
 
 func TestGlobalTrafficHandler(t *testing.T) {
 	//lots of setup
@@ -56,7 +54,6 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
-
 	fakeClient := fake.NewSimpleClientset()
 
 	deployment := v12.Deployment{}
@@ -65,7 +62,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	deployment.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -77,7 +74,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	deployment2.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -90,7 +87,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	deployment3.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -103,7 +100,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	deployment4.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -117,14 +114,12 @@ func TestGlobalTrafficHandler(t *testing.T) {
 		log.Fatalf("Failed to set up mock k8s client. Failing test. Error=%v", err)
 	}
 
-
-	deploymentController := &admiral.DeploymentController{K8sClient:fakeClient}
+	deploymentController := &admiral.DeploymentController{K8sClient: fakeClient}
 	remoteController := &RemoteController{}
 	remoteController.DeploymentController = deploymentController
 
-
 	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
-	rolloutController := &admiral.RolloutController{K8sClient:fakeClient,RolloutClient:noRolloutsClient}
+	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
@@ -133,23 +128,20 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	registry.AdmiralCache = admiralCacle
 	handler.RemoteRegistry = registry
 
-
 	e2eGtp := v1.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
 	noMatchGtp := v1.GlobalTrafficPolicy{}
-	noMatchGtp.Labels = map[string]string{"identity": "app2", "env":"e2e"}
+	noMatchGtp.Labels = map[string]string{"identity": "app2", "env": "e2e"}
 	noMatchGtp.Namespace = "namespace"
 	noMatchGtp.Name = "myGTP"
 
 	prfGtp := v1.GlobalTrafficPolicy{}
-	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
+	prfGtp.Labels = map[string]string{"identity": "app1", "env": "prf"}
 	prfGtp.Namespace = "namespace"
 	prfGtp.Name = "myGTP"
-
-
 
 	testCases := []struct {
 		name                         string
@@ -158,7 +150,6 @@ func TestGlobalTrafficHandler(t *testing.T) {
 		expectedEnv                  string
 		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
 		expectedDeploymentCacheValue *v12.Deployment
-
 	}{
 		{
 			name:                         "Should return matching environment",
@@ -202,7 +193,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name),  c.expectedDeploymentCacheValue, ignoreUnexported) {
+			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), c.expectedDeploymentCacheValue, ignoreUnexported) {
 				t.Fatalf("Deployment Mismatch. Diff: %v", cmp.Diff(c.expectedDeploymentCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), ignoreUnexported))
 			}
 
@@ -231,7 +222,6 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
-
 	fakeClient := fake.NewSimpleClientset()
 
 	deployment := v12.Deployment{}
@@ -240,7 +230,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	deployment.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -252,7 +242,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	deployment2.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -265,7 +255,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	deployment3.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -278,12 +268,11 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	deployment4.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
 	deployment4.Labels = map[string]string{"identity": "app1"}
-
 
 	_, err := fakeClient.AppsV1().Deployments("namespace").Create(&deployment)
 	_, err = fakeClient.AppsV1().Deployments("namespace").Create(&deployment2)
@@ -293,12 +282,12 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 		log.Fatalf("Failed to set up mock k8s client. Failing test. Error=%v", err)
 	}
 
-	deploymentController := &admiral.DeploymentController{K8sClient:fakeClient}
+	deploymentController := &admiral.DeploymentController{K8sClient: fakeClient}
 	remoteController := &RemoteController{}
 	remoteController.DeploymentController = deploymentController
 
 	noRolloutsClient := argofake.NewSimpleClientset().ArgoprojV1alpha1()
-	rolloutController := &admiral.RolloutController{K8sClient:fakeClient,RolloutClient:noRolloutsClient}
+	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
@@ -307,43 +296,39 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	registry.AdmiralCache = admiralCacle
 	handler.RemoteRegistry = registry
 
-
 	e2eGtp := v1.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
 	e2eGtpExtraLabel := v1.GlobalTrafficPolicy{}
-	e2eGtpExtraLabel.Labels = map[string]string{"identity": "app1", "env":"e2e", "random": "foobar"}
+	e2eGtpExtraLabel.Labels = map[string]string{"identity": "app1", "env": "e2e", "random": "foobar"}
 	e2eGtpExtraLabel.Namespace = "namespace"
 	e2eGtpExtraLabel.Name = "myGTP"
 
 	noMatchGtp := v1.GlobalTrafficPolicy{}
-	noMatchGtp.Labels = map[string]string{"identity": "app2", "env":"e2e"}
+	noMatchGtp.Labels = map[string]string{"identity": "app2", "env": "e2e"}
 	noMatchGtp.Namespace = "namespace"
 	noMatchGtp.Name = "myGTP"
 
 	prfGtp := v1.GlobalTrafficPolicy{}
-	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
+	prfGtp.Labels = map[string]string{"identity": "app1", "env": "prf"}
 	prfGtp.Namespace = "namespace"
 	prfGtp.Name = "myGTP"
-
-
 
 	testCases := []struct {
 		name                         string
 		gtp                          *v1.GlobalTrafficPolicy
-		updatedGTP                          *v1.GlobalTrafficPolicy
+		updatedGTP                   *v1.GlobalTrafficPolicy
 		expectedIdentity             string
 		expectedEnv                  string
 		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
 		expectedDeploymentCacheValue *v12.Deployment
-
 	}{
 		{
 			name:                         "Should return matching environment",
 			gtp:                          &e2eGtp,
-			updatedGTP:					  &e2eGtpExtraLabel,
+			updatedGTP:                   &e2eGtpExtraLabel,
 			expectedIdentity:             "app1",
 			expectedEnv:                  "e2e",
 			expectedDeploymentCacheValue: &deployment2,
@@ -352,7 +337,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 		{
 			name:                         "Should return nothing when identity labels don't match after update",
 			gtp:                          &e2eGtp,
-			updatedGTP:					  &noMatchGtp,
+			updatedGTP:                   &noMatchGtp,
 			expectedIdentity:             "app1",
 			expectedEnv:                  "e2e",
 			expectedDeploymentCacheValue: nil,
@@ -361,7 +346,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 		{
 			name:                         "Should return oldest deployment when multiple match",
 			gtp:                          &e2eGtp,
-			updatedGTP: 				  &prfGtp,
+			updatedGTP:                   &prfGtp,
 			expectedIdentity:             "app1",
 			expectedEnv:                  "prf",
 			expectedDeploymentCacheValue: &deployment4,
@@ -376,7 +361,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-			gtpCache.dependencyRolloutCache =make(map[string]*argo.Rollout)
+			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -386,7 +371,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name),  c.expectedDeploymentCacheValue, ignoreUnexported) {
+			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), c.expectedDeploymentCacheValue, ignoreUnexported) {
 				t.Fatalf("Deployment Mismatch. Diff: %v", cmp.Diff(c.expectedDeploymentCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), ignoreUnexported))
 			}
 
@@ -418,11 +403,9 @@ func TestDeploymentHandler(t *testing.T) {
 	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
-
-
 	fakeCrdClient := admiralFake.NewSimpleClientset()
 
-	gtpController := &admiral.GlobalTrafficController{CrdClient:fakeCrdClient}
+	gtpController := &admiral.GlobalTrafficController{CrdClient: fakeCrdClient}
 	remoteController, _ := createMockRemoteController(func(i interface{}) {
 
 	})
@@ -433,12 +416,11 @@ func TestDeploymentHandler(t *testing.T) {
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
 
-
 	deployment := v12.Deployment{
 		ObjectMeta: time2.ObjectMeta{
 			Name:      "test",
 			Namespace: "namespace",
-			Labels: map[string]string{"identity": "app1"},
+			Labels:    map[string]string{"identity": "app1"},
 		},
 		Spec: v12.DeploymentSpec{
 			Selector: &time2.LabelSelector{
@@ -452,23 +434,20 @@ func TestDeploymentHandler(t *testing.T) {
 		},
 	}
 
-
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		addedDeployment *v12.Deployment
-		expectedDeploymentCacheKey string
+		name                         string
+		addedDeployment              *v12.Deployment
+		expectedDeploymentCacheKey   string
 		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
 		expectedDeploymentCacheValue *v12.Deployment
-
 	}{
 		{
-			name: "Shouldn't throw errors when called",
-			addedDeployment: &deployment,
-			expectedDeploymentCacheKey: "myGTP1",
-			expectedIdentityCacheValue: nil,
+			name:                         "Shouldn't throw errors when called",
+			addedDeployment:              &deployment,
+			expectedDeploymentCacheKey:   "myGTP1",
+			expectedIdentityCacheValue:   nil,
 			expectedDeploymentCacheValue: nil,
-
 		},
 	}
 
@@ -491,7 +470,6 @@ func TestDeploymentHandler(t *testing.T) {
 	}
 }
 
-
 func TestGlobalTrafficCache(t *testing.T) {
 	deployment := v12.Deployment{}
 	deployment.Namespace = "namespace"
@@ -499,7 +477,7 @@ func TestGlobalTrafficCache(t *testing.T) {
 	deployment.Spec = v12.DeploymentSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -518,7 +496,7 @@ func TestGlobalTrafficCache(t *testing.T) {
 	deploymentNoEnv.Labels = map[string]string{"identity": "app1"}
 
 	e2eGtp := v1.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
@@ -527,39 +505,38 @@ func TestGlobalTrafficCache(t *testing.T) {
 	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
-
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		gtp *v1.GlobalTrafficPolicy
-		deployment *v12.Deployment
-		identity string
+		name        string
+		gtp         *v1.GlobalTrafficPolicy
+		deployment  *v12.Deployment
+		identity    string
 		environment string
-		gtpName string
+		gtpName     string
 	}{
 		{
-			name: "Base case",
-			gtp: &e2eGtp,
-			deployment: &deployment,
-			identity: "app1",
+			name:        "Base case",
+			gtp:         &e2eGtp,
+			deployment:  &deployment,
+			identity:    "app1",
 			environment: "e2e",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 		{
-			name: "No Deployment",
-			gtp: &e2eGtp,
-			deployment: nil,
-			identity: "app1",
+			name:        "No Deployment",
+			gtp:         &e2eGtp,
+			deployment:  nil,
+			identity:    "app1",
 			environment: "e2e",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 		{
-			name: "Handles lack of environment label properly",
-			gtp: &e2eGtp,
-			deployment: &deploymentNoEnv,
-			identity: "app1",
+			name:        "Handles lack of environment label properly",
+			gtp:         &e2eGtp,
+			deployment:  &deploymentNoEnv,
+			identity:    "app1",
 			environment: "default",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 	}
 
@@ -616,11 +593,9 @@ func TestRolloutHandler(t *testing.T) {
 	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
-
-
 	fakeCrdClient := admiralFake.NewSimpleClientset()
 
-	gtpController := &admiral.GlobalTrafficController{CrdClient:fakeCrdClient}
+	gtpController := &admiral.GlobalTrafficController{CrdClient: fakeCrdClient}
 	remoteController, _ := createMockRemoteController(func(i interface{}) {
 
 	})
@@ -631,12 +606,11 @@ func TestRolloutHandler(t *testing.T) {
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
 
-
 	rollout := argo.Rollout{
 		ObjectMeta: time2.ObjectMeta{
 			Name:      "test",
 			Namespace: "namespace",
-			Labels: map[string]string{"identity": "app1"},
+			Labels:    map[string]string{"identity": "app1"},
 		},
 		Spec: argo.RolloutSpec{
 			Selector: &time2.LabelSelector{
@@ -650,30 +624,26 @@ func TestRolloutHandler(t *testing.T) {
 		},
 	}
 
-
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		addedRolout *argo.Rollout
-		expectedRolloutCacheKey string
-		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
-		expectedRolloutCacheValue *argo.Rollout
-
+		name                       string
+		addedRolout                *argo.Rollout
+		expectedRolloutCacheKey    string
+		expectedIdentityCacheValue *v1.GlobalTrafficPolicy
+		expectedRolloutCacheValue  *argo.Rollout
 	}{{
-		name: "Shouldn't throw errors when called",
-		addedRolout: &rollout,
-		expectedRolloutCacheKey: "myGTP1",
+		name:                       "Shouldn't throw errors when called",
+		addedRolout:                &rollout,
+		expectedRolloutCacheKey:    "myGTP1",
 		expectedIdentityCacheValue: nil,
-		expectedRolloutCacheValue: nil,
-
-	},{
-			name: "Shouldn't throw errors when called-no identity",
-			addedRolout: &argo.Rollout{},
-			expectedRolloutCacheKey: "myGTP1",
-			expectedIdentityCacheValue: nil,
-			expectedRolloutCacheValue: nil,
-
-		},
+		expectedRolloutCacheValue:  nil,
+	}, {
+		name:                       "Shouldn't throw errors when called-no identity",
+		addedRolout:                &argo.Rollout{},
+		expectedRolloutCacheKey:    "myGTP1",
+		expectedIdentityCacheValue: nil,
+		expectedRolloutCacheValue:  nil,
+	},
 	}
 
 	//Rather annoying, but wasn't able to get the autogenerated fake k8s client for GTP objects to allow me to list resources, so this test is only for not throwing errors. I'll be testing the rest of the fucntionality picemeal.
@@ -703,7 +673,7 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 	rollout.Spec = argo.RolloutSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -722,7 +692,7 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 	rolloutNoEnv.Labels = map[string]string{"identity": "app1"}
 
 	e2eGtp := v1.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
@@ -731,39 +701,38 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
-
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		gtp *v1.GlobalTrafficPolicy
-		rollout *argo.Rollout
-		identity string
+		name        string
+		gtp         *v1.GlobalTrafficPolicy
+		rollout     *argo.Rollout
+		identity    string
 		environment string
-		gtpName string
+		gtpName     string
 	}{
 		{
-			name: "Base case",
-			gtp: &e2eGtp,
-			rollout: &rollout,
-			identity: "app1",
+			name:        "Base case",
+			gtp:         &e2eGtp,
+			rollout:     &rollout,
+			identity:    "app1",
 			environment: "e2e",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 		{
-			name: "No rollout",
-			gtp: &e2eGtp,
-			rollout: nil,
-			identity: "app1",
+			name:        "No rollout",
+			gtp:         &e2eGtp,
+			rollout:     nil,
+			identity:    "app1",
 			environment: "e2e",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 		{
-			name: "Handles lack of environment label properly",
-			gtp: &e2eGtp,
-			rollout: &rolloutNoEnv,
-			identity: "app1",
+			name:        "Handles lack of environment label properly",
+			gtp:         &e2eGtp,
+			rollout:     &rolloutNoEnv,
+			identity:    "app1",
 			environment: "default",
-			gtpName: "myGTP",
+			gtpName:     "myGTP",
 		},
 	}
 
@@ -817,7 +786,6 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
-
 	fakeClient := fake.NewSimpleClientset()
 
 	rollout := argo.Rollout{}
@@ -826,7 +794,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	rollout.Spec = argo.RolloutSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -838,7 +806,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	rollout2.Spec = argo.RolloutSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -851,7 +819,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	rollout3.Spec = argo.RolloutSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -864,14 +832,13 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	rollout4.Spec = argo.RolloutSpec{
 		Template: v13.PodTemplateSpec{
 			ObjectMeta: time2.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
 	rollout4.Labels = map[string]string{"identity": "app1"}
 
-
-	deploymentController := &admiral.DeploymentController{K8sClient:fakeClient}
+	deploymentController := &admiral.DeploymentController{K8sClient: fakeClient}
 	remoteController := &RemoteController{}
 	remoteController.DeploymentController = deploymentController
 
@@ -886,8 +853,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 		log.Fatalf("Failed to set up mock k8s client. Failing test. Error=%v", err)
 	}
 
-
-	rolloutController := &admiral.RolloutController{K8sClient:fakeClient,RolloutClient:noRolloutsClient}
+	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
@@ -896,65 +862,61 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	registry.AdmiralCache = admiralCacle
 	handler.RemoteRegistry = registry
 
-
 	e2eGtp := v1.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
 	e2eGtpExtraLabel := v1.GlobalTrafficPolicy{}
-	e2eGtpExtraLabel.Labels = map[string]string{"identity": "app1", "env":"e2e", "random": "foobar"}
+	e2eGtpExtraLabel.Labels = map[string]string{"identity": "app1", "env": "e2e", "random": "foobar"}
 	e2eGtpExtraLabel.Namespace = "namespace"
 	e2eGtpExtraLabel.Name = "myGTP"
 
 	noMatchGtp := v1.GlobalTrafficPolicy{}
-	noMatchGtp.Labels = map[string]string{"identity": "app2", "env":"e2e"}
+	noMatchGtp.Labels = map[string]string{"identity": "app2", "env": "e2e"}
 	noMatchGtp.Namespace = "namespace"
 	noMatchGtp.Name = "myGTP"
 
 	prfGtp := v1.GlobalTrafficPolicy{}
-	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
+	prfGtp.Labels = map[string]string{"identity": "app1", "env": "prf"}
 	prfGtp.Namespace = "namespace"
 	prfGtp.Name = "myGTP"
 
-
-
 	testCases := []struct {
-		name                         string
-		gtp                          *v1.GlobalTrafficPolicy
-		updatedGTP                          *v1.GlobalTrafficPolicy
-		expectedIdentity             string
-		expectedEnv                  string
-		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
-		expectedRolloutCacheValue *argo.Rollout
-
+		name                       string
+		gtp                        *v1.GlobalTrafficPolicy
+		updatedGTP                 *v1.GlobalTrafficPolicy
+		expectedIdentity           string
+		expectedEnv                string
+		expectedIdentityCacheValue *v1.GlobalTrafficPolicy
+		expectedRolloutCacheValue  *argo.Rollout
 	}{
 		{
-			name:                         "Should return matching environment",
-			gtp:                          &e2eGtp,
-			updatedGTP:					  &e2eGtpExtraLabel,
-			expectedIdentity:             "app1",
-			expectedEnv:                  "e2e",
-			expectedRolloutCacheValue: &rollout2,
-			expectedIdentityCacheValue:   &e2eGtpExtraLabel,
+			name:                       "Should return matching environment",
+			gtp:                        &e2eGtp,
+			updatedGTP:                 &e2eGtpExtraLabel,
+			expectedIdentity:           "app1",
+			expectedEnv:                "e2e",
+			expectedRolloutCacheValue:  &rollout2,
+			expectedIdentityCacheValue: &e2eGtpExtraLabel,
 		},
 		{
-			name:                         "Should return nothing when identity labels don't match after update",
-			gtp:                          &e2eGtp,
-			updatedGTP:					  &noMatchGtp,
-			expectedIdentity:             "app1",
-			expectedEnv:                  "e2e",
-			expectedRolloutCacheValue: nil,
-			expectedIdentityCacheValue:   nil,
+			name:                       "Should return nothing when identity labels don't match after update",
+			gtp:                        &e2eGtp,
+			updatedGTP:                 &noMatchGtp,
+			expectedIdentity:           "app1",
+			expectedEnv:                "e2e",
+			expectedRolloutCacheValue:  nil,
+			expectedIdentityCacheValue: nil,
 		},
 		{
-			name:                         "Should return oldest rollout when multiple match",
-			gtp:                          &e2eGtp,
-			updatedGTP: 				  &prfGtp,
-			expectedIdentity:             "app1",
-			expectedEnv:                  "prf",
-			expectedRolloutCacheValue: &rollout4,
-			expectedIdentityCacheValue:   &prfGtp,
+			name:                       "Should return oldest rollout when multiple match",
+			gtp:                        &e2eGtp,
+			updatedGTP:                 &prfGtp,
+			expectedIdentity:           "app1",
+			expectedEnv:                "prf",
+			expectedRolloutCacheValue:  &rollout4,
+			expectedIdentityCacheValue: &prfGtp,
 		},
 	}
 
@@ -975,7 +937,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name),  c.expectedRolloutCacheValue, ignoreUnexported) {
+			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name), c.expectedRolloutCacheValue, ignoreUnexported) {
 				t.Fatalf("Rollout Mismatch. Diff: %v", cmp.Diff(c.expectedRolloutCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name), ignoreUnexported))
 			}
 

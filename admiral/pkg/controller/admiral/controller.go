@@ -26,16 +26,16 @@ type Delegator interface {
 type EventType string
 
 const (
-	Add    		EventType = "Add"
-	Update    	EventType = "Update"
-	Delete    	EventType = "Delete"
+	Add    EventType = "Add"
+	Update EventType = "Update"
+	Delete EventType = "Delete"
 )
 
 type InformerCacheObj struct {
-	key string
+	key       string
 	eventType EventType
-	obj interface{}
-	oldObj interface{}
+	obj       interface{}
+	oldObj    interface{}
 }
 
 type Controller struct {
@@ -58,7 +58,7 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 
 			if err == nil {
-				controller.queue.Add(InformerCacheObj{key:key, eventType: Add, obj: obj})
+				controller.queue.Add(InformerCacheObj{key: key, eventType: Add, obj: obj})
 			}
 
 		},
@@ -66,14 +66,14 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 			log.Debugf("Informer Update: %v", newObj)
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
 			if err == nil {
-				controller.queue.Add(InformerCacheObj{key:key, eventType: Update, obj: newObj, oldObj: oldObj})
+				controller.queue.Add(InformerCacheObj{key: key, eventType: Update, obj: newObj, oldObj: oldObj})
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			log.Debugf("Informer Delete: %v", obj)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
-				controller.queue.Add(InformerCacheObj{key:key, eventType: Delete, obj: obj})
+				controller.queue.Add(InformerCacheObj{key: key, eventType: Delete, obj: obj})
 			}
 		},
 	})

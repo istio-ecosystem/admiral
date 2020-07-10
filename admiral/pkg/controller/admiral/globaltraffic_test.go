@@ -49,7 +49,7 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 	}
 
 	gtpName := "gtp1"
-	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy:[]*model.TrafficPolicy{}}
+	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy: []*model.TrafficPolicy{}}
 	gtpObj := makeK8sGtpObj(gtpName, "namespace1", gtp)
 	globalTrafficController.Added(gtpObj)
 
@@ -57,7 +57,7 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 		t.Errorf("Add should call the handler with the object")
 	}
 
-	updatedGtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "qa"}, Policy:[]*model.TrafficPolicy{}}
+	updatedGtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "qa"}, Policy: []*model.TrafficPolicy{}}
 	updatedGtpObj := makeK8sGtpObj(gtpName, "namespace1", updatedGtp)
 
 	globalTrafficController.Updated(updatedGtpObj, gtpObj)
@@ -92,21 +92,19 @@ func TestGlobalTrafficGetByLabel(t *testing.T) {
 		t.Errorf("GlobalTraffic controller should never be nil without an error thrown")
 	}
 
-	gtps  := globalTrafficController.GetGTPByLabel("payments", "namespace1")
+	gtps := globalTrafficController.GetGTPByLabel("payments", "namespace1")
 
 	if gtps != nil || len(gtps) > 0 {
 		t.Errorf("gtps is not empty")
 	}
 }
 
-func makeK8sGtpObj (name string, namespace string, gtp model.GlobalTrafficPolicy) *v1.GlobalTrafficPolicy {
+func makeK8sGtpObj(name string, namespace string, gtp model.GlobalTrafficPolicy) *v1.GlobalTrafficPolicy {
 	return &v1.GlobalTrafficPolicy{
-		Spec: gtp,
+		Spec:       gtp,
 		ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace},
 		TypeMeta: v12.TypeMeta{
 			APIVersion: "admiral.io/v1",
 			Kind:       "GlobalTrafficPolicy",
 		}}
 }
-
-

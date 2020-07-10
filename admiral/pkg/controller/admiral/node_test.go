@@ -46,7 +46,7 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 		t.Errorf("Node controller should never be nil without an error thrown")
 	}
 	region := "us-west-2"
-	nodeObj := &k8sV1.Node {Spec: k8sV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string {common.NodeRegionLabel: region}}}
+	nodeObj := &k8sV1.Node{Spec: k8sV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string{common.NodeRegionLabel: region}}}
 
 	nodeController.Added(nodeObj)
 

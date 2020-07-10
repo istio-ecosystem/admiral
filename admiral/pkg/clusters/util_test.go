@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"errors"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -9,7 +10,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 
 	k8sV1 "k8s.io/api/core/v1"
 )
@@ -28,12 +28,12 @@ func TestGetMeshPorts(t *testing.T) {
 	serviceMeshPortsOnlyDefault := []k8sV1.ServicePort{defaultK8sSvcPortNoName}
 
 	service := k8sV1.Service{
-		ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-		Spec: k8sV1.ServiceSpec{Ports: serviceMeshPorts},
+		ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+		Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPorts},
 	}
 	deployment := k8sAppsV1.Deployment{
-		Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
-			ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
+		Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 		}}}
 
 	ports := map[string]uint32{"http": uint32(annotatedPort)}
@@ -43,39 +43,39 @@ func TestGetMeshPorts(t *testing.T) {
 	emptyPorts := map[string]uint32{}
 
 	testCases := []struct {
-		name   string
-		clusterName   string
-		service k8sV1.Service
-		deployment   k8sAppsV1.Deployment
-		expected map[string]uint32
+		name        string
+		clusterName string
+		service     k8sV1.Service
+		deployment  k8sAppsV1.Deployment
+		expected    map[string]uint32
 	}{
 		{
-			name:    "should return a port based on annotation",
-			service: service,
+			name:       "should return a port based on annotation",
+			service:    service,
 			deployment: deployment,
-			expected: ports,
+			expected:   ports,
 		},
 		{
-			name:    "should return a default port",
+			name: "should return a default port",
 			service: k8sV1.Service{
-				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec: k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
 			},
 			deployment: k8sAppsV1.Deployment{
-				Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
-					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
 			expected: portsFromDefaultSvcPort,
 		},
 		{
-			name:    "should return empty ports",
+			name: "should return empty ports",
 			service: k8sV1.Service{
-				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec: k8sV1.ServiceSpec{Ports: nil},
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: nil},
 			},
 			deployment: k8sAppsV1.Deployment{
-				Spec: k8sAppsV1.DeploymentSpec{Template:coreV1.PodTemplateSpec{
-					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
 			expected: emptyPorts,
 		},
@@ -95,51 +95,50 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 
 	legalStore := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1"},
+		Addresses:      []string{common.LocalAddressPrefix + ".10.1"},
 	}
 
 	illegalStore := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
-		Addresses: []string{common.LocalAddressPrefix + ".10.1","1.2.3.4"},
+		Addresses:      []string{common.LocalAddressPrefix + ".10.1", "1.2.3.4"},
 	}
 
 	emptyCM := coreV1.ConfigMap{}
 	emptyCM.ResourceVersion = "123"
 
-	testCases := []struct{
-		name string
-		configMap	 *coreV1.ConfigMap
-		expectedError	error
+	testCases := []struct {
+		name          string
+		configMap     *coreV1.ConfigMap
+		expectedError error
 	}{
 		{
-			name: "should not throw error on legal configmap",
+			name:          "should not throw error on legal configmap",
 			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, "123"),
 			expectedError: nil,
 		},
 		{
-			name: "should not throw error on empty configmap",
+			name:          "should not throw error on empty configmap",
 			configMap:     &emptyCM,
 			expectedError: nil,
 		},
 		{
-			name: "should throw error on no resourceversion",
+			name:          "should throw error on no resourceversion",
 			configMap:     buildFakeConfigMapFromAddressStore(&legalStore, ""),
 			expectedError: errors.New("resourceversion required"),
 		},
 		{
-			name: "should throw error on length mismatch",
+			name:          "should throw error on length mismatch",
 			configMap:     buildFakeConfigMapFromAddressStore(&illegalStore, "123"),
 			expectedError: errors.New("address cache length mismatch"),
 		},
-
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			errorResult := ValidateConfigmapBeforePutting(c.configMap)
-			if errorResult==nil && c.expectedError==nil {
+			if errorResult == nil && c.expectedError == nil {
 				//we're fine
-			} else if c.expectedError == nil && errorResult != nil{
+			} else if c.expectedError == nil && errorResult != nil {
 				t.Errorf("Unexpected error. Err: %v", errorResult)
 			} else if errorResult.Error() != c.expectedError.Error() {
 				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, errorResult)
@@ -163,12 +162,12 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 	serviceMeshPortsOnlyDefault := []k8sV1.ServicePort{defaultK8sSvcPortNoName}
 
 	service := k8sV1.Service{
-		ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-		Spec: k8sV1.ServiceSpec{Ports: serviceMeshPorts},
+		ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+		Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPorts},
 	}
 	rollout := argo.Rollout{
-		Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
-			ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
+		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 		}}}
 
 	ports := map[string]uint32{"http": uint32(annotatedPort)}
@@ -178,39 +177,39 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 	emptyPorts := map[string]uint32{}
 
 	testCases := []struct {
-		name   string
-		clusterName   string
-		service k8sV1.Service
-		rollout   argo.Rollout
-		expected map[string]uint32
+		name        string
+		clusterName string
+		service     k8sV1.Service
+		rollout     argo.Rollout
+		expected    map[string]uint32
 	}{
 		{
-			name:    "should return a port based on annotation",
-			service: service,
-			rollout: rollout,
+			name:     "should return a port based on annotation",
+			service:  service,
+			rollout:  rollout,
 			expected: ports,
 		},
 		{
-			name:    "should return a default port",
+			name: "should return a default port",
 			service: k8sV1.Service{
-				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec: k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
 			},
 			rollout: argo.Rollout{
-				Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
-					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
 			expected: portsFromDefaultSvcPort,
 		},
 		{
-			name:    "should return empty ports",
+			name: "should return empty ports",
 			service: k8sV1.Service{
-				ObjectMeta: v1.ObjectMeta{Name: "server", Labels:map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec: k8sV1.ServiceSpec{Ports: nil},
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: nil},
 			},
 			rollout: argo.Rollout{
-				Spec: argo.RolloutSpec{Template:coreV1.PodTemplateSpec{
-					ObjectMeta: v1.ObjectMeta{Annotations:map[string]string{}},
+				Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
 			expected: emptyPorts,
 		},

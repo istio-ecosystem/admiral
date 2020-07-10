@@ -17,28 +17,25 @@ var ignoreUnexported = cmpopts.IgnoreUnexported(v12.GlobalTrafficPolicy{}.Status
 
 func init() {
 	p := AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-		LabelSet: &LabelSet{},
-		EnableSAN: true,
-		SANPrefix: "prefix",
-		HostnameSuffix: "mesh",
-		SyncNamespace: "ns",
-		CacheRefreshDuration: time.Minute,
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
 		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace: "default",
-		SecretResolver: "",
-		WorkloadSidecarName: "default",
-		WorkloadSidecarUpdate: "disabled",
-
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+		WorkloadSidecarName:        "default",
+		WorkloadSidecarUpdate:      "disabled",
 	}
 
-	p.LabelSet.WorkloadIdentityKey="identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel="identity"
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
 	InitializeConfig(p)
 }
-
-
 
 func TestGetSAN(t *testing.T) {
 	t.Parallel()
@@ -110,13 +107,13 @@ func TestGetCname(t *testing.T) {
 			name:       "should return valid cname (from label)",
 			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   strings.ToLower("stage." + identifierVal + ".global"),
-		},{
+		}, {
 			name:       "should return valid cname (from label) uses case sensitive DNS annotation -enabled",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"true"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "true"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   "stage." + identifierVal + ".global",
-		},{
+		}, {
 			name:       "should return valid cname (from label)  uses case sensitive DNS annotation -disabled",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive":"false"},Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "false"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
@@ -298,7 +295,7 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 	deployment.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -311,7 +308,7 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 	deployment2.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -324,7 +321,7 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 	deployment3.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -337,72 +334,65 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 	deployment4.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
 	deployment4.Labels = map[string]string{"identity": "app1"}
 
 	e2eGtp := v12.GlobalTrafficPolicy{}
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP"
 
 	prfGtp := v12.GlobalTrafficPolicy{}
-	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
+	prfGtp.Labels = map[string]string{"identity": "app1", "env": "prf"}
 	prfGtp.Namespace = "namespace"
 	prfGtp.Name = "myGTP"
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		gtp *v12.GlobalTrafficPolicy
-		deployments *[]k8sAppsV1.Deployment
+		name                string
+		gtp                 *v12.GlobalTrafficPolicy
+		deployments         *[]k8sAppsV1.Deployment
 		expectedDeployments []k8sAppsV1.Deployment
 	}{
 		{
-			name: "Should return nil when none have a matching environment",
-			gtp: &e2eGtp,
-			deployments: &[]k8sAppsV1.Deployment{deployment, deployment3, deployment4},
+			name:                "Should return nil when none have a matching environment",
+			gtp:                 &e2eGtp,
+			deployments:         &[]k8sAppsV1.Deployment{deployment, deployment3, deployment4},
 			expectedDeployments: nil,
-
 		},
 		{
-			name: "Should return Match when there's one match",
-			gtp: &e2eGtp,
-			deployments: &[]k8sAppsV1.Deployment{deployment2},
+			name:                "Should return Match when there's one match",
+			gtp:                 &e2eGtp,
+			deployments:         &[]k8sAppsV1.Deployment{deployment2},
 			expectedDeployments: []k8sAppsV1.Deployment{deployment2},
-
 		},
 		{
-			name: "Should return Match when there's one match from a bigger list",
-			gtp: &e2eGtp,
-			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
+			name:                "Should return Match when there's one match from a bigger list",
+			gtp:                 &e2eGtp,
+			deployments:         &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
 			expectedDeployments: []k8sAppsV1.Deployment{deployment2},
-
 		},
 		{
-			name: "Should return nil when there's no match",
-			gtp: &e2eGtp,
-			deployments: &[]k8sAppsV1.Deployment{},
+			name:                "Should return nil when there's no match",
+			gtp:                 &e2eGtp,
+			deployments:         &[]k8sAppsV1.Deployment{},
 			expectedDeployments: nil,
-
 		},
 		{
-			name: "Should return nil when the GTP is invalid",
-			gtp: &v12.GlobalTrafficPolicy{},
-			deployments: &[]k8sAppsV1.Deployment{deployment},
+			name:                "Should return nil when the GTP is invalid",
+			gtp:                 &v12.GlobalTrafficPolicy{},
+			deployments:         &[]k8sAppsV1.Deployment{deployment},
 			expectedDeployments: nil,
-
 		},
 		{
-			name: "Returns multiple matches",
-			gtp: &prfGtp,
-			deployments: &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
+			name:                "Returns multiple matches",
+			gtp:                 &prfGtp,
+			deployments:         &[]k8sAppsV1.Deployment{deployment, deployment2, deployment3, deployment4},
 			expectedDeployments: []k8sAppsV1.Deployment{deployment3, deployment4},
-
 		},
-
 	}
 
 	//Run the test for every provided case
@@ -416,7 +406,6 @@ func TestMatchDeploymentsToGTP(t *testing.T) {
 	}
 }
 
-
 func TestMatchGTPsToDeployment(t *testing.T) {
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Namespace = "namespace"
@@ -425,7 +414,7 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 	deployment.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -438,7 +427,7 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 	otherEnvDeployment.Spec = k8sAppsV1.DeploymentSpec{
 		Template: k8sCoreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"random"},
+				Labels: map[string]string{"identity": "app1", "env": "random"},
 			},
 		},
 	}
@@ -459,25 +448,25 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 
 	e2eGtp := v12.GlobalTrafficPolicy{}
 	e2eGtp.CreationTimestamp = v1.Now()
-	e2eGtp.Labels = map[string]string{"identity": "app1", "env":"e2e"}
+	e2eGtp.Labels = map[string]string{"identity": "app1", "env": "e2e"}
 	e2eGtp.Namespace = "namespace"
 	e2eGtp.Name = "myGTP-e2e"
 
 	prfGtp := v12.GlobalTrafficPolicy{}
 	prfGtp.CreationTimestamp = v1.Now()
-	prfGtp.Labels = map[string]string{"identity": "app1", "env":"prf"}
+	prfGtp.Labels = map[string]string{"identity": "app1", "env": "prf"}
 	prfGtp.Namespace = "namespace"
 	prfGtp.Name = "myGTP-prf"
 
 	qalGtp := v12.GlobalTrafficPolicy{}
 	qalGtp.CreationTimestamp = v1.Now()
-	qalGtp.Labels = map[string]string{"identity": "app1", "env":"qal"}
+	qalGtp.Labels = map[string]string{"identity": "app1", "env": "qal"}
 	qalGtp.Namespace = "namespace"
 	qalGtp.Name = "myGTP"
 
 	qalGtpOld := v12.GlobalTrafficPolicy{}
 	qalGtpOld.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
-	qalGtpOld.Labels = map[string]string{"identity": "app1", "env":"qal"}
+	qalGtpOld.Labels = map[string]string{"identity": "app1", "env": "qal"}
 	qalGtpOld.Namespace = "namespace"
 	qalGtpOld.Name = "myGTP"
 
@@ -493,78 +482,67 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 	noEnvGTPOld.Namespace = "namespace"
 	noEnvGTPOld.Name = "myGTP"
 
-
 	testCases := []struct {
-		name string
-		gtp *[]v12.GlobalTrafficPolicy
-		deployment *k8sAppsV1.Deployment
+		name        string
+		gtp         *[]v12.GlobalTrafficPolicy
+		deployment  *k8sAppsV1.Deployment
 		expectedGTP *v12.GlobalTrafficPolicy
 	}{
 		{
-			name: "Should return no deployment when none have a matching env",
-			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld},
-			deployment: &otherEnvDeployment,
+			name:        "Should return no deployment when none have a matching env",
+			gtp:         &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld},
+			deployment:  &otherEnvDeployment,
 			expectedGTP: nil,
-
 		},
 		{
-			name: "Should return no deployment when the GTP doesn't have an environment",
-			gtp: &[]v12.GlobalTrafficPolicy{noEnvGTP, noEnvGTPOld},
-			deployment: &otherEnvDeployment,
+			name:        "Should return no deployment when the GTP doesn't have an environment",
+			gtp:         &[]v12.GlobalTrafficPolicy{noEnvGTP, noEnvGTPOld},
+			deployment:  &otherEnvDeployment,
 			expectedGTP: nil,
-
 		},
 		{
-			name: "Should return no deployment when no deployments have an environment",
-			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp},
-			deployment: &noEnvDeployment,
+			name:        "Should return no deployment when no deployments have an environment",
+			gtp:         &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp},
+			deployment:  &noEnvDeployment,
 			expectedGTP: nil,
-
 		},
 		{
-			name: "Should match a GTP and deployment when both have no env label",
-			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld, noEnvGTP, noEnvGTPOld},
-			deployment: &noEnvDeployment,
+			name:        "Should match a GTP and deployment when both have no env label",
+			gtp:         &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld, noEnvGTP, noEnvGTPOld},
+			deployment:  &noEnvDeployment,
 			expectedGTP: &noEnvGTPOld,
-
 		},
 		{
-			name: "Should return Match when there's one match",
-			gtp: &[]v12.GlobalTrafficPolicy{qalGtp},
-			deployment: &deployment,
+			name:        "Should return Match when there's one match",
+			gtp:         &[]v12.GlobalTrafficPolicy{qalGtp},
+			deployment:  &deployment,
 			expectedGTP: &qalGtp,
-
 		},
 		{
-			name: "Should return Match when there's one match from a bigger list",
-			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp},
-			deployment: &deployment,
+			name:        "Should return Match when there's one match from a bigger list",
+			gtp:         &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp},
+			deployment:  &deployment,
 			expectedGTP: &qalGtp,
-
 		},
 		{
-			name: "Should handle multiple matches properly",
-			gtp: &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld},
-			deployment: &deployment,
+			name:        "Should handle multiple matches properly",
+			gtp:         &[]v12.GlobalTrafficPolicy{e2eGtp, prfGtp, qalGtp, qalGtpOld},
+			deployment:  &deployment,
 			expectedGTP: &qalGtpOld,
-
 		},
 		{
-			name: "Should return nil when there's no match",
-			gtp: &[]v12.GlobalTrafficPolicy{},
-			deployment: &deployment,
+			name:        "Should return nil when there's no match",
+			gtp:         &[]v12.GlobalTrafficPolicy{},
+			deployment:  &deployment,
 			expectedGTP: nil,
-
 		},
 		{
-			name: "Should return nil the deployment is invalid",
-			gtp: &[]v12.GlobalTrafficPolicy{},
-			deployment: &k8sAppsV1.Deployment{},
+			name:        "Should return nil the deployment is invalid",
+			gtp:         &[]v12.GlobalTrafficPolicy{},
+			deployment:  &k8sAppsV1.Deployment{},
 			expectedGTP: nil,
-
 		},
 	}
-
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
@@ -574,6 +552,5 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 			}
 		})
 	}
-
 
 }

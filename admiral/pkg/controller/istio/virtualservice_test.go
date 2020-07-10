@@ -37,7 +37,7 @@ func TestNewVirtualServiceController(t *testing.T) {
 		t.Errorf("Handler should have the added obj")
 	}
 
-	updatedVs := &v1alpha3.VirtualService{Spec: v1alpha32.VirtualService{Hosts:[]string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "vs1", Namespace: "namespace1"}}
+	updatedVs := &v1alpha3.VirtualService{Spec: v1alpha32.VirtualService{Hosts: []string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "vs1", Namespace: "namespace1"}}
 
 	virtualServiceController.Updated(updatedVs, vs)
 
