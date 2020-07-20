@@ -109,6 +109,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	rc := RemoteController{
 		stop:      stop,
 		ClusterID: clusterID,
+		ApiServer: clientConfig.Host,
 	}
 
 	var err error
@@ -193,10 +194,21 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 }
 
 func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
-	if err := r.deleteCacheController(clusterID); err != nil {
-		return err
+	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
+	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
+	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
+	controller := r.remoteControllers[clusterID]
+
+	if clientConfig.Host != controller.ApiServer {
+		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
+
+		if err := r.deleteCacheController(clusterID); err != nil {
+			return err
+		}
+		return r.createCacheController(clientConfig, clusterID, resyncPeriod)
+
 	}
-	return r.createCacheController(clientConfig, clusterID, resyncPeriod)
+	return nil
 }
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
