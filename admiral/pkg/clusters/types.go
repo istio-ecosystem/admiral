@@ -18,6 +18,7 @@ import (
 
 type RemoteController struct {
 	ClusterID                 string
+	ApiServer				  string
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
