@@ -19,6 +19,7 @@ type MapOfMaps struct {
 type SidecarEgress struct {
 	Namespace string
 	FQDN      string
+	CNAMEs    map[string]string
 }
 
 //maintains a map from workload identity -> map[namespace]SidecarEgress
@@ -37,6 +38,7 @@ type AdmiralParams struct {
 	SANPrefix                  string
 	SecretResolver             string
 	LabelSet                   *LabelSet
+	LogLevel                   int
 	HostnameSuffix             string
 	WorkloadSidecarUpdate      string
 	WorkloadSidecarName        string
@@ -133,14 +135,14 @@ func (s *MapOfMaps) Map() map[string]*Map {
 	return s.cache
 }
 
-func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string) {
+func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string, cnames map[string]string) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	var mapVal = s.cache[identity]
 	if mapVal == nil {
-		mapVal = make(map[string]SidecarEgress, 0)
+		mapVal = make(map[string]SidecarEgress)
 	}
-	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn}
+	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn, CNAMEs: cnames}
 	s.cache[identity] = mapVal
 }
 

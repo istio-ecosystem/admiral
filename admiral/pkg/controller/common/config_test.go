@@ -21,20 +21,19 @@ func TestConfigManagement(t *testing.T) {
 
 	//trying to initialize again. If the singleton pattern works, none of these will have changed
 	p := AdmiralParams{
-		KubeconfigPath: "DIFFERENT",
-		LabelSet: &LabelSet{},
-		EnableSAN: false,
-		SANPrefix: "BAD_PREFIX",
-		HostnameSuffix: "NOT_MESH",
-		SyncNamespace: "NOT_A_NAMESPACE",
-		CacheRefreshDuration: time.Hour,
+		KubeconfigPath:             "DIFFERENT",
+		LabelSet:                   &LabelSet{},
+		EnableSAN:                  false,
+		SANPrefix:                  "BAD_PREFIX",
+		HostnameSuffix:             "NOT_MESH",
+		SyncNamespace:              "NOT_A_NAMESPACE",
+		CacheRefreshDuration:       time.Hour,
 		ClusterRegistriesNamespace: "NOT_DEFAULT",
-		DependenciesNamespace: "NOT_DEFAULT",
-		SecretResolver: "INSECURE_RESOLVER",
-
+		DependenciesNamespace:      "NOT_DEFAULT",
+		SecretResolver:             "INSECURE_RESOLVER",
 	}
 
-	p.LabelSet.WorkloadIdentityKey="BAD_LABEL"
+	p.LabelSet.WorkloadIdentityKey = "BAD_LABEL"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "ANOTHER_BAD_LABEL"
 
 	InitializeConfig(p)

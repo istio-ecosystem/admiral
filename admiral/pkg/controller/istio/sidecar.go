@@ -29,7 +29,6 @@ type SidecarController struct {
 	IstioClient    versioned.Interface
 	SidecarHandler SidecarHandler
 	informer       cache.SharedIndexInformer
-	ctl            *admiral.Controller
 }
 
 func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration) (*SidecarController, error) {

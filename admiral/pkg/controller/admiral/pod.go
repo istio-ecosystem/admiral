@@ -31,7 +31,6 @@ type PodController struct {
 	PodHandler PodHandler
 	Cache      *podCache
 	informer   cache.SharedIndexInformer
-	ctl        *Controller
 	labelSet   *common.LabelSet
 }
 
@@ -79,7 +78,7 @@ func (p *podCache) AppendPodToCluster(key string, pod *k8sV1.Pod) {
 	namespacePods := v.Pods[pod.Namespace]
 
 	if namespacePods == nil {
-		namespacePods = make ([]*k8sV1.Pod, 0)
+		namespacePods = make([]*k8sV1.Pod, 0)
 	}
 
 	namespacePods = append(namespacePods, pod)
@@ -92,7 +91,7 @@ func (d *PodController) GetPods() ([]*k8sV1.Pod, error) {
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel + "=" + d.labelSet.NamespaceSidecarInjectionLabelValue
 	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
 
 	if err != nil {

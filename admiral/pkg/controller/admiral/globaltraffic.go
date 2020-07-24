@@ -22,11 +22,9 @@ type GlobalTrafficHandler interface {
 }
 
 type GlobalTrafficController struct {
-	CrdClient  clientset.Interface
+	CrdClient            clientset.Interface
 	GlobalTrafficHandler GlobalTrafficHandler
-	informer   cache.SharedIndexInformer
-	ctl        *Controller
-	clusterName string
+	informer             cache.SharedIndexInformer
 }
 
 func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
@@ -86,4 +84,3 @@ func (g *GlobalTrafficController) GetGTPByLabel(labelValue string, namespace str
 
 	return matchedDeployments.Items
 }
-

@@ -5,8 +5,8 @@ import (
 )
 
 type FakeConfigMapController struct {
-	GetError error
-	PutError error
+	GetError          error
+	PutError          error
 	ConfigmapToReturn *k8sCoreV1.ConfigMap
 }
 

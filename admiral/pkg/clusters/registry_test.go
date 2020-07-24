@@ -226,7 +226,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		ServiceController:    s,
 		NodeController:       n,
 		ClusterID:            "test.cluster",
-		RolloutController: r,
+		RolloutController:    r,
 	}
 	return &rc, nil
 }
@@ -310,7 +310,7 @@ func TestAdded(t *testing.T) {
 }
 
 func TestMakeVirtualService(t *testing.T) {
-	vs := makeVirtualService("test.local", []string {common.MulticlusterIngressGateway}, "dest", 8080)
+	vs := makeVirtualService("test.local", []string{common.MulticlusterIngressGateway}, "dest", 8080)
 	if vs.Hosts[0] != "test.local" {
 		t.Fail()
 	}

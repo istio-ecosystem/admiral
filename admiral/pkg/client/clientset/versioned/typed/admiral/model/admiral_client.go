@@ -67,7 +67,6 @@ func setConfigDefaults(config *rest.Config) error {
 	config.APIPath = "/apis"
 	config.NegotiatedSerializer = scheme.Codecs
 
-
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()
 	}

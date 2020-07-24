@@ -17,8 +17,8 @@ type Dependency struct {
 
 // FooStatus is the status for a Foo resource
 type DependencyStatus struct {
-	clusterSynced int32  `json:"clustersSynced"`
-	state         string `json:"state"`
+	ClusterSynced int32  `json:"clustersSynced"`
+	State         string `json:"state"`
 }
 
 // FooList is a list of Foo resources
@@ -43,8 +43,8 @@ type GlobalTrafficPolicy struct {
 // FooStatus is the status for a Foo resource
 
 type GlobalTrafficPolicyStatus struct {
-	clusterSynced int32  `json:"clustersSynced"`
-	state         string `json:"state"`
+	ClusterSynced int32  `json:"clustersSynced"`
+	State         string `json:"state"`
 }
 
 // FooList is a list of Foo resources

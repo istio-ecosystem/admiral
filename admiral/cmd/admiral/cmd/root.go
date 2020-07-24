@@ -37,6 +37,7 @@ func GetRootCmd(args []string) *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			log.SetLevel(log.Level(params.LogLevel))
 			log.Info("Starting Admiral")
 			_, err := clusters.InitAdmiral(ctx, params)
 
@@ -47,12 +48,13 @@ func GetRootCmd(args []string) *cobra.Command {
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			shutdown(cancel)
-
 		},
 	}
 
 	rootCmd.SetArgs(args)
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	rootCmd.PersistentFlags().IntVar(&params.LogLevel, "log_level", int(log.InfoLevel),
+		fmt.Sprintf("Set log verbosity, defaults to 'Info'. Must be between %v and %v", int(log.PanicLevel), int(log.TraceLevel)))
 	rootCmd.PersistentFlags().StringVar(&params.KubeconfigPath, "kube_config", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
 	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "admiral",
