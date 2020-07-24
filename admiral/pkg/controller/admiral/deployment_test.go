@@ -102,10 +102,10 @@ func TestDeploymentController_Added(t *testing.T) {
 				ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
 				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
 			}
+			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			if c.name == "Expects ignored deployment identified by deployment annotation to be removed from the cache" {
 				depController.Cache.AppendDeploymentToCluster("id", &deploymentWithIgnoreAnnotations)
 			}
-			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			depController.Added(c.deployment)
 			if c.expectedDeployment == nil {
 				if len(depController.Cache.cache) != 0 {
