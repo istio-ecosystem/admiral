@@ -171,15 +171,23 @@ func (roc *RolloutController) Added(ojb interface{}) {
 	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
 		roc.Cache.AppendRolloutToCluster(key, rollout)
 		roc.RolloutHandler.Added(rollout)
+	} else {
+		roc.Cache.Delete(roc.Cache.Get(key))
+		log.Debugf("ignoring rollout %v based on labels", rollout.Name)
 	}
 }
 
 func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
-	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.AppendRolloutToCluster(key, rollout)
-		roc.RolloutHandler.Added(rollout)
+	if len(key) > 0 {
+		if !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
+			roc.Cache.AppendRolloutToCluster(key, rollout)
+			roc.RolloutHandler.Added(rollout)
+		} else {
+			roc.Cache.Delete(roc.Cache.Get(key))
+			log.Debugf("ignoring rollout %v based on labels", rollout.Name)
+		}
 	}
 }
 

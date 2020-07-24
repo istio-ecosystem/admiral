@@ -43,6 +43,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	deploymentWithIgnoreAnnotations := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
 	deploymentWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore": "true"}
+	deploymentWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"env": "test-env"}
 	deploymentWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithNsIgnoreAnnotations := k8sAppsV1.Deployment{}
 	deploymentWithNsIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
@@ -85,6 +86,12 @@ func TestDeploymentController_Added(t *testing.T) {
 			expectedDeployment: nil,
 			expectedCacheSize:  0,
 		},
+		{
+			name:               "Expects ignored deployment identified by deployment annotation to be removed from the cache",
+			deployment:         &deploymentWithIgnoreAnnotations,
+			expectedDeployment: nil,
+			expectedCacheSize:  0,
+		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
@@ -94,6 +101,9 @@ func TestDeploymentController_Added(t *testing.T) {
 				ns.Name = "test-ns"
 				ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
 				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
+			}
+			if c.name == "Expects ignored deployment identified by deployment annotation to be removed from the cache" {
+				depController.Cache.AppendDeploymentToCluster("id", &deploymentWithIgnoreAnnotations)
 			}
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 			depController.Added(c.deployment)

@@ -49,6 +49,12 @@ func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
 	return p.cache[key]
 }
 
+func (p *deploymentCache) Delete(key string) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+	delete(p.cache, key)
+}
+
 func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
@@ -167,6 +173,9 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 			d.Cache.AppendDeploymentToCluster(key, deployment)
 			d.DeploymentHandler.Added(deployment)
 		} else {
+			if d.Cache.Get(key) != nil {
+				d.Cache.Delete(key)
+			}
 			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
 		}
 	}
