@@ -172,7 +172,6 @@ func (roc *RolloutController) Added(ojb interface{}) {
 		roc.Cache.AppendRolloutToCluster(key, rollout)
 		roc.RolloutHandler.Added(rollout)
 	} else {
-		roc.Cache.Delete(roc.Cache.Get(key))
 		log.Debugf("ignoring rollout %v based on labels", rollout.Name)
 	}
 }
@@ -185,7 +184,6 @@ func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
 			roc.Cache.AppendRolloutToCluster(key, rollout)
 			roc.RolloutHandler.Added(rollout)
 		} else {
-			roc.Cache.Delete(roc.Cache.Get(key))
 			log.Debugf("ignoring rollout %v based on labels", rollout.Name)
 		}
 	}
