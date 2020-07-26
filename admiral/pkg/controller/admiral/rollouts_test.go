@@ -66,40 +66,46 @@ func TestRolloutController_Added(t *testing.T) {
 	rolloutWithNsIgnoreAnnotations.Namespace = "test-ns"
 
 	testCases := []struct {
-		name              string
-		rollout           *argo.Rollout
-		expectedRollout   *argo.Rollout
-		expectedCacheSize int
+		name                  string
+		rollout               *argo.Rollout
+		expectedRollout       *argo.Rollout
+		expectedCacheContains bool
 	}{
 		{
-			name:              "Expects rollout to be added to the cache when the correct label is present",
-			rollout:           &rollout,
-			expectedRollout:   &rollout,
-			expectedCacheSize: 1,
+			name:                  "Expects rollout to be added to the cache when the correct label is present",
+			rollout:               &rollout,
+			expectedRollout:       &rollout,
+			expectedCacheContains: true,
 		},
 		{
-			name:              "Expects rollout to not be added to the cache when the correct label is not present",
-			rollout:           &rolloutWithBadLabels,
-			expectedRollout:   nil,
-			expectedCacheSize: 0,
+			name:                  "Expects rollout to not be added to the cache when the correct label is not present",
+			rollout:               &rolloutWithBadLabels,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:              "Expects ignored rollout identified by label to not be added to the cache",
-			rollout:           &rolloutWithIgnoreLabels,
-			expectedRollout:   nil,
-			expectedCacheSize: 0,
+			name:                  "Expects ignored rollout identified by label to not be added to the cache",
+			rollout:               &rolloutWithIgnoreLabels,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:              "Expects ignored rollout identified by rollout annotation to not be added to the cache",
-			rollout:           &rolloutWithIgnoreAnnotations,
-			expectedRollout:   nil,
-			expectedCacheSize: 0,
+			name:                  "Expects ignored rollout identified by rollout annotation to not be added to the cache",
+			rollout:               &rolloutWithIgnoreAnnotations,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:              "Expects ignored rollout identified by namespace annotation to not be added to the cache",
-			rollout:           &rolloutWithNsIgnoreAnnotations,
-			expectedRollout:   nil,
-			expectedCacheSize: 0,
+			name:                  "Expects ignored rollout identified by namespace annotation to not be added to the cache",
+			rollout:               &rolloutWithNsIgnoreAnnotations,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
+		},
+		{
+			name:                  "Expects ignored rollout identified by label to be removed from the cache",
+			rollout:               &rollout,
+			expectedRollout:       &rollout,
+			expectedCacheContains: false,
 		},
 	}
 	for _, c := range testCases {
@@ -114,15 +120,15 @@ func TestRolloutController_Added(t *testing.T) {
 			depController.Cache.cache = map[string]*RolloutClusterEntry{}
 			depController.Added(c.rollout)
 			if c.expectedRollout == nil {
-				if len(depController.Cache.cache) != 0 {
+				if len(depController.Cache.cache) != 0 || (depController.Cache.cache["id"] != nil && len(depController.Cache.cache["id"].Rollouts) != 0) {
 					t.Errorf("Cache should be empty if expected rollout is nil")
 				}
-			} else if len(depController.Cache.cache) == 0 && c.expectedCacheSize != 0 {
-				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
-			} else if len(depController.Cache.cache["id"].Rollouts) < 1 && len(depController.Cache.cache["id"].Rollouts[common.Default]) != c.expectedCacheSize {
-				t.Errorf("Rollout controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Rollouts[""]), c.expectedCacheSize)
-			} else if depController.Cache.cache["id"].Rollouts[common.Default][0] != &rollout {
-				t.Errorf("Incorrect rollout added to rollout controller cache. Got %v expected %v", depController.Cache.cache["id"].Rollouts[""][0], rollout)
+			} else if len(depController.Cache.cache) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Unexpectedly empty cache. Expected cache to have entry for the given identifier")
+			} else if len(depController.Cache.cache["id"].Rollouts) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Rollout controller cache has wrong size. Cached was expected to have rollout for environment %v but was not present.", common.Default)
+			} else if depController.Cache.cache["id"].Rollouts[common.Default] != nil && depController.Cache.cache["id"].Rollouts[common.Default] != &rollout {
+				t.Errorf("Incorrect rollout added to rollout controller cache. Got %v expected %v", depController.Cache.cache["id"].Rollouts[common.Default], rollout)
 			}
 
 		})

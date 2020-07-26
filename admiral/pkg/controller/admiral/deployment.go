@@ -24,7 +24,7 @@ type DeploymentHandler interface {
 
 type DeploymentClusterEntry struct {
 	Identity    string
-	Deployments map[string][]*k8sAppsV1.Deployment
+	Deployments map[string]*k8sAppsV1.Deployment
 }
 
 type DeploymentController struct {
@@ -49,7 +49,7 @@ func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
 	return p.cache[key]
 }
 
-func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sAppsV1.Deployment) {
+func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -58,21 +58,24 @@ func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sA
 	if v == nil {
 		v = &DeploymentClusterEntry{
 			Identity:    key,
-			Deployments: make(map[string][]*k8sAppsV1.Deployment),
+			Deployments: make(map[string]*k8sAppsV1.Deployment),
 		}
 		p.cache[v.Identity] = v
 	}
 	env := common.GetEnv(deployment)
-	envDeployments := v.Deployments[env]
+	v.Deployments[env] = deployment
+}
 
-	if envDeployments == nil {
-		envDeployments = make([]*k8sAppsV1.Deployment, 0)
+func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deployment *k8sAppsV1.Deployment) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	v := p.Get(key)
+
+	if v != nil {
+		env := common.GetEnv(deployment)
+		delete(v.Deployments, env)
 	}
-
-	envDeployments = append(envDeployments, deployment)
-
-	v.Deployments[env] = envDeployments
-
 }
 
 func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error) {
@@ -164,9 +167,10 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	key := d.Cache.getKey(deployment)
 	if len(key) > 0 {
 		if !d.shouldIgnoreBasedOnLabels(deployment) {
-			d.Cache.AppendDeploymentToCluster(key, deployment)
+			d.Cache.UpdateDeploymentToClusterCache(key, deployment)
 			d.DeploymentHandler.Added(deployment)
 		} else {
+			d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
 		}
 	}
