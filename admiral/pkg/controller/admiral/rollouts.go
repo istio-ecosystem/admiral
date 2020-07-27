@@ -31,7 +31,7 @@ type RolloutsEntry struct {
 
 type RolloutClusterEntry struct {
 	Identity string
-	Rollouts map[string][]*argo.Rollout
+	Rollouts map[string]*argo.Rollout
 }
 
 type RolloutController struct {
@@ -70,7 +70,7 @@ func (p *rolloutCache) Delete(pod *RolloutClusterEntry) {
 	delete(p.cache, pod.Identity)
 }
 
-func (p *rolloutCache) AppendRolloutToCluster(key string, rollout *argo.Rollout) {
+func (p *rolloutCache) UpdateRolloutToClusterCache(key string, rollout *argo.Rollout) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -79,21 +79,24 @@ func (p *rolloutCache) AppendRolloutToCluster(key string, rollout *argo.Rollout)
 	if v == nil {
 		v = &RolloutClusterEntry{
 			Identity: key,
-			Rollouts: make(map[string][]*argo.Rollout),
+			Rollouts: make(map[string]*argo.Rollout),
 		}
 		p.cache[v.Identity] = v
 	}
 	env := common.GetEnvForRollout(rollout)
-	envRollouts := v.Rollouts[env]
+	v.Rollouts[env] = rollout
+}
 
-	if envRollouts == nil {
-		envRollouts = make([]*argo.Rollout, 0)
+func (p *rolloutCache) DeleteFromRolloutToClusterCache(key string, rollout *argo.Rollout) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	v := p.Get(key)
+
+	if v != nil {
+		env := common.GetEnvForRollout(rollout)
+		delete(v.Rollouts, env)
 	}
-
-	envRollouts = append(envRollouts, rollout)
-
-	v.Rollouts[env] = envRollouts
-
 }
 
 func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Rollout) bool {
@@ -169,17 +172,25 @@ func (roc *RolloutController) Added(ojb interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.AppendRolloutToCluster(key, rollout)
+		roc.Cache.UpdateRolloutToClusterCache(key, rollout)
 		roc.RolloutHandler.Added(rollout)
+	} else {
+		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
+		log.Debugf("ignoring rollout %v based on labels", rollout.Name)
 	}
 }
 
 func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
-	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.AppendRolloutToCluster(key, rollout)
-		roc.RolloutHandler.Added(rollout)
+	if len(key) > 0 {
+		if !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
+			roc.Cache.UpdateRolloutToClusterCache(key, rollout)
+			roc.RolloutHandler.Added(rollout)
+		} else {
+			roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
+			log.Debugf("ignoring rollout %v based on labels", rollout.Name)
+		}
 	}
 }
 

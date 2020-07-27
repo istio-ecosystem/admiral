@@ -61,25 +61,25 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		if deployment != nil && deployment.Deployments[env] != nil {
 			deploymentInstance := deployment.Deployments[env]
 
-			serviceInstance = getServiceForDeployment(rc, deploymentInstance[0])
+			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceDeployments[rc.ClusterID] = deploymentInstance[0]
-			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceDeployments[rc.ClusterID] = deploymentInstance
+			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
-			serviceInstance = getServiceForRollout(rc, rolloutInstance[0])
+			serviceInstance = getServiceForRollout(rc, rolloutInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCnameForRollout(rolloutInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceRollouts[rc.ClusterID] = rolloutInstance[0]
-			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance[0], serviceEntries)
+			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceRollouts[rc.ClusterID] = rolloutInstance
+			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
 		} else {
 			continue
 		}

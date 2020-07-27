@@ -682,7 +682,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	}
 	rollout.Spec.Selector = &labelSelector4
 
-	r.Cache.AppendRolloutToCluster("bar", &rollout)
+	r.Cache.UpdateRolloutToClusterCache("bar", &rollout)
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
