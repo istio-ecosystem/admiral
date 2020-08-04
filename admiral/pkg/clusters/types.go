@@ -45,6 +45,8 @@ type AdmiralCache struct {
 	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
+
+	argoRolloutsEnabled bool
 }
 
 type RemoteRegistry struct {

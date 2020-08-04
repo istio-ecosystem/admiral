@@ -27,6 +27,10 @@ func GetAdmiralParams() AdmiralParams {
 	return admiralParams
 }
 
+func GetArgoRolloutsEnabled() bool {
+	return admiralParams.ArgoRolloutsEnabled
+}
+
 func GetKubeconfigPath() string {
 	return admiralParams.KubeconfigPath
 }
