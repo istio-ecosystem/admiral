@@ -140,6 +140,13 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 		return nil, fmt.Errorf("failed to create rollouts controller argo client: %v", err)
 	}
 
+	roController.K8sClient, err = K8sClientFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create rollouts controller k8s client: %v", err)
+	}
+
+	roController.RolloutClient = rolloutClient.ArgoprojV1alpha1()
+
 	argoRolloutsInformerFactory := argoinformers.NewSharedInformerFactoryWithOptions(
 		rolloutClient,
 		resyncPeriod,
