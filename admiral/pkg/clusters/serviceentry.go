@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -44,7 +43,7 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	return tmpSe
 }
 
-func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, remoteRegistry *RemoteRegistry, fqdnTemplate *template.Template) map[string]*networking.ServiceEntry {
+func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 
@@ -73,7 +72,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 				continue
 			}
 
-			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix(), fqdnTemplate)
+			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix(), remoteRegistry.AdmiralCache.FQDNTemplate)
 			sourceDeployments[rc.ClusterID] = deploymentInstance
 			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {

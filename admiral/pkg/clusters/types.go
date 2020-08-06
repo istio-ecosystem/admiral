@@ -393,7 +393,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 	env := common.GetEnv(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.AdmiralCache.FQDNTemplate)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
@@ -454,7 +454,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 	env := common.GetEnvForRollout(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry, rh.RemoteRegistry.AdmiralCache.FQDNTemplate)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
 }
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {

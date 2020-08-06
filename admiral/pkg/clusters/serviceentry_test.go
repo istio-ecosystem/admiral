@@ -156,7 +156,6 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 
 	rr.remoteControllers["test.cluster"] = rc
 	createServiceEntryForNewServiceOrPod("test", "bar", rr)
-
 }
 
 func TestGetLocalAddressForSe(t *testing.T) {
