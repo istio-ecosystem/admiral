@@ -14,11 +14,12 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"sync"
+	"text/template"
 )
 
 type RemoteController struct {
 	ClusterID                 string
-	ApiServer				  string
+	ApiServer                 string
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
@@ -45,6 +46,7 @@ type AdmiralCache struct {
 	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
+	FQDNTemplate                    *template.Template
 
 	argoRolloutsEnabled bool
 }
@@ -391,7 +393,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 	env := common.GetEnv(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry, pc.RemoteRegistry.AdmiralCache.FQDNTemplate)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
@@ -452,7 +454,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 	env := common.GetEnvForRollout(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry, rh.RemoteRegistry.AdmiralCache.FQDNTemplate)
 }
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {

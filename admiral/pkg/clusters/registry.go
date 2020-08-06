@@ -8,6 +8,7 @@ import (
 	v12 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/rest"
 	"sync"
+	"text/template"
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -42,6 +43,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
 	}
 
+	fqdnTmpl, err := template.New("fqdn").Parse(params.FQDNTemplate)
+	if err != nil {
+		return nil, fmt.Errorf(" Issue with FQDN template: %v", err)
+	}
+
 	w.remoteControllers = make(map[string]*RemoteController)
 
 	gtpCache := &globalTrafficCache{}
@@ -61,6 +67,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
+		FQDNTemplate:                    fqdnTmpl,
 
 		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}

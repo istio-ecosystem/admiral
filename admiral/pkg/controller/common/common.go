@@ -7,6 +7,7 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	"sort"
 	"strings"
+	"text/template"
 )
 
 const (
@@ -65,7 +66,7 @@ func GetDeploymentGlobalIdentifier(deployment *k8sAppsV1.Deployment) string {
 }
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global
-func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix string) string {
+func GetCname(deployment *k8sAppsV1.Deployment, identifier, nameSuffix string, template *template.Template) string {
 	var environment = GetEnv(deployment)
 	alias := GetValueForKeyFromDeployment(identifier, deployment)
 	if len(alias) == 0 {
@@ -76,7 +77,22 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	cname := environment + Sep + alias + Sep + nameSuffix
+	buf := new(strings.Builder)
+	err := template.Execute(buf, struct {
+		Environment string
+		Identity    string
+		Suffix      string
+		Deployment  *k8sAppsV1.Deployment
+	}{
+		environment,
+		alias,
+		nameSuffix,
+		deployment,
+	})
+	if err != nil {
+		log.Errorf("Unable to render FQDN template: %v", err)
+	}
+	cname := buf.String()
 	if deployment.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
 		log.Infof("admiral.io/cname-case-sensitive annotation enabled on deployment with name %v", deployment.Name)
 		return cname
