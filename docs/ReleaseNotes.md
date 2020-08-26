@@ -15,7 +15,7 @@ Once again, many thanks to everyone who has tried out Admiral and provided their
  Version 1.0 now also properly handles secret updates, allowing for cluster secrets to be ignored or changed without requiring an Admiral restart to take effect.
  
  #### [Ignorable Services](https://github.com/istio-ecosystem/admiral/pull/107)
- Services are added to the set of resources that Admiral can be set to ignore, using `admiral.io/ignore: "true"`.
+ Services are added to the set of resources that Admiral can be configured to ignore, using `admiral.io/ignore: "true"`.
  
  #### Assorted quality of life improvements
  Including [an added linter](https://github.com/istio-ecosystem/admiral/pull/117), [dockerfile improvements](https://github.com/istio-ecosystem/admiral/pull/129), [parameter overrides](https://github.com/istio-ecosystem/admiral/pull/115), and a [flag-driven log level](https://github.com/istio-ecosystem/admiral/pull/114)
