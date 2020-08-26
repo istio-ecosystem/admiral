@@ -29,6 +29,7 @@ type SidecarEgressMap struct {
 }
 
 type AdmiralParams struct {
+	ArgoRolloutsEnabled        bool
 	KubeconfigPath             string
 	CacheRefreshDuration       time.Duration
 	ClusterRegistriesNamespace string

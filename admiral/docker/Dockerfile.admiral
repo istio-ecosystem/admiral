@@ -1,8 +1,9 @@
-FROM ubuntu:xenial
+FROM ubuntu:focal
 
-RUN apt update -y
-
-RUN apt install -y curl
+RUN set -ex; \
+  apt-get update; \
+  apt-get install -qy --no-install-recommends curl; \
+  rm -rf /var/lib/apt/lists/*
 
 COPY ./out/admiral /usr/local/admiral
 

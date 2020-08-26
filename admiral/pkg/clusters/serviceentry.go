@@ -3,10 +3,13 @@ package clusters
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
+	"strconv"
+	"strings"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
@@ -14,11 +17,10 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math"
-	"math/rand"
-	"strconv"
-	"strings"
-	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
 
 func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
@@ -52,34 +54,38 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 	var cname string
 	var serviceInstance *k8sV1.Service
+	var rollout *admiral.RolloutClusterEntry
 
 	for _, rc := range remoteRegistry.remoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-		rollout := rc.RolloutController.Cache.Get(sourceIdentity)
+
+		if rc.RolloutController != nil {
+			rollout = rc.RolloutController.Cache.Get(sourceIdentity)
+		}
 
 		if deployment != nil && deployment.Deployments[env] != nil {
 			deploymentInstance := deployment.Deployments[env]
 
-			serviceInstance = getServiceForDeployment(rc, deploymentInstance[0])
+			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceDeployments[rc.ClusterID] = deploymentInstance[0]
-			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
+			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceDeployments[rc.ClusterID] = deploymentInstance
+			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
-			serviceInstance = getServiceForRollout(rc, rolloutInstance[0])
+			serviceInstance = getServiceForRollout(rc, rolloutInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCnameForRollout(rolloutInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceRollouts[rc.ClusterID] = rolloutInstance[0]
-			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance[0], serviceEntries)
+			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceRollouts[rc.ClusterID] = rolloutInstance
+			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
 		} else {
 			continue
 		}

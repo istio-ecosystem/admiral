@@ -88,7 +88,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
-					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
+					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -106,7 +106,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
+					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -437,7 +437,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	//TODO this will pull a random deployment from some cluster which might not be the right deployment
 	var deploymentInstance *k8sAppsV1.Deployment
 	for _, value := range deployment.Deployments {
-		deploymentInstance = value[0]
+		deploymentInstance = value
 		break
 	}
 
