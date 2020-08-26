@@ -117,8 +117,15 @@ endif
 endif
 
 download-kustomize:
-	curl -s "https://raw.githubusercontent.com/\
-    kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
+	curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases |\
+	grep browser_download |\
+	grep $(OPSYS) |\
+	cut -d '"' -f 4 |\
+	grep /kustomize/v |\
+	sort | tail -n 1 |\
+	xargs curl -s -O -L
+	tar xzf ./kustomize_v*_${opsys}_amd64.tar.gz
+	mv kustomize_v*_${opsys}_amd64 kustomize
 	chmod u+x kustomize
 
 gen-yaml:
