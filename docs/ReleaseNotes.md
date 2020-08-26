@@ -1,5 +1,33 @@
 # Release notes
 
+## v1.0
+
+Admiral has graduated to Generally Available! Version 1.0 has a series of bugfixes and includes support for [Argo Rollouts](https://argoproj.github.io/argo-rollouts/)
+
+Once again, many thanks to everyone who has tried out Admiral and provided their valuable feedback throughout the development process. And a special thanks to everyone who has contributed to the project This would not be possible without you.
+
+### Features
+
+ #### [Argo Rollouts](https://github.com/istio-ecosystem/admiral/issues/57)
+ Version 1.0 adds support to use Argo Rollouts rather than deployments, allowing you to leverage their advanced deployment capabilities without giving up Admiral's functionality. Try the [example](https://github.com/istio-ecosystem/admiral/blob/master/docs/Examples.md#argo-rollouts) to get started.
+ 
+ #### [Secret Updates](https://github.com/istio-ecosystem/admiral/pull/55)
+ Version 1.0 now also properly handles secret updates, allowing for cluster secrets to be ignored or changed without requiring an Admiral restart to take effect.
+ 
+ #### [Ignorable Services](https://github.com/istio-ecosystem/admiral/pull/107)
+ Services are added to the set of resources that Admiral can be set to ignore, using `admiral.io/ignore: "true"`.
+ 
+ #### Assorted quality of life improvements
+ Including [an added linter](https://github.com/istio-ecosystem/admiral/pull/117), [dockerfile improvements](https://github.com/istio-ecosystem/admiral/pull/129), [parameter overrides](https://github.com/istio-ecosystem/admiral/pull/115), and a [flag-driven log level](https://github.com/istio-ecosystem/admiral/pull/114)
+ 
+### Bug Fixes
+
+* Fixed a [bug](https://github.com/istio-ecosystem/admiral/issues/102) preventing 100/0 load balancing with Global Traffic Policies.
+* Put Argo Rollouts behind a feature flag to prevent [excessive error logging](https://github.com/istio-ecosystem/admiral/issues/109) in clusters without Argo CRDs installed.
+* Fixed a [bug](https://github.com/istio-ecosystem/admiral/issues/112) where virtual services in destination namespaces weren't being imported to the [sidecars](https://istio.io/latest/docs/reference/config/networking/sidecar/) in the client namespace. 
+* Admiral now correctly updates [service entries](https://istio.io/latest/docs/reference/config/networking/service-entry/) in response to a previously watched being ignored. 
+* [Mitigated](https://github.com/istio-ecosystem/admiral/pull/123) a memory leak related to the recreation of cache controllers
+
 ## v0.9 
 We are excited to announce the release of Admiral version `v0.9` with lots of cool functionality added. This version is ready for production usage and addresses some of the biggest requests from our users.
 
