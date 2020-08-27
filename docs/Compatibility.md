@@ -7,6 +7,7 @@ The below information is based on the testing done, please submit a PR if you ha
 |:-----------------:|:---------------------:|:---------------------:|:-----------------:|:-----------------:
 v0.1-beta           | 1.2.3                 | 1.4.6                 | 1.13              | 1.14.2
 v0.9                | 1.2.3                 | 1.5.1                 | 1.13              | 1.18.0
+v1.0                | 1.2.3                 | 1.5.6                 | 1.13              | 1.18.0
 
 
 ## Admiral feature support by Istio Version
@@ -14,6 +15,7 @@ v0.9                | 1.2.3                 | 1.5.1                 | 1.13      
 | Admiral Version   | Syncing   | Dependency    | Global Traffic Policy
 |:-----------------:|:---------:|:-------------:|:--------------------:
 v0.1-beta           | Yes       | Yes           | No
+v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
 v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
 
 
@@ -23,5 +25,6 @@ v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or h
 |:-----------------:|:---------:
 v0.1-beta           | AWS       
 v0.9                | AWS
+v1.0                | AWS, GCP, Azure
 
 `Note`: Please submit a PR if admiral was tested on other cloud vendors       
