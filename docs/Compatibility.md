@@ -16,7 +16,7 @@ v1.0                | 1.2.3                 | 1.5.6                 | 1.13      
 |:-----------------:|:---------:|:-------------:|:--------------------:
 v0.1-beta           | Yes       | Yes           | No
 v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
-v0.9                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
+v1.0                | Yes       | Yes           | Yes (requires Istio 1.5.1 or higher)
 
 
 ## Tested cloud vendors
