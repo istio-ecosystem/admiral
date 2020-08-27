@@ -4,6 +4,10 @@
 
 Admiral will be released monthly, on the second Wednesday of every month. Intuit engineers will conduct the release.
 
+### Steps to release admiral
+
+This is applicable to anyone who makes new Admiral releases. The steps to conduct a release are outlined [here](Release-steps.md)
+
 ## Issue Management
 
 We use GitHub issues to track all of our bugs and feature requests. Each issue is assigned a milestone. This is 0.1, 0.2, ..., or 'Nebulous Future'. The milestone indicates when we think the issue should get addressed.

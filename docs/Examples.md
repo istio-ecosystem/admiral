@@ -25,10 +25,10 @@ Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at i
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v0.9/admiral-install-v0.9.tar.gz
-tar xvf admiral-install-v0.9.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v1.0/admiral-install-v1.0.tar.gz
+tar xvf admiral-install-v1.0.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v0.9
+export ADMIRAL_HOME=./admiral-install-v1.0
 ```
 
 ```
