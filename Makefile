@@ -124,8 +124,8 @@ download-kustomize:
 	grep /kustomize/v |\
 	sort | tail -n 1 |\
 	xargs curl -s -O -L
-	tar xzf ./kustomize_v*_${opsys}_amd64.tar.gz
-	mv kustomize_v*_${opsys}_amd64 kustomize
+	tar xzf ./kustomize_v*_${OPSYS}_amd64.tar.gz
+	mv kustomize_v*_${OPSYS}_amd64 kustomize
 	chmod u+x kustomize
 
 gen-yaml:
