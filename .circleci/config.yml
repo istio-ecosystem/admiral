@@ -1,6 +1,7 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@1.0.2
+  kube-orb: circleci/kubernetes@0.11.1
 jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
@@ -40,6 +41,25 @@ jobs:
         paths:
           - .
 
+  run-integration-tests:
+    working_directory: /go/pkg/mod/github.com/admiral
+      docker:
+          - image: circleci/golang:1.11
+    steps:
+      - checkout
+      - kube-orb/install
+      - run:
+          name: Setting BRANCH, TAG & SHA variables
+          command: |
+            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
+            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
+            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Run Integration Test
+          command:  |
+            ./tests/run.sh "1.14.2" "1.4.3" "./install"
+
   publish-github-release:
     docker:
     - image: circleci/golang:1.11
@@ -71,6 +91,10 @@ workflows:
   build-and-release:
     jobs:
       - build:
+          filters:
+            tags:
+              only: /.*/
+      - run-integration-tests:
           filters:
             tags:
               only: /.*/
