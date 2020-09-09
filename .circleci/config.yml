@@ -44,12 +44,14 @@ jobs:
   run-integration-tests:
     docker:
       - image: 'cimg/base:stable'
+    working_directory: /go/pkg/mod/github.com/admiral
     steps:
       - checkout
       - kube-orb/install
       - run:
           name: Run Integration Test
           command:  |
+            echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
             source $BASH_ENV
             echo $BASH_ENV
             ./tests/run.sh "1.14.2" "1.4.3" "$BASH_ENV/install"
