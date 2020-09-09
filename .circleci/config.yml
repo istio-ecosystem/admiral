@@ -43,7 +43,7 @@ jobs:
 
   run-integration-tests:
     working_directory: /go/pkg/mod/github.com/admiral
-      docker:
+    docker:
           - image: circleci/golang:1.11
     steps:
       - checkout
