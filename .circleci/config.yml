@@ -1,6 +1,7 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@1.0.2
+  kube-orb: circleci/kubernetes@0.11.1
 jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
@@ -40,6 +41,17 @@ jobs:
         paths:
           - .
 
+  run-integration-tests:
+    steps:
+      - checkout
+      - kube-orb/install
+      - run:
+          name: Run Integration Test
+          command:  |
+            source $BASH_ENV
+            echo $BASH_ENV
+            ./tests/run.sh "1.14.2" "1.4.3" "$BASH_ENV/install"
+
   publish-github-release:
     docker:
     - image: circleci/golang:1.11
@@ -71,6 +83,10 @@ workflows:
   build-and-release:
     jobs:
       - build:
+          filters:
+            tags:
+              only: /.*/
+      - run-integration-tests:
           filters:
             tags:
               only: /.*/
