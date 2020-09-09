@@ -24,7 +24,7 @@ type DeploymentHandler interface {
 
 type DeploymentClusterEntry struct {
 	Identity    string
-	Deployments map[string][]*k8sAppsV1.Deployment
+	Deployments map[string]*k8sAppsV1.Deployment
 }
 
 type DeploymentController struct {
@@ -32,8 +32,7 @@ type DeploymentController struct {
 	DeploymentHandler DeploymentHandler
 	Cache             *deploymentCache
 	informer          cache.SharedIndexInformer
-	ctl               *Controller
-	labelSet 		  *common.LabelSet
+	labelSet          *common.LabelSet
 }
 
 type deploymentCache struct {
@@ -50,7 +49,7 @@ func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
 	return p.cache[key]
 }
 
-func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sAppsV1.Deployment) {
+func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -59,28 +58,31 @@ func (p *deploymentCache) AppendDeploymentToCluster(key string, deployment *k8sA
 	if v == nil {
 		v = &DeploymentClusterEntry{
 			Identity:    key,
-			Deployments: make(map[string][]*k8sAppsV1.Deployment),
+			Deployments: make(map[string]*k8sAppsV1.Deployment),
 		}
 		p.cache[v.Identity] = v
 	}
 	env := common.GetEnv(deployment)
-	envDeployments := v.Deployments[env]
+	v.Deployments[env] = deployment
+}
 
-	if envDeployments == nil {
-		envDeployments = make([]*k8sAppsV1.Deployment, 0)
+func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deployment *k8sAppsV1.Deployment) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	v := p.Get(key)
+
+	if v != nil {
+		env := common.GetEnv(deployment)
+		delete(v.Deployments, env)
 	}
-
-	envDeployments = append(envDeployments, deployment)
-
-	v.Deployments[env] = envDeployments
-
 }
 
 func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error) {
 
 	ns := d.K8sClient.CoreV1().Namespaces()
 
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel+"="+d.labelSet.NamespaceSidecarInjectionLabelValue
+	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel + "=" + d.labelSet.NamespaceSidecarInjectionLabelValue
 	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
 
 	if err != nil {
@@ -145,11 +147,11 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 	return &deploymentController, nil
 }
 
-func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration,labelSet *common.LabelSet) (*DeploymentController, error) {
+func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
 
-	dc, err :=  NewDeploymentController(stopCh,handler,config,resyncPeriod)
-	dc.labelSet =labelSet
-	return dc,err
+	dc, err := NewDeploymentController(stopCh, handler, config, resyncPeriod)
+	dc.labelSet = labelSet
+	return dc, err
 }
 
 func (d *DeploymentController) Added(obj interface{}) {
@@ -163,9 +165,14 @@ func (d *DeploymentController) Updated(obj interface{}, oldObj interface{}) {
 func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
-	if len(key) > 0 && !d.shouldIgnoreBasedOnLabels(deployment) {
-		d.Cache.AppendDeploymentToCluster(key, deployment)
-		d.DeploymentHandler.Added(deployment)
+	if len(key) > 0 {
+		if !d.shouldIgnoreBasedOnLabels(deployment) {
+			d.Cache.UpdateDeploymentToClusterCache(key, deployment)
+			d.DeploymentHandler.Added(deployment)
+		} else {
+			d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
+			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
+		}
 	}
 }
 
@@ -214,4 +221,4 @@ func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace
 	}
 
 	return matchedDeployments.Items
-	}
+}

@@ -3,9 +3,12 @@ package clusters
 import (
 	"errors"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	"math"
+	"math/rand"
+	"strconv"
+	"strings"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -14,13 +17,11 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"math"
-	"math/rand"
-	"strconv"
-	"strings"
-	"time"
-)
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+)
 
 func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
@@ -30,15 +31,15 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 
 	//Handling retries for getting/putting service entries from/in cache
 
-	address := getUniqueAddress(admiralCache,globalFqdn)
+	address := getUniqueAddress(admiralCache, globalFqdn)
 
-	if len(globalFqdn)== 0 || len(address) ==0 {
+	if len(globalFqdn) == 0 || len(address) == 0 {
 		return nil
 	}
 
-	san := getSanForDeployment(destDeployment, workloadIdentityKey);
+	san := getSanForDeployment(destDeployment, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(admiralCache,globalFqdn,rc, serviceEntries,address,san)
+	tmpSe := generateServiceEntry(admiralCache, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
@@ -52,37 +53,40 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 	var serviceEntries = make(map[string]*networking.ServiceEntry)
 
 	var cname string
-	var serviceInstance *k8sV1.Service;
-
+	var serviceInstance *k8sV1.Service
+	var rollout *admiral.RolloutClusterEntry
 
 	for _, rc := range remoteRegistry.remoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
-		rollout := rc.RolloutController.Cache.Get(sourceIdentity)
+
+		if rc.RolloutController != nil {
+			rollout = rc.RolloutController.Cache.Get(sourceIdentity)
+		}
 
 		if deployment != nil && deployment.Deployments[env] != nil {
 			deploymentInstance := deployment.Deployments[env]
 
-			serviceInstance = getServiceForDeployment(rc, deploymentInstance[0])
+			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCname(deploymentInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceDeployments[rc.ClusterID] = deploymentInstance[0]
-			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance[0], serviceEntries)
-		}else if rollout !=nil && rollout.Rollouts[env]!=nil{
+			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceDeployments[rc.ClusterID] = deploymentInstance
+			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
+		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
-			serviceInstance = getServiceForRollout(rc, rolloutInstance[0])
+			serviceInstance = getServiceForRollout(rc, rolloutInstance)
 			if serviceInstance == nil {
 				continue
 			}
 
-			cname = common.GetCnameForRollout(rolloutInstance[0], common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceRollouts[rc.ClusterID] = rolloutInstance[0]
-			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance[0], serviceEntries)
-		}else {
+			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceRollouts[rc.ClusterID] = rolloutInstance
+			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
+		} else {
 			continue
 		}
 
@@ -97,7 +101,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
 
 	//update cname dependent cluster cache
-	for clusterId, _ := range dependentClusters {
+	for clusterId := range dependentClusters {
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
@@ -108,15 +112,15 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		rc := remoteRegistry.remoteControllers[sourceCluster]
 		var meshPorts map[string]uint32
-		if len(sourceDeployments) > 0{
-			meshPorts =GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
-		}else {
-			meshPorts= GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
+		if len(sourceDeployments) > 0 {
+			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
+		} else {
+			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 		}
 
 		for key, serviceEntry := range serviceEntries {
 			for _, ep := range serviceEntry.Endpoints {
-				clusterIngress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					ep.Address = localFqdn
@@ -131,11 +135,10 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 			}
 			//add virtual service for routing locally in within the cluster
 			createIngressOnlyVirtualService(rc, cname, serviceEntry, localFqdn, meshPorts)
-
 		}
 
 		for _, val := range dependents.Map() {
-			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn)
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, map[string]string{cname: "1"})
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
@@ -148,14 +151,14 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 func createIngressOnlyVirtualService(rc *RemoteController, cname string, serviceEntry *networking.ServiceEntry, localFqdn string, meshPorts map[string]uint32) {
 	virtualServiceName := getIstioResourceName(cname, "-default-vs")
 
-	oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{});
+	oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{})
 
 	//TODO handle non http ports
 	virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
 
 	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
 
-	addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc);
+	addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
 }
 
 func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
@@ -176,8 +179,18 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 	//copy and add our new local FQDN
 	newSidecar := copySidecar(sidecar)
 
+	egressHosts := make(map[string]string)
+
 	for _, sidecarEgress := range sidecarEgressMap {
 		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
+		egressHosts[egressHost] = egressHost
+		for cname := range sidecarEgress.CNAMEs {
+			scopedCname := sidecarEgress.Namespace + "/" + cname
+			egressHosts[scopedCname] = scopedCname
+		}
+	}
+
+	for egressHost := range egressHosts {
 		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
 			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
 		}
@@ -275,6 +288,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
+			if err != nil {
+				log.Error(LogFormat, err)
+				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
+			}
 
 			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
 
@@ -306,10 +323,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	}
 }
 
-func makeRemoteEndpointForServiceEntry(address string, locality string, portName string) *networking.ServiceEntry_Endpoint {
+func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int) *networking.ServiceEntry_Endpoint {
 	return &networking.ServiceEntry_Endpoint{Address: address,
 		Locality: locality,
-		Ports:    map[string]uint32{portName: common.DefaultMtlsPort}} //
+		Ports:    map[string]uint32{portName: uint32(portNumber)}} //
 }
 
 func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
@@ -422,19 +439,19 @@ func createServiceEntryForRollout(rc *RemoteController, admiralCache *AdmiralCac
 
 	//Handling retries for getting/putting service entries from/in cache
 
-	address := getUniqueAddress(admiralCache,globalFqdn)
+	address := getUniqueAddress(admiralCache, globalFqdn)
 
-	if len(globalFqdn)== 0 || len(address) ==0 {
+	if len(globalFqdn) == 0 || len(address) == 0 {
 		return nil
 	}
 
-	san := getSanForRollout(destRollout, workloadIdentityKey);
+	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(admiralCache,globalFqdn,rc, serviceEntries,address,san)
+	tmpSe := generateServiceEntry(admiralCache, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
-func getSanForDeployment (destDeployment *k8sAppsV1.Deployment, workloadIdentityKey string) (san []string){
+func getSanForDeployment(destDeployment *k8sAppsV1.Deployment, workloadIdentityKey string) (san []string) {
 	if common.GetEnableSAN() {
 		tmpSan := common.GetSAN(common.GetSANPrefix(), destDeployment, workloadIdentityKey)
 		if len(tmpSan) > 0 {
@@ -445,7 +462,7 @@ func getSanForDeployment (destDeployment *k8sAppsV1.Deployment, workloadIdentity
 
 }
 
-func getSanForRollout (destRollout *argo.Rollout, workloadIdentityKey string) (san []string){
+func getSanForRollout(destRollout *argo.Rollout, workloadIdentityKey string) (san []string) {
 	if common.GetEnableSAN() {
 		tmpSan := common.GetSANForRollout(common.GetSANPrefix(), destRollout, workloadIdentityKey)
 		if len(tmpSan) > 0 {
@@ -456,7 +473,7 @@ func getSanForRollout (destRollout *argo.Rollout, workloadIdentityKey string) (s
 
 }
 
-func getUniqueAddress (admiralCache *AdmiralCache, globalFqdn string) (address string){
+func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address string) {
 
 	//initializations
 	var err error = nil
@@ -489,10 +506,10 @@ func getUniqueAddress (admiralCache *AdmiralCache, globalFqdn string) (address s
 		loadServiceEntryCacheData(admiralCache.ConfigMapController, admiralCache)
 	}
 
-	return address;
+	return address
 }
 
-func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string,rc *RemoteController,serviceEntries map[string]*networking.ServiceEntry,address string,san []string) *networking.ServiceEntry{
+func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
 	tmpSe := serviceEntries[globalFqdn]
@@ -512,13 +529,13 @@ func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string,rc *Remo
 		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
 	}
 
-	endpointAddress := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
 	var locality string
 	if rc.NodeController.Locality != nil {
 		locality = rc.NodeController.Locality.Region
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
-		locality, common.Http)
+		locality, common.Http, port)
 	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
 	serviceEntries[globalFqdn] = tmpSe

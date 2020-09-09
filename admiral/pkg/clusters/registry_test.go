@@ -8,13 +8,16 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	logTest "github.com/sirupsen/logrus/hooks/test"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"strings"
 	"testing"
 	"time"
 )
@@ -226,7 +229,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		ServiceController:    s,
 		NodeController:       n,
 		ClusterID:            "test.cluster",
-		RolloutController: r,
+		RolloutController:    r,
 	}
 	return &rc, nil
 }
@@ -310,7 +313,7 @@ func TestAdded(t *testing.T) {
 }
 
 func TestMakeVirtualService(t *testing.T) {
-	vs := makeVirtualService("test.local", []string {common.MulticlusterIngressGateway}, "dest", 8080)
+	vs := makeVirtualService("test.local", []string{common.MulticlusterIngressGateway}, "dest", 8080)
 	if vs.Hosts[0] != "test.local" {
 		t.Fail()
 	}
@@ -428,10 +431,90 @@ func TestGetServiceForDeployment(t *testing.T) {
 				//perfect
 			} else {
 				if !cmp.Equal(resultingService, c.expectedService) {
-					log.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
+					logrus.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
 					t.Errorf("Service mismatch. Got %v, expected %v", resultingService, c.expectedService)
 				}
 			}
 		})
 	}
+}
+
+func TestUpdateCacheController(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	originalConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake.config")
+	changedConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake_2.config")
+	if err != nil {
+		t.Fatalf("Unexpected error getting client %v", err)
+	}
+
+	rr, _ := InitAdmiral(context.Background(), p)
+
+	rc, _ := createMockRemoteController(func(i interface{}) {
+		t.Fail()
+	})
+	rc.stop = make(chan struct{})
+	rr.remoteControllers["test.cluster"] = rc
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name string
+		oldConfig *rest.Config
+		newConfig *rest.Config
+		clusterId string
+		shouldRefresh bool
+	}{
+		{
+			name: "Should update controller when kubeconfig changes",
+			oldConfig: originalConfig,
+			newConfig: changedConfig,
+			clusterId: "test.cluster",
+			shouldRefresh: true,
+		},
+		{
+			name: "Should not update controller when kubeconfig doesn't change",
+			oldConfig: originalConfig,
+			newConfig: originalConfig,
+			clusterId: "test.cluster",
+			shouldRefresh: false,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			hook := logTest.NewGlobal()
+			rr.remoteControllers[c.clusterId].ApiServer = c.oldConfig.Host
+			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig,  time.Second*time.Duration(300))
+			if err != nil {
+				t.Fatalf("Unexpected error creating controller %v", err)
+			}
+			rc.DeploymentController = d
+
+			err = rr.updateCacheController(c.newConfig, c.clusterId, time.Second*time.Duration(300))
+			if err != nil {
+				t.Fatalf("Unexpected error doing update %v", err)
+			}
+
+			if rr.remoteControllers[c.clusterId].ApiServer != c.newConfig.Host {
+				t.Fatalf("Client mismatch. Updated controller has the wrong client. Expected %v got %v", c.newConfig.Host, rr.remoteControllers[c.clusterId].ApiServer)
+			}
+
+			refreshed := checkIfLogged(hook.AllEntries(), "Client mismatch, recreating cache controllers for cluster")
+
+			if refreshed != c.shouldRefresh {
+				t.Fatalf("Refresh mismatch. Expected %v got %v", c.shouldRefresh, refreshed)
+			}
+		})
+	}
+}
+
+func checkIfLogged(entries []*logrus.Entry, phrase string) bool {
+	for _, entry := range entries {
+		if strings.Contains(entry.Message, phrase) {
+			return true
+		}
+	}
+	return false
 }

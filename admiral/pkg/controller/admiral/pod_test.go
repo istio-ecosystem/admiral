@@ -53,12 +53,12 @@ func TestPodController_GetPods(t *testing.T) {
 
 	pod := v1.Pod{}
 	pod.Namespace = "test-ns"
-	pod.Name="pod"
+	pod.Name = "pod"
 	pod.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
 	pod.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	podWithBadLabels := v1.Pod{}
 	podWithBadLabels.Namespace = "test-ns"
-	podWithBadLabels.Name="podWithBadLabels"
+	podWithBadLabels.Name = "podWithBadLabels"
 	podWithBadLabels.Labels = map[string]string{"identity": "id", "random-label": "true"}
 	podWithBadLabels.Annotations = map[string]string{"woo": "yay"}
 	_, err = client.CoreV1().Pods("test-ns").Create(&pod)
@@ -67,7 +67,7 @@ func TestPodController_GetPods(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
 	}
-	
+
 	controller.K8sClient = client
 
 	podsList, err := controller.GetPods()
@@ -90,9 +90,9 @@ func TestPodCache_AppendPodToCluster(t *testing.T) {
 	podCache.mutex = &sync.Mutex{}
 
 	pod := &v1.Pod{}
-	pod.Name="foobar"
+	pod.Name = "foobar"
 	pod.Namespace = "ns"
-	pod.Labels = map[string]string{"identity":"my-first-pod"}
+	pod.Labels = map[string]string{"identity": "my-first-pod"}
 
 	podCache.AppendPodToCluster("ns", pod)
 
@@ -113,7 +113,7 @@ func TestPodCache_AppendPodToCluster(t *testing.T) {
 	if !cmp.Equal(podCache.Get("ns").Pods["ns"][0], pod) {
 		t.Errorf("Incorrect pod fount. Diff: %v", cmp.Diff(podCache.Get("ns").Pods["ns"], pod))
 	}
-	if (length+1) != len(podCache.Get("ns").Pods["ns"]) {
+	if (length + 1) != len(podCache.Get("ns").Pods["ns"]) {
 		t.Errorf("Didn't add a second pod, expected %v, got %v", length+1, len(podCache.Get("ns").Pods["ns"]))
 	}
 

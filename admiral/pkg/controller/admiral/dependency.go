@@ -25,7 +25,6 @@ type DependencyController struct {
 	DepHandler   DepHandler
 	Cache        *depCache
 	informer     cache.SharedIndexInformer
-	ctl          *Controller
 }
 
 type depCache struct {

@@ -2,23 +2,23 @@ package clusters
 
 import (
 	"fmt"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
+	networking "istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-	networking "istio.io/api/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
-const  ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -63,12 +63,10 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 		tempDeployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 		//If there is  no deployment, check if a rollout is available.
 		tempRollout := rc.RolloutController.Cache.Get(sourceIdentity)
-		if tempDeployment != nil || tempRollout !=nil {
+		if tempDeployment != nil || tempRollout != nil {
 			sourceClusters[rc.ClusterID] = rc.ClusterID
 			r.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		}
-
-
 
 		//create and store destination service entries
 		for _, destinationCluster := range destinationIdentitys {
@@ -90,13 +88,13 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
-					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment[0], serviceEntries)
+					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
 					}
 				}
-			}else if destRollout != nil {
+			} else if destRollout != nil {
 				//rollouts can be in multiple clusters, create SEs for all clusters
 
 				for _, rollout := range destRollout.Rollouts {
@@ -108,7 +106,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout[0], serviceEntries)
+					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -149,10 +147,10 @@ func getIstioResourceName(host string, suffix string) string {
 }
 
 func makeIngressOnlyVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
-	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port);
+	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port)
 }
 
-func makeVirtualService(host string, gateways [] string, destination string, port uint32) *v1alpha32.VirtualService {
+func makeVirtualService(host string, gateways []string, destination string, port uint32) *v1alpha32.VirtualService {
 	return &v1alpha32.VirtualService{Hosts: []string{host},
 		Gateways: gateways,
 		ExportTo: []string{"*"},
@@ -172,7 +170,6 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
 
-
 			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
 				targetTrafficMap := make(map[string]uint32)
@@ -187,9 +184,8 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 					To:   targetTrafficMap,
 				})
 				localityLbSettings.Distribute = distribute
-			} else {
-				//this will have default behavior
 			}
+			// else default behavior
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 		}
@@ -245,37 +241,40 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo) {
 		return
 	}
-	handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+	if err != nil {
+		log.Error(err)
+	}
 }
 
-func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {
-	return
-}
+func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
 
 func IgnoreIstioResource(exportTo []string) bool {
-	if exportTo == nil || len(exportTo) == 0 {
+	if len(exportTo) == 0 {
 		return false
 	} else {
 		for _, namespace := range exportTo {
@@ -364,17 +363,33 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		if event == common.Delete {
 
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-			rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+			err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
+			err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
 			for _, subset := range destinationRule.Subsets {
 				sseName := seName + common.Dash + subset.Name
-				rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
-				log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+				if err != nil {
+					log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+				} else {
+					log.Error(LogFormat, err)
+				}
 			}
-			rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-			log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+			err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
+			if err != nil {
+				log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+			} else {
+				log.Error(LogFormat, err)
+			}
 
 		} else {
 
@@ -385,20 +400,18 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
 
-			if drServiceEntries != nil {
-				for _seName, se := range drServiceEntries {
-					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
-					newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
-					if err != nil {
-						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
-					}
-					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
-					}
-					//cache the subset service entries for updating them later for pod events
-					if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
-						r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
-					}
+			for _seName, se := range drServiceEntries {
+				existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
+				newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
+				if err != nil {
+					log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
+				}
+				if newServiceEntry != nil {
+					addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
+				}
+				//cache the subset service entries for updating them later for pod events
+				if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
+					r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
 				}
 			}
 
@@ -424,7 +437,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	//TODO this will pull a random deployment from some cluster which might not be the right deployment
 	var deploymentInstance *k8sAppsV1.Deployment
 	for _, value := range deployment.Deployments {
-		deploymentInstance = value[0]
+		deploymentInstance = value
 		break
 	}
 
@@ -640,7 +653,7 @@ func getDependentClusters(dependents *common.Map, identityClusterCache *common.M
 	//TODO optimize this map construction
 	if dependents != nil {
 		for identity, clusters := range identityClusterCache.Map() {
-			for depIdentity, _ := range dependents.Map() {
+			for depIdentity := range dependents.Map() {
 				if identity == depIdentity {
 					for _, clusterId := range clusters.Map() {
 						_, ok := sourceServices[clusterId]
@@ -691,14 +704,14 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) *k8sV1.Se
 	for _, service := range cachedService.Service[rollout.Namespace] {
 		var match = true
 		// Both active and passive service have similar label selector. Use active service name to filter in case of blue green stratergy
-		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name!= blueGreenActiveService{
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService {
 			continue
 		}
 		for lkey, lvalue := range service.Spec.Selector {
 			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
 			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if(lkey == ROLLOUT_POD_HASH_LABEL){
-				continue;
+			if lkey == ROLLOUT_POD_HASH_LABEL {
+				continue
 			}
 			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
 			if !ok || value != lvalue {

@@ -2,14 +2,14 @@ package admiral
 
 import (
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
+	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
-	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	"k8s.io/client-go/tools/clientcmd"
 	"sort"
 	"sync"
@@ -32,7 +32,6 @@ func TestNewRolloutController(t *testing.T) {
 	}
 }
 
-
 func TestRolloutController_Added(t *testing.T) {
 	//Rollouts with the correct label are added to the cache
 	mdh := test.MockRolloutHandler{}
@@ -46,8 +45,8 @@ func TestRolloutController_Added(t *testing.T) {
 	}
 	depController := RolloutController{
 		RolloutHandler: &mdh,
-		Cache:             &cache,
-		labelSet:          &labelset,
+		Cache:          &cache,
+		labelSet:       &labelset,
 	}
 	rollout := argo.Rollout{}
 	rollout.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
@@ -59,7 +58,7 @@ func TestRolloutController_Added(t *testing.T) {
 	rolloutWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	rolloutWithIgnoreAnnotations := argo.Rollout{}
 	rolloutWithIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
-	rolloutWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore":"true"}
+	rolloutWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore": "true"}
 	rolloutWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	rolloutWithNsIgnoreAnnotations := argo.Rollout{}
 	rolloutWithNsIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
@@ -67,40 +66,46 @@ func TestRolloutController_Added(t *testing.T) {
 	rolloutWithNsIgnoreAnnotations.Namespace = "test-ns"
 
 	testCases := []struct {
-		name               string
-		rollout         *argo.Rollout
-		expectedRollout *argo.Rollout
-		expectedCacheSize  int
+		name                  string
+		rollout               *argo.Rollout
+		expectedRollout       *argo.Rollout
+		expectedCacheContains bool
 	}{
 		{
-			name:               "Expects rollout to be added to the cache when the correct label is present",
-			rollout:         &rollout,
-			expectedRollout: &rollout,
-			expectedCacheSize:  1,
+			name:                  "Expects rollout to be added to the cache when the correct label is present",
+			rollout:               &rollout,
+			expectedRollout:       &rollout,
+			expectedCacheContains: true,
 		},
 		{
-			name:               "Expects rollout to not be added to the cache when the correct label is not present",
-			rollout:         &rolloutWithBadLabels,
-			expectedRollout: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects rollout to not be added to the cache when the correct label is not present",
+			rollout:               &rolloutWithBadLabels,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored rollout identified by label to not be added to the cache",
-			rollout:         &rolloutWithIgnoreLabels,
-			expectedRollout: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored rollout identified by label to not be added to the cache",
+			rollout:               &rolloutWithIgnoreLabels,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored rollout identified by rollout annotation to not be added to the cache",
-			rollout:         &rolloutWithIgnoreAnnotations,
-			expectedRollout: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored rollout identified by rollout annotation to not be added to the cache",
+			rollout:               &rolloutWithIgnoreAnnotations,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored rollout identified by namespace annotation to not be added to the cache",
-			rollout:         &rolloutWithNsIgnoreAnnotations,
-			expectedRollout: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored rollout identified by namespace annotation to not be added to the cache",
+			rollout:               &rolloutWithNsIgnoreAnnotations,
+			expectedRollout:       nil,
+			expectedCacheContains: false,
+		},
+		{
+			name:                  "Expects ignored rollout identified by label to be removed from the cache",
+			rollout:               &rollout,
+			expectedRollout:       &rollout,
+			expectedCacheContains: false,
 		},
 	}
 	for _, c := range testCases {
@@ -109,21 +114,21 @@ func TestRolloutController_Added(t *testing.T) {
 			if c.name == "Expects ignored rollout identified by namespace annotation to not be added to the cache" {
 				ns := coreV1.Namespace{}
 				ns.Name = "test-ns"
-				ns.Annotations = map[string]string{"admiral.io/ignore":"true"}
+				ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
 				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
 			}
 			depController.Cache.cache = map[string]*RolloutClusterEntry{}
 			depController.Added(c.rollout)
 			if c.expectedRollout == nil {
-				if len(depController.Cache.cache) != 0 {
+				if len(depController.Cache.cache) != 0 || (depController.Cache.cache["id"] != nil && len(depController.Cache.cache["id"].Rollouts) != 0) {
 					t.Errorf("Cache should be empty if expected rollout is nil")
 				}
-			} else if len(depController.Cache.cache)==0 && c.expectedCacheSize != 0 {
-				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
-			}else if len(depController.Cache.cache["id"].Rollouts) < 1 && len(depController.Cache.cache["id"].Rollouts[common.Default]) != c.expectedCacheSize {
-				t.Errorf("Rollout controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Rollouts[""]), c.expectedCacheSize)
-			} else if depController.Cache.cache["id"].Rollouts[common.Default][0] != &rollout {
-				t.Errorf("Incorrect rollout added to rollout controller cache. Got %v expected %v", depController.Cache.cache["id"].Rollouts[""][0], rollout)
+			} else if len(depController.Cache.cache) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Unexpectedly empty cache. Expected cache to have entry for the given identifier")
+			} else if len(depController.Cache.cache["id"].Rollouts) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Rollout controller cache has wrong size. Cached was expected to have rollout for environment %v but was not present.", common.Default)
+			} else if depController.Cache.cache["id"].Rollouts[common.Default] != nil && depController.Cache.cache["id"].Rollouts[common.Default] != &rollout {
+				t.Errorf("Incorrect rollout added to rollout controller cache. Got %v expected %v", depController.Cache.cache["id"].Rollouts[common.Default], rollout)
 			}
 
 		})
@@ -138,19 +143,19 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 	rollout.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
 	rollout.Labels = map[string]string{"identity": "app1"}
 
-	rollout2 :=argo.Rollout{}
+	rollout2 := argo.Rollout{}
 	rollout2.Namespace = "namespace"
 	rollout2.Name = "fake-app-rollout-e2e"
 	rollout2.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -163,7 +168,7 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 	rollout3.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -176,7 +181,7 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 	rollout4.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app2", "env":"prf"},
+				Labels: map[string]string{"identity": "app2", "env": "prf"},
 			},
 		},
 	}
@@ -192,40 +197,40 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
+		name             string
 		expectedRollouts []argo.Rollout
-		fakeClient argoprojv1alpha1.ArgoprojV1alpha1Interface
-		labelValue string
+		fakeClient       argoprojv1alpha1.ArgoprojV1alpha1Interface
+		labelValue       string
 	}{
 		{
-			name: "Get one",
+			name:             "Get one",
 			expectedRollouts: []argo.Rollout{rollout},
-			fakeClient:oneRolloutClient,
-			labelValue: "app1",
+			fakeClient:       oneRolloutClient,
+			labelValue:       "app1",
 		},
 		{
-			name: "Get one from long list",
+			name:             "Get one from long list",
 			expectedRollouts: []argo.Rollout{rollout4},
-			fakeClient:allRolloutsClient,
-			labelValue: "app2",
+			fakeClient:       allRolloutsClient,
+			labelValue:       "app2",
 		},
 		{
-			name: "Get many from long list",
+			name:             "Get many from long list",
 			expectedRollouts: []argo.Rollout{rollout, rollout3, rollout2},
-			fakeClient:allRolloutsClient,
-			labelValue: "app1",
+			fakeClient:       allRolloutsClient,
+			labelValue:       "app1",
 		},
 		{
-			name: "Get none from long list",
+			name:             "Get none from long list",
 			expectedRollouts: []argo.Rollout{},
-			fakeClient:allRolloutsClient,
-			labelValue: "app3",
+			fakeClient:       allRolloutsClient,
+			labelValue:       "app3",
 		},
 		{
-			name: "Get none from empty list",
+			name:             "Get none from empty list",
 			expectedRollouts: []argo.Rollout{},
-			fakeClient:noRolloutsClient,
-			labelValue: "app1",
+			fakeClient:       noRolloutsClient,
+			labelValue:       "app1",
 		},
 	}
 

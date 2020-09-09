@@ -4,15 +4,15 @@ import (
 	"fmt"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	argoclientset "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
-	argoinformers "github.com/argoproj/argo-rollouts/pkg/client/informers/externalversions"
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
+	argoinformers "github.com/argoproj/argo-rollouts/pkg/client/informers/externalversions"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/kubernetes"
 	"sync"
 	"time"
 )
@@ -26,25 +26,22 @@ type RolloutHandler interface {
 
 type RolloutsEntry struct {
 	Identity string
-	Rollout *argo.Rollout
+	Rollout  *argo.Rollout
 }
 
 type RolloutClusterEntry struct {
-	Identity    string
-	Rollouts map[string][]*argo.Rollout
+	Identity string
+	Rollouts map[string]*argo.Rollout
 }
 
 type RolloutController struct {
-	K8sClient         kubernetes.Interface
-	RolloutClient     argoprojv1alpha1.ArgoprojV1alpha1Interface
+	K8sClient      kubernetes.Interface
+	RolloutClient  argoprojv1alpha1.ArgoprojV1alpha1Interface
 	RolloutHandler RolloutHandler
-	informer  cache.SharedIndexInformer
-	ctl      *Controller
-	clusterName string
-	Cache    *rolloutCache
-	labelSet *common.LabelSet
+	informer       cache.SharedIndexInformer
+	Cache          *rolloutCache
+	labelSet       *common.LabelSet
 }
-
 
 type rolloutCache struct {
 	//map of dependencies key=identity value array of onboarded identities
@@ -73,7 +70,7 @@ func (p *rolloutCache) Delete(pod *RolloutClusterEntry) {
 	delete(p.cache, pod.Identity)
 }
 
-func (p *rolloutCache) AppendRolloutToCluster(key string, rollout *argo.Rollout) {
+func (p *rolloutCache) UpdateRolloutToClusterCache(key string, rollout *argo.Rollout) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -81,22 +78,25 @@ func (p *rolloutCache) AppendRolloutToCluster(key string, rollout *argo.Rollout)
 
 	if v == nil {
 		v = &RolloutClusterEntry{
-			Identity:    key,
-			Rollouts: make(map[string][]*argo.Rollout),
+			Identity: key,
+			Rollouts: make(map[string]*argo.Rollout),
 		}
 		p.cache[v.Identity] = v
 	}
 	env := common.GetEnvForRollout(rollout)
-	envRollouts := v.Rollouts[env]
+	v.Rollouts[env] = rollout
+}
 
-	if envRollouts == nil {
-		envRollouts = make([]*argo.Rollout, 0)
+func (p *rolloutCache) DeleteFromRolloutToClusterCache(key string, rollout *argo.Rollout) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	v := p.Get(key)
+
+	if v != nil {
+		env := common.GetEnvForRollout(rollout)
+		delete(v.Rollouts, env)
 	}
-
-	envRollouts = append(envRollouts, rollout)
-
-	v.Rollouts[env] = envRollouts
-
 }
 
 func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Rollout) bool {
@@ -124,7 +124,6 @@ func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Ro
 	return false //labels are fine, we should not ignore
 }
 
-
 func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration) (*RolloutController, error) {
 
 	roController := RolloutController{}
@@ -139,7 +138,6 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 
 	var err error
 	rolloutClient, err := argoclientset.NewForConfig(config)
-
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create rollouts controller argo client: %v", err)
@@ -163,10 +161,10 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	return &roController, nil
 }
 
-func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration,labelSet *common.LabelSet) (*RolloutController, error) {
-	rc, err :=  NewRolloutsController(stopCh,handler,config,resyncPeriod)
-	rc.labelSet =labelSet
-	return rc,err
+func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*RolloutController, error) {
+	rc, err := NewRolloutsController(stopCh, handler, config, resyncPeriod)
+	rc.labelSet = labelSet
+	return rc, err
 }
 
 func (roc *RolloutController) Added(ojb interface{}) {
@@ -174,17 +172,25 @@ func (roc *RolloutController) Added(ojb interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.AppendRolloutToCluster(key, rollout)
+		roc.Cache.UpdateRolloutToClusterCache(key, rollout)
 		roc.RolloutHandler.Added(rollout)
+	} else {
+		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
+		log.Debugf("ignoring rollout %v based on labels", rollout.Name)
 	}
 }
 
-func (roc *RolloutController) Updated(ojb interface{},oldObj interface{}) {
+func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
-	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.AppendRolloutToCluster(key, rollout)
-		roc.RolloutHandler.Added(rollout)
+	if len(key) > 0 {
+		if !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
+			roc.Cache.UpdateRolloutToClusterCache(key, rollout)
+			roc.RolloutHandler.Added(rollout)
+		} else {
+			roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
+			log.Debugf("ignoring rollout %v based on labels", rollout.Name)
+		}
 	}
 }
 
@@ -197,7 +203,7 @@ func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace strin
 	matchLabel := common.GetGlobalTrafficDeploymentLabel()
 	labelOptions := meta_v1.ListOptions{}
 	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
-	matchedRollouts, err :=d.RolloutClient.Rollouts(namespace).List(labelOptions)
+	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
 
 	if err != nil {
 		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)

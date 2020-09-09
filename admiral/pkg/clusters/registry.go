@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 )
 
 const (
@@ -61,6 +61,12 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
+
+		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
+	}
+
+	if !params.ArgoRolloutsEnabled {
+		log.Info("argo rollouts disabled")
 	}
 
 	configMapController, err := admiral.NewConfigMapController()
@@ -109,6 +115,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	rc := RemoteController{
 		stop:      stop,
 		ClusterID: clusterID,
+		ApiServer: clientConfig.Host,
 	}
 
 	var err error
@@ -128,11 +135,15 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)
 	}
 
-	log.Infof("starting rollout controller clusterID: %v", clusterID)
-	rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	if r.AdmiralCache == nil {
+		log.Warn("admiral cache was nil!")
+	} else if r.AdmiralCache.argoRolloutsEnabled {
+		log.Infof("starting rollout controller clusterID: %v", clusterID)
+		rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
 
-	if err != nil {
-		return fmt.Errorf(" Error with Rollout controller init: %v", err)
+		if err != nil {
+			return fmt.Errorf(" Error with Rollout controller init: %v", err)
+		}
 	}
 
 	log.Infof("starting pod controller clusterID: %v", clusterID)
@@ -193,10 +204,21 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 }
 
 func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
-	if err := r.deleteCacheController(clusterID); err != nil {
-		return err
+	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
+	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
+	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
+	controller := r.remoteControllers[clusterID]
+
+	if clientConfig.Host != controller.ApiServer {
+		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
+
+		if err := r.deleteCacheController(clusterID); err != nil {
+			return err
+		}
+		return r.createCacheController(clientConfig, clusterID, resyncPeriod)
+
 	}
-	return r.createCacheController(clientConfig, clusterID, resyncPeriod)
+	return nil
 }
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {

@@ -25,7 +25,7 @@ func Subset(m1 map[string]string, m2 map[string]string) bool {
 			}
 		}
 	}
-	return true;
+	return true
 }
 
 func Contains(vs []string, t string) bool {

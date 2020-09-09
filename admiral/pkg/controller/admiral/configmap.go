@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const configmapName  = "se-address-configmap"
+const configmapName = "se-address-configmap"
 
 type ConfigMapControllerInterface interface {
 	GetConfigMap() (*v1.ConfigMap, error)
@@ -18,7 +18,7 @@ type ConfigMapControllerInterface interface {
 }
 
 type ConfigMapController struct {
-	K8sClient kubernetes.Interface
+	K8sClient          kubernetes.Interface
 	ConfigmapNamespace string
 }
 
@@ -37,7 +37,7 @@ func NewConfigMapController() (*ConfigMapController, error) {
 			return nil, err
 		}
 		controller := ConfigMapController{
-			K8sClient: client,
+			K8sClient:          client,
 			ConfigmapNamespace: namespaceToUse,
 		}
 		return &controller, nil
@@ -54,7 +54,7 @@ func NewConfigMapController() (*ConfigMapController, error) {
 			return nil, err
 		}
 		controller := ConfigMapController{
-			K8sClient: client,
+			K8sClient:          client,
 			ConfigmapNamespace: namespaceToUse,
 		}
 		return &controller, nil
@@ -85,4 +85,3 @@ func (c *ConfigMapController) PutConfigMap(newMap *v1.ConfigMap) error {
 	_, err := c.K8sClient.CoreV1().ConfigMaps(c.ConfigmapNamespace).Update(newMap)
 	return err
 }
-

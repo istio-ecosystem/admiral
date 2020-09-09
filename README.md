@@ -36,3 +36,7 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 
 ## Contributing
 Refer to [Contributing doc](./CONTRIBUTING.md)
+
+## Release Cadence
+
+Details can be found [here](./docs/Processes.md)

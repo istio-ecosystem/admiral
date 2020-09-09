@@ -42,7 +42,7 @@ func TestDeploymentController_Added(t *testing.T) {
 	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithIgnoreAnnotations := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
-	deploymentWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore":"true"}
+	deploymentWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore": "true"}
 	deploymentWithIgnoreAnnotations.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithNsIgnoreAnnotations := k8sAppsV1.Deployment{}
 	deploymentWithNsIgnoreAnnotations.Spec.Template.Labels = map[string]string{"identity": "id"}
@@ -50,40 +50,46 @@ func TestDeploymentController_Added(t *testing.T) {
 	deploymentWithNsIgnoreAnnotations.Namespace = "test-ns"
 
 	testCases := []struct {
-		name               string
-		deployment         *k8sAppsV1.Deployment
-		expectedDeployment *k8sAppsV1.Deployment
-		expectedCacheSize  int
+		name                  string
+		deployment            *k8sAppsV1.Deployment
+		expectedDeployment    *k8sAppsV1.Deployment
+		expectedCacheContains bool
 	}{
 		{
-			name:               "Expects deployment to be added to the cache when the correct label is present",
-			deployment:         &deployment,
-			expectedDeployment: &deployment,
-			expectedCacheSize:  1,
+			name:                  "Expects deployment to be added to the cache when the correct label is present",
+			deployment:            &deployment,
+			expectedDeployment:    &deployment,
+			expectedCacheContains: true,
 		},
 		{
-			name:               "Expects deployment to not be added to the cache when the correct label is not present",
-			deployment:         &deploymentWithBadLabels,
-			expectedDeployment: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects deployment to not be added to the cache when the correct label is not present",
+			deployment:            &deploymentWithBadLabels,
+			expectedDeployment:    nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored deployment identified by label to not be added to the cache",
-			deployment:         &deploymentWithIgnoreLabels,
-			expectedDeployment: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored deployment identified by label to not be added to the cache",
+			deployment:            &deploymentWithIgnoreLabels,
+			expectedDeployment:    nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored deployment identified by deployment annotation to not be added to the cache",
-			deployment:         &deploymentWithIgnoreAnnotations,
-			expectedDeployment: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored deployment identified by deployment annotation to not be added to the cache",
+			deployment:            &deploymentWithIgnoreAnnotations,
+			expectedDeployment:    nil,
+			expectedCacheContains: false,
 		},
 		{
-			name:               "Expects ignored deployment identified by namespace annotation to not be added to the cache",
-			deployment:         &deploymentWithNsIgnoreAnnotations,
-			expectedDeployment: nil,
-			expectedCacheSize:  0,
+			name:                  "Expects ignored deployment identified by namespace annotation to not be added to the cache",
+			deployment:            &deploymentWithNsIgnoreAnnotations,
+			expectedDeployment:    nil,
+			expectedCacheContains: false,
+		},
+		{
+			name:                  "Expects ignored deployment identified by label to be removed from the cache",
+			deployment:            &deploymentWithIgnoreLabels,
+			expectedDeployment:    &deploymentWithIgnoreLabels,
+			expectedCacheContains: false,
 		},
 	}
 	for _, c := range testCases {
@@ -92,29 +98,31 @@ func TestDeploymentController_Added(t *testing.T) {
 			if c.name == "Expects ignored deployment identified by namespace annotation to not be added to the cache" {
 				ns := coreV1.Namespace{}
 				ns.Name = "test-ns"
-				ns.Annotations = map[string]string{"admiral.io/ignore":"true"}
+				ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
 				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
 			}
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
+
+			if c.name == "Expects ignored deployment identified by label to be removed from the cache" {
+				depController.Cache.UpdateDeploymentToClusterCache("id", &deployment)
+			}
 			depController.Added(c.deployment)
+
 			if c.expectedDeployment == nil {
-				if len(depController.Cache.cache) != 0 {
+				if len(depController.Cache.cache) != 0 || (depController.Cache.cache["id"] != nil && len(depController.Cache.cache["id"].Deployments) != 0) {
 					t.Errorf("Cache should be empty if expected deployment is nil")
 				}
-			} else if len(depController.Cache.cache)==0 && c.expectedCacheSize != 0 {
-				t.Errorf("Unexpectedly empty cache. Length should have been %v but was 0", c.expectedCacheSize)
-			}else if len(depController.Cache.cache["id"].Deployments) < 1 && len(depController.Cache.cache["id"].Deployments[common.Default]) != c.expectedCacheSize {
-				t.Errorf("Deployment controller cache the wrong size. Got %v, expected %v", len(depController.Cache.cache["id"].Deployments[""]), c.expectedCacheSize)
-			} else if depController.Cache.cache["id"].Deployments[common.Default][0] != &deployment {
-				t.Errorf("Incorrect deployment added to deployment controller cache. Got %v expected %v", depController.Cache.cache["id"].Deployments[""][0], deployment)
+			} else if len(depController.Cache.cache) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Unexpectedly empty cache. Cache was expected to have the key")
+			} else if len(depController.Cache.cache["id"].Deployments) == 0 && c.expectedCacheContains != false {
+				t.Errorf("Deployment controller cache has wrong size. Cached was expected to have deployment for environment %v but was not present.", common.Default)
+			} else if depController.Cache.cache["id"].Deployments[common.Default] != nil && depController.Cache.cache["id"].Deployments[common.Default] != &deployment {
+				t.Errorf("Incorrect deployment added to deployment controller cache. Got %v expected %v", depController.Cache.cache["id"].Deployments[common.Default], deployment)
 			}
-
 		})
 	}
 
 }
-
-
 
 func TestDeploymentController_GetDeployments(t *testing.T) {
 
@@ -126,7 +134,6 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 			AdmiralIgnoreLabel:                  "admiral-ignore",
 		},
 	}
-
 
 	client := fake.NewSimpleClientset()
 
@@ -141,17 +148,17 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Namespace = "test-ns"
-	deployment.Name="deployment"
+	deployment.Name = "deployment"
 	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
 	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	deploymentWithBadLabels := k8sAppsV1.Deployment{}
 	deploymentWithBadLabels.Namespace = "test-ns"
-	deploymentWithBadLabels.Name="deploymentWithBadLabels"
+	deploymentWithBadLabels.Name = "deploymentWithBadLabels"
 	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
 	deploymentWithBadLabels.Spec.Template.Annotations = map[string]string{"woo": "yay"}
 	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
 	deploymentWithIgnoreLabels.Namespace = "test-ns"
-	deploymentWithIgnoreLabels.Name="deploymentWithIgnoreLabels"
+	deploymentWithIgnoreLabels.Name = "deploymentWithIgnoreLabels"
 	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
 	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 	_, err = client.AppsV1().Deployments("test-ns").Create(&deployment)
@@ -168,7 +175,7 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 	if len(resultingDeps) != 1 {
 		t.Errorf("Get Deployments returned too many values. Expected 1, got %v", len(resultingDeps))
 	}
-	if  !cmp.Equal(resultingDeps[0], &deployment) {
+	if !cmp.Equal(resultingDeps[0], &deployment) {
 		log.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
 		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
 	}
@@ -197,7 +204,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment.Spec = k8sAppsV1.DeploymentSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"qal"},
+				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
@@ -209,7 +216,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment2.Spec = k8sAppsV1.DeploymentSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"e2e"},
+				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
@@ -222,7 +229,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment3.Spec = k8sAppsV1.DeploymentSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app1", "env":"prf"},
+				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
@@ -235,7 +242,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment4.Spec = k8sAppsV1.DeploymentSpec{
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"identity": "app2", "env":"prf"},
+				Labels: map[string]string{"identity": "app2", "env": "prf"},
 			},
 		},
 	}
@@ -251,40 +258,40 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
+		name                string
 		expectedDeployments []k8sAppsV1.Deployment
-		fakeClient *fake.Clientset
-		labelValue string
+		fakeClient          *fake.Clientset
+		labelValue          string
 	}{
 		{
-			name: "Get one",
+			name:                "Get one",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment},
-			fakeClient:oneDeploymentClient,
-			labelValue: "app1",
+			fakeClient:          oneDeploymentClient,
+			labelValue:          "app1",
 		},
 		{
-			name: "Get one from long list",
+			name:                "Get one from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment4},
-			fakeClient:allDeploymentsClient,
-			labelValue: "app2",
+			fakeClient:          allDeploymentsClient,
+			labelValue:          "app2",
 		},
 		{
-			name: "Get many from long list",
+			name:                "Get many from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment, deployment3, deployment2},
-			fakeClient:allDeploymentsClient,
-			labelValue: "app1",
+			fakeClient:          allDeploymentsClient,
+			labelValue:          "app1",
 		},
 		{
-			name: "Get none from long list",
+			name:                "Get none from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{},
-			fakeClient:allDeploymentsClient,
-			labelValue: "app3",
+			fakeClient:          allDeploymentsClient,
+			labelValue:          "app3",
 		},
 		{
-			name: "Get none from empty list",
+			name:                "Get none from empty list",
 			expectedDeployments: []k8sAppsV1.Deployment{},
-			fakeClient:noDeploymentsClient,
-			labelValue: "app1",
+			fakeClient:          noDeploymentsClient,
+			labelValue:          "app1",
 		},
 	}
 
