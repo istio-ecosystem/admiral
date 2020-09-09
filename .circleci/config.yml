@@ -56,6 +56,11 @@ jobs:
             echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
             source $BASH_ENV
       - run:
+          name: Spin up test cluster
+          command:  |
+            minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
+            export KUBECONFIG=~/.kube/config
+      - run:
           name: Run Integration Test
           command:  |
             ./tests/run.sh "1.14.2" "1.4.3" "./install"
