@@ -80,6 +80,8 @@ jobs:
           command:  |
             pwd
             ls
+            cd admiral
+            ls
             ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
 
   publish-github-release:
