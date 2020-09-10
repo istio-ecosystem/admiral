@@ -62,6 +62,7 @@ jobs:
               && chmod +x minikube
             sudo mkdir -p /usr/local/bin/
             sudo install minikube /usr/local/bin/
+            docker version
             minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
             export KUBECONFIG=~/.kube/config
       - run:
