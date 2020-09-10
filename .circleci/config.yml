@@ -1,7 +1,5 @@
-version: 2.1
-orbs:
-  codecov: codecov/codecov@1.0.2
-  minikube: ccpgames/minikube@0.0.1
+version: 2
+
 jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
@@ -25,8 +23,6 @@ jobs:
         command: |
           make test
           mv c.out /tmp/
-    - codecov/upload:
-        file: /tmp/c.out
     - setup_remote_docker
     - run:
         name: Build Docker image
@@ -47,8 +43,30 @@ jobs:
           - image: circleci/golang:1.11
     steps:
       - checkout
-      - setup_remote_docker
-      - minikube/initialize
+      - run:
+          name: setup kubectl
+          command: |
+            curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+            mkdir -p ${HOME}/.kube
+            touch ${HOME}/.kube/config
+      - run:
+          name: setup minikube
+          command: |
+            curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+      - run:
+          name: setup helm
+          command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
+      - run:
+          name: start minikube
+          command: |
+            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
+      - run:
+          name: wait for minikube
+          command: |
+            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
+            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
+              sleep 1;
+            done
       - run:
           name: Spin up test cluster
           command:  |
