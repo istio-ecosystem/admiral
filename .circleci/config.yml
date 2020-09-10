@@ -58,8 +58,10 @@ jobs:
       - run:
           name: Spin up test cluster
           command:  |
-            curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-darwin-amd64 && chmod +x minikube
-            sudo mv minikube /usr/local/bin
+            curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
+              && chmod +x minikube
+            sudo mkdir -p /usr/local/bin/
+            sudo install minikube /usr/local/bin/
             minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
             export KUBECONFIG=~/.kube/config
       - run:
