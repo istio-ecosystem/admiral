@@ -48,6 +48,7 @@ jobs:
     steps:
       - checkout
       - kube-orb/install
+      - setup_remote_docker
       - run:
           name: Setting BRANCH, TAG & SHA variables
           command: |
@@ -59,7 +60,6 @@ jobs:
           name: Spin up test cluster
           command:  |
             docker version
-            sudo service docker start
             curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
               && chmod +x minikube
             sudo mkdir -p /usr/local/bin/
@@ -69,7 +69,8 @@ jobs:
       - run:
           name: Run Integration Test
           command:  |
-            ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
+            pwd
+            ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/admiral/install"
 
   publish-github-release:
     docker:
