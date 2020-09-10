@@ -67,6 +67,7 @@ jobs:
           name: start minikube
           command: |
             sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
+            export KUBECONFIG=${HOME}/.kube/config
       - run:
           name: wait for minikube
           command: |
@@ -75,20 +76,10 @@ jobs:
               sleep 1;
             done
       - run:
-          name: Spin up test cluster
-          command:  |
-            docker version
-            curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
-              && chmod +x minikube
-            sudo mkdir -p /usr/local/bin/
-            sudo install minikube /usr/local/bin/
-            minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2 --vm-driver=none
-            export KUBECONFIG=~/.kube/config
-      - run:
           name: Run Integration Test
           command:  |
             pwd
-            ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/admiral/install"
+            ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
 
   publish-github-release:
     docker:
