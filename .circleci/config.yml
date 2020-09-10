@@ -50,13 +50,6 @@ jobs:
       - kube-orb/install
       - setup_remote_docker
       - run:
-          name: Setting BRANCH, TAG & SHA variables
-          command: |
-            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
-            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
-            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
-            source $BASH_ENV
-      - run:
           name: Spin up test cluster
           command:  |
             docker version
@@ -64,7 +57,7 @@ jobs:
               && chmod +x minikube
             sudo mkdir -p /usr/local/bin/
             sudo install minikube /usr/local/bin/
-            minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2 --driver=docker
+            minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2 --vm-driver=none
             export KUBECONFIG=~/.kube/config
       - run:
           name: Run Integration Test
