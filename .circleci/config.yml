@@ -58,6 +58,7 @@ jobs:
       - run:
           name: Spin up test cluster
           command:  |
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
             brew install minikube
             minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
             export KUBECONFIG=~/.kube/config
