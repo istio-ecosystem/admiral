@@ -41,6 +41,7 @@ jobs:
           - .
 
   publish-github-release:
+
     docker:
     - image: circleci/golang:1.11
     working_directory: /go/pkg/mod/github.com/admiral
