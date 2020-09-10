@@ -114,10 +114,10 @@ workflows:
   version: 2
   build-and-release:
     jobs:
-#      - build:
-#          filters:
-#            tags:
-#              only: /.*/
+      - build:
+          filters:
+            tags:
+              only: /.*/
       - run-integration-tests:
           filters:
             tags:
