@@ -38,9 +38,16 @@ jobs:
           - .
 
   run-integration-tests:
-    working_directory: /go/pkg/mod/github.com/admiral
-    docker:
-          - image: circleci/golang:1.11
+    machine:
+      image: circleci/classic:201808-01
+    environment:
+      K8S_VERSION: v1.10.0
+      KUBECONFIG: /home/circleci/.kube/config
+      MINIKUBE_VERSION: v0.30.0
+      MINIKUBE_WANTUPDATENOTIFICATION: false
+      MINIKUBE_WANTREPORTERRORPROMPT: false
+      MINIKUBE_HOME: /home/circleci
+      CHANGE_MINIKUBE_NONE_USER: true
     steps:
       - checkout
       - run:
