@@ -58,12 +58,13 @@ jobs:
       - run:
           name: Spin up test cluster
           command:  |
+            brew install minikube
             minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
             export KUBECONFIG=~/.kube/config
       - run:
           name: Run Integration Test
           command:  |
-            ./tests/run.sh "1.14.2" "1.4.3" "./install"
+            ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
 
   publish-github-release:
     docker:
