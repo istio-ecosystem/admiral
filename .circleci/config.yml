@@ -1,7 +1,7 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@1.0.2
-  kube-orb: circleci/kubernetes@0.11.1
+  minikube: ccpgames/minikube@0.0.1
 jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
@@ -47,8 +47,8 @@ jobs:
           - image: circleci/golang:1.11
     steps:
       - checkout
-      - kube-orb/install
       - setup_remote_docker
+      - minikube/initialize
       - run:
           name: Spin up test cluster
           command:  |
