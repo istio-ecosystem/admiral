@@ -79,6 +79,7 @@ jobs:
           name: Run Integration Test
           command:  |
             pwd
+            ls
             ./tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
 
   publish-github-release:
@@ -111,10 +112,10 @@ workflows:
   version: 2
   build-and-release:
     jobs:
-      - build:
-          filters:
-            tags:
-              only: /.*/
+#      - build:
+#          filters:
+#            tags:
+#              only: /.*/
       - run-integration-tests:
           filters:
             tags:
