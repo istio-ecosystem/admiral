@@ -77,6 +77,11 @@ jobs:
               sleep 1;
             done
       - run:
+          name: dump cluster-info
+          command: |
+            kubectl cluster-info
+            kubectl get po --all-namespaces
+      - run:
           name: Setting BRANCH, TAG & SHA variables
           command: |
             echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
@@ -86,13 +91,12 @@ jobs:
       - run:
           name: Run Integration Test
           command:  |
-            make build
             pwd
             ls
             cd admiral/tests
             ls
             cat run.sh
-            ./run.sh
+            make gen-yaml
             ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
 
   publish-github-release:
