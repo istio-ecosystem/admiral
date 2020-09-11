@@ -76,6 +76,13 @@ jobs:
               sleep 1;
             done
       - run:
+          name: Setting BRANCH, TAG & SHA variables
+          command: |
+            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
+            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
+            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
           name: Run Integration Test
           command:  |
             make build
