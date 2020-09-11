@@ -40,7 +40,6 @@ jobs:
   run-integration-tests:
     machine:
       image: circleci/classic:201808-01
-    working_directory: /go/pkg/mod/github.com/admiral
     environment:
       K8S_VERSION: v1.10.0
       KUBECONFIG: /home/circleci/.kube/config
