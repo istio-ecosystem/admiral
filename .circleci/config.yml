@@ -131,6 +131,8 @@ workflows:
             tags:
               only: /.*/
       - run-integration-tests:
+          requires:
+            - build
           filters:
             tags:
               only: /.*/
