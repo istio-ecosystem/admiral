@@ -39,7 +39,7 @@ jobs:
 
   run-integration-tests:
     machine:
-      image: circleci/classic:201808-01
+      image: circleci/golang:1.11
     environment:
       K8S_VERSION: v1.10.0
       KUBECONFIG: /home/circleci/.kube/config
@@ -97,7 +97,7 @@ jobs:
             ls
             cat run.sh
             make gen-yaml
-            ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "/go/pkg/mod/github.com/admiral/install"
+            ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
 
   publish-github-release:
     docker:
