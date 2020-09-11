@@ -78,6 +78,7 @@ jobs:
       - run:
           name: Run Integration Test
           command:  |
+            make build
             pwd
             ls
             cd admiral/tests
