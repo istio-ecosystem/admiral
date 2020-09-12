@@ -18,28 +18,37 @@ jobs:
         name: Build
         command: |
           make build
-    - run:
-        name: Tests
-        command: |
-          make test
-          mv c.out /tmp/
-    - setup_remote_docker
-    - run:
-        name: Build Docker image
-        command: |
-          make docker-build
-    - run:
-        name: Publish Docker image
-        command: |
-          make docker-publish
+#    - run:
+#        name: Tests
+#        command: |
+#          make test
+#          mv c.out /tmp/
+#    - setup_remote_docker
+#    - run:
+#        name: Build Docker image
+#        command: |
+#          make docker-build
+#    - run:
+#        name: Publish Docker image
+#        command: |
+#          make docker-publish
     - persist_to_workspace:
         root: .
         paths:
           - .
+    - run:
+        name: Verify work space location and preserved content
+        command: |
+          pwd
+          cd admiral
+          ls
+          cd tests
+          ls
+          cat run.sh
 
   run-integration-tests:
     machine:
-      image: circleci/golang:1.11
+      image: circleci/classic:201808-01
     environment:
       K8S_VERSION: v1.10.0
       KUBECONFIG: /home/circleci/.kube/config
