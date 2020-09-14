@@ -96,13 +96,20 @@ jobs:
             echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
             source $BASH_ENV
       - run:
-          name: Run Integration Test
-          command:  |
+          name: Check if file exist
+          command: |
             pwd
             ls
+            cd tests
+            ls
+            cat run.sh
+      - run:
+          name: Run Integration Test
+          command:  |
             make download-kustomize
             echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
             source $BASH_ENV
+            export PATH=$PATH:$(go env GOPATH)/bin
             (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
             make gen-yaml
             ./tests/run.sh "1.14.2" "1.4.3" "./out"
