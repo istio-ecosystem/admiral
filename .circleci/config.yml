@@ -100,6 +100,9 @@ jobs:
           command:  |
             pwd
             ls
+            make download-kustomize
+            echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
+            source $BASH_ENV
             make gen-yaml
             ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
 
