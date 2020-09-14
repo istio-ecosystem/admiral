@@ -40,6 +40,7 @@ jobs:
         name: Verify work space location and preserved content
         command: |
           pwd
+          ls
           cd admiral
           ls
 
@@ -98,8 +99,6 @@ jobs:
           name: Run Integration Test
           command:  |
             pwd
-            ls
-            cd admiral
             ls
             make gen-yaml
             ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
