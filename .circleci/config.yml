@@ -89,6 +89,18 @@ jobs:
 #            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
 #            source $BASH_ENV
       - run:
+          name: Generate output
+          command: |
+            make download-kustomize
+            echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
+            source $BASH_ENV
+            (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
+            make gen-yaml
+            mkdir ./artifact
+            mkdir admiral-install-${CIRCLE_TAG}
+            cp -R out/* admiral-install-${CIRCLE_TAG}
+            tar -zcvf ./artifact/admiral-install-${CIRCLE_TAG}.tar.gz admiral-install-${CIRCLE_TAG}
+      - run:
           name: Run Integration Test
           command:  |
             make download-kustomize
