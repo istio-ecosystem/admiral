@@ -89,17 +89,12 @@ jobs:
 #            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
 #            source $BASH_ENV
       - run:
-          name: Generate output
+          name: Download kustomizable
           command: |
-            make download-kustomize
-            echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
-            source $BASH_ENV
-            (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
-            make gen-yaml
-            mkdir ./artifact
-            mkdir admiral-install-${CIRCLE_TAG}
-            cp -R out/* admiral-install-${CIRCLE_TAG}
-            tar -zcvf ./artifact/admiral-install-${CIRCLE_TAG}.tar.gz admiral-install-${CIRCLE_TAG}
+            KUSTOMIZE_VERSION=2.1.0
+            curl -L -o /usr/local/bin/kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64
+            chmod +x /usr/local/bin/kustomize
+            kustomize version
       - run:
           name: Run Integration Test
           command:  |
