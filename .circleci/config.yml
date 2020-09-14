@@ -100,8 +100,7 @@ jobs:
           name: Run Integration Test
           command:  |
             make gen-yaml
-            cd tests
-            ./run.sh "1.14.2" "1.4.3" "../out"
+            ./tests/run.sh "1.14.2" "1.4.3" "./out"
 #           ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
 
   publish-github-release:
