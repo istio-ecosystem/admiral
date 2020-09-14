@@ -42,9 +42,6 @@ jobs:
           pwd
           cd admiral
           ls
-          cd tests
-          ls
-          cat run.sh
 
   run-integration-tests:
     machine:
