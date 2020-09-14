@@ -99,9 +99,8 @@ jobs:
           command:  |
             pwd
             ls
-            cd admiral/tests
+            cd admiral
             ls
-            cat run.sh
             make gen-yaml
             ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
 
