@@ -103,6 +103,7 @@ jobs:
             make download-kustomize
             echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
             source $BASH_ENV
+            (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${CIRCLE_TAG}")
             make gen-yaml
             ./tests/run.sh "1.14.2" "1.4.3" "./out"
 #           ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
