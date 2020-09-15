@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  codecov: codecov/codecov@1.0.2
+
 jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
