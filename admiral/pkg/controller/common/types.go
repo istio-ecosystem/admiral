@@ -43,6 +43,7 @@ type AdmiralParams struct {
 	HostnameSuffix             string
 	WorkloadSidecarUpdate      string
 	WorkloadSidecarName        string
+	FQDNTemplate               string
 }
 
 func (b AdmiralParams) String() string {

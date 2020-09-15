@@ -16,6 +16,7 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
+	"text/template"
 )
 
 const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
@@ -417,15 +418,15 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 			if dependentCluster == clusterId {
 				//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-				createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
+				createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule, dh.RemoteRegistry.AdmiralCache.FQDNTemplate)
 			}
 
 		}
 	}
 }
 
-func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *v1alpha32.DestinationRule) {
+func createDestinationRuleForLocal(remoteController *RemoteController, localDrName, identityId, clusterId string,
+	destinationRule *v1alpha32.DestinationRule, fqdnTemplate *template.Template) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -444,7 +445,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 	syncNamespace := common.GetSyncNamespace()
 	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance)
 
-	cname := common.GetCname(deploymentInstance, common.GetHostnameSuffix(), common.GetWorkloadIdentifier())
+	cname := common.GetCname(deploymentInstance, common.GetHostnameSuffix(), common.GetWorkloadIdentifier(), fqdnTemplate)
 	if cname == destinationRule.Host {
 		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		existsDestinationRule, err := remoteController.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(localDrName, v12.GetOptions{})

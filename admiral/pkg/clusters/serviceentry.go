@@ -27,7 +27,7 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
-	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
+	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix(), admiralCache.FQDNTemplate)
 
 	//Handling retries for getting/putting service entries from/in cache
 
@@ -72,7 +72,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 				continue
 			}
 
-			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix(), remoteRegistry.AdmiralCache.FQDNTemplate)
 			sourceDeployments[rc.ClusterID] = deploymentInstance
 			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
