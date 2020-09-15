@@ -44,7 +44,8 @@ jobs:
           - .
 
   run-integration-tests:
-    machine: true
+    machine:
+      image: circleci/classic:201808-01
     steps:
       - minikube/kubectl-install
       - minikube/minikube-start:
