@@ -70,23 +70,23 @@ jobs:
       - run:
           name: setup helm
           command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
-      - run:
-          name: start minikube
-          command: |
-            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
-            export KUBECONFIG=${HOME}/.kube/config
-      - run:
-          name: wait for minikube
-          command: |
-            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
-            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
-              sleep 1;
-            done
-      - run:
-          name: dump cluster-info
-          command: |
-            kubectl cluster-info
-            kubectl get po --all-namespaces
+#      - run:
+#          name: start minikube
+#          command: |
+#            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
+#            export KUBECONFIG=${HOME}/.kube/config
+#      - run:
+#          name: wait for minikube
+#          command: |
+#            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
+#            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
+#              sleep 1;
+#            done
+#      - run:
+#          name: dump cluster-info
+#          command: |
+#            kubectl cluster-info
+#            kubectl get po --all-namespaces
       - run:
           name: Download kustomizable
           command: |

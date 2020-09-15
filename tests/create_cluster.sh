@@ -5,4 +5,5 @@
 k8s_version=$1
 vm_driver=$2
 
-minikube start --memory=8192 --cpus=4 --kubernetes-version=$k8s_version --vm-driver $vm_driver
+minikube start --memory=2048 --cpus=2 --kubernetes-version=$k8s_version --vm-driver $vm_driver
+export KUBECONFIG=${HOME}/.kube/config
