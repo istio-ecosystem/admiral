@@ -7,7 +7,7 @@ istio_version=$2
 install_dir=$3
 
 #source ./create_cluster.sh $k8s_version "virtualbox"
-./install_istio.sh $istio_version "osx"
+./install_istio.sh $istio_version "linux"
 # Uncomment below line if setup fails due to KUBECONFIG not set
 export KUBECONFIG=~/.kube/config
 ./dns_setup.sh $install_dir
