@@ -14,6 +14,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   export os="osx"
 else
   export os="linux"
+fi
 ./install_istio.sh $istio_version $os
 # Uncomment below line if setup fails due to KUBECONFIG not set
 export KUBECONFIG=~/.kube/config
@@ -27,5 +28,4 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
-
 ./cleanup.sh $istio_version
