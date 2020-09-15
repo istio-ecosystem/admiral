@@ -23,6 +23,8 @@ jobs:
         command: |
           make test
           mv c.out /tmp/
+    - codecov/upload:
+        file: /tmp/c.out
     - setup_remote_docker
     - run:
         name: Build Docker image
