@@ -46,7 +46,10 @@ jobs:
   run-integration-tests:
     machine: true
     steps:
-      - minikube/initialize
+      - kubectl-install
+      - minikube-start:
+          version: v1.16.8
+      - helm-initialize
       - run:
           name: dump cluster-info
           command: |
