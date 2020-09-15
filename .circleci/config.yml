@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   codecov: codecov/codecov@1.0.2
+  minikube: ccpgames/minikube@0.0.1
 
 jobs:
   build:
@@ -43,56 +44,14 @@ jobs:
           - .
 
   run-integration-tests:
-    machine:
-      image: circleci/classic:201808-01
-    environment:
-      K8S_VERSION: v1.16.8
-      KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.13.0
-      MINIKUBE_WANTUPDATENOTIFICATION: false
-      MINIKUBE_WANTREPORTERRORPROMPT: false
-      MINIKUBE_HOME: /home/circleci
-      CHANGE_MINIKUBE_NONE_USER: true
+    machine: true
     steps:
-      - attach_workspace:
-          at: .
-      - run:
-          name: setup kubectl
-          command: |
-            curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-            mkdir -p ${HOME}/.kube
-            touch ${HOME}/.kube/config
-      - run:
-          name: setup minikube
-          command: |
-            curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
-      - run:
-          name: setup helm
-          command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
-      - run:
-          name: start minikube
-          command: |
-            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
-            export KUBECONFIG=${HOME}/.kube/config
-      - run:
-          name: wait for minikube
-          command: |
-            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
-            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
-              sleep 1;
-            done
+      - minikube/initialize
       - run:
           name: dump cluster-info
           command: |
             kubectl cluster-info
             kubectl get po --all-namespaces
-      - run:
-          name: Setting BRANCH, TAG & SHA variables
-          command: |
-            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
-            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
-            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Download kustomizable
           command: |
@@ -107,7 +66,72 @@ jobs:
             make gen-yaml
             cd tests
             ./run.sh "1.16.8" "1.5.6" "../out"
-#           ./home/circleci/project/admiral/tests/run.sh "1.14.2" "1.4.3" "the path in out folder after make gen"
+#
+#  run-integration-tests:
+#    machine:
+#      image: circleci/classic:201808-01
+#    environment:
+#      K8S_VERSION: v1.16.8
+#      KUBECONFIG: /home/circleci/.kube/config
+#      MINIKUBE_VERSION: v1.13.0
+#      MINIKUBE_WANTUPDATENOTIFICATION: false
+#      MINIKUBE_WANTREPORTERRORPROMPT: false
+#      MINIKUBE_HOME: /home/circleci
+#      CHANGE_MINIKUBE_NONE_USER: true
+#    steps:
+#      - attach_workspace:
+#          at: .
+#      - run:
+#          name: setup kubectl
+#          command: |
+#            curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+#            mkdir -p ${HOME}/.kube
+#            touch ${HOME}/.kube/config
+#      - run:
+#          name: setup minikube
+#          command: |
+#            curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+#      - run:
+#          name: setup helm
+#          command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
+#      - run:
+#          name: start minikube
+#          command: |
+#            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
+#            export KUBECONFIG=${HOME}/.kube/config
+#      - run:
+#          name: wait for minikube
+#          command: |
+#            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
+#            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
+#              sleep 1;
+#            done
+#      - run:
+#          name: dump cluster-info
+#          command: |
+#            kubectl cluster-info
+#            kubectl get po --all-namespaces
+#      - run:
+#          name: Setting BRANCH, TAG & SHA variables
+#          command: |
+#            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
+#            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
+#            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
+#            source $BASH_ENV
+#      - run:
+#          name: Download kustomizable
+#          command: |
+#            KUSTOMIZE_VERSION=2.1.0
+#            sudo chown -R $(whoami) /usr/local/bin
+#            curl -L -o /usr/local/bin/kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64
+#            chmod +x /usr/local/bin/kustomize
+#            kustomize version
+#      - run:
+#          name: Run Integration Test
+#          command:  |
+#            make gen-yaml
+#            cd tests
+#            ./run.sh "1.16.8" "1.5.6" "../out"
 
   publish-github-release:
     docker:
