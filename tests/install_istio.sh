@@ -32,8 +32,6 @@ then
     crds_count=0
     while [ $crds_count -lt 1 ]
     do
-      kubectl get events -n istio-system
-      kubectl get jobs -n istio-system
       crds_count=$(kubectl get crds | grep 'istio.io' | wc -l)
     done
 

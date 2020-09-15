@@ -6,7 +6,9 @@ k8s_version=$1
 istio_version=$2
 install_dir=$3
 
+# Uncomment below to run integration test on local computer
 #source ./create_cluster.sh $k8s_version "virtualbox"
+# change linux to osx when running on local computer
 ./install_istio.sh $istio_version "linux"
 # Uncomment below line if setup fails due to KUBECONFIG not set
 export KUBECONFIG=~/.kube/config
