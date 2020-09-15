@@ -89,13 +89,6 @@ jobs:
             kubectl cluster-info
             kubectl get po --all-namespaces
       - run:
-          name: Setting BRANCH, TAG & SHA variables
-          command: |
-            echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
-            echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
-            echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
-            source $BASH_ENV
-      - run:
           name: Download kustomizable
           command: |
             KUSTOMIZE_VERSION=2.1.0
