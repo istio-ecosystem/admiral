@@ -38,10 +38,11 @@ $ADMIRAL_HOME/install/scripts/cluster-secret.sh <Path_to_Kubeconfig_Admiral_Clus
 
 ## Integration tests
 ### Single cluster
-Single cluster integration tests can be run locally using minikube.
+Single cluster integration tests can be run locally using minikube. Read through run.sh and make sure the correct operating system and virtual machine are set if run into issues
 ```
+make gen-yaml
 cd $ADMIRAL_HOME/tests
-./master_run.sh
+./run.sh "1.16.8" "1.5.6" "../out"
 ```
 * Multi-cluster 
 ```
