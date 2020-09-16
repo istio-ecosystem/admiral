@@ -100,9 +100,7 @@ jobs:
           command:  |
             make gen-yaml
             cd tests
-            ls
-            cat run.sh
-            /run.sh "1.16.8" "1.6.8" "../out"
+            ./run.sh "1.16.8" "1.6.8" "../out"
 
   publish-github-release:
     docker:

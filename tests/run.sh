@@ -5,15 +5,19 @@
 k8s_version=$1
 istio_version=$2
 install_dir=$3
-
+os=""
 # Uncomment below to run integration test on local computer to spin up minikube
 source ./create_cluster.sh $k8s_version "virtualbox"
 # change $os from "linux" to "osx" when running on local computer
 echo "$OSTYPE"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  export os="osx"
+  os="osx"
 else
-  export os="linux"
+  if [[ istio_version == "1.5"* ]]; then
+    os="linux"
+  else
+    os="linux-amd64"
+  fi
 fi
 ./install_istio.sh $istio_version $os
 # Uncomment below line if setup fails due to KUBECONFIG not set
