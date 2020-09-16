@@ -83,6 +83,7 @@ jobs:
           command:  |
             make gen-yaml
             cd tests
+            export IS_LOCAL=false
             ./run.sh "1.16.8" "1.7.1" "../out"
 
   publish-github-release:
