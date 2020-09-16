@@ -100,8 +100,6 @@ jobs:
           command:  |
             make gen-yaml
             cd tests
-            ./run.sh "1.16.8" "1.5.7" "../out"
-            ./run.sh "1.16.8" "1.6.8" "../out"
             ./run.sh "1.16.8" "1.7.1" "../out"
 
   publish-github-release:
