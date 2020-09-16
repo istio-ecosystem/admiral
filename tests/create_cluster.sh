@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ $# -lt 2 ] && { echo "Usage: $0 <k8s_version> <vm_driver>" ; exit 1; }
+[ $# -lt 1 ] && { echo "Usage: $0 <k8s_version>" ; exit 1; }
 
 k8s_version=$1
 
