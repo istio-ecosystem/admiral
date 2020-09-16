@@ -21,22 +21,22 @@ jobs:
         name: Build
         command: |
           make build
-    - run:
-        name: Tests
-        command: |
-          make test
-          mv c.out /tmp/
-    - codecov/upload:
-        file: /tmp/c.out
-    - setup_remote_docker
-    - run:
-        name: Build Docker image
-        command: |
-          make docker-build
-    - run:
-        name: Publish Docker image
-        command: |
-          make docker-publish
+#    - run:
+#        name: Tests
+#        command: |
+#          make test
+#          mv c.out /tmp/
+#    - codecov/upload:
+#        file: /tmp/c.out
+#    - setup_remote_docker
+#    - run:
+#        name: Build Docker image
+#        command: |
+#          make docker-build
+#    - run:
+#        name: Publish Docker image
+#        command: |
+#          make docker-publish
     - persist_to_workspace:
         root: .
         paths:
@@ -70,23 +70,6 @@ jobs:
       - run:
           name: setup helm
           command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
-#      - run:
-#          name: start minikube
-#          command: |
-#            sudo -E minikube start --vm-driver=none --cpus 2 --memory 2048 --kubernetes-version=${K8S_VERSION} &> $HOME/minikube.log 2>&1 < /dev/null
-#            export KUBECONFIG=${HOME}/.kube/config
-#      - run:
-#          name: wait for minikube
-#          command: |
-#            JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}';
-#            until kubectl get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do
-#              sleep 1;
-#            done
-#      - run:
-#          name: dump cluster-info
-#          command: |
-#            kubectl cluster-info
-#            kubectl get po --all-namespaces
       - run:
           name: Download kustomizable
           command: |
@@ -100,8 +83,7 @@ jobs:
           command:  |
             make gen-yaml
             cd tests
-            ./run.sh "1.16.8" "1.5.7" "../out"
-            ./run.sh "1.16.8" "1.6.8" "../out"
+            ./run.sh "1.16.8" "1.7.1" "../out"
 
   publish-github-release:
     docker:

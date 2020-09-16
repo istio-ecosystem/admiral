@@ -49,7 +49,7 @@ then
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 else
-    "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml"
+    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml"
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 fi
