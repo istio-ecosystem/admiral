@@ -12,7 +12,7 @@ source ./create_cluster.sh $k8s_version "virtualbox"
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"
 else
-  if [[ istio_version == "1.5"* ]]; then
+  if [[ $istio_version == "1.5"* ]]; then
     os="linux"
   else
     os="linux-amd64"
