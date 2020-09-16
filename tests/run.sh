@@ -6,8 +6,7 @@ k8s_version=$1
 istio_version=$2
 install_dir=$3
 os=""
-# Uncomment below to run integration test on local computer to spin up minikube
-source ./create_cluster.sh $k8s_version "virtualbox"
+source ./create_cluster.sh $k8s_version
 # change $os from "linux" to "osx" when running on local computer
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"
