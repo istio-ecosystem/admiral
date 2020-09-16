@@ -43,8 +43,13 @@ then
     #Verify that sidecar injector is running
     kubectl rollout status deployment istio-sidecar-injector -n istio-system
 
-else
+elif [ $(ver $istio_version) -lt $(ver 1.6.0) ]
+then
     "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/install/kubernetes/operator/examples/multicluster/values-istio-multicluster-gateways.yaml"
+    #Verify that istiod is up and running
+    kubectl rollout status deployment istiod -n istio-system
+else
+    "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml"
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 fi
