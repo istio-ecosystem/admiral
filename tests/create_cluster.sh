@@ -9,5 +9,3 @@ if [[ $IS_LOCAL == "false" ]]; then
 else
   minikube start --memory=8192 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
 fi
-
-export KUBECONFIG=${HOME}/.kube/config

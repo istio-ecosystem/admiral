@@ -7,6 +7,8 @@ istio_version=$2
 install_dir=$3
 os=""
 source ./create_cluster.sh $k8s_version
+# Uncomment below line if setup fails due to KUBECONFIG not set
+export KUBECONFIG=~/.kube/config
 # change $os from "linux" to "osx" when running on local computer
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"
@@ -18,8 +20,6 @@ else
   fi
 fi
 ./install_istio.sh $istio_version $os
-# Uncomment below line if setup fails due to KUBECONFIG not set
-export KUBECONFIG=~/.kube/config
 ./dns_setup.sh $install_dir
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
