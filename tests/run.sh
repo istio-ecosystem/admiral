@@ -9,7 +9,6 @@ os=""
 # Uncomment below to run integration test on local computer to spin up minikube
 source ./create_cluster.sh $k8s_version "virtualbox"
 # change $os from "linux" to "osx" when running on local computer
-echo "$OSTYPE"
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"
 else
