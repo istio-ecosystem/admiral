@@ -19,7 +19,7 @@ else
     os="linux-amd64"
   fi
 fi
-#./install_istio.sh $istio_version $os
+./install_istio.sh $istio_version $os
 ./dns_setup.sh $install_dir
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
