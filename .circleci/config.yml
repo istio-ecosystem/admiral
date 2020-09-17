@@ -21,22 +21,22 @@ jobs:
         name: Build
         command: |
           make build
-    - run:
-        name: Tests
-        command: |
-          make test
-          mv c.out /tmp/
-    - codecov/upload:
-        file: /tmp/c.out
-    - setup_remote_docker
-    - run:
-        name: Build Docker image
-        command: |
-          make docker-build
-    - run:
-        name: Publish Docker image
-        command: |
-          make docker-publish
+#    - run:
+#        name: Tests
+#        command: |
+#          make test
+#          mv c.out /tmp/
+#    - codecov/upload:
+#        file: /tmp/c.out
+#    - setup_remote_docker
+#    - run:
+#        name: Build Docker image
+#        command: |
+#          make docker-build
+#    - run:
+#        name: Publish Docker image
+#        command: |
+#          make docker-publish
     - persist_to_workspace:
         root: .
         paths:
