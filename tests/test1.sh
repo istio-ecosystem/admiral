@@ -13,6 +13,7 @@ if [[ "$output" == *"Admiral"* ]]; then
   echo "PASS"
   exit 0
 else
+  echo "mengying"
   echo "FAIL" . $output
   exit 1
 fi
