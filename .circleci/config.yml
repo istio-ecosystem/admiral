@@ -87,19 +87,20 @@ jobs:
       - run:
           name: Run Integration Test for Istio 1.5.7
           command:  |
-            result=$(./run.sh "1.16.8" "1.5.7" "../out" | grep "PASS" | wc -l)
-            if [[ $result != 2]]; then
-                      exit 2
-                    else
-                      exit 0
-                    fi
+            cd tests
+            export IS_LOCAL=false
+            ./run.sh "1.16.8" "1.5.7" "../out"
       - run:
           name: Run Integration Test for Istio 1.6.8
           command:  |
+            cd tests
+            export IS_LOCAL=false
             ./run.sh "1.16.8" "1.6.8" "../out"
       - run:
           name: Run Integration Test for Istio 1.7.1
           command:  |
+            cd tests
+            export IS_LOCAL=false
             ./run.sh "1.16.8" "1.7.1" "../out"
 
   publish-github-release:
