@@ -32,9 +32,11 @@ sleep 10
 result=$(grep -o -i PASS tmp.txt | wc -l)
 if [[ $result != 1]]; then
   exit 1
+fi
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting" | tee tmp.txt
 result=$(grep -o -i PASS tmp.txt | wc -l)
 if [[ $result != 1]]; then
   exit 1
+fi
 rm tmp.txt
 ./cleanup.sh $istio_version
