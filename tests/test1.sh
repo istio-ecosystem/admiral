@@ -14,6 +14,7 @@ if [[ "$output" == *"Admiral"* ]]; then
   exit 0
 else
   echo "mengying"
-  echo "FAIL" . $output
+  echo "FAIL"
+  echo $output
   exit 1
 fi
