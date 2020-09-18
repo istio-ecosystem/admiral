@@ -1,5 +1,7 @@
 #!/bin/bash
-set -euo pipefail
+
+set -o errexit
+set -o pipefail
 
 [ $# -lt 3 ] && { echo "Usage: $0 <k8s_version> <istio_version> <admiral_install_dir>" ; exit 1; }
 
