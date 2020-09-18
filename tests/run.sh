@@ -22,7 +22,7 @@ else
     os="linux-amd64"
   fi
 fi
-#./install_istio.sh $istio_version $os
+./install_istio.sh $istio_version $os
 ./dns_setup.sh $install_dir
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
@@ -32,8 +32,4 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 #allow for stabilization of DNS and Istio SEs before running tests
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
-echo $?
-if [ $? -eq 1 ]; then
-  exit 1
-fi
-#./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
+./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
