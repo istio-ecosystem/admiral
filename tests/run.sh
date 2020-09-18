@@ -28,24 +28,9 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 
 #allow for stabilization of DNS and Istio SEs before running tests
 sleep 10
-./test1.sh "webapp" "sample" "greeting" | tee tmp.txt
-result=$(grep -o -i PASS tmp.txt | wc -l)
-cat tmp.txt
-echo "mengying"
-echo $result
-#if [[ $result != 1 ]]; then
-#  exit 1
-#else
-#  continue
-#fi
+./test1.sh "webapp" "sample" "greeting"
 echo $?
 if [ $? -eq 1 ]; then
   exit 1
 fi
-#./test2.sh "webapp" "sample-rollout-bluegreen" "greeting" | tee tmp.txt
-#result=$(grep -o -i PASS tmp.txt | wc -l)
-#if [[ $result != 1 ]]; then
-#  exit 1
-#fi
-#rm tmp.txt
-#./cleanup.sh $istio_version
+#./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
