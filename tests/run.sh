@@ -33,3 +33,5 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
+
+./cleanup.sh $istio_version
