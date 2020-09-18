@@ -33,10 +33,14 @@ result=$(grep -o -i PASS tmp.txt | wc -l)
 cat tmp.txt
 echo "mengying"
 echo $result
-if [[ $result != 1 ]]; then
+#if [[ $result != 1 ]]; then
+#  exit 1
+#else
+#  continue
+#fi
+echo $?
+if [ $? -eq 1 ]; then
   exit 1
-else
-  continue
 fi
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting" | tee tmp.txt
 result=$(grep -o -i PASS tmp.txt | wc -l)
