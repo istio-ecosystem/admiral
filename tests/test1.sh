@@ -13,6 +13,7 @@ if [[ "$output" == *"Admiral"* ]]; then
   echo "PASS"
   exit 0
 else
-  echo "FAIL" . $output
+  echo "FAIL"
+  echo $output
   exit 1
 fi
