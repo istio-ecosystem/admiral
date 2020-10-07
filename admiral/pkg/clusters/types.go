@@ -244,6 +244,9 @@ func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
+	// need clean up before handle it as added, I need to handle update that delete the dependency, find diff first
+	// this is more complex cos want to make sure no other service depend on the same service (which we just removed the dependancy).
+	// need to make sure nothing depend on that before cleaning up the SE for that service
 	HandleDependencyRecord(obj, dh.RemoteRegistry)
 
 }
@@ -261,6 +264,8 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
+	// special case of update, delete the dependency crd file for one service, need to loop through all ones we plan to update
+	// and make sure nobody else is relying on the same SE in same cluster
 	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
@@ -395,6 +400,8 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+	// 1. update SE once the deployment of certain service is deleted, to let SE not point to this any more
+	// 2. loop and delete all SE pointing to same service if all deployment for this service is deleted
 	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Skipped, not implemented")
 	//todo remove from gtp cache
 
