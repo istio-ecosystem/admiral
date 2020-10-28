@@ -18,6 +18,8 @@ Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at i
 
 ## Example Installations & Demos
 
+![](Admiral_Diagram.png)
+
 ### Run Admiral in Production Environment
 
 In order to run admiral in production environment, we will have two types of clusters:
@@ -28,8 +30,18 @@ The requirements are different for the two types:
 - admiral namespace will exist in main cluster
 - admiral-sync namespace will exist in remote clusters that admiral watches and monitors.
 
+1\. Set necessary environment variables  
 
-#### Install/Run Admiral in the main cluster
+```bash
+# Set main cluster env variable
+export MAIN_CLUSTER=<path_to_kubeconfig_for_main_cluster>
+
+# Set remote cluster env variable
+export REMOTE_CLUSTER=<path_to_kubeconfig_for_remote_cluster>
+```
+
+2\. Install/Run Admiral in the main cluster
+
 ```bash
 #Download and extract admiral
 
@@ -41,50 +53,34 @@ export ADMIRAL_HOME=./admiral-install-v1.0
 
 ```bash
 #Install admiral
+export KUBECONFIG=$MAIN_CLUSTER
 $ADMIRAL_HOME/scripts/install_admiral.sh $ADMIRAL_HOME
 
 ```
 
-#### Add main cluster to Admiral's watcher
+3\. Add main cluster to Admiral's watcher
 
-Since there are most likely other contents living in the same cluster where admiral lives, admiral need to watch the cluster it's currently living in as well.
+Since there are most likely other contents living in the same cluster where admiral lives, admiral need to watch the cluster it's currently living in as well. This step can be skipped if Admiral has a dedicated cluster for Admiral only.
 
 Let admiral monitor the cluster it lives in by exchanging secret with itself.
 
 ```
-#Create the secret for admiral to monitor.
-#Since this is for a single cluster demo the remote and local context are the same
-
-$ADMIRAL_HOME/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
+$ADMIRAL_HOME/scripts/cluster-secret.sh $MAIN_CLUSTER $MAIN_CLUSTER admiral
 ```
 
-#### Install/Run Admiral-Sync in the remote clusters that admiral monitors
+4\. Install/Run Admiral-Sync in the remote clusters that admiral monitors
 ```
-# Switch kubectx to remote cluster 
-export KUBECONFIG=$REMOTE_CLUSTER
 # Create admiral role and bindings on remote cluster
-kubectl apply -f $ADMIRAL_HOME/yaml/remotecluster.yaml
+kubectl apply --context=$REMOTE_CLUSTER -f $ADMIRAL_HOME/yaml/remotecluster.yaml
 ```
-#### Add Remote Cluster to Admiral's watcher
-
+5\. Add Remote Cluster to Admiral's watcher
 ```
-# Set main cluster env variable
-export MAIN_CLUSTER=<path_to_kubeconfig_for_main_cluster>
-
-# Set remote cluster env variable
-export REMOTE_CLUSTER=<path_to_kubeconfig_for_remote_cluster>
-```
-
-```
-#Switch kubectx to main cluster
-export KUBECONFIG=$MAIN_CLUSTER
-
 # Create the k8s secret for admiral to monitor remote cluster.
 $ADMIRAL_HOME/scripts/cluster-secret.sh $MAIN_CLUSTER $REMOTE_CLUSTER admiral
 ```
 
 At this point, admiral is watching `remote cluster`
-Repeat this step to add another remote cluster to watch by admiral
+Repeat step 4 and 5 to add another remote cluster to watch by admiral
 
 ### Single cluster
 
