@@ -18,9 +18,10 @@ Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at i
 
 ## Example Installations & Demos
 
+### Production Deployment
+
 ![](Admiral_Diagram.png)
 
-### Run Admiral in Production Environment
 
 In order to run admiral in production environment, we will have two types of clusters:
 - one main cluster where admiral lives
