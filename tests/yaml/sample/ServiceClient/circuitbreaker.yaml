@@ -1,0 +1,19 @@
+apiVersion: admiralproj.io/v1alpha1
+kind: ServiceClient
+metadata:
+name: rating-reviews
+  labels:
+    identity: ratings #client
+spec:
+    selector: #deployment to target
+      identity: reviews
+      version: v1
+  http:
+    - match:  #HTTPMatchRequest[]
+        uri:
+          prefix: "/v1/*"
+      outlierDetection: #OutlierDetection
+        baseEjectionTime: 3m
+        consecutiveErrors: 1
+        interval: 1s
+        maxEjectionPercent: 100

@@ -70,9 +70,14 @@ api-gen:
 	go install k8s.io/code-generator/cmd/deepcopy-gen
 
 crd-gen:
-	go get -d -u -fix k8s.io/code-generator
-	go get -d -u -fix k8s.io/apimachinery
+	#go get -d -u -fix k8s.io/code-generator
+	#go get -d -u -fix k8s.io/apimachinery
+
+	mkdir -p $(GOPATH)/src/k8s.io/
+	rm -rf $(GOPATH)/src/k8s.io/code-generator
+	git clone --depth 1 --branch v0.17.13 https://github.com/kubernetes/code-generator.git $(GOPATH)/src/k8s.io/code-generator
 	go get -d -u -fix k8s.io/gengo
+	chmod +x $(GOPATH)/src/k8s.io/code-generator/generate-groups.sh
 	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
 
 # Cross compilation

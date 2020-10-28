@@ -1,0 +1,20 @@
+apiVersion: admiralproj.io/v1alpha1
+kind: ServiceClient
+metadata:
+name: rating-reviews
+  labels:
+    identity: ratings #client
+spec:
+  selector: #deployment to target
+    identity: reviews
+    version: v1
+  Http: #istio api ref
+    - match:  #HTTPMatchRequest[]
+        headers:
+          end-user:
+            exact: jason
+      fault: #HTTPFaultInjection
+        delay:
+          fixedDelay: 7s
+          percentage:
+            value: 100

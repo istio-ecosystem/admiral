@@ -1,0 +1,15 @@
+apiVersion: admiralproj.io/v1alpha1
+kind: ServiceClient
+metadata:
+name: rating-reviews
+  labels:
+    identity: ratings #client
+spec:
+  selector: #deployment to target
+    identity: reviews
+    version: v1
+  Http:
+    - match:  #HTTPMatchRequest[]
+        uri:
+          prefix: "/v1/*"
+      timeout: 1s  #Duration  https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#duration

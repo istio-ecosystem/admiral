@@ -28,6 +28,8 @@ type Interface interface {
 	Dependencies() DependencyInformer
 	// GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 	GlobalTrafficPolicies() GlobalTrafficPolicyInformer
+	// ServiceClients returns a ServiceClientInformer.
+	ServiceClients() ServiceClientInformer
 }
 
 type version struct {
@@ -49,4 +51,9 @@ func (v *version) Dependencies() DependencyInformer {
 // GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 func (v *version) GlobalTrafficPolicies() GlobalTrafficPolicyInformer {
 	return &globalTrafficPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ServiceClients returns a ServiceClientInformer.
+func (v *version) ServiceClients() ServiceClientInformer {
+	return &serviceClientInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

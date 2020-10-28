@@ -1,0 +1,18 @@
+apiVersion: admiralproj.io/v1alpha1
+kind: ServiceClient
+metadata:
+name: rating-reviews
+  labels:
+  identity: ratings #client
+spec:
+  selector: #deployment to target
+    identity: reviews
+    version: v1
+  Http:
+    - match:  #HTTPMatchRequest[]
+        uri:
+          prefix: "/v1/*"
+      retries: #HTTPRetry
+        attempts: 3
+          perTryTimeout: 2s
+          retryOn: gateway-error,connect-failure,refused-stream

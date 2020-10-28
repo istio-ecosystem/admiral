@@ -1,0 +1,150 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+    - match:
+        - uri:
+            prefix: "/v1/*"
+      route:
+        - destination:
+            host: reviews
+            subset: v2
+    - route:
+        - destination:
+            host: reviews
+            subset: v1
+
+---
+apiVersion: admiralproj.io/v1alpha1
+kind: ServiceClient
+metadata:
+name: rating-reviews
+  labels:
+    identity: ratings #client
+spec:
+  selector: #deployment to target
+    identity: reviews
+    version: v1
+  Http:
+    - match:  #HTTPMatchRequest[]
+        uri:
+          prefix: "/v1/*"
+      timeout: 1s  #Duration
+      retries: #HTTPRetry
+        attempts: 3
+          perTryTimeout: 2s
+          retryOn: gateway-error,connect-failure,refused-stream
+      outlierDetection: #OutlierDetection
+        baseEjectionTime: 3m
+        consecutiveErrors: 1
+        interval: 1s
+        maxEjectionPercent: 100
+    - match: #HTTPMatchRequest[]
+        headers:
+          end-user:
+            exact: jason
+        fault: #HTTPFaultInjection
+          delay:
+            fixedDelay: 7s
+            percentage:
+              value: 100
+---
+#merge
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+    - reviews
+  http:
+    - match:
+        sourceLabels:
+          identity: ratings
+        uri:
+          prefix: "/v1/*"
+      timeout: 1s
+      retries: #HTTPRetry
+        attempts: 3
+          perTryTimeout: 2s
+          retryOn: gateway-error,connect-failure,refused-stream
+      route:
+        - destination:
+            host: reviews
+            subset: v2-gen
+    - match:
+        sourceLabels:
+          identity: ratings
+        headers:
+          end-user:
+            exact: jason
+      fault: #HTTPFaultInjection
+        delay:
+          fixedDelay: 7s
+          percentage:
+            value: 100
+      route:
+        - destination:
+            host: reviews
+            subset: v1
+   - match:
+      sourceLabels:
+        identity: ratings
+      headers:
+        end-user:
+          exact: jason
+      uri:
+        prefix: "/v1/*"
+      fault: #HTTPFaultInjection
+        delay:
+          fixedDelay: 7s
+          percentage:
+            value: 100
+      route:
+        - destination:
+            host: reviews
+            subset: v2
+    # start
+    - match:
+        - uri:
+            prefix: "/v1/*"
+      route:
+        - destination:
+            host: reviews
+            subset: v2
+    - route:
+        - destination:
+            host: reviews
+            subset: v1
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: reviews-destination
+  namespace: foo
+spec:
+  host: reviews # interpreted as reviews.foo.svc.cluster.local
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2
+
+# generated
+    - name: v2-gen
+        labels:
+          version: v2
+      trafficPolicy:
+        outlierDetection:
+          consecutiveErrors: 7
+          interval: 5m
+          baseEjectionTime: 15m
+---

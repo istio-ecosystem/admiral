@@ -33,3 +33,11 @@ type GlobalTrafficPolicyListerExpansion interface{}
 // GlobalTrafficPolicyNamespaceListerExpansion allows custom methods to be added to
 // GlobalTrafficPolicyNamespaceLister.
 type GlobalTrafficPolicyNamespaceListerExpansion interface{}
+
+// ServiceClientListerExpansion allows custom methods to be added to
+// ServiceClientLister.
+type ServiceClientListerExpansion interface{}
+
+// ServiceClientNamespaceListerExpansion allows custom methods to be added to
+// ServiceClientNamespaceLister.
+type ServiceClientNamespaceListerExpansion interface{}
