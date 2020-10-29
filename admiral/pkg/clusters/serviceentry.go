@@ -168,7 +168,7 @@ func createIngressOnlyVirtualService(rc *RemoteController, cname string, service
 		return
 	}
 
-	for protocol, _ := range meshPorts {
+	for protocol := range meshPorts {
 		vsProtocol = protocol
 	}
 
@@ -545,7 +545,7 @@ func generateServiceEntry(admiralCache *AdmiralCache, meshPorts map[string]uint3
 			log.Errorf(LogErrFormat, "CreateSE", "VirtualService", globalFqdn, rc.ClusterID, "Multiple inbound mesh ports are not supported")
 			return nil
 		}
-		for protocol, _ := range meshPorts {
+		for protocol := range meshPorts {
 			sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
 				Name: protocol, Protocol: protocol}}
 			finalProtocol = protocol
