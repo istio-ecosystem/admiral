@@ -177,7 +177,15 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 }
 
 func (d *DeploymentController) Deleted(ojb interface{}) {
-	//TODO
+	HandleDeleteDeployment(ojb, d)
+}
+
+func HandleDeleteDeployment(ojb interface{}, d *DeploymentController) {
+	deployment := ojb.(*k8sAppsV1.Deployment)
+	key := d.Cache.getKey(deployment)
+	if len(key) > 0 {
+		d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
+	}
 }
 
 func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
