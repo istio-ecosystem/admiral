@@ -88,7 +88,8 @@ $ADMIRAL_HOME/scripts/cluster-secret.sh $MAIN_CLUSTER $REMOTE_CLUSTER admiral
 ```
 
 At this point, admiral is watching `remote cluster`
-Repeat step 4 and 5 to add another remote cluster to watch by admiral
+
+`Repeat steps 4 and 5 to add another remote cluster to be watched by Admiral.`
 
 ### Single cluster
 
