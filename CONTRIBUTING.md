@@ -19,7 +19,7 @@ export ADMIRAL_HOME=$(pwd)
 $ADMIRAL_HOME/tests/create_cluster.sh 1.16.8
 export KUBECONFIG=~/.kube/config
 ```
-* Install [Prerequisites](./docs/Examples.md#Prerequisite)
+* Install [Prerequisites](./docs/Examples.md#Prerequisite) and make sure to install istio control plane in cluster
 * Set up necessary permissions and configurations for Admiral
 ```bash
 $ADMIRAL_HOME/install/scripts/dev_setup.sh
