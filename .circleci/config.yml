@@ -139,8 +139,6 @@ workflows:
           filters:
             tags:
               only: /.*/
-          context:
-            - admiral_forks
       - run-integration-tests:
           requires:
             - build
