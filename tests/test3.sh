@@ -9,6 +9,8 @@ dest=$3
 #Deploy the grpc client pod to run requests against the grpc endpoint
 kubectl apply -f ./grpc-client.yaml -n $source_ns
 
+kubectl get serviceentry -n admiral-sync
+
 kubectl rollout status deploy grpc-client -n $source_ns
 
 sleep 15
