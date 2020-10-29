@@ -13,6 +13,10 @@ kubectl rollout status deploy grpc-client -n $source_ns
 
 sleep 15
 
+kubectl get pods -n $source_ns
+
+kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source
+
 #Test, expecting to expect the grpc client to complete the requests with 100% success
 output=$(kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source | grep '"good": 10')
 
