@@ -23,15 +23,23 @@ Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at i
 ![](Admiral_Diagram.png)
 
 
-In order to run admiral in production environment, we will have two types of clusters:
-- one main cluster where admiral lives
-- other remote clusters where admiral watches and monitors.
+An admiral production set up would have two types of clusters:
+- cluster where admiral runs called the `main` cluster
+- clusters which admiral watches, monitors and creates Istio CRs called the `remote` clusters
 
 The requirements are different for the two types:
-- admiral namespace will exist in main cluster
+- admiral namespace will exist in the main cluster
 - admiral-sync namespace will exist in remote clusters that admiral watches and monitors.
 
 1\. Set necessary environment variables  
+
+The following steps show how you can install admiral in the main cluster and then provision secrets for it to watch the remote clusters. 
+
+```
+While the process shown below using shell scripts is manual, automation can be built for 
+i) installing admiral and its necessary resources (using a CD pipeline) 
+ii) Provisioning secret for every new cluster created or upgraded as a post cluster create step
+```
 
 ```bash
 # Set main cluster env variable
@@ -61,9 +69,8 @@ $ADMIRAL_HOME/scripts/install_admiral.sh $ADMIRAL_HOME
 
 3\. Add main cluster to Admiral's watcher
 
-Since there are most likely other contents living in the same cluster where admiral lives, admiral need to watch the cluster it's currently living in as well. This step can be skipped if Admiral has a dedicated cluster for Admiral only.
-
-Let admiral monitor the cluster it lives in by exchanging secret with itself.
+Since there are most likely other workloads running in the same cluster where admiral lives, admiral needs to watch the cluster it's currently living in as well. This step can be skipped if Admiral runs in a dedicated cluster.
+Let admiral monitor the cluster it lives in by using the secret to talk to the API server of the cluster where it runs.
 
 ```
 $ADMIRAL_HOME/scripts/cluster-secret.sh $MAIN_CLUSTER $MAIN_CLUSTER admiral
