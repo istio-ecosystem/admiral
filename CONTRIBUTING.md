@@ -13,13 +13,20 @@ git clone https://github.com/istio-ecosystem/admiral.git
 cd admiral
 export ADMIRAL_HOME=$(pwd)
 ```
-* Run a k8s cluster using [minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) (you can use any k8s cluster if one exists already)
+* Run a [minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) k8s cluster using existing script (you can use any k8s cluster if one exists already)
+* Note: Recommend using k8s version 1.16.8 or above to work with recent istio version
 ```bash
-minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.14.2
+$ADMIRAL_HOME/tests/create_cluster.sh 1.16.8
 export KUBECONFIG=~/.kube/config
 ```
-* Install [Prerequisites](./docs/Examples.md#Prerequisite)
+* Install [Prerequisites](./docs/Examples.md#Prerequisite) and make sure to install istio control plane in cluster. Alternatively, you can use the script to install istio control plane on the cluster created in previous step:
+                                                                                                   
+Mac: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 osx` 
+
+Linux: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 linux`                                                                                            
+
 * Set up necessary permissions and configurations for Admiral
+
 ```bash
 $ADMIRAL_HOME/install/scripts/dev_setup.sh
 ```
