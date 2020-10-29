@@ -28,6 +28,10 @@ func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 
 func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterName string) map[string]uint32 {
 	var ports = make(map[string]uint32)
+
+	if destService == nil {
+		return ports
+	}
 	if len(meshPorts) == 0 {
 		log.Infof(LogFormat, "GetMeshPorts", "service", destService.Name, clusterName, "No mesh ports present, defaulting to first port")
 		if destService.Spec.Ports != nil && len(destService.Spec.Ports) > 0 {
@@ -50,9 +54,19 @@ func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 		meshPortMap[uint32(port)] = uint32(port)
 	}
 	for _, servicePort := range destService.Spec.Ports {
+		//handling relevant protocols from here:
+		// https://istio.io/latest/docs/ops/configuration/traffic-management/protocol-selection/#manual-protocol-selection
 		if _, ok := meshPortMap[uint32(servicePort.Port)]; ok {
-			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port")
-			ports[common.Http] = uint32(servicePort.Port)
+			var protocol = common.Http
+			if strings.Contains(servicePort.Name, common.GrpcWeb) {
+				protocol = common.GrpcWeb
+			} else if strings.Contains(servicePort.Name, common.Grpc) {
+				protocol = common.Grpc
+			} else if strings.Contains(servicePort.Name, common.Http2) {
+				protocol = common.Http2
+			}
+			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port for protocol: " + protocol)
+			ports[protocol] = uint32(servicePort.Port)
 		}
 	}
 	return ports

@@ -88,7 +88,15 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
-					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment, serviceEntries)
+					serviceInstance := getServiceForDeployment(rc, deployment)
+
+					if serviceInstance == nil {
+						continue
+					}
+
+					meshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
+
+					tmpSe = createServiceEntry(rc, r.AdmiralCache, meshPorts, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -106,7 +114,16 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout, serviceEntries)
+
+					serviceInstance := getServiceForRollout(rc, rollout)
+
+					if serviceInstance == nil {
+						continue
+					}
+
+					meshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
+
+					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, meshPorts, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue

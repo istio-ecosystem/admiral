@@ -133,6 +133,7 @@ gen-yaml:
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
 	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml
 	kustomize build ./install/sample/overlays/deployment > ./out/yaml/sample.yaml
+	kustomize build ./install/sample/overlays/grpc > ./out/yaml/grpc.yaml
 	kustomize build ./install/sample/overlays/rollout-canary > ./out/yaml/sample-greeting-rollout-canary.yaml
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
