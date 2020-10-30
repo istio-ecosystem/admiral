@@ -13,8 +13,6 @@ kubectl rollout status deploy grpc-client -n $source_ns
 
 sleep 15
 
-kubectl get serviceentry -n admiral-sync
-
 #Test, expecting to expect the grpc client to complete the requests with 100% success
 output=($(kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source | egrep -o '"good": ([0-9]+)'))
 
@@ -23,6 +21,8 @@ if [[ "${output[1]}" -gt 0 ]]; then
   exit 0
 else
   echo "FAIL" . $output
+  kubectl get serviceentry -n admiral-sync
+  kubectl get pods -n $source_ns
   kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source
   exit 1
 fi
