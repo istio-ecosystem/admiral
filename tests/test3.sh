@@ -11,6 +11,10 @@ kubectl apply -f ./grpc-client.yaml -n $source_ns
 
 sleep 10
 
+kubectl get serviceentry -n admiral-sync
+
+kubectl get pods -n $source_ns
+
 kubectl get events --sort-by='.lastTimestamp' -n $source_ns
 
 #kubectl rollout status deploy grpc-client -n $source_ns
