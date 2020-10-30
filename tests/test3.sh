@@ -7,23 +7,9 @@ source_ns=$2
 dest=$3
 
 #Deploy the grpc client pod to run requests against the grpc endpoint
-kubectl get deployment admiral -n admiral -o yaml
-
-kubectl logs --namespace=admiral $(kubectl get pod -l "app=admiral" --namespace=admiral -o jsonpath='{.items[0].metadata.name}') -c admiral
-
-#kubectl delete ns sample-rollout-bluegreen
-
 kubectl apply -f ./grpc-client.yaml -n $source_ns
 
-sleep 15
-
-kubectl get serviceentry -n admiral-sync
-
-kubectl get pods -n $source_ns
-
-kubectl get events --sort-by='.lastTimestamp' -n $source_ns
-
-#kubectl rollout status deploy grpc-client -n $source_ns
+kubectl rollout status deploy grpc-client -n $source_ns
 
 sleep 15
 

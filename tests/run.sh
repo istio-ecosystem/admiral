@@ -32,7 +32,16 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 #allow for stabilization of DNS and Istio SEs before running tests
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
+#cleanup for the pipeline minkube resources
+if [[ $IS_LOCAL == "false" ]]; then
+  kubectl delete deploy greeting -n sample
+  kubectl delete deploy webapp -n sample
+fi
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
+#cleanup for the pipeline minkube resources
+if [[ $IS_LOCAL == "false" ]]; then
+  kubectl delete ns sample-rollout-bluegreen
+fi
 ./test3.sh "grpc-client" "sample" "grpc-server"
 
 ./cleanup.sh $istio_version

@@ -54,11 +54,6 @@ else
     kubectl rollout status deployment istiod -n istio-system
 fi
 
-#Deleting ingressgateway to make space in integration tests
-#if [[ $IS_LOCAL == "false" ]]; then
-#kubectl delete deployment istio-ingressgateway -n istio-system
-#fi
-
 # Delete envoy filter for translating `global` to `svc.cluster.local`
 kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 
