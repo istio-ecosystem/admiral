@@ -11,7 +11,7 @@ kubectl get deployment admiral -n admiral -o yaml
 
 kubectl logs --namespace=admiral $(kubectl get pod -l "app=admiral" --namespace=admiral -o jsonpath='{.items[0].metadata.name}') -c admiral
 
-kubectl delete ns sample-rollout-bluegreen
+#kubectl delete ns sample-rollout-bluegreen
 
 kubectl apply -f ./grpc-client.yaml -n $source_ns
 
