@@ -49,9 +49,14 @@ then
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 else
-    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false
+    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false --set .values.global.proxy.resources.requests.memory=64Mi --set .values.global.proxy.resources.requests.cpu=50m
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
+fi
+
+#Deleting ingressgateway to make space in integration tests
+if [[ $IS_LOCAL == "false" ]]; then
+kubectl delete deployment istio-ingressgateway -n istio-system
 fi
 
 # Delete envoy filter for translating `global` to `svc.cluster.local`
