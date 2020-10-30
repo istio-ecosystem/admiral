@@ -23,5 +23,6 @@ if [[ "$output" == *"good"* ]]; then
   exit 0
 else
   echo "FAIL" . $output
+  kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source
   exit 1
 fi
