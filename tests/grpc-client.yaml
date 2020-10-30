@@ -24,7 +24,7 @@ spec:
         - "--address=default.grpc-server.global:80"
         - "--connections=2"
         - "--totalTargetRps=1"
-        - "--totalRequests=10"
+        - "--totalRequests=2"
         - "--logLevel=debug"
         resources:
           requests:
