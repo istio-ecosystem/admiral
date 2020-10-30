@@ -7,9 +7,15 @@ source_ns=$2
 dest=$3
 
 #Deploy the grpc client pod to run requests against the grpc endpoint
+kubectl get deployment admiral -n admiral -o yaml
+
+kubectl logs --namespace=admiral $(kubectl get pod -l "app=admiral" --namespace=admiral -o jsonpath='{.items[0].metadata.name}') -c admiral
+
+kubectl delete ns sample-rollout-bluegreen
+
 kubectl apply -f ./grpc-client.yaml -n $source_ns
 
-sleep 10
+sleep 15
 
 kubectl get serviceentry -n admiral-sync
 
@@ -20,6 +26,8 @@ kubectl get events --sort-by='.lastTimestamp' -n $source_ns
 #kubectl rollout status deploy grpc-client -n $source_ns
 
 sleep 15
+
+kubectl get serviceentry -n admiral-sync
 
 #Test, expecting to expect the grpc client to complete the requests with 100% success
 output=$(kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source | grep '"good": 10')
