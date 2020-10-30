@@ -45,7 +45,7 @@ then
 
 elif [ $(ver $istio_version) -lt $(ver 1.6.0) ]
 then
-    "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/install/kubernetes/operator/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false .values.global.proxy.resources.requests.memory=64Mi --set .values.global.proxy.resources.requests.cpu=50m
+    "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/install/kubernetes/operator/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false  --set .values.global.proxy.resources.requests.memory=64Mi --set .values.global.proxy.resources.requests.cpu=50m
     #Verify that istiod is up and running
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
