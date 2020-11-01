@@ -174,16 +174,20 @@ func makeVirtualService(host string, gateways []string, destination string, port
 		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
 }
 
-func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTrafficPolicy) *v1alpha32.DestinationRule {
+func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
 	var dr = &v1alpha32.DestinationRule{}
 	dr.Host = host
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.TLSSettings{Mode: v1alpha32.TLSSettings_ISTIO_MUTUAL}}
-	if gtpWrapper != nil {
+	processGtp := true
+	if len(locality) == 0 {
+		log.Errorf(LogErrFormat, "Process", "GlobalTrafficPolicy", host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
+		processGtp = false
+	}
+	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
 			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_ROUND_ROBIN},
 		}
-		gtp := gtpWrapper.Spec
-		gtpTrafficPolicy := gtp.Policy[0]
+
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
 
