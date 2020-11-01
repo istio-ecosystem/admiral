@@ -8,9 +8,4 @@ metadata:
 spec:
   policy:
     - dns: default
-      lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
-      target:
-        - region: us-west-2
-          weight: 80
-        - region: us-east-2
-          weight: 20
+      lbType: 0

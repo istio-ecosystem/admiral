@@ -279,6 +279,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 	return allSes
 }
 
+//This will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
@@ -286,7 +287,16 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 		//add service entry
 		serviceEntryName := getIstioResourceName(se.Hosts[0], "-se")
 
-		destinationRuleName := getIstioResourceName(se.Hosts[0], "-default-dr")
+		//Add a label
+		var identityId string
+		if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+			identityId = fmt.Sprint(identityValue)
+		}
+
+		splitByEnv := strings.Split(se.Hosts[0], ".")
+		var env, dnsSuffix = splitByEnv[0], "." + identityId + "." + common.GetHostnameSuffix()
+
+		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, env)
 
 		for _, sourceCluster := range sourceClusters {
 
@@ -297,38 +307,56 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				continue
 			}
 
+			//check if there is a gtp and add additional hosts/destination rules
+			var seHosts = []string{se.Hosts[0]}
+			var defaultDrName = se.Hosts[0] + "-default-dr"
+			var destinationRules = make(map[string]*networking.DestinationRule)
+			if globalTrafficPolicy != nil {
+				gtp := globalTrafficPolicy.Spec
+				for _, gtpTrafficPolicy := range gtp.Policy {
+					var host = gtpTrafficPolicy.Dns + dnsSuffix
+					var drName = host + "-default-dr"
+					if gtpTrafficPolicy.Dns != env {
+						seHosts = append(seHosts, host)
+						drName = host + "-dr"
+					}
+					destinationRules[drName] = getDestinationRule(host, rc.NodeController.Locality.Region, gtpTrafficPolicy)
+				}
+			}
+
+			//create a destination rule for default hostname if that wasn't present in gtp
+			if _, ok := destinationRules[defaultDrName]; !ok {
+				destinationRules[defaultDrName] = getDestinationRule(se.Hosts[0] + "-default-dr", rc.NodeController.Locality.Region, nil)
+			}
+
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
 			if err != nil {
-				log.Error(LogFormat, err)
-				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
+				log.Error(LogErrFormat, "Get", "ServiceEntry", serviceEntryName, serviceEntryName, err)
+
 			}
 
 			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
 
-			//Add a label
-			var identityId string
-			if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				identityId = fmt.Sprint(identityValue)
-				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-			}
+			newServiceEntry.Spec.Hosts = seHosts
 
 			if newServiceEntry != nil {
+				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
 			}
 
-			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
+			for destinationRuleName, destinationRule := range destinationRules {
 
-			if err != nil {
-				oldDestinationRule = nil
+				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
+
+				if err != nil {
+					oldDestinationRule = nil
+				}
+
+				newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
+
+				addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 			}
 
-			globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
-
-			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
-
-			newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
-
-			addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 		}
 	}
 }
