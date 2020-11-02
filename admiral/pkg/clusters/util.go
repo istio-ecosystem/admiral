@@ -58,11 +58,11 @@ func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 		// https://istio.io/latest/docs/ops/configuration/traffic-management/protocol-selection/#manual-protocol-selection
 		if _, ok := meshPortMap[uint32(servicePort.Port)]; ok {
 			var protocol = common.Http
-			if strings.Contains(servicePort.Name, common.GrpcWeb) {
+			if strings.Index(servicePort.Name, common.GrpcWeb) == 0 {
 				protocol = common.GrpcWeb
-			} else if strings.Contains(servicePort.Name, common.Grpc) {
+			} else if strings.Index(servicePort.Name, common.Grpc) == 0 {
 				protocol = common.Grpc
-			} else if strings.Contains(servicePort.Name, common.Http2) {
+			} else if strings.Index(servicePort.Name, common.Http2) == 0 {
 				protocol = common.Http2
 			}
 			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port for protocol: " + protocol)

@@ -60,10 +60,28 @@ func TestGetMeshPorts(t *testing.T) {
 			expected:   ports,
 		},
 		{
+			name:       "should return a http port if no port name is specified",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
+			name:       "should return a http port if the port name doesn't start with a protocol name",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "hello-grpc", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
 			name:       "should return a grpc port based on annotation",
 			service:    k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc", Port: int32(annotatedPort)}}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc-service", Port: int32(annotatedPort)}}},
 			},
 			deployment: deployment,
 			expected:   grpcPorts,
