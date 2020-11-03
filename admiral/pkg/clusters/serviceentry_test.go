@@ -533,12 +533,12 @@ func TestCreateServiceEntry(t *testing.T) {
 			expectedResult: &se,
 		},
 		{
-			name:           "Returns no service entry if there are two inbound mesh ports",
+			name:           "Returns service entry with first matching port if there are two inbound mesh ports",
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"grpc": uint32(80), "http": uint32(90)},
 			deployment:		deployment,
-			expectedResult: nil,
+			expectedResult: &se,
 		},
 	}
 

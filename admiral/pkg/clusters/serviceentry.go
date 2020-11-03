@@ -122,11 +122,6 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 		}
 
-		if len(meshPorts) > 1 {
-			log.Errorf(LogErrFormat, "CreateVS", "ServiceEntry", localFqdn, rc.ClusterID, "Multiple inbound mesh ports are not supported")
-			continue
-		}
-
 		for key, serviceEntry := range serviceEntries {
 			for _, ep := range serviceEntry.Endpoints {
 				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
@@ -161,12 +156,6 @@ func createIngressOnlyVirtualService(rc *RemoteController, cname string, service
 
 	var vsProtocol = common.Http;
 	virtualServiceName := getIstioResourceName(cname, "-default-vs")
-
-
-	if len(meshPorts) > 1 {
-		log.Errorf(LogErrFormat, "CreateVS", "VirtualService", virtualServiceName, rc.ClusterID, "Multiple inbound mesh ports are not supported")
-		return
-	}
 
 	for protocol := range meshPorts {
 		vsProtocol = protocol
@@ -541,10 +530,6 @@ func generateServiceEntry(admiralCache *AdmiralCache, meshPorts map[string]uint3
 		Name: finalProtocol, Protocol: finalProtocol}}
 
 	if meshPorts != nil {
-		if len(meshPorts) > 1 {
-			log.Errorf(LogErrFormat, "CreateSE", "VirtualService", globalFqdn, rc.ClusterID, "Multiple inbound mesh ports are not supported")
-			return nil
-		}
 		for protocol := range meshPorts {
 			sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
 				Name: protocol, Protocol: protocol}}
