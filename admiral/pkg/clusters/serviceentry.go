@@ -529,12 +529,10 @@ func generateServiceEntry(admiralCache *AdmiralCache, meshPorts map[string]uint3
 	var sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
 		Name: finalProtocol, Protocol: finalProtocol}}
 
-	if meshPorts != nil {
-		for protocol := range meshPorts {
-			sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
-				Name: protocol, Protocol: protocol}}
-			finalProtocol = protocol
-		}
+	for protocol := range meshPorts {
+		sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: protocol, Protocol: protocol}}
+		finalProtocol = protocol
 	}
 
 	if tmpSe == nil {
