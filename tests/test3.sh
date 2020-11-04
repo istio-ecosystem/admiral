@@ -5,11 +5,12 @@
 source=$1
 source_ns=$2
 dest=$3
+install_dir=$4
 
 sleep 20
 
 #Deploy the grpc client pod to run requests against the grpc endpoint
-kubectl apply -f ./grpc-client.yaml -n $source_ns
+kubectl apply -f $install_dir/yaml/grpc-client.yaml -n $source_ns
 
 kubectl rollout status deploy grpc-client -n $source_ns
 

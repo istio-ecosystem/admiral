@@ -37,6 +37,6 @@ sleep 10
 if [[ $IS_LOCAL == "false" ]]; then
   kubectl delete ns sample-rollout-bluegreen
 fi
-./test3.sh "grpc-client" "sample" "grpc-server"
+./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 
 ./cleanup.sh $istio_version
