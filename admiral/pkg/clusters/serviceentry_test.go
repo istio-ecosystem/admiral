@@ -155,7 +155,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
-	createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	createServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
 
 }
 
@@ -482,7 +482,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	deployment := v14.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
-	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+	resultingEntry := createServiceEntry(common.Add, rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
 	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
 		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
@@ -504,7 +504,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	rollout := argo.Rollout{}
 	rollout.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
-	resultingEntry = createServiceEntryForRollout(rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+	resultingEntry = createServiceEntryForRollout(common.Add, rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
 	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
 		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
@@ -709,7 +709,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	se := createServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}

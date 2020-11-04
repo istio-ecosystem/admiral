@@ -186,6 +186,7 @@ func HandleDeleteDeployment(ojb interface{}, d *DeploymentController) {
 	if len(key) > 0 {
 		d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 	}
+	d.DeploymentHandler.Deleted(deployment)
 }
 
 func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {

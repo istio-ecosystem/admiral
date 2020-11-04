@@ -396,13 +396,46 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 	env := common.GetEnv(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
+	createServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+	// mengying !!!! todos here
 	// 1. update SE once the deployment of certain service is deleted, to let SE not point to this any more
 	// 2. loop and delete all SE pointing to same service if all deployment for this service is deleted
+	// 2 break down: first get all deployment with same match labels in all clusters, if all gone, start delete
+	// Second, do I delete all services too??
+	// third, what about service entries?? need more research,
 	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Skipped, not implemented")
+
+	// case 1
+	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, "", "Received")
+	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	// TODO: need to check the global traffic policy handle part, not too sure yet
+	var matchedGTPs []v1.GlobalTrafficPolicy
+	for _, remoteCluster := range pc.RemoteRegistry.remoteControllers {
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+	}
+
+	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
+
+	if gtp != nil {
+		pc.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
+		log.Infof(LogFormat, "Delete event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+	}
+
+	env := common.GetEnv(obj)
+
+	// Use the same function as added deployment function to create and put new service entry in place to replace old one
+	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, pc.RemoteRegistry)
+
+
 	//todo remove from gtp cache
 
 	//TODO update subset service entries
@@ -459,7 +492,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 	env := common.GetEnvForRollout(obj)
 
-	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
+	createServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, rh.RemoteRegistry)
 }
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {

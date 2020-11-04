@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
 
-func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
 	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -39,14 +40,13 @@ func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(admiralCache, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(event, admiralCache, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
-func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func createServiceEntryForNewServiceOrPod(event common.Event, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
-
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
 	sourceRollouts := make(map[string]*argo.Rollout)
 
@@ -74,7 +74,7 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deploymentInstance
-			createServiceEntry(rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
+			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
@@ -85,11 +85,12 @@ func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, rem
 
 			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceRollouts[rc.ClusterID] = rolloutInstance
-			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
+			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
 		} else {
 			continue
 		}
 
+		// mengying: TODO: verify if only need to do these steps for add or also for delete
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
@@ -289,7 +290,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
 			if err != nil {
-				log.Error(LogFormat, err)
+				log.Errorf(LogErrFormat, "Get", "old ServiceEntry", serviceEntryName, sourceCluster, err)
+				oldServiceEntry = nil
 				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
 			}
 
@@ -302,13 +304,19 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
 
-			if newServiceEntry != nil {
+			// case 2, if no endpoint, delete this SE in all dependency clusters
+			// mengying TODO: need double check if here is the best place to do it
+			if len(newServiceEntry.Spec.Endpoints) == 0 {
+				// after deleting the service entry, destination rule also need to be deleted?? double check here
+				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
+			} else {
 				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
 			}
 
 			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
 
 			if err != nil {
+				log.Errorf(LogErrFormat, "Get", "old DestinationRule", destinationRuleName, sourceCluster, err)
 				oldDestinationRule = nil
 			}
 
@@ -318,7 +326,12 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
-			addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+			if len(newServiceEntry.Spec.Endpoints) == 0 {
+				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
+				deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
+			} else {
+				addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+			}
 		}
 	}
 }
@@ -431,7 +444,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 	return c.PutConfigMap(originalConfigmap)
 }
 
-func createServiceEntryForRollout(rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntryForRollout(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
 	destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -447,7 +460,7 @@ func createServiceEntryForRollout(rc *RemoteController, admiralCache *AdmiralCac
 
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(admiralCache, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(event, admiralCache, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
@@ -509,7 +522,7 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	return address
 }
 
-func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
+func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
 	tmpSe := serviceEntries[globalFqdn]
@@ -536,8 +549,35 @@ func generateServiceEntry(admiralCache *AdmiralCache, globalFqdn string, rc *Rem
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
 		locality, common.Http, port)
-	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
+	//mengying: TODO: instead of append the endpoint, I should identify the endpoint to delete
+	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones
+	if event == common.Add {
+		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
+	} else if event == common.Delete {
+		for i, exitingEndpoint := range tmpSe.Endpoints {
+			if reflect.DeepEqual(exitingEndpoint, seEndpoint) {
+				fmt.Println("mengying, deep equal endpoint succeed. deleting the endpoint from the list of endpoints")
+				tmpSe.Endpoints = RemoveIndex(tmpSe.Endpoints, i)
+				//  case 2, if no endpoints left, we can delete the service entry object itself
+				//  mengying: TODO: not sure where is the deletion of SE should be handled
+				fmt.Println("deleting endpoint with address: " + seEndpoint.Address)
+				if len(tmpSe.Endpoints) == 0 {
+					tmpSe = nil
+				}
+			} else {
+				// mengying: TODO: delete the debugging statement
+				fmt.Println("mengying, not equal, check if the endpoint address is the same and if there's mistake")
+				fmt.Println("existing endpoint address is: " + exitingEndpoint.Address)
+				fmt.Println("new endpoint address is: " + seEndpoint.Address)
+			}
+		}
+	}
 	serviceEntries[globalFqdn] = tmpSe
 	return tmpSe
+}
+
+// helper function to remove index from list of service entry endpoints
+func RemoveIndex(slice []*networking.ServiceEntry_Endpoint, index int) []*networking.ServiceEntry_Endpoint {
+	return append(slice[:index], slice[index+1:]...)
 }

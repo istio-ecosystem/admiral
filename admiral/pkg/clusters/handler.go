@@ -88,7 +88,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
-					tmpSe = createServiceEntry(rc, r.AdmiralCache, deployment, serviceEntries)
+					tmpSe = createServiceEntry(common.Add, rc, r.AdmiralCache, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -106,7 +106,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 					if rollouts == nil || len(rollouts.Rollouts) == 0 {
 						continue
 					}
-					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, rollout, serviceEntries)
+					tmpSe = createServiceEntryForRollout(common.Add, rc, r.AdmiralCache, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -570,9 +570,20 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
+	}
+}
+
+func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Success")
+		}
 	}
 }
 
@@ -593,12 +604,22 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
+func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Success")
+		}
+	}
+}
 func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
 	return &v1alpha3.ServiceEntry{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
