@@ -159,7 +159,12 @@ func createIngressOnlyVirtualService(rc *RemoteController, cname string, service
 
 	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
 
-	addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
+	if len(serviceEntry.Endpoints) == 0 {
+		// after deleting the service entry, virtual service also need to be deleted if the service entry host no longer exists
+		deleteVirtualService(oldVirtualService, common.GetSyncNamespace(), rc)
+	} else {
+		addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
+	}
 }
 
 func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
@@ -303,7 +308,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				identityId = fmt.Sprint(identityValue)
 				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
-
 			// case 2, if no endpoint, delete this SE in all dependency clusters
 			// mengying TODO: need double check if here is the best place to do it
 			if len(newServiceEntry.Spec.Endpoints) == 0 {

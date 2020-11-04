@@ -425,6 +425,7 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 
 	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
 
+	// remove from gtp cache
 	if gtp != nil {
 		pc.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
 		log.Infof(LogFormat, "Delete event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
@@ -432,13 +433,8 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 
 	env := common.GetEnv(obj)
 
-	// Use the same function as added deployment function to create and put new service entry in place to replace old one
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, pc.RemoteRegistry)
-
-
-	//todo remove from gtp cache
-
-	//TODO update subset service entries
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {

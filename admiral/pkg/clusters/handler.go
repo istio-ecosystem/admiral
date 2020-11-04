@@ -547,12 +547,22 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
+func deleteVirtualService(exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, "Success")
+		}
+	}
+}
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
