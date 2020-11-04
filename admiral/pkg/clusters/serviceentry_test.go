@@ -532,14 +532,6 @@ func TestCreateServiceEntry(t *testing.T) {
 			deployment:		deployment,
 			expectedResult: &se,
 		},
-		{
-			name:           "Returns service entry with first matching port if there are two inbound mesh ports",
-			rc:             rc,
-			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"grpc": uint32(80), "http": uint32(90)},
-			deployment:		deployment,
-			expectedResult: &se,
-		},
 	}
 
 	//Run the test for every provided case
@@ -577,14 +569,6 @@ func TestCreateServiceEntry(t *testing.T) {
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			rollout:		rollout,
-			expectedResult: &se,
-		},
-		{
-			name:           "Returns service entry with first matching port if there are two inbound mesh ports",
-			rc:             rc,
-			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"grpc": uint32(80), "http": uint32(90)},
 			rollout:		rollout,
 			expectedResult: &se,
 		},
