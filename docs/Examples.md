@@ -66,7 +66,7 @@ kubectl exec --namespace=sample -it $(kubectl get pod -l "app=webapp" --namespac
 
 #### gRPC Demo
 
-- As part of the sample services, a grpc service is also deployed, and Admiral generates the corresponding CNAME. Since we need a rich client to make the gRPC calls. Apply the following yaml that will launch a pod that will make gRPC calls to the generated CNAME.
+- As part of the sample services, a grpc service is also deployed and Admiral generates the corresponding CNAME. Apply the following yaml that will launch a pod which runs a gRPC client that will make gRPC calls to the generated CNAME.
 ```
 kubectl apply -f $ADMIRAL_HOME/yaml/grpc-client.yaml -n sample
 ```
