@@ -33,5 +33,10 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
+#cleanup to fee up the pipeline minkube resources
+if [[ $IS_LOCAL == "false" ]]; then
+  kubectl delete ns sample-rollout-bluegreen
+fi
+./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 
 ./cleanup.sh $istio_version

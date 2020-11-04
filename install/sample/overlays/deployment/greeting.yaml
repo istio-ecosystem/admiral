@@ -28,6 +28,13 @@ spec:
               readOnly: true
             - mountPath: /var/log/nginx
               name: log
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "50Mi"
+            limits:
+              cpu: "20m"
+              memory: "75Mi"
       volumes:
         - configMap:
             items:

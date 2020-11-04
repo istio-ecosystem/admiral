@@ -81,6 +81,8 @@ jobs:
       - run:
           name: generate prereq yaml files
           command:  |
+            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_BRANCH}; fi
+            (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${TAG}")
             make gen-yaml
             cd tests
             export IS_LOCAL=false
@@ -91,17 +93,17 @@ jobs:
             export IS_LOCAL=false
             ./run.sh "1.16.8" "1.5.7" "../out"
       - run:
-          name: Run Integration Test for Istio 1.6.8
+          name: Run Integration Test for Istio 1.6.13
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.6.8" "../out"
+            ./run.sh "1.16.8" "1.6.13" "../out"
       - run:
-          name: Run Integration Test for Istio 1.7.1
+          name: Run Integration Test for Istio 1.7.4
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.7.1" "../out"
+            ./run.sh "1.16.8" "1.7.4" "../out"
 
   publish-github-release:
     docker:

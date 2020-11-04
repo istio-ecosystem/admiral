@@ -482,44 +482,122 @@ func TestCreateServiceEntry(t *testing.T) {
 	deployment := v14.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
-	resultingEntry := createServiceEntry(rc, &admiralCache, &deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
-
-	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
-		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	se := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		},
 	}
 
-	if resultingEntry.Addresses[0] != localAddress {
-		t.Errorf("Address mismatch. Got: %v, expected: "+localAddress, resultingEntry.Addresses[0])
+	grpcSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "grpc", Protocol: "grpc"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
+		},
 	}
 
-	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
-		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
+	deploymentSeCreationTestCases := []struct {
+		name           string
+		rc             *RemoteController
+		admiralCache   AdmiralCache
+		meshPorts      map[string]uint32
+		deployment	   v14.Deployment
+		expectedResult *istionetworkingv1alpha3.ServiceEntry
+	}{
+		{
+			name:           "Should return a created service entry with grpc protocol",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
+			deployment:		deployment,
+			expectedResult: &grpcSe,
+		},
+		{
+			name:           "Should return a created service entry with http protocol",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			expectedResult: &se,
+		},
+		{
+			name:           "Returns service entry with first matching port if there are two inbound mesh ports",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"grpc": uint32(80), "http": uint32(90)},
+			deployment:		deployment,
+			expectedResult: &se,
+		},
 	}
 
-	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
-		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
+	//Run the test for every provided case
+	for _, c := range deploymentSeCreationTestCases {
+		t.Run(c.name, func(t *testing.T) {
+			createdSE := createServiceEntry(c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			if !reflect.DeepEqual(createdSE, c.expectedResult) {
+				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
+			}
+		})
 	}
 
 	// Test for Rollout
 	rollout := argo.Rollout{}
 	rollout.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
-	resultingEntry = createServiceEntryForRollout(rc, &admiralCache, &rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
-
-	if resultingEntry.Hosts[0] != "e2e.my-first-service.mesh" {
-		t.Errorf("Host mismatch. Got: %v, expected: e2e.my-first-service.mesh", resultingEntry.Hosts[0])
+	rolloutSeCreationTestCases := []struct {
+		name           string
+		rc             *RemoteController
+		admiralCache   AdmiralCache
+		meshPorts      map[string]uint32
+		rollout		   argo.Rollout
+		expectedResult *istionetworkingv1alpha3.ServiceEntry
+	}{
+		{
+			name:           "Should return a created service entry with grpc protocol",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
+			rollout:		rollout,
+			expectedResult: &grpcSe,
+		},
+		{
+			name:           "Should return a created service entry with http protocol",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			rollout:		rollout,
+			expectedResult: &se,
+		},
+		{
+			name:           "Returns service entry with first matching port if there are two inbound mesh ports",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"grpc": uint32(80), "http": uint32(90)},
+			rollout:		rollout,
+			expectedResult: &se,
+		},
 	}
 
-	if resultingEntry.Addresses[0] != localAddress {
-		t.Errorf("Address mismatch. Got: %v, expected: "+localAddress, resultingEntry.Addresses[0])
-	}
-
-	if resultingEntry.Endpoints[0].Address != "admiral_dummy.com" {
-		t.Errorf("Endpoint mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Address, "admiral_dummy.com")
-	}
-
-	if resultingEntry.Endpoints[0].Locality != "us-west-2" {
-		t.Errorf("Locality mismatch. Got %v, expected: %v", resultingEntry.Endpoints[0].Locality, "us-west-2")
+	//Run the test for every provided case
+	for _, c := range rolloutSeCreationTestCases {
+		t.Run(c.name, func(t *testing.T) {
+			createdSE := createServiceEntryForRollout(c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			if !reflect.DeepEqual(createdSE, c.expectedResult) {
+				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
+			}
+		})
 	}
 
 }
@@ -552,22 +630,34 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		Spec:       *vsTobeUpdated,
 		ObjectMeta: v12.ObjectMeta{Name: vsname, Namespace: common.GetSyncNamespace()}})
 
+	meshPorts := map[string]uint32{common.Http: 80}
+
 	testCases := []struct {
 		name           string
 		rc             *RemoteController
 		localFqdn      string
+		meshPorts 	   map[string]uint32
 		expectedResult string
 	}{
 		{
 			name:           "Should return a created virtual service",
 			rc:             rcCreate,
 			localFqdn:      localFqdn,
+			meshPorts:      meshPorts,
 			expectedResult: localFqdn,
 		},
 		{
 			name:           "Should return an updated virtual service",
 			rc:             rcCreate,
 			localFqdn:      localFqdn2,
+			meshPorts:      meshPorts,
+			expectedResult: localFqdn2,
+		},
+		{
+			name:           "Should return virtual service not updated when mesh inbound ports is more than 1",
+			rc:             rcCreate,
+			localFqdn:      localFqdn,
+			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
 			expectedResult: localFqdn2,
 		},
 	}
@@ -575,7 +665,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, map[string]uint32{common.Http: 80})
+			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, c.meshPorts)
 			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
 			if err != nil {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
