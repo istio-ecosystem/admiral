@@ -649,7 +649,13 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, c.meshPorts)
+			inputSe :=  &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
+			inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+				&istionetworkingv1alpha3.ServiceEntry_Endpoint{
+				Address: "address",
+				},
+			}
+			createIngressOnlyVirtualService(c.rc, cname, inputSe, c.localFqdn, c.meshPorts)
 			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
 			if err != nil {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
