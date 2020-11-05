@@ -88,8 +88,7 @@ override TAG=latest
 endif
 endif
 ifndef TAG
-override TAG=$(SHA)
-override DO_NOT_PUBLISH=1
+override TAG=$(BRANCH)
 endif
 
 docker-build: set-tag
@@ -133,9 +132,11 @@ gen-yaml:
 	kustomize build ./install/admiral/overlays/demosinglecluster/ > ./out/yaml/demosinglecluster.yaml
 	kustomize build ./install/admiralremote/base/ > ./out/yaml/remotecluster.yaml
 	kustomize build ./install/sample/overlays/deployment > ./out/yaml/sample.yaml
+	kustomize build ./install/sample/overlays/grpc > ./out/yaml/grpc.yaml
 	kustomize build ./install/sample/overlays/rollout-canary > ./out/yaml/sample-greeting-rollout-canary.yaml
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
 	cp ./install/sample/gtp.yaml ./out/yaml/gtp.yaml
+	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
 	cp ./install/scripts/*.sh ./out/scripts/

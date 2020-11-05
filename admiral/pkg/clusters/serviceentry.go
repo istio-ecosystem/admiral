@@ -25,7 +25,7 @@ import (
 )
 
 func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
-	destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
@@ -40,7 +40,7 @@ func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(event, admiralCache, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
@@ -72,9 +72,11 @@ func createServiceEntryForNewServiceOrPod(event common.Event, env string, source
 				continue
 			}
 
+			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deploymentInstance)
+
 			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deploymentInstance
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, deploymentInstance, serviceEntries)
+			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
@@ -83,9 +85,11 @@ func createServiceEntryForNewServiceOrPod(event common.Event, env string, source
 				continue
 			}
 
+			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rolloutInstance)
+
 			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceRollouts[rc.ClusterID] = rolloutInstance
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, rolloutInstance, serviceEntries)
+			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rolloutInstance, serviceEntries)
 		} else {
 			continue
 		}
@@ -150,12 +154,18 @@ func createServiceEntryForNewServiceOrPod(event common.Event, env string, source
 }
 
 func createIngressOnlyVirtualService(rc *RemoteController, cname string, serviceEntry *networking.ServiceEntry, localFqdn string, meshPorts map[string]uint32) {
+
+	var vsProtocol = common.Http;
 	virtualServiceName := getIstioResourceName(cname, "-default-vs")
+
+	for protocol := range meshPorts {
+		vsProtocol = protocol
+	}
 
 	oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{})
 
 	//TODO handle non http ports
-	virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[common.Http])
+	virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[vsProtocol])
 
 	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
 
@@ -449,7 +459,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 }
 
 func createServiceEntryForRollout(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
-	destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
@@ -464,7 +474,7 @@ func createServiceEntryForRollout(event common.Event, rc *RemoteController, admi
 
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(event, admiralCache, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
@@ -526,18 +536,27 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	return address
 }
 
-func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
+
+func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
 	tmpSe := serviceEntries[globalFqdn]
 
-	if tmpSe == nil {
+	var finalProtocol = common.Http
 
+	var sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Name: finalProtocol, Protocol: finalProtocol}}
+
+	for protocol := range meshPorts {
+		sePorts = []*networking.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: protocol, Protocol: protocol}}
+		finalProtocol = protocol
+	}
+
+	if tmpSe == nil {
 		tmpSe = &networking.ServiceEntry{
 			Hosts: []string{globalFqdn},
-			//ExportTo: []string{"*"}, --> //TODO this is causing a coredns plugin to fail serving the DNS entry
-			Ports: []*networking.Port{{Number: uint32(common.DefaultHttpPort),
-				Name: common.Http, Protocol: common.Http}},
+			Ports: sePorts,
 			Location:        networking.ServiceEntry_MESH_INTERNAL,
 			Resolution:      networking.ServiceEntry_DNS,
 			Addresses:       []string{address}, //It is possible that the address is an empty string. That is fine as the se creation will fail and log an error
@@ -552,7 +571,8 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, global
 		locality = rc.NodeController.Locality.Region
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
-		locality, common.Http, port)
+		locality, finalProtocol, port)
+	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
 	//mengying: TODO: instead of append the endpoint, I should identify the endpoint to delete
 	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones

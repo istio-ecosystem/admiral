@@ -14,8 +14,11 @@ const (
 	NamespaceIstioSystem       = "istio-system"
 	Env                        = "env"
 	Http                       = "http"
+	Grpc                       = "grpc"
+	GrpcWeb                    = "grpc-web"
+	Http2                      = "http2"
 	DefaultMtlsPort            = 15443
-	DefaultHttpPort            = 80
+	DefaultServiceEntryPort    = 80
 	Sep                        = "."
 	Dash                       = "-"
 	Slash                      = "/"

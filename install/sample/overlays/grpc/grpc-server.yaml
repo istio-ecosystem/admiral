@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grpc-server
+  template:
+    metadata:
+      labels:
+        app: grpc-server
+        identity: grpc-server
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+      - name: grpc-server
+        image: buoyantio/strest-grpc:latest
+        args:
+        - "server"
+        - "--address=:11111"
+        - "--logLevel=debug"
+        ports:
+        - name: grpc
+          containerPort: 11111
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "50Mi"
+          limits:
+            cpu: "20m"
+            memory: "75Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-server
+spec:
+  selector:
+    app: grpc-server
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 11111
+    targetPort: 11111
