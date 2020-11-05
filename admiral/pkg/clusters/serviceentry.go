@@ -572,7 +572,6 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
 		locality, finalProtocol, port)
-	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
 	//mengying: TODO: instead of append the endpoint, I should identify the endpoint to delete
 	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones
