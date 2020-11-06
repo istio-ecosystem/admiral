@@ -1,0 +1,35 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grpc-client
+  template:
+    metadata:
+      labels:
+        app: grpc-client
+        identity: grpc-client
+      annotations:
+        sidecar.istio.io/inject: "true"
+    spec:
+      containers:
+      - name: grpc-client
+        image: buoyantio/strest-grpc:latest
+        args:
+        - "client"
+        - "--address=default.grpc-server.global:80"
+        - "--connections=2"
+        - "--totalTargetRps=1"
+        - "--totalRequests=2"
+        - "--logLevel=debug"
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "50Mi"
+          limits:
+            cpu: "20m"
+            memory: "75Mi"

@@ -17,6 +17,7 @@ import (
 func TestGetMeshPorts(t *testing.T) {
 
 	annotatedPort := 8090
+	annotatedSecondPort := 8091
 	defaultServicePort := uint32(8080)
 
 	defaultK8sSvcPortNoName := k8sV1.ServicePort{Port: int32(defaultServicePort)}
@@ -36,7 +37,16 @@ func TestGetMeshPorts(t *testing.T) {
 			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 		}}}
 
+	deploymentWithMultipleMeshPorts := k8sAppsV1.Deployment{
+		Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort) + "," + strconv.Itoa(annotatedSecondPort)}},
+		}}}
+
 	ports := map[string]uint32{"http": uint32(annotatedPort)}
+
+	grpcPorts := map[string]uint32{"grpc": uint32(annotatedPort)}
+	grpcWebPorts := map[string]uint32{"grpc-web": uint32(annotatedPort)}
+	http2Ports := map[string]uint32{"http2": uint32(annotatedPort)}
 
 	portsFromDefaultSvcPort := map[string]uint32{"http": defaultServicePort}
 
@@ -54,6 +64,51 @@ func TestGetMeshPorts(t *testing.T) {
 			service:    service,
 			deployment: deployment,
 			expected:   ports,
+		},
+		{
+			name:       "should return a http port if no port name is specified",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
+			name:       "should return a http port if the port name doesn't start with a protocol name",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "hello-grpc", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
+			name:       "should return a grpc port based on annotation",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc-service", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   grpcPorts,
+		},
+		{
+			name:       "should return a grpc-web port based on annotation",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc-web", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   grpcWebPorts,
+		},
+		{
+			name:       "should return a http2 port based on annotation",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "http2", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   http2Ports,
 		},
 		{
 			name: "should return a default port",
@@ -78,6 +133,16 @@ func TestGetMeshPorts(t *testing.T) {
 					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
 			expected: emptyPorts,
+		},
+		{
+			name:       "should return a http port if the port name doesn't start with a protocol name",
+			service:    k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "http", Port: int32(annotatedPort)},
+					{Name: "grpc", Port: int32(annotatedSecondPort)}}},
+			},
+			deployment: deploymentWithMultipleMeshPorts,
+			expected:   ports,
 		},
 	}
 
