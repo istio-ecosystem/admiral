@@ -510,14 +510,17 @@ func TestCreateServiceEntry(t *testing.T) {
 
 	deploymentSeCreationTestCases := []struct {
 		name           string
+		action         common.Event
 		rc             *RemoteController
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		deployment	   v14.Deployment
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
+		/*
 		{
 			name:           "Should return a created service entry with grpc protocol",
+			action:         common.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
@@ -526,18 +529,36 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 		{
 			name:           "Should return a created service entry with http protocol",
+			action:         common.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
 			expectedResult: &se,
+		},*/
+		{
+			name:           "Delete",
+			action:         common.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			expectedResult: nil,
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			var createdSE *istionetworkingv1alpha3.ServiceEntry
+			if c.action == common.Delete {
+				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
+				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+			} else {
+				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+
+			}
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}

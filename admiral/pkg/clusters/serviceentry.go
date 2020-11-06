@@ -583,8 +583,6 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 				fmt.Println("mengying, deep equal endpoint succeed. deleting the endpoint from the list of endpoints")
 				tmpSe.Endpoints = RemoveIndex(tmpSe.Endpoints, i)
 				//  case 2, if no endpoints left, we can delete the service entry object itself
-				//  mengying: TODO: not sure where is the deletion of SE should be handled
-				fmt.Println("deleting endpoint with address: " + seEndpoint.Address)
 				if len(tmpSe.Endpoints) == 0 {
 					tmpSe = nil
 				}
@@ -596,7 +594,15 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 			}
 		}
 	}
-	serviceEntries[globalFqdn] = tmpSe
+
+	// if we delete service entry, clean up in the service entries
+	if tmpSe == nil {
+		if _, exist := serviceEntries[globalFqdn]; exist {
+			delete(serviceEntries, globalFqdn)
+		}
+	} else {
+		serviceEntries[globalFqdn] = tmpSe
+	}
 	return tmpSe
 }
 
