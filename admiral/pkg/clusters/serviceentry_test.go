@@ -482,6 +482,10 @@ func TestCreateServiceEntry(t *testing.T) {
 	deployment := v14.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
+	// the second deployment will be add with us-east-2 region remote controller
+	secondDeployment := v14.Deployment{}
+	secondDeployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
+
 	se := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"e2e.my-first-service.mesh"},
 		Addresses:[]string{localAddress},
@@ -517,7 +521,6 @@ func TestCreateServiceEntry(t *testing.T) {
 		deployment	   v14.Deployment
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
-		/*
 		{
 			name:           "Should return a created service entry with grpc protocol",
 			action:         common.Add,
@@ -535,9 +538,9 @@ func TestCreateServiceEntry(t *testing.T) {
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
 			expectedResult: &se,
-		},*/
+		},
 		{
-			name:           "Delete",
+			name:           "Delete the service entry with one endpoint",
 			action:         common.Delete,
 			rc:             rc,
 			admiralCache:   admiralCache,
@@ -545,16 +548,36 @@ func TestCreateServiceEntry(t *testing.T) {
 			deployment:		deployment,
 			expectedResult: nil,
 		},
+		{
+			name:           "Delete the service entry with two endpoints",
+			action:         common.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			expectedResult: &se,
+		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
 			var createdSE *istionetworkingv1alpha3.ServiceEntry
-			if c.action == common.Delete {
+			if c.name == "Delete the service entry with one endpoint" {
 				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
 				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+			} else if  c.name == "Delete the service entry with two endpoints" {
+				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
+				// add endpoint to service entry with west region
+				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+				// add endpoint to service entry with east region
+				c.rc.NodeController.Locality.Region = "us-east-2"
+				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &secondDeployment, serviceEntries)
+				// delete endpoint to service entry with east region and left one endpoint with west region
+				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+				// revert back to original remote controller set up to run further tests
+				c.rc.NodeController.Locality.Region = "us-west-2"
 			} else {
 				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 
