@@ -596,9 +596,7 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 
 	// if we delete service entry, clean up in the service entries
 	if tmpSe == nil {
-		if _, exist := serviceEntries[globalFqdn]; exist {
-			delete(serviceEntries, globalFqdn)
-		}
+		delete(serviceEntries, globalFqdn)
 	} else {
 		serviceEntries[globalFqdn] = tmpSe
 	}
