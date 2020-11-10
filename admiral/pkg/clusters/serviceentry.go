@@ -579,17 +579,11 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 	} else if event == common.Delete {
 		for i, exitingEndpoint := range tmpSe.Endpoints {
 			if reflect.DeepEqual(exitingEndpoint, seEndpoint) {
-				fmt.Println("mengying, deep equal endpoint succeed. deleting the endpoint from the list of endpoints")
 				tmpSe.Endpoints = RemoveIndex(tmpSe.Endpoints, i)
-				//  case 2, if no endpoints left, we can delete the service entry object itself
+				//  If no endpoints left, we can delete the service entry object itself
 				if len(tmpSe.Endpoints) == 0 {
 					tmpSe = nil
 				}
-			} else {
-				// mengying: TODO: delete the debugging statement
-				fmt.Println("mengying, not equal, check if the endpoint address is the same and if there's mistake")
-				fmt.Println("existing endpoint address is: " + exitingEndpoint.Address)
-				fmt.Println("new endpoint address is: " + seEndpoint.Address)
 			}
 		}
 	}

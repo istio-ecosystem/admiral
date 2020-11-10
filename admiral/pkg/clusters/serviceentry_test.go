@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -660,8 +661,16 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 
 	meshPorts := map[string]uint32{common.Http: 80}
 
+	inputSe :=  &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
+	inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		&istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			Address: "address",
+		},
+	}
+
 	testCases := []struct {
 		name           string
+		serviceEntry   *istionetworkingv1alpha3.ServiceEntry
 		rc             *RemoteController
 		localFqdn      string
 		meshPorts 	   map[string]uint32
@@ -670,6 +679,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		{
 			name:           "Should return a created virtual service",
 			rc:             rcCreate,
+			serviceEntry:   inputSe,
 			localFqdn:      localFqdn,
 			meshPorts:      meshPorts,
 			expectedResult: localFqdn,
@@ -677,6 +687,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		{
 			name:           "Should return an updated virtual service",
 			rc:             rcCreate,
+			serviceEntry:   inputSe,
 			localFqdn:      localFqdn2,
 			meshPorts:      meshPorts,
 			expectedResult: localFqdn2,
@@ -684,27 +695,34 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		{
 			name:           "Should return virtual service not updated when mesh inbound ports is more than 1",
 			rc:             rcCreate,
+			serviceEntry:   inputSe,
 			localFqdn:      localFqdn,
 			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
 			expectedResult: localFqdn2,
+		},
+		{
+			name:           "Should return virtual service deleted when endpoint not exist any more",
+			rc:             rcCreate,
+			serviceEntry:   &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}},
+			localFqdn:      localFqdn,
+			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
+			expectedResult: "",
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			inputSe :=  &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
-			inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-				&istionetworkingv1alpha3.ServiceEntry_Endpoint{
-				Address: "address",
-				},
-			}
-			createIngressOnlyVirtualService(c.rc, cname, inputSe, c.localFqdn, c.meshPorts)
+			createIngressOnlyVirtualService(c.rc, cname, c.serviceEntry, c.localFqdn, c.meshPorts)
 			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
 			if err != nil {
+				// for the last test case when deleting virtual service is needed, then we should be expecting not found error for virtual service
+				if c.expectedResult == "" && strings.Contains(err.Error(), "not found") {
+					return
+				}
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
 			}
-			if vs == nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
+			if  vs == nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
 				if vs != nil {
 					t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
 				}
