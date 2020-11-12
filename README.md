@@ -10,6 +10,8 @@
 
 Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity for developers and mesh operators.
 
+[Example Video](https://www.youtube.com/watch?v=cwQpt1t287c)
+
 ## [Docs](./docs/Index.md)
 
 ## Who uses Admiral?
