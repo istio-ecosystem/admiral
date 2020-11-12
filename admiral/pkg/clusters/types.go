@@ -369,7 +369,7 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
@@ -400,7 +400,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, "", "Received")
+	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
@@ -468,7 +468,6 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 	gtp := common.MatchGTPsToRollout(matchedGTPs, obj)
 
 	if gtp != nil {
-
 		err := rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(gtp, obj)
 		if err != nil {
 			log.Errorf("Failed to add Rollout to GTP cache. Error=%v", err)
@@ -487,5 +486,32 @@ func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
 }
 
 func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
-	log.Infof(LogFormat, "Deleted", "rollout", obj.Name, obj.ClusterName, "received")
+
+	log.Infof(LogFormat, "Deleted", "rollout", obj.Name, obj.ClusterName, "Received")
+
+	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "rollout", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	var matchedGTPs []v1.GlobalTrafficPolicy
+	for _, remoteCluster := range rh.RemoteRegistry.remoteControllers {
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+	}
+
+	gtp := common.MatchGTPsToRollout(matchedGTPs, obj)
+
+	// remove from gtp cache
+	if gtp != nil {
+		rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
+		log.Infof(LogFormat, "Delete event", "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+	}
+
+	env := common.GetEnvForRollout(obj)
+
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, rh.RemoteRegistry)
+
 }
