@@ -93,8 +93,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The parameter will be used to decide whether to update workload sidecar resource or not. By default these updates will be disabled.")
 	rootCmd.PersistentFlags().StringVar(&params.WorkloadSidecarName, "workload_sidecar_name", "default",
 		"Name of the sidecar resource in the workload namespace. By default sidecar resource will be named as \"default\".")
-	rootCmd.PersistentFlags().StringVar(&params.GroupBy, "group_by", "env",
-		"The label key on deployment that will group deployments across multiple clusters. It defaults to \"env\".")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.EnvLabel, "env_label", "env",
+		"The label key on deployment that will be used to group deployments across multiple clusters. It defaults to \"env\".")
 
 	return rootCmd
 }

@@ -33,8 +33,6 @@ const (
 	AdmiralCnameCaseSensitive  = "admiral.io/cname-case-sensitive"
 )
 
-var Env                        = admiralParams.GroupBy
-
 type Event int
 
 const (
@@ -89,9 +87,9 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 }
 
 func GetEnv(deployment *k8sAppsV1.Deployment) string {
-	var environment = deployment.Spec.Template.Labels[Env]
+	var environment = deployment.Spec.Template.Labels[GetEnvLabel()]
 	if len(environment) == 0 {
-		environment = deployment.Spec.Template.Annotations[Env]
+		environment = deployment.Spec.Template.Annotations[GetEnvLabel()]
 	}
 	if len(environment) == 0 {
 		splitNamespace := strings.Split(deployment.Namespace, Dash)
@@ -143,7 +141,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		return nil
 	}
 
-	gtpEnv := gtp.Labels[Env]
+	gtpEnv := gtp.Labels[GetEnvLabel()]
 	if gtpEnv == "" {
 		gtpEnv = Default
 	}
@@ -155,7 +153,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	var envMatchedDeployments []k8sAppsV1.Deployment
 
 	for _, deployment := range deployments {
-		deploymentEnvironment := deployment.Spec.Template.Labels[Env]
+		deploymentEnvironment := deployment.Spec.Template.Labels[GetEnvLabel()]
 		if deploymentEnvironment == "" {
 			//No environment label, use default value
 			deploymentEnvironment = Default
@@ -186,7 +184,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
 	}
-	deploymentEnvironment := deployment.Spec.Template.Labels[Env]
+	deploymentEnvironment := deployment.Spec.Template.Labels[GetEnvLabel()]
 	if deploymentEnvironment == "" {
 		//No environment label, use default value
 		deploymentEnvironment = Default
@@ -194,7 +192,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 
 	//If one and only one GTP matches the env label of the deployment - use that one
 	if len(gtpList) == 1 {
-		gtpEnv := gtpList[0].Labels[Env]
+		gtpEnv := gtpList[0].Labels[GetEnvLabel()]
 		if gtpEnv == "" {
 			gtpEnv = Default
 		}
@@ -213,7 +211,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		gtpEnv := gtp.Labels[Env]
+		gtpEnv := gtp.Labels[GetEnvLabel()]
 		if gtpEnv == "" {
 			gtpEnv = Default
 		}

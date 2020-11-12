@@ -61,7 +61,7 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 		return nil
 	}
 
-	gtpEnv := gtp.Labels[Env]
+	gtpEnv := gtp.Labels[GetEnvLabel()]
 	if gtpEnv == "" {
 		gtpEnv = Default
 	}
@@ -73,7 +73,7 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 	var envMatchedRollouts []argo.Rollout
 
 	for _, rollout := range rollouts {
-		rolloutEnvironment := rollout.Spec.Template.Labels[Env]
+		rolloutEnvironment := rollout.Spec.Template.Labels[GetEnvLabel()]
 		if rolloutEnvironment == "" {
 			//No environment label, use default value
 			rolloutEnvironment = Default
@@ -113,7 +113,7 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for rollout match. Returning nil.")
 		return nil
 	}
-	rolloutEnvironment := rollout.Spec.Template.Labels[Env]
+	rolloutEnvironment := rollout.Spec.Template.Labels[GetEnvLabel()]
 	if rolloutEnvironment == "" {
 		//No environment label, use default value
 		rolloutEnvironment = Default
@@ -121,7 +121,7 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 
 	//If one and only one GTP matches the env label of the rollout - use that one
 	if len(gtpList) == 1 {
-		gtpEnv := gtpList[0].Labels[Env]
+		gtpEnv := gtpList[0].Labels[GetEnvLabel()]
 		if gtpEnv == "" {
 			gtpEnv = Default
 		}
@@ -140,7 +140,7 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		gtpEnv := gtp.Labels[Env]
+		gtpEnv := gtp.Labels[GetEnvLabel()]
 		if gtpEnv == "" {
 			gtpEnv = Default
 		}
@@ -175,9 +175,9 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 }
 
 func GetEnvForRollout(rollout *argo.Rollout) string {
-	var environment = rollout.Spec.Template.Labels[Env]
+	var environment = rollout.Spec.Template.Labels[GetEnvLabel()]
 	if len(environment) == 0 {
-		environment = rollout.Spec.Template.Annotations[Env]
+		environment = rollout.Spec.Template.Annotations[GetEnvLabel()]
 	}
 	if len(environment) == 0 {
 		splitNamespace := strings.Split(rollout.Namespace, Dash)

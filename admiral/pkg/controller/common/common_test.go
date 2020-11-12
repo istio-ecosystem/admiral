@@ -29,10 +29,12 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
+		GroupBy:					"env",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+	p.LabelSet.EnvLabel = "env"
 
 	InitializeConfig(p)
 }
