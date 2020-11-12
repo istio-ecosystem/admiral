@@ -12,7 +12,6 @@ import (
 const (
 	NamespaceKubeSystem        = "kube-system"
 	NamespaceIstioSystem       = "istio-system"
-	Env                        = "env"
 	Http                       = "http"
 	Grpc                       = "grpc"
 	GrpcWeb                    = "grpc-web"
@@ -33,6 +32,8 @@ const (
 	AdmiralIgnoreAnnotation    = "admiral.io/ignore"
 	AdmiralCnameCaseSensitive  = "admiral.io/cname-case-sensitive"
 )
+
+var Env                        = admiralParams.GroupBy
 
 type Event int
 
