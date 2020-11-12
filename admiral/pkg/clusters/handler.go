@@ -469,7 +469,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		if err != nil {
 			log.Warnf(LogErrFormat, "Find", "DestinationRule", localDrName, clusterId, err)
 		}
-		newDestinationRule := createDestinationRulSkeletion(*destinationRule, localDrName, syncNamespace)
+		newDestinationRule := createDestinationRuleSkeletion(*destinationRule, localDrName, syncNamespace)
 
 		if newDestinationRule != nil {
 			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
@@ -656,7 +656,7 @@ func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace st
 	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-func createDestinationRulSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
+func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 

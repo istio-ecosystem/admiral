@@ -304,10 +304,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
+			// if old service entry not find, just create a new service entry instead
 			if err != nil {
-				log.Errorf(LogErrFormat, "Get", "old ServiceEntry", serviceEntryName, sourceCluster, err)
+				log.Infof(LogFormat, "Get (error)", "old ServiceEntry", serviceEntryName, sourceCluster, err)
 				oldServiceEntry = nil
-				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
 			}
 
 			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
@@ -318,10 +318,9 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				identityId = fmt.Sprint(identityValue)
 				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 			}
-			// case 2, if no endpoint, delete this SE in all dependency clusters
-			// mengying TODO: need double check if here is the best place to do it
+
+			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
 			if len(newServiceEntry.Spec.Endpoints) == 0 {
-				// after deleting the service entry, destination rule also need to be deleted?? double check here
 				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
 			} else {
 				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
@@ -330,15 +329,16 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
 
 			if err != nil {
-				log.Errorf(LogErrFormat, "Get", "old DestinationRule", destinationRuleName, sourceCluster, err)
+				log.Infof(LogFormat, "Get (error)", "old DestinationRule", destinationRuleName, sourceCluster, err)
 				oldDestinationRule = nil
 			}
 
+			// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
 			globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
 
 			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
 
-			newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
+			newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
 			if len(newServiceEntry.Spec.Endpoints) == 0 {
 				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
@@ -580,20 +580,14 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 		for i, exitingEndpoint := range tmpSe.Endpoints {
 			if reflect.DeepEqual(exitingEndpoint, seEndpoint) {
 				tmpSe.Endpoints = RemoveIndex(tmpSe.Endpoints, i)
-				//  If no endpoints left, we can delete the service entry object itself
-				if len(tmpSe.Endpoints) == 0 {
-					tmpSe = nil
-				}
+				// If no endpoints left, we can delete the service entry object itself later inside function
+				// AddServiceEntriesWithDr when updating service entry, leave an empty shell skeleton here
 			}
 		}
 	}
 
-	// if we delete service entry, clean up in the service entries
-	if tmpSe == nil {
-		delete(serviceEntries, globalFqdn)
-	} else {
-		serviceEntries[globalFqdn] = tmpSe
-	}
+	serviceEntries[globalFqdn] = tmpSe
+
 	return tmpSe
 }
 

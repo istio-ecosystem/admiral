@@ -400,16 +400,8 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	// mengying !!!! todos here
-	// 1. update SE once the deployment of certain service is deleted, to let SE not point to this any more
-	// 2. loop and delete all SE pointing to same service if all deployment for this service is deleted
-	// 2 break down: first get all deployment with same match labels in all clusters, if all gone, start delete
-	// Second, do I delete all services too??
-	// third, what about service entries?? need more research,
-	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Skipped, not implemented")
-
-	// case 1
 	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, "", "Received")
+
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
@@ -417,7 +409,6 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 		return
 	}
 
-	// TODO: need to check the global traffic policy handle part, not too sure yet
 	var matchedGTPs []v1.GlobalTrafficPolicy
 	for _, remoteCluster := range pc.RemoteRegistry.remoteControllers {
 		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)

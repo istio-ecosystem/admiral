@@ -94,6 +94,12 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 
+	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"dev.bar.global"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+	}
+
+
 	seConfig := v1alpha3.ServiceEntry{
 		Spec: se,
 	}
@@ -117,6 +123,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
@@ -500,6 +507,17 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 	}
 
+	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+	}
+
 	grpcSe := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"e2e.my-first-service.mesh"},
 		Addresses:[]string{localAddress},
@@ -547,7 +565,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
-			expectedResult: nil,
+			expectedResult: &emptyEndpointSe,
 		},
 		{
 			name:           "Delete the service entry with two endpoints",
@@ -693,19 +711,11 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 			expectedResult: localFqdn2,
 		},
 		{
-			name:           "Should return virtual service not updated when mesh inbound ports is more than 1",
-			rc:             rcCreate,
-			serviceEntry:   inputSe,
-			localFqdn:      localFqdn,
-			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
-			expectedResult: localFqdn2,
-		},
-		{
 			name:           "Should return virtual service deleted when endpoint not exist any more",
 			rc:             rcCreate,
 			serviceEntry:   &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}},
 			localFqdn:      localFqdn,
-			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
+			meshPorts:      meshPorts,
 			expectedResult: "",
 		},
 	}
@@ -722,7 +732,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 				}
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
 			}
-			if  vs == nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
+			if vs != nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
 				if vs != nil {
 					t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
 				}
