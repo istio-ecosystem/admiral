@@ -320,7 +320,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
-			if len(newServiceEntry.Spec.Endpoints) == 0 {
+			numberOfEndpoints := len(newServiceEntry.Spec.Endpoints)
+			if numberOfEndpoints == 0 {
 				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
 			} else {
 				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
@@ -340,7 +341,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
-			if len(newServiceEntry.Spec.Endpoints) == 0 {
+			if numberOfEndpoints == 0 {
 				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 				deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 			} else {
