@@ -94,7 +94,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.WorkloadSidecarName, "workload_sidecar_name", "default",
 		"Name of the sidecar resource in the workload namespace. By default sidecar resource will be named as \"default\".")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.EnvKey, "env_key", "admiral.io/env",
-		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment.")
+		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment. Defaults to `admiral.io/env`. " +
+		"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
 
 	return rootCmd
 }

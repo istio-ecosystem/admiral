@@ -170,6 +170,7 @@ func GetEnvForRollout(rollout *argo.Rollout) string {
 		if len(splitNamespace) > 1 {
 			environment = splitNamespace[len(splitNamespace)-1]
 		}
+		log.Warnf("Using deprecated approach to deduce env from namespace for rollout, name=%v in namespace=%v", rollout.Name, rollout.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default

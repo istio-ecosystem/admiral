@@ -100,7 +100,7 @@ func GetEnv(deployment *k8sAppsV1.Deployment) string {
 		if len(splitNamespace) > 1 {
 			environment = splitNamespace[len(splitNamespace)-1]
 		}
-		log.Infof("Using deprecated approach to deduce env from namespace for deployment, name=%v in namespace=%v", deployment.Name, deployment.Namespace)
+		log.Warnf("Using deprecated approach to deduce env from namespace for deployment, name=%v in namespace=%v", deployment.Name, deployment.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default
@@ -240,7 +240,7 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 	}
 	if len(environment) == 0 {
 		environment = gtp.Labels[Env]
-		log.Infof("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
+		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default
