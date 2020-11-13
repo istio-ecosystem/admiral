@@ -576,6 +576,15 @@ func TestCreateServiceEntry(t *testing.T) {
 			deployment:		deployment,
 			expectedResult: &se,
 		},
+		//{
+		//	name:           "Delete the service entry with three endpoints",
+		//	action:         common.Delete,
+		//	rc:             rc,
+		//	admiralCache:   admiralCache,
+		//	meshPorts:      map[string]uint32 {"http": uint32(80)},
+		//	deployment:		deployment,
+		//	expectedResult: &se,
+		//},
 	}
 
 	//Run the test for every provided case
@@ -586,8 +595,8 @@ func TestCreateServiceEntry(t *testing.T) {
 				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
 				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
-			} else if  c.name == "Delete the service entry with two endpoints" {
-				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
+			} else if c.name == "Delete the service entry with two endpoints" {
+				serviceEntries := map[string]*istionetworkingv1alpha3.ServiceEntry{}
 				// add endpoint to service entry with west region
 				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				// add endpoint to service entry with east region
@@ -872,5 +881,4 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	if nil == serviceEntryResp {
 		t.Fatalf("Service entry returned should not be empty")
 	}
-
 }

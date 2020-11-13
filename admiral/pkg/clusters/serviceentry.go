@@ -577,21 +577,20 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 	if event == common.Add {
 		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 	} else if event == common.Delete {
-		for i, exitingEndpoint := range tmpSe.Endpoints {
-			if reflect.DeepEqual(exitingEndpoint, seEndpoint) {
-				tmpSe.Endpoints = RemoveIndex(tmpSe.Endpoints, i)
-				// If no endpoints left, we can delete the service entry object itself later inside function
-				// AddServiceEntriesWithDr when updating service entry, leave an empty shell skeleton here
+		// create a tmp endpoint list to store all the endpoints that we intend to keep
+		remainEndpoints := []*networking.ServiceEntry_Endpoint{}
+		// if the endpoint is not equal to the endpoint we intend to delete, append it to remainEndpoint list
+		for _, existingEndpoint := range tmpSe.Endpoints {
+			if !reflect.DeepEqual(existingEndpoint, seEndpoint) {
+				remainEndpoints = append(remainEndpoints, existingEndpoint)
 			}
 		}
+		// If no endpoints left for particular SE, we can delete the service entry object itself later inside function
+		// AddServiceEntriesWithDr when updating SE, leave an empty shell skeleton here
+		tmpSe.Endpoints = remainEndpoints
 	}
 
 	serviceEntries[globalFqdn] = tmpSe
 
 	return tmpSe
-}
-
-// helper function to remove index from list of service entry endpoints
-func RemoveIndex(slice []*networking.ServiceEntry_Endpoint, index int) []*networking.ServiceEntry_Endpoint {
-	return append(slice[:index], slice[index+1:]...)
 }

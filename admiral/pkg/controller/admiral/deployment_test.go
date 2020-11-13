@@ -147,19 +147,16 @@ func TestDeploymentController_Deleted(t *testing.T) {
 		name                  string
 		deployment            *k8sAppsV1.Deployment
 		expectedDeployment    *k8sAppsV1.Deployment
-		expectedCacheContains bool
 	}{
 		{
 			name:                  "Expects deployment to be deleted from the cache when the correct label is present",
 			deployment:            &deployment,
 			expectedDeployment:    nil,
-			expectedCacheContains: true,
 		},
 		{
-			name:                  "Expects no error thrown if calling delete on an employment not exist in cache",
+			name:                  "Expects no error thrown if calling delete on an deployment not exist in cache",
 			deployment:            &deployment,
 			expectedDeployment:    nil,
-			expectedCacheContains: true,
 		},
 	}
 
@@ -184,7 +181,6 @@ func TestDeploymentController_Deleted(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestDeploymentController_GetDeployments(t *testing.T) {
