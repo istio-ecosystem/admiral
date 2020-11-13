@@ -87,6 +87,10 @@ func GetWorkloadSidecarName() string {
 	return admiralParams.WorkloadSidecarName
 }
 
+func GetEnvKey() string {
+	return admiralParams.LabelSet.EnvKey
+}
+
 ///Setters - be careful
 
 func SetKubeconfigPath(path string) {

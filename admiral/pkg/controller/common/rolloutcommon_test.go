@@ -48,13 +48,18 @@ func TestGetEnvForRollout(t *testing.T) {
 		},
 		{
 			name:     "should return valid env from label",
-			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage"}}}}},
-			expected: "stage",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage2"}}}}},
+			expected: "stage2",
 		},
 		{
-			name:     "should return valid env from annotation",
-			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"env": "stage"}}}}},
-			expected: "stage",
+			name:     "should return valid env from new env annotation",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/env": "stage1"}, Labels: map[string]string{"env": "stage2"}}}}},
+			expected: "stage1",
+		},
+		{
+			name:     "should return valid env from new env label",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage2", "admiral.io/env": "production"}}}}},
+			expected: "production",
 		},
 		{
 			name:     "should return env from namespace suffix",

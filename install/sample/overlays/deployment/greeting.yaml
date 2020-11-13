@@ -12,6 +12,7 @@ spec:
   template:
     metadata:
       annotations:
+        admiral.io/env: stage
         sidecar.istio.io/inject: "true"
       labels:
         app: greeting
