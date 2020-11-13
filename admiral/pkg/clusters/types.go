@@ -513,5 +513,4 @@ func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, rh.RemoteRegistry)
-
 }

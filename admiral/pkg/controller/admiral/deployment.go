@@ -177,10 +177,6 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 }
 
 func (d *DeploymentController) Deleted(ojb interface{}) {
-	HandleDeleteDeployment(ojb, d)
-}
-
-func HandleDeleteDeployment(ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
 	if len(key) > 0 {
