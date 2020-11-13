@@ -94,7 +94,6 @@ func createServiceEntryForNewServiceOrPod(event common.Event, env string, source
 			continue
 		}
 
-		// mengying: TODO: verify if only need to do these steps for add or also for delete
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
