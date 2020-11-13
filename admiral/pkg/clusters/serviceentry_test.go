@@ -163,7 +163,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
-	modifyServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
+	modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
 
 }
 
@@ -533,7 +533,7 @@ func TestCreateServiceEntry(t *testing.T) {
 
 	deploymentSeCreationTestCases := []struct {
 		name           string
-		action         common.Event
+		action         admiral.EventType
 		rc             *RemoteController
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
@@ -542,7 +542,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
-			action:         common.Add,
+			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
@@ -551,7 +551,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 		{
 			name:           "Should return a created service entry with http protocol",
-			action:         common.Add,
+			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
@@ -560,7 +560,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 		{
 			name:           "Delete the service entry with one endpoint",
-			action:         common.Delete,
+			action:         admiral.Delete,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
@@ -569,7 +569,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 		{
 			name:           "Delete the service entry with two endpoints",
-			action:         common.Delete,
+			action:         admiral.Delete,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
@@ -593,15 +593,15 @@ func TestCreateServiceEntry(t *testing.T) {
 			var createdSE *istionetworkingv1alpha3.ServiceEntry
 			if c.name == "Delete the service entry with one endpoint" {
 				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
-				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 			} else if c.name == "Delete the service entry with two endpoints" {
 				serviceEntries := map[string]*istionetworkingv1alpha3.ServiceEntry{}
 				// add endpoint to service entry with west region
-				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
+				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				// add endpoint to service entry with east region
 				c.rc.NodeController.Locality.Region = "us-east-2"
-				createServiceEntry(common.Add, c.rc, &c.admiralCache, c.meshPorts, &secondDeployment, serviceEntries)
+				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &secondDeployment, serviceEntries)
 				// delete endpoint to service entry with east region and left one endpoint with west region
 				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
 				// revert back to original remote controller set up to run further tests
@@ -649,7 +649,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForRollout(common.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			createdSE := createServiceEntryForRollout(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -870,7 +870,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := modifyServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}

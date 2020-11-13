@@ -24,7 +24,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
 
-func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -44,7 +44,7 @@ func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *
 	return tmpSe
 }
 
-func modifyServiceEntryForNewServiceOrPod(event common.Event, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
@@ -452,7 +452,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 	return c.PutConfigMap(originalConfigmap)
 }
 
-func createServiceEntryForRollout(event common.Event, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -531,7 +531,7 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 }
 
 
-func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
+func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
 	tmpSe := serviceEntries[globalFqdn]
@@ -568,9 +568,9 @@ func generateServiceEntry(event common.Event, admiralCache *AdmiralCache, meshPo
 		locality, finalProtocol, port)
 
 	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones
-	if event == common.Add {
+	if event == admiral.Add {
 		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
-	} else if event == common.Delete {
+	} else if event == admiral.Delete {
 		// create a tmp endpoint list to store all the endpoints that we intend to keep
 		remainEndpoints := []*networking.ServiceEntry_Endpoint{}
 		// if the endpoint is not equal to the endpoint we intend to delete, append it to remainEndpoint list

@@ -6,6 +6,7 @@ import (
 	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
@@ -96,7 +97,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 					meshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
 
-					tmpSe = createServiceEntry(common.Add, rc, r.AdmiralCache, meshPorts, deployment, serviceEntries)
+					tmpSe = createServiceEntry(admiral.Add, rc, r.AdmiralCache, meshPorts, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -124,7 +125,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 					meshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
 
-					tmpSe = createServiceEntryForRollout(common.Add, rc, r.AdmiralCache, meshPorts, rollout, serviceEntries)
+					tmpSe = createServiceEntryForRollout(admiral.Add, rc, r.AdmiralCache, meshPorts, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue
