@@ -396,7 +396,7 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 	env := common.GetEnv(obj)
 
-	createServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, pc.RemoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
@@ -425,7 +425,7 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 	env := common.GetEnv(obj)
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, pc.RemoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {
@@ -439,7 +439,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 	}
 
 	//TODO Skip pod events until GTP is implemented
-	//createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
+	//modifyServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
@@ -478,7 +478,7 @@ func (rh *RolloutHandler) Added(obj *argo.Rollout) {
 
 	env := common.GetEnvForRollout(obj)
 
-	createServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, rh.RemoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(common.Add, env, globalIdentifier, rh.RemoteRegistry)
 }
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
@@ -512,5 +512,5 @@ func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
 	env := common.GetEnvForRollout(obj)
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	createServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, rh.RemoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(common.Delete, env, globalIdentifier, rh.RemoteRegistry)
 }

@@ -44,7 +44,7 @@ func createServiceEntry(event common.Event, rc *RemoteController, admiralCache *
 	return tmpSe
 }
 
-func createServiceEntryForNewServiceOrPod(event common.Event, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func modifyServiceEntryForNewServiceOrPod(event common.Event, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
@@ -309,23 +309,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				oldServiceEntry = nil
 			}
 
-			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
-
-			//Add a label
-			var identityId string
-			if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-				identityId = fmt.Sprint(identityValue)
-				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-			}
-
-			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
-			numberOfEndpoints := len(newServiceEntry.Spec.Endpoints)
-			if numberOfEndpoints == 0 {
-				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
-			} else {
-				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
-			}
-
 			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
 
 			if err != nil {
@@ -333,17 +316,28 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				oldDestinationRule = nil
 			}
 
-			// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-			globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
-
-			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
-
-			newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
-
-			if numberOfEndpoints == 0 {
+			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
+			if len(se.Endpoints) == 0 {
+				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
 				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 				deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 			} else {
+				newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
+
+				//Add a label
+				var identityId string
+				if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+					identityId = fmt.Sprint(identityValue)
+					newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+				}
+
+				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+
+				// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
+				globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
+				destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
+				newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
+
 				addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 			}
 		}

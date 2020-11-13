@@ -163,7 +163,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
-	createServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
+	modifyServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
 
 }
 
@@ -870,7 +870,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := createServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(common.Add,"test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}
