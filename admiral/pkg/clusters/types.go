@@ -119,22 +119,19 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy, deployment *k8sApp
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
+	var gtpEnv = common.GetGtpEnv(gtp)
 	if deployment != nil && deployment.Labels != nil {
-		log.Infof("Adding Deployment with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", deployment.Name, gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		log.Infof("Adding Deployment with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", deployment.Name, gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtpEnv)
 		//we have a valid deployment
-		env := deployment.Spec.Template.Labels[common.Env]
-		if env == "" {
-			//No environment label, use default value
-			env = common.Default
-		}
+		env := common.GetEnv(deployment)
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
 	} else if g.dependencyCache[gtp.Name] != nil {
-		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtpEnv)
 		//The old GTP matched a deployment, the new one doesn't. So we need to clear that cache.
 		oldDeployment := g.dependencyCache[gtp.Name]
-		env := oldDeployment.Spec.Template.Labels[common.Env]
+		env := common.GetEnv(oldDeployment)
 		identity := oldDeployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)
@@ -152,15 +149,16 @@ func (g *globalTrafficCache) PutRollout(gtp *v1.GlobalTrafficPolicy, rollout *ar
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
+	var gtpEnv = common.GetGtpEnv(gtp)
 	if rollout != nil && rollout.Labels != nil {
-		log.Infof("Adding Rollout with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", rollout.Name, gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		log.Infof("Adding Rollout with name %v and gtp with name %v to GTP cache. LabelMatch=%v env=%v", rollout.Name, gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtpEnv)
 		//we have a valid rollout
 		env := common.GetEnvForRollout(rollout)
 		identity := rollout.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		g.identityCache[key] = gtp
 	} else if g.dependencyRolloutCache[gtp.Name] != nil {
-		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+		log.Infof("Adding gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtpEnv)
 		//The old GTP matched a rollout, the new one doesn't. So we need to clear that cache.
 		oldRollout := g.dependencyRolloutCache[gtp.Name]
 		env := common.GetEnvForRollout(oldRollout)
@@ -181,18 +179,14 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	}
 	defer g.mutex.Unlock()
 	g.mutex.Lock()
-	log.Infof("Deleting gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], gtp.Labels[common.Env])
+	log.Infof("Deleting gtp with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtp.Labels[common.GetGlobalTrafficDeploymentLabel()], common.GetGtpEnv(gtp))
 
 	deployment := g.dependencyCache[gtp.Name]
 
 	if deployment != nil && deployment.Labels != nil {
 
 		//we have a valid deployment
-		env := deployment.Spec.Template.Labels[common.Env]
-		if env == "" {
-			//No environment label, use default value
-			env = common.Default
-		}
+		env := common.GetEnv(deployment)
 		identity := deployment.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)
@@ -202,11 +196,7 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 	if rollout != nil && rollout.Labels != nil {
 
 		//we have a valid rollout
-		env := rollout.Spec.Template.Labels[common.Env]
-		if env == "" {
-			//No environment label, use default value
-			env = common.Default
-		}
+		env := common.GetEnvForRollout(rollout)
 		identity := rollout.Labels[common.GetWorkloadIdentifier()]
 		key := getCacheKey(env, identity)
 		delete(g.identityCache, key)

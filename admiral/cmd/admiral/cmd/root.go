@@ -93,6 +93,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The parameter will be used to decide whether to update workload sidecar resource or not. By default these updates will be disabled.")
 	rootCmd.PersistentFlags().StringVar(&params.WorkloadSidecarName, "workload_sidecar_name", "default",
 		"Name of the sidecar resource in the workload namespace. By default sidecar resource will be named as \"default\".")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.EnvKey, "env_key", "admiral.io/env",
+		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment.")
 
 	return rootCmd
 }
