@@ -308,16 +308,15 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			//check if there is a gtp and add additional hosts/destination rules
-			var seHosts = []string{se.Hosts[0]}
 			var defaultDrName = se.Hosts[0] + "-default-dr"
 			var destinationRules = make(map[string]*networking.DestinationRule)
+			var serviceEntries = make(map[string]*networking.ServiceEntry)
 			if globalTrafficPolicy != nil {
 				gtp := globalTrafficPolicy.Spec
 				for _, gtpTrafficPolicy := range gtp.Policy {
-					var host = gtpTrafficPolicy.Dns + dnsSuffix
+					var host = gtpTrafficPolicy.Dns + "." + se.Hosts[0]
 					var drName = host + "-default-dr"
 					if gtpTrafficPolicy.Dns != env {
-						seHosts = append(seHosts, host)
 						drName = host + "-dr"
 					}
 					destinationRules[drName] = getDestinationRule(host, rc.NodeController.Locality.Region, gtpTrafficPolicy)
