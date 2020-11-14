@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +23,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
 
-func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntry(rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -40,13 +39,14 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
-func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func createServiceEntryForNewServiceOrPod(env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
+
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
 	sourceRollouts := make(map[string]*argo.Rollout)
 
@@ -76,7 +76,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deploymentInstance
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deploymentInstance, serviceEntries)
+			createServiceEntry(rc, remoteRegistry.AdmiralCache, localMeshPorts, deploymentInstance, serviceEntries)
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
@@ -89,7 +89,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceRollouts[rc.ClusterID] = rolloutInstance
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rolloutInstance, serviceEntries)
+			createServiceEntryForRollout(rc, remoteRegistry.AdmiralCache, localMeshPorts, rolloutInstance, serviceEntries)
 		} else {
 			continue
 		}
@@ -168,12 +168,7 @@ func createIngressOnlyVirtualService(rc *RemoteController, cname string, service
 
 	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
 
-	if len(serviceEntry.Endpoints) == 0 {
-		// after deleting the service entry, virtual service also need to be deleted if the service entry host no longer exists
-		deleteVirtualService(oldVirtualService, common.GetSyncNamespace(), rc)
-	} else {
-		addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
-	}
+	addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
 }
 
 func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
@@ -303,43 +298,37 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
-			// if old service entry not find, just create a new service entry instead
 			if err != nil {
-				log.Infof(LogFormat, "Get (error)", "old ServiceEntry", serviceEntryName, sourceCluster, err)
-				oldServiceEntry = nil
+				log.Error(LogFormat, err)
+				// TODO(peter.novotnak@reddit.com): Does this need to return or continue?
+			}
+
+			newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
+
+			//Add a label
+			var identityId string
+			if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
+				identityId = fmt.Sprint(identityValue)
+				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+			}
+
+			if newServiceEntry != nil {
+				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
 			}
 
 			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
 
 			if err != nil {
-				log.Infof(LogFormat, "Get (error)", "old DestinationRule", destinationRuleName, sourceCluster, err)
 				oldDestinationRule = nil
 			}
 
-			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
-			if len(se.Endpoints) == 0 {
-				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
-				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-				deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
-			} else {
-				newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
+			globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
 
-				//Add a label
-				var identityId string
-				if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
-					identityId = fmt.Sprint(identityValue)
-					newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-				}
+			destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
 
-				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+			newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
 
-				// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-				globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
-				destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
-				newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
-
-				addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
-			}
+			addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 		}
 	}
 }
@@ -452,7 +441,7 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 	return c.PutConfigMap(originalConfigmap)
 }
 
-func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntryForRollout(rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -468,7 +457,7 @@ func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController,
 
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
+	tmpSe := generateServiceEntry(admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
 	return tmpSe
 }
 
@@ -530,8 +519,7 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	return address
 }
 
-
-func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
+func generateServiceEntry(admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
 	tmpSe := serviceEntries[globalFqdn]
@@ -566,25 +554,8 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 	}
 	seEndpoint := makeRemoteEndpointForServiceEntry(endpointAddress,
 		locality, finalProtocol, port)
-
-	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones
-	if event == admiral.Add {
-		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
-	} else if event == admiral.Delete {
-		// create a tmp endpoint list to store all the endpoints that we intend to keep
-		remainEndpoints := []*networking.ServiceEntry_Endpoint{}
-		// if the endpoint is not equal to the endpoint we intend to delete, append it to remainEndpoint list
-		for _, existingEndpoint := range tmpSe.Endpoints {
-			if !reflect.DeepEqual(existingEndpoint, seEndpoint) {
-				remainEndpoints = append(remainEndpoints, existingEndpoint)
-			}
-		}
-		// If no endpoints left for particular SE, we can delete the service entry object itself later inside function
-		// AddServiceEntriesWithDr when updating SE, leave an empty shell skeleton here
-		tmpSe.Endpoints = remainEndpoints
-	}
+	tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 
 	serviceEntries[globalFqdn] = tmpSe
-
 	return tmpSe
 }
