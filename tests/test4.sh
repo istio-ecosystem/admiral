@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[ $# -lt 3 ] && { echo "Usage: $0 <source_app> <source_ns> <destination_app>" ; exit 1; }
+[ $# -lt 2 ] && { echo "Usage: $0 <source_app> <source_ns>" ; exit 1; }
 
 source=$1
 source_ns=$2
