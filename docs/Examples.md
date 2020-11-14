@@ -54,10 +54,10 @@ export REMOTE_CLUSTER=<path_to_kubeconfig_for_remote_cluster>
 ```bash
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v1.0/admiral-install-v1.0.tar.gz
-tar xvf admiral-install-v1.0.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v1.1/admiral-install-v1.1.tar.gz
+tar xvf admiral-install-v1.1.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v1.0
+export ADMIRAL_HOME=./admiral-install-v1.1
 ```
 
 ```bash
@@ -98,10 +98,10 @@ At this point, admiral is watching `remote cluster`
 ```
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v1.0/admiral-install-v1.0.tar.gz
-tar xvf admiral-install-v1.0.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v1.1/admiral-install-v1.1.tar.gz
+tar xvf admiral-install-v1.1.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v1.0
+export ADMIRAL_HOME=./admiral-install-v1.1
 ```
 
 ```
