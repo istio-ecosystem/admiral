@@ -507,6 +507,60 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 	}
 
+	oneEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		},
+	}
+
+	twoEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	threeEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+	eastEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
 	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"e2e.my-first-service.mesh"},
 		Addresses:[]string{localAddress},
@@ -538,6 +592,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		deployment	   v14.Deployment
+		serviceEntries map[string]*istionetworkingv1alpha3.ServiceEntry
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
 		{
@@ -547,6 +602,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
 			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &grpcSe,
 		},
 		{
@@ -556,6 +612,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &se,
 		},
 		{
@@ -565,6 +622,9 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &oneEndpointSe,
+			},
 			expectedResult: &emptyEndpointSe,
 		},
 		{
@@ -574,42 +634,30 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
-			expectedResult: &se,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &twoEndpointSe,
+			},
+			expectedResult: &eastEndpointSe,
 		},
-		//{
-		//	name:           "Delete the service entry with three endpoints",
-		//	action:         common.Delete,
-		//	rc:             rc,
-		//	admiralCache:   admiralCache,
-		//	meshPorts:      map[string]uint32 {"http": uint32(80)},
-		//	deployment:		deployment,
-		//	expectedResult: &se,
-		//},
+		{
+			name:           "Delete the service entry with three endpoints",
+			action:         admiral.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &threeEndpointSe,
+			},
+			expectedResult: &eastEndpointSe,
+		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
 			var createdSE *istionetworkingv1alpha3.ServiceEntry
-			if c.name == "Delete the service entry with one endpoint" {
-				serviceEntries :=  map[string]*istionetworkingv1alpha3.ServiceEntry{}
-				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
-				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
-			} else if c.name == "Delete the service entry with two endpoints" {
-				serviceEntries := map[string]*istionetworkingv1alpha3.ServiceEntry{}
-				// add endpoint to service entry with west region
-				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
-				// add endpoint to service entry with east region
-				c.rc.NodeController.Locality.Region = "us-east-2"
-				createServiceEntry(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &secondDeployment, serviceEntries)
-				// delete endpoint to service entry with east region and left one endpoint with west region
-				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, serviceEntries)
-				// revert back to original remote controller set up to run further tests
-				c.rc.NodeController.Locality.Region = "us-west-2"
-			} else {
-				createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
-
-			}
+			createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
