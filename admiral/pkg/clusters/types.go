@@ -234,9 +234,6 @@ func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
-	// need clean up before handle it as added, I need to handle update that delete the dependency, find diff first
-	// this is more complex cos want to make sure no other service depend on the same service (which we just removed the dependancy).
-	// need to make sure nothing depend on that before cleaning up the SE for that service
 	HandleDependencyRecord(obj, dh.RemoteRegistry)
 
 }
@@ -254,8 +251,6 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
-	// special case of update, delete the dependency crd file for one service, need to loop through all ones we plan to update
-	// and make sure nobody else is relying on the same SE in same cluster
 	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
 }
 
@@ -359,11 +354,41 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry)
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+
+	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	var matchedGTPs []v1.GlobalTrafficPolicy
+	for _, remoteCluster := range pc.RemoteRegistry.remoteControllers {
+		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
+	}
+
+	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
+
+	if gtp != nil {
+		err := pc.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
+		if err != nil {
+			log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
+		} else {
+			log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+		}
+	}
+
+	env := common.GetEnv(obj)
+
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry)
+	log.Infof(LogFormat, "Deleted", "deployment", obj.Name, obj.ClusterName, "Skipped, not implemented")
+	//todo remove from gtp cache
+
+	//TODO update subset service entries
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {
@@ -377,7 +402,7 @@ func (pc *PodHandler) Added(obj *k8sV1.Pod) {
 	}
 
 	//TODO Skip pod events until GTP is implemented
-	//modifyServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
+	//createServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func (pc *PodHandler) Deleted(obj *k8sV1.Pod) {
@@ -389,21 +414,8 @@ func getCacheKey(environment string, identity string) string {
 }
 
 func (rh *RolloutHandler) Added(obj *argo.Rollout) {
-	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry)
-}
+	log.Infof(LogFormat, "Added", "rollout", obj.Name, obj.ClusterName, "received")
 
-func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
-	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
-}
-
-func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
-	HandleEventForRollout(admiral.Delete, obj, rh.RemoteRegistry)
-}
-
-// helper function to handle add and delete for RolloutHandler
-func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry) {
-
-	log.Infof(LogFormat, event, "rollout", obj.Name, obj.ClusterName, "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
@@ -412,66 +424,31 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 	}
 
 	var matchedGTPs []v1.GlobalTrafficPolicy
-	for _, remoteCluster := range remoteRegistry.remoteControllers {
+	for _, remoteCluster := range rh.RemoteRegistry.remoteControllers {
 		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
 	gtp := common.MatchGTPsToRollout(matchedGTPs, obj)
 
 	if gtp != nil {
-		if event == admiral.Add {
-			err := remoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(gtp, obj)
-			if err != nil {
-				log.Errorf("Failed to add Rollout to GTP cache. Error=%v", err)
-			} else {
-				log.Infof(LogFormat, "Event", "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
-			}
-		} else if event == admiral.Delete {
-			remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
-			log.Infof(LogFormat, event, "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+
+		err := rh.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(gtp, obj)
+		if err != nil {
+			log.Errorf("Failed to add Rollout to GTP cache. Error=%v", err)
+		} else {
+			log.Infof(LogFormat, "Event", "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
 		}
 	}
 
 	env := common.GetEnvForRollout(obj)
 
-	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+	createServiceEntryForNewServiceOrPod(env, globalIdentifier, rh.RemoteRegistry)
 }
 
-// helper function to handle add and delete for DeploymentHandler
-func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry)  {
-	log.Infof(LogFormat, event, "deployment", obj.Name, obj.ClusterName, "Received")
+func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
+}
 
-	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
-
-	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
-		return
-	}
-
-	var matchedGTPs []v1.GlobalTrafficPolicy
-	for _, remoteCluster := range remoteRegistry.remoteControllers {
-		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
-	}
-
-	gtp := common.MatchGTPsToDeployment(matchedGTPs, obj)
-
-	if gtp != nil {
-		if event == admiral.Add {
-			err := remoteRegistry.AdmiralCache.GlobalTrafficCache.Put(gtp, obj)
-			if err != nil {
-				log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
-			} else {
-				log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
-			}
-		} else if event == admiral.Delete {
-			remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
-			log.Infof(LogFormat, event, "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
-		}
-	}
-
-	env := common.GetEnv(obj)
-
-	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Deleted", "rollout", obj.Name, obj.ClusterName, "received")
 }
