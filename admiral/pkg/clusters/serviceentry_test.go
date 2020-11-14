@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/rest"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -93,6 +94,12 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 
+	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"dev.bar.global"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+	}
+
+
 	seConfig := v1alpha3.ServiceEntry{
 		Spec: se,
 	}
@@ -116,6 +123,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
@@ -155,7 +163,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.remoteControllers["test.cluster"] = rc
-	createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
 
 }
 
@@ -482,6 +490,10 @@ func TestCreateServiceEntry(t *testing.T) {
 	deployment := v14.Deployment{}
 	deployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
+	// the second deployment will be add with us-east-2 region remote controller
+	secondDeployment := v14.Deployment{}
+	secondDeployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
+
 	se := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"e2e.my-first-service.mesh"},
 		Addresses:[]string{localAddress},
@@ -493,6 +505,71 @@ func TestCreateServiceEntry(t *testing.T) {
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
+	}
+
+	oneEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		},
+	}
+
+	twoEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	threeEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+	eastEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"e2e.my-first-service.mesh"},
+		Addresses:[]string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
 	}
 
 	grpcSe := istionetworkingv1alpha3.ServiceEntry{
@@ -510,34 +587,77 @@ func TestCreateServiceEntry(t *testing.T) {
 
 	deploymentSeCreationTestCases := []struct {
 		name           string
+		action         admiral.EventType
 		rc             *RemoteController
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		deployment	   v14.Deployment
+		serviceEntries map[string]*istionetworkingv1alpha3.ServiceEntry
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
+			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
 			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &grpcSe,
 		},
 		{
 			name:           "Should return a created service entry with http protocol",
+			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32 {"http": uint32(80)},
 			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &se,
+		},
+		{
+			name:           "Delete the service entry with one endpoint",
+			action:         admiral.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &oneEndpointSe,
+			},
+			expectedResult: &emptyEndpointSe,
+		},
+		{
+			name:           "Delete the service entry with two endpoints",
+			action:         admiral.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &twoEndpointSe,
+			},
+			expectedResult: &eastEndpointSe,
+		},
+		{
+			name:           "Delete the service entry with three endpoints",
+			action:         admiral.Delete,
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32 {"http": uint32(80)},
+			deployment:		deployment,
+			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &threeEndpointSe,
+			},
+			expectedResult: &eastEndpointSe,
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntry(c.rc, &c.admiralCache, c.meshPorts, &c.deployment, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			var createdSE *istionetworkingv1alpha3.ServiceEntry
+			createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -577,7 +697,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForRollout(c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			createdSE := createServiceEntryForRollout(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -616,8 +736,16 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 
 	meshPorts := map[string]uint32{common.Http: 80}
 
+	inputSe :=  &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
+	inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		&istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			Address: "address",
+		},
+	}
+
 	testCases := []struct {
 		name           string
+		serviceEntry   *istionetworkingv1alpha3.ServiceEntry
 		rc             *RemoteController
 		localFqdn      string
 		meshPorts 	   map[string]uint32
@@ -626,6 +754,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		{
 			name:           "Should return a created virtual service",
 			rc:             rcCreate,
+			serviceEntry:   inputSe,
 			localFqdn:      localFqdn,
 			meshPorts:      meshPorts,
 			expectedResult: localFqdn,
@@ -633,28 +762,34 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		{
 			name:           "Should return an updated virtual service",
 			rc:             rcCreate,
+			serviceEntry:   inputSe,
 			localFqdn:      localFqdn2,
 			meshPorts:      meshPorts,
 			expectedResult: localFqdn2,
 		},
 		{
-			name:           "Should return virtual service not updated when mesh inbound ports is more than 1",
+			name:           "Should return virtual service deleted when endpoint not exist any more",
 			rc:             rcCreate,
+			serviceEntry:   &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}},
 			localFqdn:      localFqdn,
-			meshPorts:      map[string]uint32{common.Http: 80, common.Grpc : 8090},
-			expectedResult: localFqdn2,
+			meshPorts:      meshPorts,
+			expectedResult: "",
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			createIngressOnlyVirtualService(c.rc, cname, &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}, c.localFqdn, c.meshPorts)
+			createIngressOnlyVirtualService(c.rc, cname, c.serviceEntry, c.localFqdn, c.meshPorts)
 			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
 			if err != nil {
+				// for the last test case when deleting virtual service is needed, then we should be expecting not found error for virtual service
+				if c.expectedResult == "" && strings.Contains(err.Error(), "not found") {
+					return
+				}
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
 			}
-			if vs == nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
+			if vs != nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
 				if vs != nil {
 					t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
 				}
@@ -783,7 +918,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := createServiceEntryForNewServiceOrPod("test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}
@@ -794,5 +929,4 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	if nil == serviceEntryResp {
 		t.Fatalf("Service entry returned should not be empty")
 	}
-
 }

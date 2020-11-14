@@ -130,7 +130,66 @@ func TestRolloutController_Added(t *testing.T) {
 			} else if depController.Cache.cache["id"].Rollouts[common.Default] != nil && depController.Cache.cache["id"].Rollouts[common.Default] != &rollout {
 				t.Errorf("Incorrect rollout added to rollout controller cache. Got %v expected %v", depController.Cache.cache["id"].Rollouts[common.Default], rollout)
 			}
+		})
+	}
+}
 
+func TestRolloutController_Deleted(t *testing.T) {
+	//Rollouts with the correct label are added to the cache
+	mdh := test.MockRolloutHandler{}
+	cache := rolloutCache{
+		cache: map[string]*RolloutClusterEntry{},
+		mutex: &sync.Mutex{},
+	}
+	labelset := common.LabelSet{
+		DeploymentAnnotation: "sidecar.istio.io/inject",
+		AdmiralIgnoreLabel:   "admiral-ignore",
+	}
+	depController := RolloutController{
+		RolloutHandler: &mdh,
+		Cache:          &cache,
+		labelSet:       &labelset,
+	}
+	rollout := argo.Rollout{}
+	rollout.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
+	rollout.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+
+	testCases := []struct {
+		name                  string
+		rollout               *argo.Rollout
+		expectedRollout       *argo.Rollout
+	}{
+		{
+			name:                  "Expects rollout to be deleted from the cache when the correct label is present",
+			rollout:               &rollout,
+			expectedRollout:       nil,
+		},
+		{
+			name:                  "Expects no error thrown if calling delete on an rollout not exist in cache",
+			rollout:               &rollout,
+			expectedRollout:       nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			depController.K8sClient = fake.NewSimpleClientset()
+			depController.Cache.cache = map[string]*RolloutClusterEntry{}
+			if c.name == "Expects rollout to be deleted from the cache when the correct label is present" {
+				depController.Cache.cache["id"] = &RolloutClusterEntry{
+					Identity: "id",
+					Rollouts: map[string]*argo.Rollout{
+						"default": c.rollout,
+					},
+				}
+			}
+			depController.Deleted(c.rollout)
+
+			if c.expectedRollout == nil {
+				if len(depController.Cache.cache) > 0 && len(depController.Cache.cache["id"].Rollouts) != 0 {
+					t.Errorf("Cache should remain the key with empty value if expected rollout is nil")
+				}
+			}
 		})
 	}
 
