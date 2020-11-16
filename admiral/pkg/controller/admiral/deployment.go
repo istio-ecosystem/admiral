@@ -180,10 +180,10 @@ func (d *DeploymentController) Deleted(ojb interface{}) {
 	fmt.Println("mengying!!! deleted get triggered")
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
+	d.DeploymentHandler.Deleted(deployment)
 	if len(key) > 0 {
 		d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 	}
-	d.DeploymentHandler.Deleted(deployment)
 }
 
 func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
