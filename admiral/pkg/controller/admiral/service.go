@@ -111,6 +111,8 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 			}
 		}
 	}
+	fmt.Println("mengying!!!!  for adding SE verify the lb name")
+	fmt.Println(lb)
 	return lb, lbPort
 }
 
