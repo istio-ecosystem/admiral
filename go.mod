@@ -7,6 +7,7 @@ require (
 	github.com/argoproj/argo-rollouts v0.7.2
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/emicklei/go-restful v2.11.2+incompatible // indirect
+	github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
 	github.com/go-openapi/spec v0.19.6 // indirect
 	github.com/go-openapi/swag v0.19.7 // indirect
