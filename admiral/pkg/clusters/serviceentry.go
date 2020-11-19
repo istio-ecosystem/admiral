@@ -126,6 +126,10 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		for key, serviceEntry := range serviceEntries {
+			if len(serviceEntry.Endpoints) == 0 {
+				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+					map[string]*networking.ServiceEntry{key: serviceEntry})
+			}
 			for _, ep := range serviceEntry.Endpoints {
 				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
