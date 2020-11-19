@@ -538,7 +538,6 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
-	fmt.Println("generate SE for event  " + event)
 	tmpSe := serviceEntries[globalFqdn]
 
 	var finalProtocol = common.Http
