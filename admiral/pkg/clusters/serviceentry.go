@@ -27,7 +27,6 @@ import (
 func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
-	fmt.Println("mengying !!! Create Service entry for event "+ event)
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
 
@@ -46,7 +45,6 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 }
 
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
-	fmt.Println("mengying!!! into the modifyServiceEntryForNewServiceOrPod function for event "+ event)
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
@@ -67,7 +65,6 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		if deployment != nil && deployment.Deployments[env] != nil {
-			fmt.Println("mengying !!! for event " + event + " ådeployment is not nil")
 			deploymentInstance := deployment.Deployments[env]
 
 			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
@@ -295,9 +292,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
-		fmt.Println("mengying!!! check se length")
-		fmt.Println(len(se.Endpoints))
-		fmt.Println(se.Endpoints)
 		//add service entry
 		serviceEntryName := getIstioResourceName(se.Hosts[0], "-se")
 
@@ -571,7 +565,7 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 	}
 
 	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
-	fmt.Println("mengying !!! check endpoint address:   "+endpointAddress)
+
 	var locality string
 	if rc.NodeController.Locality != nil {
 		locality = rc.NodeController.Locality.Region
@@ -586,10 +580,8 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 		// create a tmp endpoint list to store all the endpoints that we intend to keep
 		remainEndpoints := []*networking.ServiceEntry_Endpoint{}
 		// if the endpoint is not equal to the endpoint we intend to delete, append it to remainEndpoint list
-		// mengying!!!! TODO: here the tmpSe is always going to be empty or not, need double check !!!
 		for _, existingEndpoint := range tmpSe.Endpoints {
 			if !reflect.DeepEqual(existingEndpoint, seEndpoint) {
-				fmt.Println("mengying !!! not equal existing endpoint, attach")
 				remainEndpoints = append(remainEndpoints, existingEndpoint)
 			}
 		}

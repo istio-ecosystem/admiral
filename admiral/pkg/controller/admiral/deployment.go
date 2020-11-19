@@ -177,7 +177,6 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 }
 
 func (d *DeploymentController) Deleted(ojb interface{}) {
-	fmt.Println("mengying!!! deleted get triggered")
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
 	d.DeploymentHandler.Deleted(deployment)

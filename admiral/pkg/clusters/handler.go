@@ -606,7 +606,6 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 }
 
 func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
-	fmt.Println("mengying!!! delete se triggered")
 	if exist != nil {
 		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
 		if err != nil {
