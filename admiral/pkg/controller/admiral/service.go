@@ -40,18 +40,16 @@ type serviceCache struct {
 }
 
 func (s *serviceCache) Put(service *k8sV1.Service) {
-	if service.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-		//removing from the cache if it already exists
-		identity := s.getKey(service)
-		existing := s.cache[identity]
-		delete(existing.Service[identity], service.Name)
-		return //Ignoring services with the ignore label
-	}
-
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	identity := s.getKey(service)
 	existing := s.cache[identity]
+	if service.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		if existing != nil {
+			delete(existing.Service[identity], service.Name)
+		}
+		return //Ignoring services with the ignore label
+	}
 	if existing == nil {
 		existing = &ServiceClusterEntry{
 			Service:  make(map[string]map[string]*k8sV1.Service),
