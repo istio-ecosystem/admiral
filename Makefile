@@ -118,6 +118,7 @@ endif
 download-kustomize:
 	curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases |\
 	grep browser_download |\
+	grep amd64 |\
 	grep $(OPSYS) |\
 	cut -d '"' -f 4 |\
 	grep /kustomize/v |\
