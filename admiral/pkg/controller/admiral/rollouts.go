@@ -168,19 +168,14 @@ func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler Roll
 }
 
 func (roc *RolloutController) Added(ojb interface{}) {
-
-	rollout := ojb.(*argo.Rollout)
-	key := roc.Cache.getKey(rollout)
-	if len(key) > 0 && !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
-		roc.Cache.UpdateRolloutToClusterCache(key, rollout)
-		roc.RolloutHandler.Added(rollout)
-	} else {
-		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
-		log.Debugf("ignoring rollout %v based on labels", rollout.Name)
-	}
+	HandleAddUpdateRollout(ojb, roc)
 }
 
 func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
+	HandleAddUpdateRollout(ojb, roc)
+}
+
+func HandleAddUpdateRollout(ojb interface{}, roc *RolloutController) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 {
@@ -194,9 +189,13 @@ func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
 	}
 }
 
-func (sec *RolloutController) Deleted(ojb interface{}) {
-	//TODO deal with this
-
+func (roc *RolloutController) Deleted(ojb interface{}) {
+	rollout := ojb.(*argo.Rollout)
+	key := roc.Cache.getKey(rollout)
+	if len(key) > 0 {
+		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
+	}
+	roc.RolloutHandler.Deleted(rollout)
 }
 
 func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace string) []argo.Rollout {

@@ -104,7 +104,7 @@ metadata:
 rules:
   - apiGroups: ["networking.istio.io"]
     resources: ['virtualservices', 'destinationrules', 'serviceentries', 'gateways']
-    verbs: ["create", "update"]
+    verbs: ["create", "update", "delete"]
 
 ---
 

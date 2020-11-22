@@ -37,6 +37,19 @@ func TestServiceCache_Put(t *testing.T) {
 	serviceCache.cache = make(map[string]*ServiceClusterEntry)
 	serviceCache.mutex = &sync.Mutex{}
 
+	//test service cache empty with admiral ignore should skip to save in cache
+
+	firstSvc := &v1.Service{}
+	firstSvc.Name = "First Test Service"
+	firstSvc.Namespace = "ns"
+	firstSvc.Annotations = map[string]string{"admiral.io/ignore": "true"}
+
+	serviceCache.Put(firstSvc)
+
+	if serviceCache.Get("ns") != nil {
+		t.Errorf("Service with admiral.io/ignore annotation should not be in cache")
+	}
+
 	service := &v1.Service{}
 	service.Name = "Test Service"
 	service.Namespace = "ns"
