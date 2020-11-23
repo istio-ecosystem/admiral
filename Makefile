@@ -1,6 +1,7 @@
 DOCKER_REPO?=admiralproj
 IMAGE?=$(DOCKER_REPO)/admiral
 DOCKER_USER?=aattuluri
+KUSTOMIZE_VERSION?=3.8.2
 
 DOCKERFILE?=Dockerfile.admiral
 
@@ -116,15 +117,8 @@ endif
 endif
 
 download-kustomize:
-	curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases |\
-	grep browser_download |\
-	grep amd64 |\
-	grep $(OPSYS) |\
-	cut -d '"' -f 4 |\
-	grep /kustomize/v |\
-	sort | tail -n 1 |\
-	xargs curl -s -O -L
-	tar xzf ./kustomize_v*_${OPSYS}_amd64.tar.gz
+	curl -s -O -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
+	tar xzf ./kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
 	chmod u+x kustomize
 
 gen-yaml:

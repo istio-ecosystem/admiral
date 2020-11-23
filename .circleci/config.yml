@@ -24,7 +24,12 @@ jobs:
     - run:
         name: Tests
         command: |
-          make test
+  #        make test
+          make download-kustomize
+          echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
+          source $BASH_ENV
+          (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${BRANCH}")
+          make gen-yaml
           mv c.out /tmp/
     - codecov/upload:
         file: /tmp/c.out
@@ -139,12 +144,12 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - run-integration-tests:
-          requires:
-            - build
-          filters:
-            tags:
-              only: /.*/
+#      - run-integration-tests:
+#          requires:
+#            - build
+#          filters:
+#            tags:
+#              only: /.*/
       - publish-github-release:
           requires:
             - build
