@@ -75,6 +75,8 @@ jobs:
           command: |
             echo "export PATH=/go/pkg/mod/github.com/admiral:$PATH" >> $BASH_ENV
             source $BASH_ENV
+            echo $BASH_ENV
+            pwd
             make download-kustomize
       - run:
           name: generate prereq yaml files
