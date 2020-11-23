@@ -120,6 +120,7 @@ download-kustomize:
 	curl -s -O -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
 	tar xzf ./kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
 	chmod u+x kustomize
+	kustomize version
 
 gen-yaml:
 	mkdir -p ./out/yaml
