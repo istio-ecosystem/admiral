@@ -146,7 +146,7 @@ kubectl apply -f $ADMIRAL_HOME/yaml/grpc-client.yaml -n sample
 
 - Check the logs once the pod has run successfully (takes 10-20 seconds)
 ```
-kubectl logs --namespace=sample -it $(kubectl get pod -l "app=grpc-client" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c grpc-client
+kubectl logs --namespace=sample $(kubectl get pod -l "app=grpc-client" --namespace=sample -o jsonpath='{.items[0].metadata.name}') -c grpc-client
 ```
 
 - You should see a response like below
