@@ -87,8 +87,8 @@ func GetWorkloadSidecarName() string {
 	return admiralParams.WorkloadSidecarName
 }
 
-func GetEnvLabel() string {
-	return admiralParams.LabelSet.EnvLabel
+func GetEnvKey() string {
+	return admiralParams.LabelSet.EnvKey
 }
 
 ///Setters - be careful

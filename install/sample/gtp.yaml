@@ -7,7 +7,7 @@ metadata:
     identity: greeting
 spec:
   policy:
-    - dns: default
+    - dns: stage.greeting.global
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2

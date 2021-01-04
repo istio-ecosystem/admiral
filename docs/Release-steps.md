@@ -4,28 +4,7 @@
 
 * You are an admin on the admiral github project (to cut the release)
 * You have access to admiral slack channel and AdmiralProj twitter account (to make release announcements)
-
-## Validate the `latest` admiral tag
-
-* Install minikube (and the associated VM environment like VirtualBox)
-
-* Checkout admiral `master` branch and run the integration tests locally.
-
-    ```bash
-    git clone https://github.com/istio-ecosystem/admiral.git
-    cd admiral
-    git pull
-    make gen-yaml
-    cd tests
-    ./run.sh "1.16.8" "1.5.6" "../out"
-    ```
-
-Expect to see the following output when the test completes:
-```bash
-Admiral did it's magic!
-PASS
-PASS
-```
+* [Validate that the master branch build is passing](https://circleci.com/gh/istio-ecosystem/admiral/tree/master)
 
 ## Draft the release notes
 
@@ -38,7 +17,7 @@ The release notes is maintained [here](ReleaseNotes.md). Open a PR to the releas
 
 ### How to find the issues/commits
 * You can find the [issues associated with a milestone](https://github.com/istio-ecosystem/admiral/issues?q=is%3Aissue+milestone%3Av1.0+) to get started.
-* [Commits](https://github.com/istio-ecosystem/admiral/compare/release-0.9...master) between last release (the link assumes `v0.9`) and `master` branch
+* [Commits](https://github.com/istio-ecosystem/admiral/compare/v1.0...master) between last release (the link assumes `v1.0`) and `master` branch
 
 
 ## Draft a new release on github.com 

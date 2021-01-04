@@ -34,7 +34,7 @@ func init() {
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-	p.LabelSet.EnvLabel = "env"
+	p.LabelSet.EnvKey = "admiral.io/env"
 
 	InitializeConfig(p)
 }
@@ -259,13 +259,18 @@ func TestGetEnv(t *testing.T) {
 		},
 		{
 			name:       "should return valid env from label",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage"}}}}},
-			expected:   "stage",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage2"}}}}},
+			expected:   "stage2",
 		},
 		{
-			name:       "should return valid env from annotation",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"env": "stage"}}}}},
-			expected:   "stage",
+			name:       "should return valid env from new annotation",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/env": "stage1"}, Labels: map[string]string{"env": "stage2"}}}}},
+			expected:   "stage1",
+		},
+		{
+			name:       "should return valid env from new label",
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"admiral.io/env": "production", "env": "stage2"}}}}},
+			expected:   "production",
 		},
 		{
 			name:       "should return env from namespace suffix",
@@ -551,6 +556,71 @@ func TestMatchGTPsToDeployment(t *testing.T) {
 			returned := MatchGTPsToDeployment(*c.gtp, c.deployment)
 			if !cmp.Equal(returned, c.expectedGTP, ignoreUnexported) {
 				t.Fatalf("Deployment mismatch. Diff: %v", cmp.Diff(returned, c.expectedGTP, ignoreUnexported))
+			}
+		})
+	}
+
+}
+
+func TestGetGtpEnv(t *testing.T) {
+
+	envNewAnnotationGtp := v12.GlobalTrafficPolicy{}
+	envNewAnnotationGtp.CreationTimestamp = v1.Now()
+	envNewAnnotationGtp.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
+	envNewAnnotationGtp.Annotations = map[string]string{"admiral.io/env": "production"}
+	envNewAnnotationGtp.Namespace = "namespace"
+	envNewAnnotationGtp.Name = "myGTP-new-annotation"
+
+	envNewLabelGtp := v12.GlobalTrafficPolicy{}
+	envNewLabelGtp.CreationTimestamp = v1.Now()
+	envNewLabelGtp.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1", "env": "stage2"}
+	envNewLabelGtp.Namespace = "namespace"
+	envNewLabelGtp.Name = "myGTP-new-label"
+
+	envLabelGtp := v12.GlobalTrafficPolicy{}
+	envLabelGtp.CreationTimestamp = v1.Now()
+	envLabelGtp.Labels = map[string]string{"identity": "app1", "env": "stage2"}
+	envLabelGtp.Namespace = "namespace"
+	envLabelGtp.Name = "myGTP-label"
+
+	noEnvGtp := v12.GlobalTrafficPolicy{}
+	noEnvGtp.CreationTimestamp = v1.Now()
+	noEnvGtp.Labels = map[string]string{"identity": "app1"}
+	noEnvGtp.Namespace = "namespace"
+	noEnvGtp.Name = "myGTP-no-env"
+
+	testCases := []struct {
+		name        string
+		gtp         *v12.GlobalTrafficPolicy
+		expectedEnv string
+	}{
+		{
+			name:        "Should return env from new annotation",
+			gtp:         &envNewAnnotationGtp,
+			expectedEnv: "production",
+		},
+		{
+			name:        "Should return env from new label",
+			gtp:         &envNewLabelGtp,
+			expectedEnv: "stage1",
+		},
+		{
+			name:        "Should return env from label",
+			gtp:         &envLabelGtp,
+			expectedEnv: "stage2",
+		},
+		{
+			name:        "Should return default with no env specified",
+			gtp:         &noEnvGtp,
+			expectedEnv: "default",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			returned := GetGtpEnv(c.gtp)
+			if !cmp.Equal(returned, c.expectedEnv, ignoreUnexported) {
+				t.Fatalf("GTP env mismatch. Diff: %v", cmp.Diff(returned, c.expectedEnv, ignoreUnexported))
 			}
 		})
 	}

@@ -87,15 +87,19 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 }
 
 func GetEnv(deployment *k8sAppsV1.Deployment) string {
-	var environment = deployment.Spec.Template.Labels[GetEnvLabel()]
+	var environment = deployment.Spec.Template.Annotations[GetEnvKey()]
 	if len(environment) == 0 {
-		environment = deployment.Spec.Template.Annotations[GetEnvLabel()]
+		environment = deployment.Spec.Template.Labels[GetEnvKey()]
+	}
+	if len(environment) == 0 {
+		environment = deployment.Spec.Template.Labels[Env]
 	}
 	if len(environment) == 0 {
 		splitNamespace := strings.Split(deployment.Namespace, Dash)
 		if len(splitNamespace) > 1 {
 			environment = splitNamespace[len(splitNamespace)-1]
 		}
+		log.Warnf("Using deprecated approach to deduce env from namespace for deployment, name=%v in namespace=%v", deployment.Name, deployment.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default
@@ -141,10 +145,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 		return nil
 	}
 
-	gtpEnv := gtp.Labels[GetEnvLabel()]
-	if gtpEnv == "" {
-		gtpEnv = Default
-	}
+	gtpEnv := GetGtpEnv(gtp)
 
 	if len(deployments) == 0 {
 		return nil
@@ -153,11 +154,7 @@ func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.
 	var envMatchedDeployments []k8sAppsV1.Deployment
 
 	for _, deployment := range deployments {
-		deploymentEnvironment := deployment.Spec.Template.Labels[GetEnvLabel()]
-		if deploymentEnvironment == "" {
-			//No environment label, use default value
-			deploymentEnvironment = Default
-		}
+		deploymentEnvironment := GetEnv(&deployment)
 		if deploymentEnvironment == gtpEnv {
 			envMatchedDeployments = append(envMatchedDeployments, deployment)
 		}
@@ -184,18 +181,11 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
 		return nil
 	}
-	deploymentEnvironment := deployment.Spec.Template.Labels[GetEnvLabel()]
-	if deploymentEnvironment == "" {
-		//No environment label, use default value
-		deploymentEnvironment = Default
-	}
+	deploymentEnvironment := GetEnv(deployment)
 
 	//If one and only one GTP matches the env label of the deployment - use that one
 	if len(gtpList) == 1 {
-		gtpEnv := gtpList[0].Labels[GetEnvLabel()]
-		if gtpEnv == "" {
-			gtpEnv = Default
-		}
+		gtpEnv := GetGtpEnv(&gtpList[0])
 		if gtpEnv == deploymentEnvironment {
 			log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, gtpList[0].Name, deployment.Namespace, gtpEnv)
 			return &gtpList[0]
@@ -211,10 +201,7 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		gtpEnv := gtp.Labels[GetEnvLabel()]
-		if gtpEnv == "" {
-			gtpEnv = Default
-		}
+		gtpEnv := GetGtpEnv(&gtp)
 		if gtpEnv == deploymentEnvironment {
 			envMatchedGTPList = append(envMatchedGTPList, gtp)
 		}
@@ -243,4 +230,19 @@ func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sApps
 	log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, envMatchedGTPList[0].Name, deployment.Namespace, deploymentEnvironment)
 	return &envMatchedGTPList[0]
 
+}
+
+func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
+	var environment = gtp.Annotations[GetEnvKey()]
+	if len(environment) == 0 {
+		environment = gtp.Labels[GetEnvKey()]
+	}
+	if len(environment) == 0 {
+		environment = gtp.Labels[Env]
+		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
+	}
+	if len(environment) == 0 {
+		environment = Default
+	}
+	return environment
 }

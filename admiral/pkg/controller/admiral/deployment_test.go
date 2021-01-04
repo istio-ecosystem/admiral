@@ -121,7 +121,66 @@ func TestDeploymentController_Added(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestDeploymentController_Deleted(t *testing.T) {
+	//Deployments with the correct label are added to the cache
+	mdh := test.MockDeploymentHandler{}
+	cache := deploymentCache{
+		cache: map[string]*DeploymentClusterEntry{},
+		mutex: &sync.Mutex{},
+	}
+	labelset := common.LabelSet{
+		DeploymentAnnotation: "sidecar.istio.io/inject",
+		AdmiralIgnoreLabel:   "admiral-ignore",
+	}
+	depController := DeploymentController{
+		DeploymentHandler: &mdh,
+		Cache:             &cache,
+		labelSet:          &labelset,
+	}
+	deployment := k8sAppsV1.Deployment{}
+	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
+	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
+
+	testCases := []struct {
+		name                  string
+		deployment            *k8sAppsV1.Deployment
+		expectedDeployment    *k8sAppsV1.Deployment
+	}{
+		{
+			name:                  "Expects deployment to be deleted from the cache when the correct label is present",
+			deployment:            &deployment,
+			expectedDeployment:    nil,
+		},
+		{
+			name:                  "Expects no error thrown if calling delete on an deployment not exist in cache",
+			deployment:            &deployment,
+			expectedDeployment:    nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			depController.K8sClient = fake.NewSimpleClientset()
+			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
+			if c.name == "Expects deployment to be deleted from the cache when the correct label is present" {
+				depController.Cache.cache["id"] = &DeploymentClusterEntry{
+					Identity: "id",
+					Deployments: map[string]*k8sAppsV1.Deployment{
+						"default": c.deployment,
+					},
+				}
+			}
+			depController.Deleted(c.deployment)
+
+			if c.expectedDeployment == nil {
+				if len(depController.Cache.cache) > 0 && len(depController.Cache.cache["id"].Deployments) != 0 {
+					t.Errorf("Cache should remain the key with empty value if expected deployment is nil")
+				}
+			}
+		})
+	}
 }
 
 func TestDeploymentController_GetDeployments(t *testing.T) {
@@ -179,7 +238,6 @@ func TestDeploymentController_GetDeployments(t *testing.T) {
 		log.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
 		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
 	}
-
 }
 
 func TestNewDeploymentController(t *testing.T) {
