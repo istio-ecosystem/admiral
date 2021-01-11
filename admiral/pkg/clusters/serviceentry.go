@@ -3,6 +3,7 @@ package clusters
 import (
 	"errors"
 	"fmt"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"math"
 	"math/rand"
 	"reflect"
@@ -23,6 +24,13 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 )
+
+type SeDrTuple struct {
+	SeName string
+	DrName string
+	ServiceEntry *networking.ServiceEntry
+	DestinationRule *networking.DestinationRule
+}
 
 func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
@@ -317,53 +325,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			//check if there is a gtp and add additional hosts/destination rules
-			var defaultDrName = se.Hosts[0] + "-default-dr"
-			var defaultSeName = se.Hosts[0] + "-se"
-			type SeDrTuple struct {
-				SeName string
-				DrName string
-				ServiceEntry *networking.ServiceEntry
-				DestinationRule *networking.DestinationRule
-			}
-			var seDrSet = make([]*SeDrTuple, 0)
-			var defaultDrCreated = false
-			if globalTrafficPolicy != nil {
-				gtp := globalTrafficPolicy.Spec
-				for _, gtpTrafficPolicy := range gtp.Policy {
-					var modifiedSe = se
-					var host = se.Hosts[0]
-					var drName, seName = defaultDrName, defaultSeName
-					if gtpTrafficPolicy.Dns != env {
-						host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, se.Hosts[0]})
-						drName, seName = host + "-dr", host + "-se"
-						modifiedSe = copyServiceEntry(se)
-						modifiedSe.Hosts[0] = host
-					} else if gtpTrafficPolicy.Dns == env || gtpTrafficPolicy.Dns == common.Default {
-						//build the default dr and use existing se
-						host = se.Hosts[0]
-						defaultDrCreated = true
-					}
-					var seDr = &SeDrTuple {
-						DrName: drName,
-						SeName: seName,
-						DestinationRule: getDestinationRule(host, rc.NodeController.Locality.Region, gtpTrafficPolicy),
-						ServiceEntry: modifiedSe,
-					}
-					seDrSet = append(seDrSet, seDr)
-				}
-			}
-
-			//create a destination rule for default hostname if that wasn't present in gtp
-			if !defaultDrCreated {
-				var seDr = &SeDrTuple {
-					DrName: defaultDrName,
-					SeName: defaultSeName,
-					DestinationRule: getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, nil),
-					ServiceEntry: se,
-				}
-				seDrSet = append(seDrSet, seDr)
-			}
-
+			var seDrSet = createSeAndDrSetFromGtp(env, rc.NodeController.Locality.Region, se, globalTrafficPolicy)
 			for _, seDr := range seDrSet {
 				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(seDr.SeName, v12.GetOptions{})
 				// if old service entry not find, just create a new service entry instead
@@ -399,6 +361,48 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	}
 }
 
+func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy) map[string]*SeDrTuple {
+	var defaultDrName = se.Hosts[0] + "-default-dr"
+	var defaultSeName = se.Hosts[0] + "-se"
+	var seDrSet = make(map[string]*SeDrTuple)
+	if globalTrafficPolicy != nil {
+		gtp := globalTrafficPolicy.Spec
+		for _, gtpTrafficPolicy := range gtp.Policy {
+			var modifiedSe *networking.ServiceEntry
+			var host = se.Hosts[0]
+			var drName, seName = defaultDrName, defaultSeName
+			if gtpTrafficPolicy.Dns != env && gtpTrafficPolicy.Dns != common.Default {
+				host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, se.Hosts[0]})
+				drName, seName = host + "-dr", host + "-se"
+				modifiedSe = copyServiceEntry(se)
+				modifiedSe.Hosts[0] = host
+			} else if gtpTrafficPolicy.Dns == env || gtpTrafficPolicy.Dns == common.Default {
+				//build the default dr and use existing se
+				host = se.Hosts[0]
+				modifiedSe = se
+			}
+			var seDr = &SeDrTuple {
+				DrName: drName,
+				SeName: seName,
+				DestinationRule: getDestinationRule(host, region, gtpTrafficPolicy),
+				ServiceEntry: modifiedSe,
+			}
+			seDrSet[host] = seDr
+		}
+	}
+	//create a destination rule for default hostname if that wasn't overriden in gtp
+	if _, ok := seDrSet[se.Hosts[0]]; !ok {
+		var seDr = &SeDrTuple {
+			DrName: defaultDrName,
+			SeName: defaultSeName,
+			DestinationRule: getDestinationRule(se.Hosts[0], region, nil),
+			ServiceEntry: se,
+		}
+		seDrSet[se.Hosts[0]] = seDr
+	}
+	return seDrSet
+}
+
 func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int) *networking.ServiceEntry_Endpoint {
 	return &networking.ServiceEntry_Endpoint{Address: address,
 		Locality: locality,
@@ -406,8 +410,9 @@ func makeRemoteEndpointForServiceEntry(address string, locality string, portName
 }
 
 func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
-	return &networking.ServiceEntry{Ports: se.Ports, Resolution: se.Resolution, Hosts: se.Hosts, Location: se.Location,
-		SubjectAltNames: se.SubjectAltNames, ExportTo: se.ExportTo, Endpoints: se.Endpoints, Addresses: se.Addresses}
+	var newSe = &networking.ServiceEntry{}
+	se.DeepCopyInto(newSe)
+	return newSe
 }
 
 func loadServiceEntryCacheData(c admiral.ConfigMapControllerInterface, admiralCache *AdmiralCache) {
