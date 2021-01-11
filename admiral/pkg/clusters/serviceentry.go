@@ -302,8 +302,9 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			identityId = fmt.Sprint(identityValue)
 		}
 
-		splitByEnv := strings.Split(se.Hosts[0], ".")
-		var env, dnsSuffix = splitByEnv[0], "." + identityId + "." + common.GetHostnameSuffix()
+		splitByEnv := strings.Split(se.Hosts[0], common.Sep)
+		suffix := append([]string{""}, splitByEnv[1:]...)
+		var env, dnsSuffix = splitByEnv[0], common.GetCnameVal(suffix)
 
 		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, env)
 
@@ -318,71 +319,83 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//check if there is a gtp and add additional hosts/destination rules
 			var defaultDrName = se.Hosts[0] + "-default-dr"
-			var destinationRules = make(map[string]*networking.DestinationRule)
-			var serviceEntries = make(map[string]*networking.ServiceEntry)
+			var defaultSeName = se.Hosts[0] + "-se"
+			type SeDrTuple struct {
+				SeName string
+				DrName string
+				ServiceEntry *networking.ServiceEntry
+				DestinationRule *networking.DestinationRule
+			}
+			var seDrSet = make([]*SeDrTuple, 0)
+			var defaultDrCreated = false
 			if globalTrafficPolicy != nil {
 				gtp := globalTrafficPolicy.Spec
 				for _, gtpTrafficPolicy := range gtp.Policy {
-					var host = gtpTrafficPolicy.Dns + "." + se.Hosts[0]
-					var drName = host + "-default-dr"
+					var modifiedSe = se
+					var host = se.Hosts[0]
+					var drName, seName = defaultDrName, defaultSeName
 					if gtpTrafficPolicy.Dns != env {
-						drName = host + "-dr"
+						host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, dnsSuffix})
+						drName, seName = host + "-dr", host + "-se"
+						modifiedSe = copyServiceEntry(se)
+						modifiedSe.Hosts[0] = host
+					} else if gtpTrafficPolicy.Dns == env || gtpTrafficPolicy.Dns == common.Default {
+						//build the default dr and use existing se
+						host = se.Hosts[0]
+						defaultDrCreated = true
 					}
-					destinationRules[drName] = getDestinationRule(host, rc.NodeController.Locality.Region, gtpTrafficPolicy)
+					var seDr = &SeDrTuple {
+						DrName: drName,
+						SeName: seName,
+						DestinationRule: getDestinationRule(host, rc.NodeController.Locality.Region, gtpTrafficPolicy),
+						ServiceEntry: modifiedSe,
+					}
+					seDrSet = append(seDrSet, seDr)
 				}
 			}
 
 			//create a destination rule for default hostname if that wasn't present in gtp
-			if _, ok := destinationRules[defaultDrName]; !ok {
-				destinationRules[defaultDrName] = getDestinationRule(se.Hosts[0] + "-default-dr", rc.NodeController.Locality.Region, nil)
+			if !defaultDrCreated {
+				var seDr = &SeDrTuple {
+					DrName: defaultDrName,
+					SeName: defaultSeName,
+					DestinationRule: getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, nil),
+					ServiceEntry: se,
+				}
+				seDrSet = append(seDrSet, seDr)
 			}
 
-			oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(serviceEntryName, v12.GetOptions{})
-			// if old service entry not find, just create a new service entry instead
-			if err != nil {
-				log.Infof(LogFormat, "Get (error)", "old ServiceEntry", serviceEntryName, sourceCluster, err)
-				oldServiceEntry = nil
-			}
-
-			oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
-
-			if err != nil {
-				log.Infof(LogFormat, "Get (error)", "old DestinationRule", destinationRuleName, sourceCluster, err)
-				oldDestinationRule = nil
-			}
-
-			// if no endpoint, delete this SE in all dependency clusters and remove the cash in map serviceEntries
-			if len(se.Endpoints) == 0 {
-				deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
-				// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-				deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
-			} else {
-				newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
-
-			newServiceEntry.Spec.Hosts = seHosts
-
-			if newServiceEntry != nil {
-				newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-				addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
-			}
-
-			for destinationRuleName, destinationRule := range destinationRules {
-
-				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(destinationRuleName, v12.GetOptions{})
+			for _, seDr := range seDrSet {
+				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(seDr.SeName, v12.GetOptions{})
+				// if old service entry not find, just create a new service entry instead
+				if err != nil {
+					log.Infof(LogFormat, "Get (error)", "old ServiceEntry", serviceEntryName, sourceCluster, err)
+					oldServiceEntry = nil
+				}
+				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(seDr.DrName, v12.GetOptions{})
 
 				if err != nil {
 					oldDestinationRule = nil
 				}
 
-				newDestinationRule := createDestinationRulSkeletion(*destinationRule, destinationRuleName, syncNamespace)
-				// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-				globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, strings.Split(se.Hosts[0], ".")[0])
-				destinationRule := getDestinationRule(se.Hosts[0], rc.NodeController.Locality.Region, globalTrafficPolicy)
-				newDestinationRule := createDestinationRuleSkeletion(*destinationRule, destinationRuleName, syncNamespace)
+				if len(se.Endpoints) == 0 {
+					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
+					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
+					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
+				} else {
 
-				addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+					newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
+
+					if newServiceEntry != nil {
+						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+					}
+
+					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
+					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
+					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+				}
 			}
-
 		}
 	}
 }
