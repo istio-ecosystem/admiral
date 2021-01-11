@@ -7,7 +7,7 @@ metadata:
     identity: greeting
 spec:
   policy:
-    - dns: stage.greeting.global
+    - dns: default # default is a keyword, alternatively you can use `env` (ex: stage)
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2

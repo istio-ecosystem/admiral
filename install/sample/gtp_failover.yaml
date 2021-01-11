@@ -9,7 +9,7 @@ spec:
   policy:
     - dns: default
       lbType: 0
-    - dns: west
+    - dns: west #a new host will be generated Ex: west.<env>.greeting.global
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2

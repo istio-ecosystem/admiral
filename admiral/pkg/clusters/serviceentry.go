@@ -303,8 +303,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 		}
 
 		splitByEnv := strings.Split(se.Hosts[0], common.Sep)
-		suffix := append([]string{""}, splitByEnv[1:]...)
-		var env, dnsSuffix = splitByEnv[0], common.GetCnameVal(suffix)
+		var env = splitByEnv[0]
 
 		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, env)
 
@@ -335,7 +334,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 					var host = se.Hosts[0]
 					var drName, seName = defaultDrName, defaultSeName
 					if gtpTrafficPolicy.Dns != env {
-						host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, dnsSuffix})
+						host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, se.Hosts[0]})
 						drName, seName = host + "-dr", host + "-se"
 						modifiedSe = copyServiceEntry(se)
 						modifiedSe.Hosts[0] = host
