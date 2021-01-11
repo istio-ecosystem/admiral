@@ -14,6 +14,7 @@ fi
 #Install test services
 
 kubectl apply -f $install_dir/yaml/sample.yaml
+kubectl apply -f $install_dir/yaml/gtp_failover.yaml
 kubectl apply -f $install_dir/yaml/sample-greeting-rollout-bluegreen.yaml
 kubectl apply -f $install_dir/yaml/grpc.yaml
 

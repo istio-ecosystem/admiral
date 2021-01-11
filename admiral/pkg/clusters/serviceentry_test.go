@@ -140,7 +140,29 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	host := "dev.bar.global"
 	west := "west"
 	east := "east"
+
+	admiralCache := AdmiralCache{}
+
+	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses:      []string{},
+	}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses:      []string{},
+	}
+
+	cacheController := &test.FakeConfigMapController{
+		GetError:          nil,
+		PutError:          nil,
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
+	}
+
+	admiralCache.ConfigMapController = cacheController
+
 	se := &istionetworkingv1alpha3.ServiceEntry{
+		Addresses: []string {"240.10.1.0"},
 		Hosts: []string{host},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
@@ -240,7 +262,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := createSeAndDrSetFromGtp(c.env, c.locality, c.se, c.gtp)
+			result := createSeAndDrSetFromGtp(c.env, c.locality, c.se, c.gtp, &admiralCache)
 			generatedHosts := make([]string, 0, len(result))
 			for generatedHost := range result {
 				generatedHosts = append(generatedHosts, generatedHost)

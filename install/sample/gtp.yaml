@@ -5,6 +5,7 @@ metadata:
   namespace: sample
   labels:
     identity: greeting
+    env: stage
 spec:
   policy:
     - dns: default # default is a keyword, alternatively you can use `env` (ex: stage)

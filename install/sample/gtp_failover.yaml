@@ -5,6 +5,7 @@ metadata:
   namespace: sample
   labels:
     identity: greeting
+    env: stage
 spec:
   policy:
     - dns: default

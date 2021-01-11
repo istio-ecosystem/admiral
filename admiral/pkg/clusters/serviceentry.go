@@ -301,9 +301,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
-		//add service entry
-		serviceEntryName := getIstioResourceName(se.Hosts[0], "-se")
-
 		//Add a label
 		var identityId string
 		if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
@@ -325,12 +322,12 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 			}
 
 			//check if there is a gtp and add additional hosts/destination rules
-			var seDrSet = createSeAndDrSetFromGtp(env, rc.NodeController.Locality.Region, se, globalTrafficPolicy)
+			var seDrSet = createSeAndDrSetFromGtp(env, rc.NodeController.Locality.Region, se, globalTrafficPolicy, cache)
 			for _, seDr := range seDrSet {
 				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(seDr.SeName, v12.GetOptions{})
 				// if old service entry not find, just create a new service entry instead
 				if err != nil {
-					log.Infof(LogFormat, "Get (error)", "old ServiceEntry", serviceEntryName, sourceCluster, err)
+					log.Infof(LogFormat, "Get (error)", "old ServiceEntry", seDr.SeName, sourceCluster, err)
 					oldServiceEntry = nil
 				}
 				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(seDr.DrName, v12.GetOptions{})
@@ -345,7 +342,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 				} else {
 
-					newServiceEntry := createServiceEntrySkeletion(*se, serviceEntryName, syncNamespace)
+					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
@@ -361,7 +358,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	}
 }
 
-func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy) map[string]*SeDrTuple {
+func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy,
+	cache *AdmiralCache) map[string]*SeDrTuple {
 	var defaultDrName = se.Hosts[0] + "-default-dr"
 	var defaultSeName = se.Hosts[0] + "-se"
 	var seDrSet = make(map[string]*SeDrTuple)
@@ -376,6 +374,7 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 				drName, seName = host + "-dr", host + "-se"
 				modifiedSe = copyServiceEntry(se)
 				modifiedSe.Hosts[0] = host
+				modifiedSe.Addresses[0] = getUniqueAddress(cache, host)
 			} else if gtpTrafficPolicy.Dns == env || gtpTrafficPolicy.Dns == common.Default {
 				//build the default dr and use existing se
 				host = se.Hosts[0]
