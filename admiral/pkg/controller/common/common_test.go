@@ -29,7 +29,6 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
-		GroupBy:					"env",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"

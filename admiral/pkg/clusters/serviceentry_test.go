@@ -124,14 +124,6 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-
-	fetchedSe, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Get("se1", v12.GetOptions{})
-	if err != nil {
-
-	}
-	if fetchedSe != nil {
-
-	}
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
@@ -233,28 +225,28 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		seDrSet  		map[string]*SeDrTuple
 	}{
 		{
-			name:            "Should handle a nil GTP",
-			env:             "dev",
-			locality:        "us-west-2",
-			se:				 se,
-			gtp:       		 nil,
-			seDrSet:  		 map[string]*SeDrTuple{host: nil,},
+			name:		"Should handle a nil GTP",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		nil,
+			seDrSet:	map[string]*SeDrTuple{host: nil,},
 		},
 		{
-			name:            "Should handle a GTP with default overide",
-			env:             "dev",
-			locality:        "us-west-2",
-			se:				 se,
-			gtp:       		 gTPDefaultOverride,
-			seDrSet:  		 map[string]*SeDrTuple{host: nil,},
+			name:		"Should handle a GTP with default overide",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		gTPDefaultOverride,
+			seDrSet:	map[string]*SeDrTuple{host: nil,},
 		},
 		{
-			name:            "Should handle a GTP with multiple Dns",
-			env:             "dev",
-			locality:        "us-west-2",
-			se:				 se,
-			gtp:       		 gTPMultipleDns,
-			seDrSet:  		 map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string {west, host}): nil,
+			name:		"Should handle a GTP with multiple Dns",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		gTPMultipleDns,
+			seDrSet:	map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string {west, host}): nil,
 								common.GetCnameVal([]string {east, host}): nil},
 		},
 	}
