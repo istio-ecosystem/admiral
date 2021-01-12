@@ -46,7 +46,6 @@ jobs:
   run-integration-tests:
     machine:
       image: circleci/classic:201808-01
-    resource_class: large
     environment:
       K8S_VERSION: v1.16.8
       KUBECONFIG: /home/circleci/.kube/config
