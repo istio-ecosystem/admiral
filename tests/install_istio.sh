@@ -43,18 +43,23 @@ then
     #Verify that sidecar injector is running
     kubectl rollout status deployment istio-sidecar-injector -n istio-system
 
+    # Delete envoy filter for translating `global` to `svc.cluster.local`
+    kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
+
 elif [ $(ver $istio_version) -lt $(ver 1.6.0) ]
 then
     "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/install/kubernetes/operator/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false
     #Verify that istiod is up and running
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
+elif [ $(ver $istio_version) -lt $(ver 1.8.0) ]
+then
+   "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false --set global.multiCluster.includeEnvoyFilter=false
+    #Verify that istiod is up and running
+    kubectl rollout status deployment istiod -n istio-system
 else
-    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false
+    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set values.global.multiCluster.includeEnvoyFilter=false
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 fi
-
-# Delete envoy filter for translating `global` to `svc.cluster.local`
-kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
 
