@@ -12,8 +12,6 @@ os=""
 source ./create_cluster.sh $k8s_version
 # Uncomment below line if setup fails due to KUBECONFIG not set
 export KUBECONFIG=~/.kube/config
-#label node for locality load balancing
-kubectl label nodes minikube failure-domain.beta.kubernetes.io/region=us-west-2
 # change $os from "linux" to "osx" when running on local computer
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"

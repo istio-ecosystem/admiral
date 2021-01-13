@@ -8,4 +8,6 @@ if [[ $IS_LOCAL == "false" ]]; then
   sudo -E minikube start --vm-driver=none --cpus 4 --memory 4096 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
 else
   minikube start --memory=4096 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
+  #label node for locality load balancing
+  kubectl label nodes minikube failure-domain.beta.kubernetes.io/region=us-west-2
 fi
