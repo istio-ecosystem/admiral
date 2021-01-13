@@ -301,7 +301,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
-		//Add a label
 		var identityId string
 		if identityValue, ok := cache.CnameIdentityCache.Load(se.Hosts[0]); ok {
 			identityId = fmt.Sprint(identityValue)
@@ -333,6 +332,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(seDr.DrName, v12.GetOptions{})
 
 				if err != nil {
+					log.Infof(LogFormat, "Get (error)", "old DestinationRule", seDr.DrName, sourceCluster, err)
 					oldDestinationRule = nil
 				}
 

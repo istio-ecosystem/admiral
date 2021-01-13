@@ -9,7 +9,7 @@ source_ns=$2
 kubectl delete deploy $1 -n $2
 
 #wait for admiral to delete the service entry
-sleep 20
+sleep 2
 
 #Test, expecting to expect the grpc client to complete the requests with 100% success
 output=($(kubectl get se --namespace=admiral-sync | grep 'stage.webapp.global' | wc -l))

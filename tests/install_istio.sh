@@ -58,7 +58,7 @@ then
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 else
-    "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set values.global.multiCluster.includeEnvoyFilter=false
+    echo "y" | "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set values.global.multiCluster.includeEnvoyFilter=false
     #Verify that istiod is up and running
     kubectl rollout status deployment istiod -n istio-system
 fi

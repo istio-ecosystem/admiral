@@ -95,7 +95,7 @@ If the `admiral.io/env` annotation or `env` label is not present the word `defau
 
 **default.greeting.global**
 
-*No "real" dns name are created but the core dns plug is used with back ServiceEntries*
+*No "real" dns name are created but the coredns plug-in is used with back ServiceEntries*
 
 # Types
 
@@ -138,16 +138,16 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
         identity: service1
     spec:
       policy:
-      - dns: service1.global
+      - dns: default
         lbtype: TOPOLOGY
-      - dns: service1-west.global
+      - dns: service1-west
         lbtype: FAILOVER
         target:
         - region: uswest-2
           weight: 100
         - region: useast-2
           weight: 0
-      - dns: service1-east.global
+      - dns: service1-east
         lbtype: FAILOVER
         target:
         - region: uswest-2
@@ -157,9 +157,9 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
     ---
 
 In this example the service object with the identity=service1 label will have 3 dns names created that map to it.
-- service1.global - pins traffic the local region the traffic originated
-- service1-west.global - sends traffic to the west region and only to east if west in unavailable
-- service1-east.global - sends traffic to the east region and only to west if east in unavailable
+- stage.service1.global - pins traffic to the local region the traffic originated
+- service1-west.stage.service1.global - sends traffic to the west region and only to east if west in unavailable
+- service1-east.stage.service1.global - sends traffic to the east region and only to west if east in unavailable
 
 
 

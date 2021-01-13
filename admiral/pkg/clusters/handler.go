@@ -182,12 +182,12 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.TLSSettings{Mode: v1alpha32.TLSSettings_ISTIO_MUTUAL}}
 	processGtp := true
 	if len(locality) == 0 {
-		log.Errorf(LogErrFormat, "Process", "GlobalTrafficPolicy", host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
+		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
 		processGtp = false
 	}
 	outlierDetection := &v1alpha32.OutlierDetection{
 		BaseEjectionTime:  &types.Duration{Seconds: 120},
-		ConsecutiveErrors: int32(100),
+		ConsecutiveErrors: int32(10),
 		Interval:          &types.Duration{Seconds: 5},
 	}
 	if gtpTrafficPolicy != nil && processGtp {
@@ -212,7 +212,6 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 					To:   targetTrafficMap,
 				})
 				localityLbSettings.Distribute = distribute
-				outlierDetection.ConsecutiveErrors = 10
 			}
 			// else default behavior
 			loadBalancerSettings.LocalityLbSetting = localityLbSettings
