@@ -164,12 +164,12 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 
 	defaultPolicy := &model.TrafficPolicy{
 		LbType: model.TrafficPolicy_TOPOLOGY,
-		Dns: common.Default,
+		Dns: host,
 	}
 
 	trafficPolicyDefaultOverride := &model.TrafficPolicy{
 		LbType: model.TrafficPolicy_FAILOVER,
-		Dns: common.Default,
+		DnsPrefix: common.Default,
 		Target: []*model.TrafficGroup{
 			{
 				Region: "us-west-2",
@@ -180,7 +180,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 
 	trafficPolicyWest := &model.TrafficPolicy{
 		LbType: model.TrafficPolicy_FAILOVER,
-		Dns: west,
+		DnsPrefix: west,
 		Target: []*model.TrafficGroup{
 			{
 				Region: "us-west-2",
@@ -191,7 +191,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 
 	trafficPolicyEast := &model.TrafficPolicy{
 		LbType: model.TrafficPolicy_FAILOVER,
-		Dns: east,
+		DnsPrefix: east,
 		Target: []*model.TrafficGroup{
 			{
 				Region: "us-east-2",

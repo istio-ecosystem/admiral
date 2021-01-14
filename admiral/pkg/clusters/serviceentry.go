@@ -369,16 +369,16 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 			var modifiedSe *networking.ServiceEntry
 			var host = se.Hosts[0]
 			var drName, seName = defaultDrName, defaultSeName
-			if gtpTrafficPolicy.Dns != env && gtpTrafficPolicy.Dns != common.Default {
-				host = common.GetCnameVal([]string{gtpTrafficPolicy.Dns, se.Hosts[0]})
+			if gtpTrafficPolicy.Dns != "" {
+				log.Warnf("Using the deprecated field `dns` in gtp: %v in namespace: %v", globalTrafficPolicy.Name, globalTrafficPolicy.Namespace)
+			}
+			if gtpTrafficPolicy.DnsPrefix != env && gtpTrafficPolicy.DnsPrefix != common.Default &&
+				gtpTrafficPolicy.Dns != host {
+				host = common.GetCnameVal([]string{gtpTrafficPolicy.DnsPrefix, se.Hosts[0]})
 				drName, seName = host + "-dr", host + "-se"
 				modifiedSe = copyServiceEntry(se)
 				modifiedSe.Hosts[0] = host
 				modifiedSe.Addresses[0] = getUniqueAddress(cache, host)
-			} else if gtpTrafficPolicy.Dns == env || gtpTrafficPolicy.Dns == common.Default {
-				//build the default dr and use existing se
-				host = se.Hosts[0]
-				modifiedSe = se
 			}
 			var seDr = &SeDrTuple {
 				DrName: drName,

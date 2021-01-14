@@ -52,7 +52,7 @@ message TrafficPolicy {
 
     // REQUIRED: dns that can be used by client.  This name will have the
     // traffic type applied to it
-    string dns = 1;
+    string dns = 1 [deprecated=true];
 
     // REQUIRED: type of global load distrubtion
     LbType lbType = 2;
@@ -70,6 +70,10 @@ message TrafficPolicy {
 
     //weigth of primary and secondary must each 100
     repeated TrafficGroup target = 3;
+
+    //REQUIRED: dnsPrefix that will be prefixed for the service names being generated with this traffic policy
+    //Ex: dnsPrefix = west => generated service name = west.stage.servicename.global
+    string dnsPrefix = 4;
 }
 
 message TrafficGroup {
