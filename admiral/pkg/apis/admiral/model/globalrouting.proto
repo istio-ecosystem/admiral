@@ -17,16 +17,16 @@ option go_package = "model";
 //     identity: my-identity
 //     env: prd
 //   policy:
-//   - dns: prd.accounts.global
+//   - dnsPrefix: prd.accounts.global
 //     lbType: topology
-//   - dns: prd.accounts-us-west2
+//   - dnsPrefix: prd.accounts-us-west2
 //     lbType: failover
 //     target:
 //     - region: us-west2
 //       weight: 90
 //     - region: us-east2
 //       weight: 10
-//   - dns: prd.accounts-us-east2
+//   - dnsPrefix: prd.accounts-us-east2
 //     lbType: failover
 //     target:
 //     - region: us-west2

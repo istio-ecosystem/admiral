@@ -9,5 +9,5 @@ metadata:
     identity: greeting
 spec:
   policy:
-    - dns: default
+    - dnsPrefix: default
       lbType: 0

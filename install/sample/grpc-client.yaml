@@ -22,14 +22,14 @@ spec:
         args:
         - "client"
         - "--address=stage.grpc-server.global:80"
-        - "--connections=2"
-        - "--totalTargetRps=1"
-        - "--totalRequests=2"
+        - "--connections=4"
+        - "--totalTargetRps=4"
+        - "--totalRequests=40"
         - "--logLevel=debug"
         resources:
           requests:
-            cpu: "10m"
-            memory: "50Mi"
+            cpu: "30m"
+            memory: "100Mi"
           limits:
-            cpu: "20m"
-            memory: "75Mi"
+            cpu: "60m"
+            memory: "200Mi"

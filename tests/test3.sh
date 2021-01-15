@@ -7,14 +7,12 @@ source_ns=$2
 dest=$3
 install_dir=$4
 
-sleep 20
-
 #Deploy the grpc client pod to run requests against the grpc endpoint
 kubectl apply -f $install_dir/yaml/grpc-client.yaml -n $source_ns
 
 kubectl rollout status deploy grpc-client -n $source_ns
 
-sleep 10
+sleep 15
 
 #Test, expecting to expect the grpc client to complete the requests with 100% success
 output=($(kubectl logs --namespace=$source_ns $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source | egrep -o '"good": ([0-9]+)'))

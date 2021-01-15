@@ -138,16 +138,16 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
         identity: service1
     spec:
       policy:
-      - dns: default
+      - dnsPrefix: default
         lbtype: TOPOLOGY
-      - dns: service1-west
+      - dnsPrefix: service1-west
         lbtype: FAILOVER
         target:
         - region: uswest-2
           weight: 100
         - region: useast-2
           weight: 0
-      - dns: service1-east
+      - dnsPrefix: service1-east
         lbtype: FAILOVER
         target:
         - region: uswest-2

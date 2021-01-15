@@ -12,7 +12,7 @@ kubectl delete deploy $1 -n $2
 sleep 5
 
 #Test, expecting to expect the grpc client to complete the requests with 100% success
-output=($(kubectl get se --namespace=admiral-sync | grep 'stage.webapp.global' | wc -l))
+output=($(kubectl get se --namespace=admiral-sync | grep "stage.$1.global" | wc -l))
 
 if [[ "${output}" -gt 0 ]]; then
   echo "FAIL"

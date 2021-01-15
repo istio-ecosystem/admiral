@@ -322,6 +322,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			//check if there is a gtp and add additional hosts/destination rules
 			var seDrSet = createSeAndDrSetFromGtp(env, rc.NodeController.Locality.Region, se, globalTrafficPolicy, cache)
+
 			for _, seDr := range seDrSet {
 				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(seDr.SeName, v12.GetOptions{})
 				// if old service entry not find, just create a new service entry instead
@@ -341,7 +342,6 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 				} else {
-
 					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
@@ -366,7 +366,7 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 	if globalTrafficPolicy != nil {
 		gtp := globalTrafficPolicy.Spec
 		for _, gtpTrafficPolicy := range gtp.Policy {
-			var modifiedSe *networking.ServiceEntry
+			var modifiedSe = se
 			var host = se.Hosts[0]
 			var drName, seName = defaultDrName, defaultSeName
 			if gtpTrafficPolicy.Dns != "" {

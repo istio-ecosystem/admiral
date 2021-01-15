@@ -9,16 +9,16 @@ metadata:
     identity: greeting
 spec:
   policy:
-    - dns: default
+    - dnsPrefix: default
       lbType: 0
-    - dns: west #a new host will be generated Ex: west.<env>.greeting.global
+    - dnsPrefix: west #a new host will be generated Ex: west.<env>.greeting.global
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2
           weight: 100
         - region: us-east-2
           weight: 0
-    - dns: east
+    - dnsPrefix: east
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2
