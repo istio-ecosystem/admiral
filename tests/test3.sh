@@ -7,6 +7,8 @@ source_ns=$2
 dest=$3
 install_dir=$4
 
+sleep 10
+
 #Deploy the grpc client pod to run requests against the grpc endpoint
 kubectl apply -f $install_dir/yaml/grpc-client.yaml -n $source_ns
 
