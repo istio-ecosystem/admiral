@@ -24,7 +24,7 @@ spec:
         - "--address=stage.grpc-server.global:80"
         - "--connections=2"
         - "--totalTargetRps=2"
-        - "--totalRequests=20"
+        - "--totalRequests=10"
         - "--logLevel=debug"
         resources:
           requests:

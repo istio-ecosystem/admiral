@@ -29,17 +29,25 @@ kubectl rollout status deployment webapp -n sample
 
 kubectl rollout status deployment webapp -n sample-rollout-bluegreen
 
-#Wait for admiral's magic
-sleep 5
-
 #Verify that admiral created service names for 'greeting' service
-num_ses=$(kubectl get serviceentry -n admiral-sync | grep "global-se" -c)
+checkse() {
+  identity=$1
+  num_ses=$(kubectl get serviceentry -n admiral-sync | grep $1 -c)
 
-if [ -z "$num_ses" ] || [ $num_ses -lt 1 ]
-then
-      echo "No service entries created"
-      exit 1;
-else
-      echo "Admiral did it's magic!"
-      exit 0
-fi
+  if [ -z "$num_ses" ] || [ $num_ses -lt 1 ]
+  then
+        echo "No service entries created for $identity workload"
+        return 1;
+  else
+        echo "Admiral did it's magic for $identity workload"
+        return 0
+  fi
+}
+export -f checkse
+for identity in webapp greeting grpc-server; do
+  timeout 90s bash -c "until checkse $identity; do sleep 10; done"
+  if [[ $? -eq 124 ]]
+  then
+    exit 1
+  fi
+done
