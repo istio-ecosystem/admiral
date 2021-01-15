@@ -12,7 +12,6 @@ test() {
    if [[ "${output}" -gt 0 ]]; then
       echo "FAIL"
       kubectl get se --namespace=admiral-sync
-      kubectl logs --namespace=admiral $(kubectl get pod -l "app=admiral" --namespace=admiral -o jsonpath='{.items[0].metadata.name}') -c admiral
       return 1
    else
       echo "PASS"
