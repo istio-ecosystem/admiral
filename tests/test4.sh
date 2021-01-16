@@ -20,7 +20,7 @@ test() {
 }
 
 export -f test
-timeout 90s bash -c "until test $1 $2; do sleep 10; done"
+timeout 120s bash -c "until test $1 $2; do sleep 10; done"
 if [[ $? -eq 124 ]]
 then
   exit 1
