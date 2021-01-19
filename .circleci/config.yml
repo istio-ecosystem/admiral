@@ -49,7 +49,7 @@ jobs:
     environment:
       K8S_VERSION: v1.16.8
       KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.13.0
+      MINIKUBE_VERSION: v1.16.0
       MINIKUBE_WANTUPDATENOTIFICATION: false
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
@@ -97,12 +97,11 @@ jobs:
             export IS_LOCAL=false
             ./run.sh "1.16.8" "1.6.13" "../out"
       - run:
-          name: Run Integration Test for Istio 1.7.4
+          name: Run Integration Test for Istio 1.7.6
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.7.4" "../out"
-
+            ./run.sh "1.16.8" "1.7.6" "../out"
   publish-github-release:
     docker:
     - image: circleci/golang:1.11

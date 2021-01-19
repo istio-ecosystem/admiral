@@ -18,6 +18,6 @@ spec:
             - --sync_namespace
             - admiral-sync
             - --sync_period
-            - 20s
+            - 10s
             - --argo_rollouts=true
           name: admiral

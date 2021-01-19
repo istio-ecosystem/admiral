@@ -5,6 +5,7 @@ import (
 	"errors"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v13 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -124,6 +125,148 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
 	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+}
+
+func TestCreateSeAndDrSetFromGtp(t *testing.T) {
+
+	host := "dev.bar.global"
+	west := "west"
+	east := "east"
+
+	admiralCache := AdmiralCache{}
+
+	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses:      []string{},
+	}
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{},
+		Addresses:      []string{},
+	}
+
+	cacheController := &test.FakeConfigMapController{
+		GetError:          nil,
+		PutError:          nil,
+		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithEntry, "123"),
+	}
+
+	admiralCache.ConfigMapController = cacheController
+
+	se := &istionetworkingv1alpha3.ServiceEntry{
+		Addresses: []string {"240.10.1.0"},
+		Hosts: []string{host},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
+			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
+		},
+	}
+
+	defaultPolicy := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_TOPOLOGY,
+		Dns: host,
+	}
+
+	trafficPolicyDefaultOverride := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_FAILOVER,
+		DnsPrefix: common.Default,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-west-2",
+				Weight: 100,
+			},
+		},
+	}
+
+	trafficPolicyWest := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_FAILOVER,
+		DnsPrefix: west,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-west-2",
+				Weight: 100,
+			},
+		},
+	}
+
+	trafficPolicyEast := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_FAILOVER,
+		DnsPrefix: east,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-east-2",
+				Weight: 100,
+			},
+		},
+	}
+
+	gTPDefaultOverride := &v13.GlobalTrafficPolicy {
+		Spec: model.GlobalTrafficPolicy{
+			Policy:               []*model.TrafficPolicy {
+				trafficPolicyDefaultOverride,
+			},
+		},
+	}
+
+	gTPMultipleDns := &v13.GlobalTrafficPolicy {
+		Spec: model.GlobalTrafficPolicy{
+			Policy:               []*model.TrafficPolicy {
+				defaultPolicy, trafficPolicyWest, trafficPolicyEast,
+			},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		env             string
+		locality        string
+		se       		*istionetworkingv1alpha3.ServiceEntry
+		gtp 			*v13.GlobalTrafficPolicy
+		seDrSet  		map[string]*SeDrTuple
+	}{
+		{
+			name:		"Should handle a nil GTP",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		nil,
+			seDrSet:	map[string]*SeDrTuple{host: nil,},
+		},
+		{
+			name:		"Should handle a GTP with default overide",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		gTPDefaultOverride,
+			seDrSet:	map[string]*SeDrTuple{host: nil,},
+		},
+		{
+			name:		"Should handle a GTP with multiple Dns",
+			env:		"dev",
+			locality:	"us-west-2",
+			se:			se,
+			gtp:		gTPMultipleDns,
+			seDrSet:	map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string {west, host}): nil,
+								common.GetCnameVal([]string {east, host}): nil},
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := createSeAndDrSetFromGtp(c.env, c.locality, c.se, c.gtp, &admiralCache)
+			generatedHosts := make([]string, 0, len(result))
+			for generatedHost := range result {
+				generatedHosts = append(generatedHosts, generatedHost)
+			}
+			for host, _ := range c.seDrSet {
+				if _, ok := result[host]; !ok {
+					t.Fatalf("Generated hosts %v is missing the required host: %v", generatedHosts, host)
+				}
+			}
+		})
+	}
+
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {

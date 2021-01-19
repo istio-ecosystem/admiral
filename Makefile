@@ -54,7 +54,7 @@ dep:
 	$(DEP_PATH)dep ensure -v
 
 setup:
-	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go
+	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
 
 
 gen-all: api-gen crd-gen
@@ -66,13 +66,12 @@ install-protoc-mac:
 
 api-gen:
 	#make sure the protobuf matches the generation plugin
-	go install github.com/golang/protobuf/protoc-gen-go
 	$(GOCMD) generate ./...
 	go install k8s.io/code-generator/cmd/deepcopy-gen
 
 crd-gen:
-	go get -d -u -fix k8s.io/code-generator
-	go get -d -u -fix k8s.io/apimachinery
+	go get -d -u -fix k8s.io/code-generator@v0.17.3
+	go get -d -u -fix k8s.io/apimachinery@v0.17.3
 	go get -d -u -fix k8s.io/gengo
 	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
 
@@ -133,5 +132,7 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
 	cp ./install/sample/gtp.yaml ./out/yaml/gtp.yaml
+	cp ./install/sample/gtp_failover.yaml ./out/yaml/gtp_failover.yaml
+	cp ./install/sample/gtp_topology.yaml ./out/yaml/gtp_topology.yaml
 	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
 	cp ./install/scripts/*.sh ./out/scripts/
