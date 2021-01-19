@@ -1,0 +1,13 @@
+apiVersion: admiral.io/v1alpha1
+kind: GlobalTrafficPolicy
+metadata:
+  name: gtp-service1
+  namespace: sample
+  annotations:
+    admiral.io/env: stage
+  labels:
+    identity: greeting
+spec:
+  policy:
+    - dnsPrefix: default
+      lbType: 0

@@ -17,16 +17,16 @@ option go_package = "model";
 //     identity: my-identity
 //     env: prd
 //   policy:
-//   - dns: prd.accounts.global
+//   - dnsPrefix: prd.accounts.global
 //     lbType: topology
-//   - dns: prd.accounts-us-west2
+//   - dnsPrefix: prd.accounts-us-west2
 //     lbType: failover
 //     target:
 //     - region: us-west2
 //       weight: 90
 //     - region: us-east2
 //       weight: 10
-//   - dns: prd.accounts-us-east2
+//   - dnsPrefix: prd.accounts-us-east2
 //     lbType: failover
 //     target:
 //     - region: us-west2
@@ -52,7 +52,7 @@ message TrafficPolicy {
 
     // REQUIRED: dns that can be used by client.  This name will have the
     // traffic type applied to it
-    string dns = 1;
+    string dns = 1 [deprecated=true];
 
     // REQUIRED: type of global load distrubtion
     LbType lbType = 2;
@@ -70,6 +70,10 @@ message TrafficPolicy {
 
     //weigth of primary and secondary must each 100
     repeated TrafficGroup target = 3;
+
+    //REQUIRED: dnsPrefix that will be prefixed for the service names being generated with this traffic policy
+    //Ex: dnsPrefix = west => generated service name = west.stage.servicename.global
+    string dnsPrefix = 4;
 }
 
 message TrafficGroup {

@@ -79,12 +79,16 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", deployment.Name, deployment.Namespace, identifier)
 		return ""
 	}
-	cname := environment + Sep + alias + Sep + nameSuffix
+	cname := GetCnameVal([]string{environment, alias, nameSuffix})
 	if deployment.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
 		log.Infof("admiral.io/cname-case-sensitive annotation enabled on deployment with name %v", deployment.Name)
 		return cname
 	}
 	return strings.ToLower(cname)
+}
+
+func GetCnameVal(vals[] string) string {
+	return strings.Join(vals, Sep)
 }
 
 func GetEnv(deployment *k8sAppsV1.Deployment) string {

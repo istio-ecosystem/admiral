@@ -112,77 +112,64 @@ func TestGetDestinationRule(t *testing.T) {
 		},
 	}
 
-	topologyGTPBody := model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy{
+	topologyGTPPolicy := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_TOPOLOGY,
+		Target: []*model.TrafficGroup{
 			{
-				LbType: model.TrafficPolicy_TOPOLOGY,
-				Target: []*model.TrafficGroup{
-					{
-						Region: "us-west-2",
-						Weight: 100,
-					},
-				},
+				Region: "us-west-2",
+				Weight: 100,
 			},
 		},
 	}
 
-	topologyGTP := v1.GlobalTrafficPolicy{
-		Spec: topologyGTPBody,
-	}
-	topologyGTP.Name = "myGTP"
-	topologyGTP.Namespace = "myNS"
-
-	failoverGTPBody := model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy{
+	failoverGTPPolicy := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_FAILOVER,
+		Target: []*model.TrafficGroup{
 			{
-				LbType: model.TrafficPolicy_FAILOVER,
-				Target: []*model.TrafficGroup{
-					{
-						Region: "us-west-2",
-						Weight: 100,
-					},
-					{
-						Region: "us-east-2",
-						Weight: 0,
-					},
-				},
+				Region: "us-west-2",
+				Weight: 100,
+			},
+			{
+				Region: "us-east-2",
+				Weight: 0,
 			},
 		},
 	}
-
-	failoverGTP := v1.GlobalTrafficPolicy{
-		Spec: failoverGTPBody,
-	}
-	failoverGTP.Name = "myGTP"
-	failoverGTP.Namespace = "myNS"
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name            string
 		host            string
 		locality        string
-		gtp             *v1.GlobalTrafficPolicy
+		gtpPolicy             *model.TrafficPolicy
 		destinationRule *v1alpha3.DestinationRule
 	}{
 		{
 			name:            "Should handle a nil GTP",
 			host:            "qa.myservice.global",
 			locality:        "uswest2",
-			gtp:             nil,
+			gtpPolicy:       nil,
+			destinationRule: &noGtpDr,
+		},
+		{
+			name:            "Should return default DR with empty locality",
+			host:            "qa.myservice.global",
+			locality:        "",
+			gtpPolicy:       failoverGTPPolicy,
 			destinationRule: &noGtpDr,
 		},
 		{
 			name:            "Should handle a topology GTP",
 			host:            "qa.myservice.global",
 			locality:        "uswest2",
-			gtp:             &topologyGTP,
+			gtpPolicy:       topologyGTPPolicy,
 			destinationRule: &basicGtpDr,
 		},
 		{
 			name:            "Should handle a failover GTP",
 			host:            "qa.myservice.global",
 			locality:        "uswest2",
-			gtp:             &failoverGTP,
+			gtpPolicy:       failoverGTPPolicy,
 			destinationRule: &failoverGtpDr,
 		},
 	}
@@ -190,7 +177,7 @@ func TestGetDestinationRule(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getDestinationRule(c.host, c.locality, c.gtp)
+			result := getDestinationRule(c.host, c.locality, c.gtpPolicy)
 			if !cmp.Equal(result, c.destinationRule) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.destinationRule))
 			}
