@@ -161,6 +161,8 @@ In this example the service object with the identity=service1 label will have 3 
 - service1-west.stage.service1.global - sends traffic to the west region and only to east if west in unavailable
 - service1-east.stage.service1.global - sends traffic to the east region and only to west if east in unavailable
 
+`Note:` when `dnsPrefix` value is `default` or if it matches the value of `admiral.io/env` annotation on a deployment, then the behavior of the default generated service name will be overriden with what is specified in the corresponding policy section. 
+
 
 
 ### Global Traffic Policy Linking
