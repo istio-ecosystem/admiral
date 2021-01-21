@@ -60,7 +60,22 @@ func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 	for _, servicePort := range destService.Spec.Ports {
 		//handling relevant protocols from here:
 		// https://istio.io/latest/docs/ops/configuration/traffic-management/protocol-selection/#manual-protocol-selection
-		if _, ok := meshPortMap[uint32(servicePort.Port)]; ok {
+		//use target port if present to match the annotated mesh port
+		targetPort := uint32(servicePort.Port)
+		if servicePort.TargetPort.StrVal != "" {
+			port, err := strconv.Atoi(servicePort.TargetPort.StrVal)
+			if err != nil {
+				log.Warnf(LogErrFormat, "GetMeshPorts", "Failed to parse TargetPort", destService.Name, clusterName, err)
+			}
+			if port > 0 {
+				targetPort = uint32(port)
+			}
+
+		}
+		if servicePort.TargetPort.IntVal != 0 {
+			targetPort = uint32(servicePort.TargetPort.IntVal)
+		}
+		if _, ok := meshPortMap[targetPort]; ok {
 			var protocol = GetPortProtocol(servicePort.Name)
 			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port for protocol: " + protocol)
 			ports[protocol] = uint32(servicePort.Port)
