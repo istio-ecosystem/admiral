@@ -7,6 +7,7 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"strconv"
 	"testing"
@@ -43,6 +44,7 @@ func TestGetMeshPorts(t *testing.T) {
 		}}}
 
 	ports := map[string]uint32{"http": uint32(annotatedPort)}
+	portsDiffTargetPort := map[string]uint32{"http": uint32(80)}
 
 	grpcPorts := map[string]uint32{"grpc": uint32(annotatedPort)}
 	grpcWebPorts := map[string]uint32{"grpc-web": uint32(annotatedPort)}
@@ -69,10 +71,10 @@ func TestGetMeshPorts(t *testing.T) {
 			name:       "should return a http port if no port name is specified",
 			service:    k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
-				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Port: int32(annotatedPort)}}},
+				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Port: int32(80), TargetPort: intstr.FromInt(annotatedPort),}}},
 			},
 			deployment: deployment,
-			expected:   ports,
+			expected:   portsDiffTargetPort,
 		},
 		{
 			name:       "should return a http port if the port name doesn't start with a protocol name",
