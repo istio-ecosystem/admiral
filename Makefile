@@ -1,6 +1,7 @@
 DOCKER_REPO?=admiralproj
 IMAGE?=$(DOCKER_REPO)/admiral
 DOCKER_USER?=aattuluri
+KUSTOMIZE_VERSION?=3.8.2
 
 DOCKERFILE?=Dockerfile.admiral
 
@@ -53,7 +54,7 @@ dep:
 	$(DEP_PATH)dep ensure -v
 
 setup:
-	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go
+	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
 
 
 gen-all: api-gen crd-gen
@@ -65,13 +66,12 @@ install-protoc-mac:
 
 api-gen:
 	#make sure the protobuf matches the generation plugin
-	go install github.com/golang/protobuf/protoc-gen-go
 	$(GOCMD) generate ./...
 	go install k8s.io/code-generator/cmd/deepcopy-gen
 
 crd-gen:
-	go get -d -u -fix k8s.io/code-generator
-	go get -d -u -fix k8s.io/apimachinery
+	go get -d -u -fix k8s.io/code-generator@v0.17.3
+	go get -d -u -fix k8s.io/apimachinery@v0.17.3
 	go get -d -u -fix k8s.io/gengo
 	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
 
@@ -116,14 +116,8 @@ endif
 endif
 
 download-kustomize:
-	curl -s https://api.github.com/repos/kubernetes-sigs/kustomize/releases |\
-	grep browser_download |\
-	grep $(OPSYS) |\
-	cut -d '"' -f 4 |\
-	grep /kustomize/v |\
-	sort | tail -n 1 |\
-	xargs curl -s -O -L
-	tar xzf ./kustomize_v*_${OPSYS}_amd64.tar.gz
+	curl -s -O -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
+	tar xzf ./kustomize_v${KUSTOMIZE_VERSION}_${OPSYS}_amd64.tar.gz
 	chmod u+x kustomize
 
 gen-yaml:
@@ -138,5 +132,7 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
 	cp ./install/sample/gtp.yaml ./out/yaml/gtp.yaml
+	cp ./install/sample/gtp_failover.yaml ./out/yaml/gtp_failover.yaml
+	cp ./install/sample/gtp_topology.yaml ./out/yaml/gtp_topology.yaml
 	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
 	cp ./install/scripts/*.sh ./out/scripts/

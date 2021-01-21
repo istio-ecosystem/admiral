@@ -49,7 +49,7 @@ Single cluster integration tests can be run locally using minikube. By default i
 ```
 make gen-yaml
 cd $ADMIRAL_HOME/tests
-./run.sh "1.16.8" "1.5.6" "../out"
+./run.sh "1.16.8" "1.7.4" "../out"
 ```
 * Multi-cluster 
 ```

@@ -61,10 +61,7 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 		return nil
 	}
 
-	gtpEnv := gtp.Labels[Env]
-	if gtpEnv == "" {
-		gtpEnv = Default
-	}
+	gtpEnv := GetGtpEnv(gtp)
 
 	if len(rollouts) == 0 {
 		return nil
@@ -73,11 +70,7 @@ func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []
 	var envMatchedRollouts []argo.Rollout
 
 	for _, rollout := range rollouts {
-		rolloutEnvironment := rollout.Spec.Template.Labels[Env]
-		if rolloutEnvironment == "" {
-			//No environment label, use default value
-			rolloutEnvironment = Default
-		}
+		rolloutEnvironment := GetEnvForRollout(&rollout)
 		if rolloutEnvironment == gtpEnv {
 			envMatchedRollouts = append(envMatchedRollouts, rollout)
 		}
@@ -113,18 +106,11 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for rollout match. Returning nil.")
 		return nil
 	}
-	rolloutEnvironment := rollout.Spec.Template.Labels[Env]
-	if rolloutEnvironment == "" {
-		//No environment label, use default value
-		rolloutEnvironment = Default
-	}
+	rolloutEnvironment := GetEnvForRollout(rollout)
 
 	//If one and only one GTP matches the env label of the rollout - use that one
 	if len(gtpList) == 1 {
-		gtpEnv := gtpList[0].Labels[Env]
-		if gtpEnv == "" {
-			gtpEnv = Default
-		}
+		gtpEnv := GetGtpEnv(&gtpList[0])
 		if gtpEnv == rolloutEnvironment {
 			log.Infof("Newly added rollout with name=%v matched with GTP %v in namespace %v. Env=%v", rollout.Name, gtpList[0].Name, rollout.Namespace, gtpEnv)
 			return &gtpList[0]
@@ -140,10 +126,7 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 	var envMatchedGTPList []v1.GlobalTrafficPolicy
 
 	for _, gtp := range gtpList {
-		gtpEnv := gtp.Labels[Env]
-		if gtpEnv == "" {
-			gtpEnv = Default
-		}
+		gtpEnv := GetGtpEnv(&gtp)
 		if gtpEnv == rolloutEnvironment {
 			envMatchedGTPList = append(envMatchedGTPList, gtp)
 		}
@@ -175,15 +158,19 @@ func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout)
 }
 
 func GetEnvForRollout(rollout *argo.Rollout) string {
-	var environment = rollout.Spec.Template.Labels[Env]
+	var environment = rollout.Spec.Template.Annotations[GetEnvKey()]
 	if len(environment) == 0 {
-		environment = rollout.Spec.Template.Annotations[Env]
+		environment = rollout.Spec.Template.Labels[GetEnvKey()]
+	}
+	if len(environment) == 0 {
+		environment = rollout.Spec.Template.Labels[Env]
 	}
 	if len(environment) == 0 {
 		splitNamespace := strings.Split(rollout.Namespace, Dash)
 		if len(splitNamespace) > 1 {
 			environment = splitNamespace[len(splitNamespace)-1]
 		}
+		log.Warnf("Using deprecated approach to deduce env from namespace for rollout, name=%v in namespace=%v", rollout.Name, rollout.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default

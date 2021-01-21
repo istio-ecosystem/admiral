@@ -6,6 +6,7 @@ import (
 	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
@@ -96,7 +97,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 					meshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
 
-					tmpSe = createServiceEntry(rc, r.AdmiralCache, meshPorts, deployment, serviceEntries)
+					tmpSe = createServiceEntry(admiral.Add, rc, r.AdmiralCache, meshPorts, deployment, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -115,6 +116,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
+
 					serviceInstance := getServiceForRollout(rc, rollout)
 
 					if serviceInstance == nil {
@@ -123,7 +125,7 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 
 					meshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
 
-					tmpSe = createServiceEntryForRollout(rc, r.AdmiralCache, meshPorts, rollout, serviceEntries)
+					tmpSe = createServiceEntryForRollout(admiral.Add, rc, r.AdmiralCache, meshPorts, rollout, serviceEntries)
 
 					if tmpSe == nil {
 						continue
@@ -174,16 +176,25 @@ func makeVirtualService(host string, gateways []string, destination string, port
 		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
 }
 
-func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTrafficPolicy) *v1alpha32.DestinationRule {
+func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
 	var dr = &v1alpha32.DestinationRule{}
 	dr.Host = host
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.TLSSettings{Mode: v1alpha32.TLSSettings_ISTIO_MUTUAL}}
-	if gtpWrapper != nil {
+	processGtp := true
+	if len(locality) == 0 {
+		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
+		processGtp = false
+	}
+	outlierDetection := &v1alpha32.OutlierDetection{
+		BaseEjectionTime:  &types.Duration{Seconds: 120},
+		ConsecutiveErrors: int32(10),
+		Interval:          &types.Duration{Seconds: 5},
+	}
+	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
 			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_ROUND_ROBIN},
 		}
-		gtp := gtpWrapper.Spec
-		gtpTrafficPolicy := gtp.Policy[0]
+
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
 
@@ -207,11 +218,7 @@ func getDestinationRule(host string, locality string, gtpWrapper *v1.GlobalTraff
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 		}
 	}
-	dr.TrafficPolicy.OutlierDetection = &v1alpha32.OutlierDetection{
-		BaseEjectionTime:  &types.Duration{Seconds: 120},
-		ConsecutiveErrors: int32(10),
-		Interval:          &types.Duration{Seconds: 5},
-	}
+	dr.TrafficPolicy.OutlierDetection = outlierDetection
 	return dr
 }
 
@@ -468,7 +475,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		if err != nil {
 			log.Warnf(LogErrFormat, "Find", "DestinationRule", localDrName, clusterId, err)
 		}
-		newDestinationRule := createDestinationRulSkeletion(*destinationRule, localDrName, syncNamespace)
+		newDestinationRule := createDestinationRuleSkeletion(*destinationRule, localDrName, syncNamespace)
 
 		if newDestinationRule != nil {
 			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
@@ -564,12 +571,22 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
+func deleteVirtualService(exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, "Success")
+		}
+	}
+}
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
@@ -587,9 +604,20 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
+	}
+}
+
+func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Success")
+		}
 	}
 }
 
@@ -610,12 +638,22 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	}
 
 	if err != nil {
-		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
+		log.Errorf(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, err)
 	} else {
-		log.Infof(LogErrFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
+		log.Infof(LogFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
 	}
 }
 
+func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+	if exist != nil {
+		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		if err != nil {
+			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
+		} else {
+			log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Success")
+		}
+	}
+}
 func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
 	return &v1alpha3.ServiceEntry{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
@@ -624,7 +662,7 @@ func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace st
 	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-func createDestinationRulSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
+func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 

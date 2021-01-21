@@ -21,10 +21,10 @@ spec:
         image: buoyantio/strest-grpc:latest
         args:
         - "client"
-        - "--address=default.grpc-server.global:80"
+        - "--address=stage.grpc-server.global:80"
         - "--connections=2"
-        - "--totalTargetRps=1"
-        - "--totalRequests=2"
+        - "--totalTargetRps=2"
+        - "--totalRequests=10"
         - "--logLevel=debug"
         resources:
           requests:

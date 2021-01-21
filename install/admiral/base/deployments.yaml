@@ -28,6 +28,7 @@ spec:
             - --sync_period
             - 20s
           image: docker.io/admiralproj/admiral:latest
+          imagePullPolicy: Always
           #          livenessProbe:
           #            failureThreshold: 5
           #            httpGet:

@@ -49,7 +49,7 @@ jobs:
     environment:
       K8S_VERSION: v1.16.8
       KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.13.0
+      MINIKUBE_VERSION: v1.16.0
       MINIKUBE_WANTUPDATENOTIFICATION: false
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
@@ -71,13 +71,11 @@ jobs:
           name: setup helm
           command: curl https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash
       - run:
-          name: Download kustomizable
+          name: Set up kustomize
           command: |
-            KUSTOMIZE_VERSION=2.1.0
-            sudo chown -R $(whoami) /usr/local/bin
-            curl -L -o /usr/local/bin/kustomize https://github.com/kubernetes-sigs/kustomize/releases/download/v${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64
-            chmod +x /usr/local/bin/kustomize
-            kustomize version
+            echo "export PATH=/home/circleci/project:$PATH" >> $BASH_ENV
+            source $BASH_ENV
+            make download-kustomize
       - run:
           name: generate prereq yaml files
           command:  |
@@ -99,12 +97,11 @@ jobs:
             export IS_LOCAL=false
             ./run.sh "1.16.8" "1.6.13" "../out"
       - run:
-          name: Run Integration Test for Istio 1.7.4
+          name: Run Integration Test for Istio 1.7.6
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.7.4" "../out"
-
+            ./run.sh "1.16.8" "1.7.6" "../out"
   publish-github-release:
     docker:
     - image: circleci/golang:1.11

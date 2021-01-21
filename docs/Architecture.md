@@ -26,43 +26,76 @@ Each cluster is an independent cluster with an Istio control plane.  Admiral nee
 
 Admiral utilizes the concept of a global service identifier.  This identifier is attached to k8s service definitions as a label.  This label can be anything and will be defined in the following Dependency types identityLabel field.  
 
-This global identifier is needed to identify the same service running on multiple regions for Active/Active or DR deployments.  This prevents the need to have namespace names consistent across multi-region deployments.
+This global identifier is needed to identify the same workload running on multiple regions for Active/Active or DR deployments.  This prevents the need to have namespace names consistent across multi-region deployments.
 
     ---
-    apiVersion: v1
-    kind: Service
+
+    apiVersion: apps/v1
+    kind: Deployment
     metadata:
-      name: my-service
-      labels:
-        app: service1
-        identity: service1
-        env: dev
+      name: greeting
+      namespace: sample
     spec:
-      ports:
-      - port: 80
-        protocol: TCP
+      replicas: 1
       selector:
-        app: service1
+        matchLabels:
+          app: greeting
+      template:
+        metadata:
+          annotations:
+            admiral.io/env: stage
+            sidecar.istio.io/inject: "true"
+          labels:
+            app: greeting
+            identity: greeting
+        spec:
+          containers:
+            - image: nginx
+              name: greeting
+              ports:
+                - containerPort: 80
+              volumeMounts:
+                - mountPath: /etc/nginx
+                  name: nginx-conf
+                  readOnly: true
+                - mountPath: /var/log/nginx
+                  name: log
+              resources:
+                requests:
+                  cpu: "10m"
+                  memory: "50Mi"
+                limits:
+                  cpu: "20m"
+                  memory: "75Mi"
+          volumes:
+            - configMap:
+                items:
+                  - key: nginx.conf
+                    path: nginx.conf
+                name: nginx-conf
+              name: nginx-conf
+            - emptyDir: {}
+              name: log
     ---    
-Service labels will be used to create the default dns name.
+Deployment admiral.io/env annotation/label will be used to create the default dns name.
 
 # DNS Names
 
-By default dns names will be constructed using the values of two labels from the service.  
-- env
-- global-identifier as defined by the Dependency type  
+By default dns names will be constructed using the following values from the k8s deployment.  
+- `Annotation/Label`: `admiral.io/env` with a fallback to `env`
+- `Label`: global-identifier as defined by the Dependency type  
 
-**{env}.{global-identifier}.global**
+**{admiral.io/env}.{global-identifier}.global**
 
-For the service above
+For the k8s deployment above
 
-**dev.service1.global**
+**stage.greeting.global**
 
-If the env label is not present the word default will be used.
+If the `admiral.io/env` annotation or `env` label is not present the word `default` will be used.
 
-**default.service1.mesh**
+**default.greeting.global**
 
-*No "real" dns name are created but the core dns plug is used with back ServiceEntries*
+*No "real" dns name are created but the coredns plug-in is used with back ServiceEntries*
 
 # Types
 
@@ -105,16 +138,16 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
         identity: service1
     spec:
       policy:
-      - dns: service1.global
+      - dnsPrefix: default
         lbtype: TOPOLOGY
-      - dns: service1-west.global
+      - dnsPrefix: service1-west
         lbtype: FAILOVER
         target:
         - region: uswest-2
           weight: 100
         - region: useast-2
           weight: 0
-      - dns: service1-east.global
+      - dnsPrefix: service1-east
         lbtype: FAILOVER
         target:
         - region: uswest-2
@@ -124,9 +157,11 @@ Using the Global Traffic policy type will allow for the creation of multiple dns
     ---
 
 In this example the service object with the identity=service1 label will have 3 dns names created that map to it.
-- service1.global - pins traffic the local region the traffic originated
-- service1-west.global - sends traffic to the west region and only to east if west in unavailable
-- service1-east.global - sends traffic to the east region and only to west if east in unavailable
+- stage.service1.global - pins traffic to the local region the traffic originated
+- service1-west.stage.service1.global - sends traffic to the west region and only to east if west in unavailable
+- service1-east.stage.service1.global - sends traffic to the east region and only to west if east in unavailable
+
+`Note:` when `dnsPrefix` value is `default` or if it matches the value of `admiral.io/env` annotation on a deployment, then the behavior of the default generated service name will be overriden with what is specified in the corresponding policy section. 
 
 
 

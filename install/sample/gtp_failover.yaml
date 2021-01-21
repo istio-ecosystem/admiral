@@ -1,0 +1,27 @@
+apiVersion: admiral.io/v1alpha1
+kind: GlobalTrafficPolicy
+metadata:
+  name: gtp-service1
+  namespace: sample
+  annotations:
+    admiral.io/env: stage
+  labels:
+    identity: greeting
+spec:
+  policy:
+    - dnsPrefix: default
+      lbType: 0
+    - dnsPrefix: west #a new host will be generated Ex: west.<env>.greeting.global
+      lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
+      target:
+        - region: us-west-2
+          weight: 100
+        - region: us-east-2
+          weight: 0
+    - dnsPrefix: east
+      lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
+      target:
+        - region: us-west-2
+          weight: 0
+        - region: us-east-2
+          weight: 100

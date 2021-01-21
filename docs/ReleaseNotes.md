@@ -1,5 +1,23 @@
 # Release notes
 
+## v1.1
+
+This is a minor release that addresses some usability and clean up aspects. 
+
+### Features
+
+ #### [gRPC and http2 protocol support](https://github.com/istio-ecosystem/admiral/issues/76)
+ Version 1.1 adds support to use gRPC and http2 protocols in addition to the default http for admiral generated endpoints. Try the [example](https://github.com/istio-ecosystem/admiral/blob/master/docs/Examples.md#grpc-demo) to explore this further.
+ 
+ #### [Deletion support](https://github.com/istio-ecosystem/admiral/issues/9)
+ Admiral now cleans up the CNAMEs and the associated configurations when a k8s deployement is deleted.
+ 
+ #### [Guidance on using Admiral in production](https://github.com/istio-ecosystem/admiral/issues/106)
+ Added documentation and guidance on how to deploy admiral in a production setting. The documentation is available [here](https://github.com/istio-ecosystem/admiral/blob/master/docs/Examples.md#production-deployment)
+ 
+### Project improvements
+Added automated integration tests for admiral to simulates real uses cases
+
 ## v1.0
 
 Admiral has graduated to Generally Available! Version 1.0 has a series of bugfixes and includes support for [Argo Rollouts](https://argoproj.github.io/argo-rollouts/)
