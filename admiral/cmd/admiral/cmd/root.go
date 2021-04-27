@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
@@ -44,6 +45,10 @@ func GetRootCmd(args []string) *cobra.Command {
 			if err != nil {
 				log.Fatalf("Error: %v", err)
 			}
+
+			//service := server.Service{}
+			//routes, err := routes.NewAvisoServer(&opts, ctx)
+
 
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
