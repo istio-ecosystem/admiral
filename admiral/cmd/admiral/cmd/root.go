@@ -4,10 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/routes"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/pkg/routes"
-	"github.com/istio-ecosystem/admiral/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
@@ -27,7 +27,7 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	params := common.AdmiralParams{LabelSet: &common.LabelSet{}}
 
-	opts := routes.PaddleOpts{}
+	opts := routes.RouteOpts{}
 
 	rootCmd := &cobra.Command{
 		Use:          "Admiral",
@@ -43,26 +43,25 @@ func GetRootCmd(args []string) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.SetLevel(log.Level(params.LogLevel))
 			log.Info("Starting Admiral")
-			_, err := clusters.InitAdmiral(ctx, params)
+			remoteRegistry, err := clusters.InitAdmiral(ctx, params)
 
 			if err != nil {
 				log.Fatalf("Error: %v", err)
 			}
 
 			service := server.Service{}
+			opts.RemoteRegistry = remoteRegistry
 			ret_routes := routes.NewAdmiralAPIServer(&opts)
 
 			if err != nil {
 				log.Error("Error setting up server:", err.Error())
 			}
 
-			service.Start(ctx, 8080, ret_routes, routes.Filter)
+			service.Start(ctx, 8080, ret_routes, routes.Filter, remoteRegistry)
 
 			log.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Fatal("Error setting up the server")
-
-
 
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -113,8 +112,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.WorkloadSidecarName, "workload_sidecar_name", "default",
 		"Name of the sidecar resource in the workload namespace. By default sidecar resource will be named as \"default\".")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.EnvKey, "env_key", "admiral.io/env",
-		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment. Defaults to `admiral.io/env`. " +
-		"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
+		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment. Defaults to `admiral.io/env`. "+
+			"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
 
 	return rootCmd
 }

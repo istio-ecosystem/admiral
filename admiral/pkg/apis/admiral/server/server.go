@@ -3,15 +3,17 @@ package server
 import (
 	"context"
 	"github.com/gorilla/mux"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"log"
 	"net/http"
 	"strconv"
 )
 
 type Service struct {
-	Port   int
-	ctx    context.Context
-	server http.Server
+	Port           int
+	ctx            context.Context
+	server         http.Server
+	remoteRegistry *clusters.RemoteRegistry
 }
 
 // filter definition as a func
@@ -35,10 +37,11 @@ type Routes []Route
 
 type Filters []Filter
 
-func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []Filter) {
+func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []Filter, remoteRegistry *clusters.RemoteRegistry) {
 
 	s.ctx = ctx
 	s.Port = port
+	s.remoteRegistry = remoteRegistry
 
 	go waitForStop(s)
 
@@ -46,13 +49,12 @@ func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []F
 
 	s.server = http.Server{Addr: ":" + strconv.Itoa(port), Handler: router}
 
-	log.Printf("Starting server on port=%d", port)
+	log.Printf("Starting admiral api server on port=%d", port)
 	log.Fatalln(s.server.ListenAndServe())
 
 	return
 
 }
-
 
 func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 
@@ -80,7 +82,6 @@ func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 }
 
 func waitForStop(s *Service) {
-
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -92,7 +93,5 @@ func waitForStop(s *Service) {
 }
 
 func (s *Service) stop() error {
-
 	return s.server.Close()
-
 }
