@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -36,34 +35,34 @@ type Routes []Route
 
 type Filters []Filter
 
-func (s *Service) Start(port int, ctx context.Context, routes *Routes, filter []Filter) error {
+func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []Filter) {
 
-	s.Port = port
 	s.ctx = ctx
+	s.Port = port
 
 	go waitForStop(s)
 
-	glog.Infof("Starting server on port=%d", port)
-	router := s.newRouter(routes)
+	router := s.newRouter(routes, filter)
 
 	s.server = http.Server{Addr: ":" + strconv.Itoa(port), Handler: router}
 
-	return s.server.ListenAndServe()
+	log.Printf("Starting server on port=%d", port)
+	log.Fatalln(s.server.ListenAndServe())
+
+	return
 
 }
 
-func (s *Service) newRouter(routes *Routes) *mux.Router {
+
+func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 
 	router := mux.NewRouter().StrictSlash(true)
-	for _, route := range *routes {
+	for _, route := range routes {
 
 		var handler http.Handler
 		handler = route.HandlerFunc
 
-		for i := range route.FilterChain {
-
-			//iterate backward through the slice to give a nature feel to defining the chain
-			filter := route.FilterChain[len(route.FilterChain)-1-i]
+		for _, filter := range filter {
 			handler = filter.HandlerFunc(handler, route.Name)
 		}
 

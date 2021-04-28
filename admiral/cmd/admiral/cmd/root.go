@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/pkg/routes"
 	"github.com/istio-ecosystem/admiral/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"os"
@@ -25,6 +26,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	var ()
 
 	params := common.AdmiralParams{LabelSet: &common.LabelSet{}}
+
+	opts := routes.PaddleOpts{}
 
 	rootCmd := &cobra.Command{
 		Use:          "Admiral",
@@ -46,8 +49,19 @@ func GetRootCmd(args []string) *cobra.Command {
 				log.Fatalf("Error: %v", err)
 			}
 
-			//service := server.Service{}
-			//routes, err := routes.NewAvisoServer(&opts, ctx)
+			service := server.Service{}
+			ret_routes := routes.NewAdmiralAPIServer(&opts)
+
+			if err != nil {
+				log.Error("Error setting up server:", err.Error())
+			}
+
+			service.Start(ctx, 8080, ret_routes, routes.Filter)
+
+			log.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Fatal("Error setting up the server")
+
 
 
 		},
