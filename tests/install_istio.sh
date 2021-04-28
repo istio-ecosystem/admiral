@@ -11,7 +11,7 @@ os=$2
 
 #Downloading istiofunction ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 
-#wget "https://github.com/istio/istio/releases/download/$istio_version/istio-$istio_version-$os.tar.gz"
+wget "https://github.com/istio/istio/releases/download/$istio_version/istio-$istio_version-$os.tar.gz"
 
 #Extracting istio
 tar -xf "istio-$istio_version-$os.tar.gz"
