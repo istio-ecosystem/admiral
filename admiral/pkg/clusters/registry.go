@@ -88,13 +88,14 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	var err error
+	var controller *secret.Controller
 
 	w.secretClient, err = admiral.K8sClientFromPath(common.GetKubeconfigPath())
 	if err != nil {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
 
-	err = secret.StartSecretController(w.secretClient,
+	controller, err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
 		w.updateCacheController,
 		w.deleteCacheController,
@@ -104,6 +105,8 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)
 	}
+
+	w.SecretController = controller
 
 	return nil
 }
