@@ -24,5 +24,18 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 }
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(200)
+	clusterList := ""
+	// loop through secret controller's c.cs.remoteClusters to access all clusters admiral is watching
+	for clusterID := range opts.RemoteRegistry.SecretController.Cs.RemoteClusters {
+		fmt.Print(clusterID)
+		clusterList += " " + clusterID
+	}
+	response := fmt.Sprintf(clusterList)
 
+	_, writeErr := w.Write([]byte(response))
+	if writeErr != nil {
+		log.Printf("Error writing body: %v", writeErr)
+		http.Error(w, "can't write body", http.StatusInternalServerError)
+	}
 }
