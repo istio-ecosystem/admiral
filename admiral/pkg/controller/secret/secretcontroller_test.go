@@ -222,7 +222,7 @@ func Test_SecretController(t *testing.T) {
 	}
 
 	// Start the secret controller and sleep to allow secret process to start.
-	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller
+	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller and nil error
 	g.Expect(
 		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
 		ShouldNot(BeNil())
