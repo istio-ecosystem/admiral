@@ -647,7 +647,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
@@ -660,7 +660,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
@@ -673,8 +673,8 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 
@@ -687,9 +687,9 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 	eastEndpointSe := istionetworkingv1alpha3.ServiceEntry{
@@ -701,7 +701,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 
@@ -725,7 +725,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
 		},
 	}
 

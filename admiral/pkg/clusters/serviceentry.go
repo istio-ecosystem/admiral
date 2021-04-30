@@ -455,7 +455,7 @@ func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry
 
 		return serviceEnteries.Items, nil
 	} else {
-		err := fmt.Errorf("admiral is not monitoring cluster %s", clusterID)
+		err := fmt.Errorf("Admiral is not monitoring cluster %s", clusterID)
 		return nil, err
 	}
 }

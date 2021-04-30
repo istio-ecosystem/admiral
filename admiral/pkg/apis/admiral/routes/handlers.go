@@ -47,7 +47,7 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 
 	out, err := json.Marshal(clusterList)
 	if err != nil {
-		log.Printf("Failed to marshall response")
+		log.Printf("Failed to marshall response for GetClusters call")
 		http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
@@ -70,18 +70,23 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 
 		if err != nil {
 			log.Printf(err.Error())
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			if strings.Contains(err.Error(), "Admiral is not monitoring cluster") {
+				http.Error(w, err.Error(), http.StatusNotFound)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 		} else {
 			if len(serviceEntriesByCluster) == 0 {
 				log.Printf(fmt.Sprintf("No service entries configured for cluster - %s", clusterName))
-				http.Error(w, fmt.Sprintf("No service entries configured for cluster - %s", clusterName), http.StatusNotFound)
+				w.WriteHeader(200)
+				w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
 			} else {
 				response = serviceEntriesByCluster
 
 				out, err := json.Marshal(response)
 				if err != nil {
-					log.Printf("Failed to marshall response")
-					http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
+					log.Printf("Failed to marshall response for GetServiceEntriesByCluster call")
+					http.Error(w, fmt.Sprintf("Failed to marshall response for getting service entries api for cluster %s", clusterName), http.StatusInternalServerError)
 				} else {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(200)
@@ -117,8 +122,8 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 		}
 		out, err := json.Marshal(response)
 		if err != nil {
-			log.Printf("Failed to marshall response")
-			http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
+			log.Printf("Failed to marshall response GetServiceEntriesByIdentity call")
+			http.Error(w, fmt.Sprintf("Failed to marshall response for getting service entries api for identity %s", identity), http.StatusInternalServerError)
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
