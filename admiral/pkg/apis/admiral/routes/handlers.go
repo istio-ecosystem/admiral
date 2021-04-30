@@ -1,15 +1,28 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/gorilla/mux"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type RouteOpts struct {
 	KubeconfigPath string
 	RemoteRegistry *clusters.RemoteRegistry
+}
+
+//type ClusterServiceEntries struct {
+//	ServiceEntries []v1alpha3.ServiceEntry `json:"ServiceEntries,omitempty"`
+//}
+
+type IdentityServiceEntry struct {
+	IdentityCname string   `json:"IdentityCname,omitempty"`
+	ClusterNames  []string `json:"Clusters,omitempty"`
 }
 
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
@@ -25,4 +38,78 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 
+}
+
+func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	params := mux.Vars(r)
+	clusterName := strings.Trim(params["clustername"], " ")
+
+	var response []v1alpha3.ServiceEntry
+
+	if clusterName != "" {
+
+		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(clusterName, opts.RemoteRegistry)
+
+		if err != nil {
+			log.Printf(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		} else {
+			if len(serviceEntriesByCluster) == 0 {
+				log.Printf(fmt.Sprintf("No service entries configured for cluster - %s", clusterName))
+				http.Error(w, fmt.Sprintf("No service entries configured for cluster - %s", clusterName), http.StatusNotFound)
+			} else {
+				response = serviceEntriesByCluster
+
+				out, err := json.Marshal(response)
+				if err != nil {
+					log.Printf("Failed to marshall response")
+					http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
+				} else {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(200)
+					w.Write(out)
+				}
+			}
+		}
+	} else {
+		log.Printf("Cluster name not provided as part of the request")
+		http.Error(w, "Cluster name not provided as part of the request", http.StatusBadRequest)
+	}
+}
+
+func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	params := mux.Vars(r)
+	identity := strings.Trim(params["identity"], " ")
+
+	var response []IdentityServiceEntry
+
+	if identity != "" {
+
+		for cname, serviceCluster := range opts.RemoteRegistry.AdmiralCache.SeClusterCache.Map() {
+			if strings.Contains(cname, identity) {
+				var identityServiceEntry IdentityServiceEntry
+				identityServiceEntry.IdentityCname = cname
+				for _, clusterId := range serviceCluster.Map() {
+					identityServiceEntry.ClusterNames = append(identityServiceEntry.ClusterNames, clusterId)
+				}
+				response = append(response, identityServiceEntry)
+			}
+		}
+		out, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("Failed to marshall response")
+			http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(200)
+			w.Write(out)
+		}
+	} else {
+		log.Printf("Identity not provided as part of the request")
+		http.Error(w, "Identity not provided as part of the request", http.StatusBadRequest)
+	}
 }

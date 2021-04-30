@@ -116,7 +116,6 @@ func handleDependencyRecord(sourceIdentity string, r *RemoteRegistry, rcs map[st
 						continue
 					}
 
-
 					serviceInstance := getServiceForRollout(rc, rollout)
 
 					if serviceInstance == nil {
@@ -432,6 +431,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				}
 				if newServiceEntry != nil {
 					addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
+					r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 				}
 				//cache the subset service entries for updating them later for pod events
 				if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
@@ -579,7 +579,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 
 func deleteVirtualService(exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
 	if exist != nil {
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(exist.Name, &v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, err)
 		} else {
@@ -612,7 +612,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 
 func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	if exist != nil {
-		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name, &v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
 		} else {
@@ -646,7 +646,7 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 
 func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	if exist != nil {
-		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name,  &v12.DeleteOptions{})
+		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name, &v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
 		} else {

@@ -61,6 +61,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
+		SeClusterCache:                  common.NewMapOfMaps(),
 
 		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}

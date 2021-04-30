@@ -18,7 +18,7 @@ import (
 
 type RemoteController struct {
 	ClusterID                 string
-	ApiServer				  string
+	ApiServer                 string
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
@@ -45,6 +45,7 @@ type AdmiralCache struct {
 	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
+	SeClusterCache                  *common.MapOfMaps
 
 	argoRolloutsEnabled bool
 }
@@ -439,7 +440,7 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 }
 
 // helper function to handle add and delete for DeploymentHandler
-func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry)  {
+func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry) {
 	log.Infof(LogFormat, event, "deployment", obj.Name, obj.ClusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)

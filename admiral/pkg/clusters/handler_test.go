@@ -141,7 +141,7 @@ func TestGetDestinationRule(t *testing.T) {
 		name            string
 		host            string
 		locality        string
-		gtpPolicy             *model.TrafficPolicy
+		gtpPolicy       *model.TrafficPolicy
 		destinationRule *v1alpha3.DestinationRule
 	}{
 		{
@@ -211,6 +211,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			remoteControllers: map[string]*RemoteController{},
 			AdmiralCache: &AdmiralCache{
 				CnameDependentClusterCache: cnameCache,
+				SeClusterCache:             common.NewMapOfMaps(),
 			},
 		},
 	}
@@ -229,6 +230,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			},
 			AdmiralCache: &AdmiralCache{
 				CnameDependentClusterCache: goodCnameCache,
+				SeClusterCache:             common.NewMapOfMaps(),
 			},
 		},
 	}
@@ -253,6 +255,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			},
 			AdmiralCache: &AdmiralCache{
 				CnameDependentClusterCache: goodCnameCache,
+				SeClusterCache:             common.NewMapOfMaps(),
 			},
 		},
 	}
@@ -786,6 +789,7 @@ func TestHandleDependencyRecord(t *testing.T) {
 		CnameClusterCache:          common.NewMapOfMaps(),
 		CnameIdentityCache:         &sync.Map{},
 		CnameDependentClusterCache: common.NewMapOfMaps(),
+		SeClusterCache:             common.NewMapOfMaps(),
 	}
 
 	registry.AdmiralCache = admiralCache
