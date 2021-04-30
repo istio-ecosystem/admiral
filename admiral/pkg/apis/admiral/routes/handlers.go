@@ -37,19 +37,22 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 }
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	clusterList := ""
+
+	var clusterList []string
+
 	// loop through secret controller's c.cs.remoteClusters to access all clusters admiral is watching
 	for clusterID := range opts.RemoteRegistry.SecretController.Cs.RemoteClusters {
-		fmt.Print(clusterID)
-		clusterList += " " + clusterID
+		clusterList = append(clusterList, clusterID)
 	}
-	response := fmt.Sprintf(clusterList)
 
-	_, writeErr := w.Write([]byte(response))
-	if writeErr != nil {
-		log.Printf("Error writing body: %v", writeErr)
-		http.Error(w, "can't write body", http.StatusInternalServerError)
+	out, err := json.Marshal(clusterList)
+	if err != nil {
+		log.Printf("Failed to marshall response")
+		http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write(out)
 	}
 }
 
