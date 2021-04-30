@@ -33,5 +33,17 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 			Pattern:     "/clusters",
 			HandlerFunc: opts.GetClusters,
 		},
+		server.Route{
+			Name:        "Get list service entries for a given cluster",
+			Method:      "GET",
+			Pattern:     "/cluster/{clustername}/serviceentries",
+			HandlerFunc: opts.GetServiceEntriesByCluster,
+		},
+		server.Route{
+			Name:        "Get list service entries for a given identity",
+			Method:      "GET",
+			Pattern:     "/identity/{identity}/serviceentries",
+			HandlerFunc: opts.GetServiceEntriesByIdentity,
+		},
 	}
 }
