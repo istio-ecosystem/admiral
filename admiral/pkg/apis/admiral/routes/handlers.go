@@ -21,8 +21,8 @@ type RouteOpts struct {
 //}
 
 type IdentityServiceEntry struct {
-	IdentityCname string   `json:"IdentityCname,omitempty"`
-	ClusterNames  []string `json:"Clusters,omitempty"`
+	Cname        string   `json:"Cname,omitempty"`
+	ClusterNames []string `json:"Clusters,omitempty"`
 }
 
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +38,7 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 
-	var clusterList []string
+	clusterList := []string{}
 
 	// loop through secret controller's c.cs.remoteClusters to access all clusters admiral is watching
 	for clusterID := range opts.RemoteRegistry.SecretController.Cs.RemoteClusters {
@@ -106,14 +106,14 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 	params := mux.Vars(r)
 	identity := strings.Trim(params["identity"], " ")
 
-	var response []IdentityServiceEntry
+	response := []IdentityServiceEntry{}
 
 	if identity != "" {
 
 		for cname, serviceCluster := range opts.RemoteRegistry.AdmiralCache.SeClusterCache.Map() {
 			if strings.Contains(cname, identity) {
 				var identityServiceEntry IdentityServiceEntry
-				identityServiceEntry.IdentityCname = cname
+				identityServiceEntry.Cname = cname
 				for _, clusterId := range serviceCluster.Map() {
 					identityServiceEntry.ClusterNames = append(identityServiceEntry.ClusterNames, clusterId)
 				}
