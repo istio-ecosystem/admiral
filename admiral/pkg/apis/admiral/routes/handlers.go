@@ -50,9 +50,17 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to marshall response for GetClusters call")
 		http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
-		w.Write(out)
+		if len(clusterList) == 0 {
+			message := "No cluster is monitored by admiral"
+			log.Printf(message)
+			w.WriteHeader(200)
+			out, _ = json.Marshal(message)
+			w.Write(out)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(200)
+			w.Write(out)
+		}
 	}
 }
 
