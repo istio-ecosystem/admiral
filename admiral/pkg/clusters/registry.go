@@ -129,7 +129,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting deployment controller clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r}, clientConfig, resyncPeriod)
+	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with DeploymentController controller init: %v", err)

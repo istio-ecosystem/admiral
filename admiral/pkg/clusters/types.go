@@ -208,6 +208,7 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 
 type DeploymentHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type PodHandler struct {
@@ -359,6 +360,7 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
+	obj.ClusterName = pc.ClusterID
 	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry)
 }
 
@@ -445,7 +447,7 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
