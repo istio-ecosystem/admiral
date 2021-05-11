@@ -81,10 +81,12 @@ type DependencyHandler struct {
 
 type GlobalTrafficHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type RolloutHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type globalTrafficCache struct {
@@ -208,18 +210,22 @@ func (g *globalTrafficCache) Delete(gtp *v1.GlobalTrafficPolicy) {
 
 type DeploymentHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type PodHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type NodeHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 type ServiceHandler struct {
 	RemoteRegistry *RemoteRegistry
+	ClusterID      string
 }
 
 func (dh *DependencyHandler) Added(obj *v1.Dependency) {
@@ -260,6 +266,9 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 }
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
+	if obj.ClusterName == "" {
+		obj.ClusterName = gtp.ClusterID
+	}
 	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "received")
 
 	var matchedDeployments []k8sAppsV1.Deployment
@@ -359,6 +368,9 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
+	if obj.ClusterName == "" {
+		obj.ClusterName = pc.ClusterID
+	}
 	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry)
 }
 
@@ -367,7 +379,10 @@ func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Received")
+	if obj.ClusterName == "" {
+		obj.ClusterName = pc.ClusterID
+	}
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Received")
 
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
@@ -389,6 +404,9 @@ func getCacheKey(environment string, identity string) string {
 }
 
 func (rh *RolloutHandler) Added(obj *argo.Rollout) {
+	if obj.ClusterName == "" {
+		obj.ClusterName = rh.ClusterID
+	}
 	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry)
 }
 
@@ -445,7 +463,7 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
