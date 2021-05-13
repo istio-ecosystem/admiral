@@ -96,22 +96,22 @@ func TestGetServiceEntriesByCluster (t *testing.T) {
 	}{
 		{
 			name:             "failure with admiral not monitored cluster",
-		    clusterName:       "bar",
-			remoteControllers:     nil,
+		    clusterName:      "bar",
+			remoteControllers: nil,
 			expectedErr:      "Admiral is not monitoring cluster bar\n",
 			statusCode:        404,
 		},
 		{
 			name:             "failure with admiral not monitored cluster",
-			clusterName:       "",
-			remoteControllers:     nil,
+			clusterName:      "",
+			remoteControllers: nil,
 			expectedErr:      "Cluster name not provided as part of the request\n",
 			statusCode:        400,
 		},
 		{
 			name:             "success with no service entry for cluster",
 			clusterName:      "cluster1",
-			remoteControllers:     map[string]*clusters.RemoteController{
+			remoteControllers:map[string]*clusters.RemoteController{
 				"cluster1": &clusters.RemoteController{
 					ServiceEntryController:    &istio.ServiceEntryController{
 						IstioClient: fakeIstioClient,
