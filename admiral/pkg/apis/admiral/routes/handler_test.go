@@ -45,7 +45,7 @@ func TestGetClusters (t *testing.T) {
 		statusCode int
 	}{
 		{
-			name:   "success with 2 clusters case",
+			name:   "success with two clusters case",
 			remoteCluster:     map[string]*secret.RemoteCluster{
 				"cluster1": &secret.RemoteCluster{},
 				"cluster2": &secret.RemoteCluster{},
