@@ -53,7 +53,7 @@ type AdmiralCache struct {
 
 type RemoteRegistry struct {
 	sync.Mutex
-	remoteControllers map[string]*RemoteController
+	RemoteControllers map[string]*RemoteController
 	SecretController  *secret.Controller
 	secretClient      k8s.Interface
 	ctx               context.Context
@@ -67,7 +67,7 @@ func (r *RemoteRegistry) shutdown() {
 	<-done
 
 	//close the remote controllers stop channel
-	for _, v := range r.remoteControllers {
+	for _, v := range r.RemoteControllers {
 		close(v.stop)
 	}
 }
@@ -253,7 +253,7 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
 
-	handleDependencyRecord(sourceIdentity, remoteRegitry, remoteRegitry.remoteControllers, obj)
+	handleDependencyRecord(sourceIdentity, remoteRegitry, remoteRegitry.RemoteControllers, obj)
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
@@ -269,7 +269,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	var matchedRollouts []argo.Rollout
 
 	//IMPORTANT: The deployment/Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
-	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
+	for _, remoteCluster := range gtp.RemoteRegistry.RemoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		matchedRollouts = append(matchedRollouts, remoteCluster.RolloutController.GetRolloutByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
@@ -310,7 +310,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	var matchedRollouts []argo.Rollout
 
 	//IMPORTANT: The deployment/Rollout matched with a GTP will not necessarily be from the same cluster. This is because the same service could be deployed in multiple clusters and we need to guarantee consistent behavior
-	for _, remoteCluster := range gtp.RemoteRegistry.remoteControllers {
+	for _, remoteCluster := range gtp.RemoteRegistry.RemoteControllers {
 		matchedDeployments = append(matchedDeployments, remoteCluster.DeploymentController.GetDeploymentByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 		matchedRollouts = append(matchedRollouts, remoteCluster.RolloutController.GetRolloutByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
@@ -415,7 +415,7 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 	}
 
 	var matchedGTPs []v1.GlobalTrafficPolicy
-	for _, remoteCluster := range remoteRegistry.remoteControllers {
+	for _, remoteCluster := range remoteRegistry.RemoteControllers {
 		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 
@@ -453,7 +453,7 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 	}
 
 	var matchedGTPs []v1.GlobalTrafficPolicy
-	for _, remoteCluster := range remoteRegistry.remoteControllers {
+	for _, remoteCluster := range remoteRegistry.RemoteControllers {
 		matchedGTPs = append(matchedGTPs, remoteCluster.GlobalTraffic.GetGTPByLabel(obj.Labels[common.GetGlobalTrafficDeploymentLabel()], obj.Namespace)...)
 	}
 

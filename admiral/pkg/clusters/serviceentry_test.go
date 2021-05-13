@@ -306,7 +306,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 		RolloutController:    r,
 	}
 
-	rr.remoteControllers["test.cluster"] = rc
+	rr.RemoteControllers["test.cluster"] = rc
 	modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
 
 }
@@ -996,7 +996,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		VirtualServiceController: v,
 	}
 	rc.ClusterID = "test.cluster"
-	rr.remoteControllers["test.cluster"] = rc
+	rr.RemoteControllers["test.cluster"] = rc
 
 	admiralCache := &AdmiralCache{
 		IdentityClusterCache:       common.NewMapOfMaps(),

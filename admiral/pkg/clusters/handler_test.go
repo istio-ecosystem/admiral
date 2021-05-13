@@ -208,7 +208,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	cnameCache := common.NewMapOfMaps()
 	noDependencClustersHandler := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{},
+			RemoteControllers: map[string]*RemoteController{},
 			AdmiralCache: &AdmiralCache{
 				CnameDependentClusterCache: cnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
@@ -221,7 +221,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	goodCnameCache.Put("e2e.blah.global", "cluster.k8s.global", "cluster.k8s.global")
 	handlerEmptyClient := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{
+			RemoteControllers: map[string]*RemoteController{
 				"cluster.k8s.global": &RemoteController{
 					VirtualServiceController: &istio.VirtualServiceController{
 						IstioClient: fakeIstioClient,
@@ -246,7 +246,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	})
 	handlerFullClient := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{
+			RemoteControllers: map[string]*RemoteController{
 				"cluster.k8s.global": &RemoteController{
 					VirtualServiceController: &istio.VirtualServiceController{
 						IstioClient: fullFakeIstioClient,
@@ -775,7 +775,7 @@ func TestHandleDependencyRecord(t *testing.T) {
 	usecase1Rcs["cluster-1"] = remoteController
 
 	registry := &RemoteRegistry{}
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"qal.greeting.mesh-se": common.LocalAddressPrefix + ".10.1"},
@@ -856,7 +856,7 @@ func TestHandleDependencyRecord(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			handleDependencyRecord(c.sourceIdentity, c.remoteRegistry, c.remoteRegistry.remoteControllers, c.dep)
+			handleDependencyRecord(c.sourceIdentity, c.remoteRegistry, c.remoteRegistry.RemoteControllers, c.dep)
 		})
 	}
 }

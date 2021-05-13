@@ -352,7 +352,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	for _, dependentCluster := range allDependentClusters {
 
-		rc := r.remoteControllers[dependentCluster]
+		rc := r.RemoteControllers[dependentCluster]
 
 		var newServiceEntry *v1alpha3.ServiceEntry
 
@@ -516,7 +516,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	for _, dependentCluster := range dependentClusters.Map() {
 
-		rc := r.remoteControllers[dependentCluster]
+		rc := r.RemoteControllers[dependentCluster]
 
 		if clusterId != dependentCluster {
 

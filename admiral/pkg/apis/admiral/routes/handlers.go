@@ -90,7 +90,6 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 				w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
 			} else {
 				response = serviceEntriesByCluster
-
 				out, err := json.Marshal(response)
 				if err != nil {
 					log.Printf("Failed to marshall response for GetServiceEntriesByCluster call")

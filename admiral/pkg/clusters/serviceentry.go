@@ -64,7 +64,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var serviceInstance *k8sV1.Service
 	var rollout *admiral.RolloutClusterEntry
 
-	for _, rc := range remoteRegistry.remoteControllers {
+	for _, rc := range remoteRegistry.RemoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 
@@ -117,12 +117,12 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries)
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
 
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	for sourceCluster, serviceInstance := range sourceServices {
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		rc := remoteRegistry.remoteControllers[sourceCluster]
+		rc := remoteRegistry.RemoteControllers[sourceCluster]
 		var meshPorts map[string]uint32
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
@@ -132,7 +132,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			for _, ep := range serviceEntry.Endpoints {
@@ -142,7 +142,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 					ep.Address = localFqdn
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
-					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 						map[string]*networking.ServiceEntry{key: serviceEntry})
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
@@ -444,7 +444,7 @@ func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStor
 }
 
 func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry) ([]v1alpha3.ServiceEntry, error) {
-	remoteController := remoteRegistry.remoteControllers[clusterID]
+	remoteController := remoteRegistry.RemoteControllers[clusterID]
 	if remoteController != nil {
 		serviceEnteries, err := remoteController.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetSyncNamespace()).List(v12.ListOptions{})
 
