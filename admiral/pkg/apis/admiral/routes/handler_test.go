@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	"github.com/stretchr/testify/assert"
@@ -102,7 +103,7 @@ func TestGetServiceEntriesByCluster (t *testing.T) {
 			statusCode:        404,
 		},
 		{
-			name:             "failure with admiral not monitored cluster",
+			name:             "failure with cluster not provided request",
 			clusterName:      "",
 			remoteControllers: nil,
 			expectedErr:      "Cluster name not provided as part of the request\n",
@@ -157,3 +158,57 @@ func TestGetServiceEntriesByCluster (t *testing.T) {
 		})
 	}
 }
+
+func TestGetServiceEntriesByIdentity (t *testing.T) {
+	url := "https://admiral.com/identity/service1/serviceentries"
+	opts := RouteOpts{
+		RemoteRegistry: &clusters.RemoteRegistry{
+			AdmiralCache: &clusters.AdmiralCache{
+				SeClusterCache: common.NewMapOfMaps() ,
+			},
+		},
+	}
+	testCases := []struct {
+		name string
+		identity string
+		host string
+		expectedErr string
+		statusCode int
+	}{
+		{
+			name:             "failure with identity not provided request",
+			identity:         "",
+			host:            "",
+			expectedErr:      "Identity not provided as part of the request\n",
+			statusCode:       400,
+		},
+		{
+			name:             "success with service entry for service",
+			identity:         "meshhealthcheck",
+			host:             "anil-test-bdds-10-k8s-e2e.intuit.services.mesh.meshhealthcheck.mesh",
+			expectedErr:      "Identity not provided as part of the request\n",
+			statusCode:       200,
+		},
+	}
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			r:= httptest.NewRequest("GET", url, nil)
+			r = mux.SetURLVars(r, map[string]string{"identity": c.identity})
+			w := httptest.NewRecorder()
+			if c.host != "" {
+				opts.RemoteRegistry.AdmiralCache.SeClusterCache.Put(c.host, "cluster1", "cluster1")
+			}
+			opts.GetServiceEntriesByIdentity(w, r)
+			resp := w.Result()
+			body, _ := ioutil.ReadAll(resp.Body)
+			if string(body) != c.expectedErr && c.name != "success with service entry for service" {
+				t.Errorf("Error mismatch. Got %v, want %v", string(body), c.expectedErr)
+			}
+			if resp.StatusCode != c.statusCode {
+				t.Errorf("Status code mismatch. Got %v, want %v", resp.StatusCode, c.statusCode)
+			}
+		})
+	}
+}
+
