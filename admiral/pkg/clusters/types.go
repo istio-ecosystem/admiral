@@ -265,14 +265,11 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 	// special case of update, delete the dependency crd file for one service, need to loop through all ones we plan to update
 	// and make sure nobody else is relying on the same SE in same cluster
-	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, obj.ClusterName, "Skipping, not implemented")
+	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, "", "Skipping, not implemented")
 }
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
-	if obj.ClusterName == "" {
-		obj.ClusterName = gtp.ClusterID
-	}
-	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "received")
+	log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, gtp.ClusterID, "received")
 
 	var matchedDeployments []k8sAppsV1.Deployment
 	var matchedRollouts []argo.Rollout
@@ -291,7 +288,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, &deployment)
 			if err != nil {
 				log.Errorf("Failed to add nw GTP to cache. Error=%v", err)
-				log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+				log.Infof(LogFormat, "Added", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 			}
 		}
 	}
@@ -301,19 +298,19 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, &rollout)
 			if err != nil {
 				log.Errorf("Failed to add new GTP to cache. Error=%v", err)
-				log.Errorf(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+				log.Errorf(LogErrFormat, "Added", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 			}
 		}
 	}
 
 	if len(deployments) == 0 && len(rollouts) == 0 {
-		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments/rollouts")
+		log.Infof(LogErrFormat, "Added", "trafficpolicy", obj.Name, gtp.ClusterID, "Skipping, no matched deployments/rollouts")
 	}
 
 }
 
 func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "received")
+	log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "received")
 
 	var matchedDeployments []k8sAppsV1.Deployment
 	var matchedRollouts []argo.Rollout
@@ -332,16 +329,16 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, &deployment)
 			if err != nil {
 				log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
-				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 			}
 		}
 	} else {
 		err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Put(obj, nil)
 		if err != nil {
 			log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
-			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 		} else {
-			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched deployments")
+			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Skipping, no matched deployments")
 		}
 	}
 
@@ -350,42 +347,35 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 			err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, &rollout)
 			if err != nil {
 				log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
-				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+				log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 			}
 		}
 	} else {
 		err := gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.PutRollout(obj, nil)
 		if err != nil {
 			log.Errorf("Failed to add updated GTP to cache. Error=%v", err)
-			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Failed")
+			log.Infof(LogFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Failed")
 		} else {
-			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, obj.ClusterName, "Skipping, no matched rollouts")
+			log.Infof(LogErrFormat, "Updated", "trafficpolicy", obj.Name, gtp.ClusterID, "Skipping, no matched rollouts")
 		}
 	}
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
-	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, obj.ClusterName, "received")
-
+	log.Infof(LogFormat, "Deleted", "trafficpolicy", obj.Name, gtp.ClusterID, "received")
 	gtp.RemoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(obj)
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	if obj.ClusterName == "" {
-		obj.ClusterName = pc.ClusterID
-	}
-	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry)
+	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry, pc.ClusterID)
 }
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry)
+	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
 }
 
 func (pc *PodHandler) Added(obj *k8sV1.Pod) {
-	if obj.ClusterName == "" {
-		obj.ClusterName = pc.ClusterID
-	}
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Received")
+	log.Infof(LogFormat, "Event", "deployment", obj.Name, pc.ClusterID, "Received")
 
 	globalIdentifier := common.GetPodGlobalIdentifier(obj)
 
@@ -407,28 +397,25 @@ func getCacheKey(environment string, identity string) string {
 }
 
 func (rh *RolloutHandler) Added(obj *argo.Rollout) {
-	if obj.ClusterName == "" {
-		obj.ClusterName = rh.ClusterID
-	}
-	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry)
+	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry, rh.ClusterID)
 }
 
 func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
-	log.Infof(LogFormat, "Updated", "rollout", obj.Name, obj.ClusterName, "received")
+	log.Infof(LogFormat, "Updated", "rollout", obj.Name, rh.ClusterID, "received")
 }
 
 func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
-	HandleEventForRollout(admiral.Delete, obj, rh.RemoteRegistry)
+	HandleEventForRollout(admiral.Delete, obj, rh.RemoteRegistry, rh.ClusterID)
 }
 
 // helper function to handle add and delete for RolloutHandler
-func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry) {
+func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
 
-	log.Infof(LogFormat, event, "rollout", obj.Name, obj.ClusterName, "Received")
+	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName,  "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "rollout", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "rollout", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -445,11 +432,11 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 			if err != nil {
 				log.Errorf("Failed to add Rollout to GTP cache. Error=%v", err)
 			} else {
-				log.Infof(LogFormat, "Event", "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+				log.Infof(LogFormat, "Event", "rollout", obj.Name, clusterName, "Matched to GTP name="+gtp.Name)
 			}
 		} else if event == admiral.Delete {
 			remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
-			log.Infof(LogFormat, event, "rollout", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+			log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Matched to GTP name="+gtp.Name)
 		}
 	}
 
@@ -460,13 +447,13 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 }
 
 // helper function to handle add and delete for DeploymentHandler
-func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry) {
-	log.Infof(LogFormat, event, "deployment", obj.Name, obj.ClusterName, "Received")
+func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
+	log.Infof(LogFormat, event, "deployment", obj.Name, clusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
 
@@ -483,11 +470,11 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 			if err != nil {
 				log.Errorf("Failed to add Deployment to GTP cache. Error=%v", err)
 			} else {
-				log.Infof(LogFormat, "Event", "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+				log.Infof(LogFormat, "Event", "deployment", obj.Name, clusterName, "Matched to GTP name="+gtp.Name)
 			}
 		} else if event == admiral.Delete {
 			remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(gtp)
-			log.Infof(LogFormat, event, "deployment", obj.Name, obj.ClusterName, "Matched to GTP name="+gtp.Name)
+			log.Infof(LogFormat, event, "deployment", obj.Name, clusterName, "Matched to GTP name="+gtp.Name)
 		}
 	}
 
