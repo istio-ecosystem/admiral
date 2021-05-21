@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type Service struct {
@@ -68,13 +69,16 @@ func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 			handler = filter.HandlerFunc(handler, route.Name)
 		}
 
-		router.
-			Methods(route.Method).
+		router.Methods(route.Method).
 			Path(route.Pattern).
 			Name(route.Name).
 			Handler(handler)
+
 		if route.Query != "" {
-			router.Queries(route.Query)
+			queries := strings.Split(route.Query, ",")
+			for _, query := range queries {
+				router.Queries(query, "{query}")
+			}
 		}
 	}
 

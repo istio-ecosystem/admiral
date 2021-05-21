@@ -122,7 +122,7 @@ func TestGlobalTrafficHandler(t *testing.T) {
 	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	admiralCacle.GlobalTrafficCache = gtpCache
 	registry.AdmiralCache = admiralCacle
@@ -290,7 +290,7 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	admiralCacle.GlobalTrafficCache = gtpCache
 	registry.AdmiralCache = admiralCacle
@@ -411,7 +411,7 @@ func TestDeploymentHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
@@ -601,7 +601,7 @@ func TestRolloutHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
@@ -856,7 +856,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	rolloutController := &admiral.RolloutController{K8sClient: fakeClient, RolloutClient: noRolloutsClient}
 	remoteController.RolloutController = rolloutController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	admiralCacle.GlobalTrafficCache = gtpCache
 	registry.AdmiralCache = admiralCacle
