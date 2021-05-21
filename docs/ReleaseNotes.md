@@ -1,4 +1,6 @@
 # Release notes
+## v1.2
+TBD 
 
 ## v1.1
 

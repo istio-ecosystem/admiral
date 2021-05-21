@@ -54,10 +54,10 @@ export REMOTE_CLUSTER=<path_to_kubeconfig_for_remote_cluster>
 ```bash
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v1.1/admiral-install-v1.1.tar.gz
-tar xvf admiral-install-v1.1.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v1.2/admiral-install-v1.2.tar.gz
+tar xvf admiral-install-v1.2.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v1.1
+export ADMIRAL_HOME=./admiral-install-v1.2
 ```
 
 ```bash
