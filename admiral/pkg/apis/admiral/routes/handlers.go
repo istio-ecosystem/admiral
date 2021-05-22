@@ -77,7 +77,7 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(clusterName, opts.RemoteRegistry)
 
 		if err != nil {
-			log.Printf(err.Error())
+			log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, err.Error())
 			if strings.Contains(err.Error(), "Admiral is not monitoring cluster") {
 				http.Error(w, err.Error(), http.StatusNotFound)
 			} else {
@@ -85,7 +85,7 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 			}
 		} else {
 			if len(serviceEntriesByCluster) == 0 {
-				log.Printf(fmt.Sprintf("No service entries configured for cluster - %s", clusterName))
+				log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, "No service entries configured for cluster - "+clusterName)
 				w.WriteHeader(200)
 				w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
 			} else {
