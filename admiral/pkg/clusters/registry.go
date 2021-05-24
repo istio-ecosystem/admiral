@@ -42,7 +42,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
 	}
 
-	w.remoteControllers = make(map[string]*RemoteController)
+	w.RemoteControllers = make(map[string]*RemoteController)
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
@@ -61,6 +61,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		SubsetServiceEntryIdentityCache: &sync.Map{},
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
+		SeClusterCache:                  common.NewMapOfMaps(),
 
 		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}
@@ -88,13 +89,14 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	var err error
+	var controller *secret.Controller
 
 	w.secretClient, err = admiral.K8sClientFromPath(common.GetKubeconfigPath())
 	if err != nil {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
 
-	err = secret.StartSecretController(w.secretClient,
+	controller, err = secret.StartSecretController(w.secretClient,
 		w.createCacheController,
 		w.updateCacheController,
 		w.deleteCacheController,
@@ -104,6 +106,8 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)
 	}
+
+	w.SecretController = controller
 
 	return nil
 }
@@ -196,7 +200,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 
 	r.Lock()
 	defer r.Unlock()
-	r.remoteControllers[clusterID] = &rc
+	r.RemoteControllers[clusterID] = &rc
 
 	log.Infof("Create Controller %s", clusterID)
 
@@ -207,7 +211,7 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
 	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
 	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
-	controller := r.remoteControllers[clusterID]
+	controller := r.RemoteControllers[clusterID]
 
 	if clientConfig.Host != controller.ApiServer {
 		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
@@ -223,7 +227,7 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 
-	controller, ok := r.remoteControllers[clusterID]
+	controller, ok := r.RemoteControllers[clusterID]
 
 	if ok {
 		close(controller.stop)
@@ -231,7 +235,7 @@ func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 
 	r.Lock()
 	defer r.Unlock()
-	delete(r.remoteControllers, clusterID)
+	delete(r.RemoteControllers, clusterID)
 
 	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
 	return nil

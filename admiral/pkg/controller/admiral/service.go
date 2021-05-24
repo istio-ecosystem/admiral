@@ -82,7 +82,7 @@ func (s *serviceCache) Delete(pod *ServiceClusterEntry) {
 
 func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, int) {
 	var (
-		lb     = "admiral_dummy.com"
+		lb     = "dummy.admiral.global"
 		lbPort = common.DefaultMtlsPort
 	)
 	service := s.Get(namespace)
