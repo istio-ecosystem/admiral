@@ -57,7 +57,7 @@ type removeSecretCallback func(dataKey string) error
 type Controller struct {
 	kubeclientset  kubernetes.Interface
 	namespace      string
-	cs             *ClusterStore
+	Cs             *ClusterStore
 	queue          workqueue.RateLimitingInterface
 	informer       cache.SharedIndexInformer
 	addCallback    addSecretCallback
@@ -73,14 +73,14 @@ type RemoteCluster struct {
 
 // ClusterStore is a collection of clusters
 type ClusterStore struct {
-	remoteClusters map[string]*RemoteCluster
+	RemoteClusters map[string]*RemoteCluster
 }
 
 // newClustersStore initializes data struct to store clusters information
 func newClustersStore() *ClusterStore {
 	remoteClusters := make(map[string]*RemoteCluster)
 	return &ClusterStore{
-		remoteClusters: remoteClusters,
+		RemoteClusters: remoteClusters,
 	}
 }
 
@@ -127,7 +127,7 @@ func NewController(
 	controller := &Controller{
 		kubeclientset:  kubeclientset,
 		namespace:      namespace,
-		cs:             cs,
+		Cs:             cs,
 		informer:       secretsInformer,
 		queue:          queue,
 		addCallback:    addCallback,
@@ -192,14 +192,14 @@ func StartSecretController(
 	removeCallback removeSecretCallback,
 	namespace string,
 	ctx context.Context,
-	secretResolverType string) error {
+	secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
 	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
 
 	go controller.Run(ctx.Done())
 
-	return nil
+	return controller, nil
 }
 
 func (c *Controller) runWorker() {
@@ -289,7 +289,7 @@ func (c *Controller) createRemoteCluster(kubeConfig []byte, secretName string, c
 func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 	for clusterID, kubeConfig := range s.Data {
 		// clusterID must be unique even across multiple secrets
-		if prev, ok := c.cs.remoteClusters[clusterID]; !ok {
+		if prev, ok := c.Cs.RemoteClusters[clusterID]; !ok {
 			log.Infof("Adding cluster_id=%v from secret=%v", clusterID, secretName)
 
 			remoteCluster, restConfig, err := c.createRemoteCluster(kubeConfig, secretName, clusterID, s.ObjectMeta.Namespace)
@@ -300,14 +300,14 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 				continue
 			}
 
-			c.cs.remoteClusters[clusterID] = remoteCluster
+			c.Cs.RemoteClusters[clusterID] = remoteCluster
 
 			if err := c.addCallback(restConfig, clusterID, 2*time.Minute); err != nil {
 				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
 				continue
 			}
 
-			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.", clusterID, c.cs.remoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
+			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.", clusterID, c.Cs.RemoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
 
 		} else {
 			if prev.secretName != secretName {
@@ -325,7 +325,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 				continue
 			}
 
-			c.cs.remoteClusters[clusterID] = remoteCluster
+			c.Cs.RemoteClusters[clusterID] = remoteCluster
 			if err := c.updateCallback(restConfig, clusterID, 2*time.Minute); err != nil {
 				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
 					clusterID, secretName, err)
@@ -333,19 +333,19 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		}
 
 	}
-	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
+	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
 func (c *Controller) deleteMemberCluster(secretName string) {
-	for clusterID, cluster := range c.cs.remoteClusters {
+	for clusterID, cluster := range c.Cs.RemoteClusters {
 		if cluster.secretName == secretName {
 			log.Infof("Deleting cluster member: %s", clusterID)
 			err := c.removeCallback(clusterID)
 			if err != nil {
 				log.Errorf("error during cluster delete: %s %v", clusterID, err)
 			}
-			delete(c.cs.remoteClusters, clusterID)
+			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
-	log.Infof("Number of remote clusters: %d", len(c.cs.remoteClusters))
+	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
