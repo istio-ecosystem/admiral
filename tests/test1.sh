@@ -7,7 +7,7 @@ source_ns=$2
 dest=$3
 
 #Test
-output=$(kubectl exec --namespace=sample -it $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source -- curl -v "http://stage.$dest.global" && echo "")
+output=$(kubectl exec --namespace=sample -it $(kubectl get pod -l "app=$source" --namespace=$source_ns -o jsonpath='{.items[0].metadata.name}') -c $source -- curl -v "http://stage.$dest.local" && echo "")
 
 if [[ "$output" == *"Admiral"* ]]; then
   echo "PASS"
