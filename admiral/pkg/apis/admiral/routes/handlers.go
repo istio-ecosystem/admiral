@@ -29,11 +29,7 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(200)
 	response := fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
 
-	_, writeErr := w.Write([]byte(response))
-	if writeErr != nil {
-		log.Printf("Error writing body: %v", writeErr)
-		http.Error(w, "can't write body", http.StatusInternalServerError)
-	}
+	writeResponse("ReturnSuccessGet", w, []byte(response))
 }
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
@@ -52,15 +48,23 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if len(clusterList) == 0 {
 			message := "No cluster is monitored by admiral"
-			log.Printf(message)
+			log.Print(message)
 			w.WriteHeader(200)
 			out, _ = json.Marshal(message)
-			w.Write(out)
+			writeResponse("GetClusters", w, out)
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write(out)
+			writeResponse("GetClusters", w, out)
 		}
+	}
+}
+
+func writeResponse(context string, w http.ResponseWriter, response []byte) {
+	_, err := w.Write(response)
+	if err != nil {
+		log.Printf("Error writing response for api %s: %v", context, err)
+		http.Error(w, "can't write body", http.StatusInternalServerError)
 	}
 }
 
@@ -87,7 +91,7 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 			if len(serviceEntriesByCluster) == 0 {
 				log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, "No service entries configured for cluster - "+clusterName)
 				w.WriteHeader(200)
-				w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
+				writeResponse("GetServiceEntriesByCluster", w, []byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
 			} else {
 				response = serviceEntriesByCluster
 				out, err := json.Marshal(response)
@@ -97,7 +101,7 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 				} else {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(200)
-					w.Write(out)
+					writeResponse("GetServiceEntriesByCluster", w, out)
 				}
 			}
 		}
@@ -134,7 +138,7 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write(out)
+			writeResponse("GetServiceEntriesByIdentity", w, out)
 		}
 	} else {
 		log.Printf("Identity not provided as part of the request")
