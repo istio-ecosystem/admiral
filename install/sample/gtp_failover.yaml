@@ -11,7 +11,7 @@ spec:
   policy:
     - dnsPrefix: default
       lbType: 0
-    - dnsPrefix: west #a new host will be generated Ex: west.<env>.greeting.local
+    - dnsPrefix: west #a new host will be generated Ex: west.<env>.greeting.global
       lbType: 1 #0 represents TOPOLOGY, 1 represents FAILOVER
       target:
         - region: us-west-2

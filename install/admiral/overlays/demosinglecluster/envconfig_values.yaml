@@ -20,6 +20,4 @@ spec:
             - --sync_period
             - 10s
             - --argo_rollouts=true
-            - --hostname_suffix
-            - local
           name: admiral

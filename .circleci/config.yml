@@ -91,17 +91,17 @@ jobs:
             export IS_LOCAL=false
             ./run.sh "1.19.11" "1.8.6" "../out"
       - run:
-          name: Run Integration Test for Istio 1.9.5
+          name: Run Integration Test for Istio 1.9.6
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.19.11" "1.9.5" "../out"
+            ./run.sh "1.19.11" "1.9.6" "../out"
       - run:
-          name: Run Integration Test for Istio 1.10.1
+          name: Run Integration Test for Istio 1.10.2
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.19.11" "1.10.1" "../out"
+            ./run.sh "1.19.11" "1.10.2" "../out"
   publish-github-release:
     docker:
     - image: circleci/golang:1.11

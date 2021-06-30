@@ -9,5 +9,5 @@ if [[ $IS_LOCAL == "false" ]]; then
 else
   minikube start --memory=4096 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
   #label node for locality load balancing
-  kubectl label nodes minikube failure-domain.beta.kubernetes.io/region=us-west-2
+  kubectl label nodes minikube --overwrite failure-domain.beta.kubernetes.io/region=us-west-2
 fi
