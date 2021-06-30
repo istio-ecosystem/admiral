@@ -5,6 +5,7 @@ on:
       - v*
     branches:
       - master
+      - main
   pull_request:
 jobs:
   golangci:
@@ -23,7 +24,6 @@ jobs:
 
           # Optional: golangci-lint command line arguments.
           args: >-
-            --out-format=github-actions
             --skip-dirs=admiral/pkg/client/clientset/versioned
             --tests=false
             --timeout=5m
