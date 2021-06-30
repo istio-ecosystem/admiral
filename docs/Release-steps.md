@@ -17,7 +17,7 @@ The release notes is maintained [here](ReleaseNotes.md). Open a PR to the releas
 
 ### How to find the issues/commits
 * You can find the [issues associated with a milestone](https://github.com/istio-ecosystem/admiral/issues?q=is%3Aissue+milestone%3Av1.0+) to get started.
-* [Commits](https://github.com/istio-ecosystem/admiral/compare/v1.0...master) between last release (the link assumes `v1.0`) and `master` branch
+* [Commits](https://github.com/istio-ecosystem/admiral/compare/v1.1...master) between last release (the link assumes `v1.0`) and `master` branch
 
 
 ## Draft a new release on github.com 
