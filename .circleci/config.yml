@@ -49,7 +49,7 @@ jobs:
     environment:
       K8S_VERSION: v1.19.11
       KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.21.0
+      MINIKUBE_VERSION: v1.18.1
       MINIKUBE_WANTUPDATENOTIFICATION: false
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
@@ -67,6 +67,7 @@ jobs:
           name: setup minikube
           command: |
             curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+            minikube version
       - run:
           name: setup helm
           command: curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash -s -- -v v2.17.0

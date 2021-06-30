@@ -7,6 +7,9 @@ function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 istio_version=$1
 os=$2
 
+
+echo "Installing Istio version: $istio_version"
+
 #Download & extract Istio
 
 #Downloading istiofunction ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
