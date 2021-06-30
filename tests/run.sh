@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -o errexit
-set -o pipefail
 
 [ $# -lt 3 ] && { echo "Usage: $0 <k8s_version> <istio_version> <admiral_install_dir>" ; exit 1; }
 
@@ -16,14 +15,10 @@ export KUBECONFIG=~/.kube/config
 if [[ "$OSTYPE" == "darwin"* ]]; then
   os="osx"
 else
-  if [[ $istio_version == "1.5"* ]]; then
-    os="linux"
-  else
-    os="linux-amd64"
-  fi
+  os="linux-amd64"
 fi
 ./install_istio.sh $istio_version $os
-./dns_setup.sh $install_dir
+
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
 $install_dir/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
