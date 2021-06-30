@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">  
+  <img src="https://user-images.githubusercontent.com/35096265/65359707-33216900-dbb2-11e9-8622-dc76c3882c02.png" width="500">
 </p>
 
 
@@ -8,7 +8,11 @@
 
 **Admiral provides automatic configuration and service discovery for multicluster Istio service mesh**
 
-Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.  This removes the complexity for developers and mesh operators.
+Istio has a very robust set of multi-cluster capabilities.  Managing this configuration across multiple clusters at scale is challenging.  Admiral takes an opinionated view on this configuration and provides automatic provisioning and syncing across clusters.
+
+Admiral defines two custom resources, the [Dependency](./docs/Architecture.md#dependency) and [GlobalTrafficPolicy](./docs/Architecture.md#global-traffic-policy), which are used to configure ServiceEntries, VirtualServices, and DestinationRules on each cluster for each cross-cluster service. This removes the complexity for developers and mesh operators.
+
+![alt text](./docs/diagrams/admiral.svg)
 
 [Admiral Demo](https://www.youtube.com/watch?v=cwQpt1t287c)
 
