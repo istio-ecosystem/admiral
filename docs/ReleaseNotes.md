@@ -1,6 +1,11 @@
 # Release notes
 ## v1.2
-TBD 
+
+### Features
+
+ Added Health check and APIs to fetch clusters and admiral generated endpoints.
+
+ Added support/testing for istio versions 1.8.x, 1.9.x and 1.10.x with smart DNS proxying
 
 ## v1.1
 
