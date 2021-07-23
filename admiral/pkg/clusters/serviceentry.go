@@ -26,14 +26,14 @@ import (
 )
 
 type SeDrTuple struct {
-	SeName string
-	DrName string
-	ServiceEntry *networking.ServiceEntry
+	SeName          string
+	DrName          string
+	ServiceEntry    *networking.ServiceEntry
 	DestinationRule *networking.DestinationRule
 }
 
 func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
-	meshPorts map[string]uint32 , destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
@@ -64,7 +64,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var serviceInstance *k8sV1.Service
 	var rollout *admiral.RolloutClusterEntry
 
-	for _, rc := range remoteRegistry.remoteControllers {
+	for _, rc := range remoteRegistry.RemoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
 
@@ -117,12 +117,12 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.remoteControllers, serviceEntries)
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
 
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	for sourceCluster, serviceInstance := range sourceServices {
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		rc := remoteRegistry.remoteControllers[sourceCluster]
+		rc := remoteRegistry.RemoteControllers[sourceCluster]
 		var meshPorts map[string]uint32
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
@@ -132,7 +132,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			for _, ep := range serviceEntry.Endpoints {
@@ -142,7 +142,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 					ep.Address = localFqdn
 					oldPorts := ep.Ports
 					ep.Ports = meshPorts
-					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.remoteControllers,
+					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 						map[string]*networking.ServiceEntry{key: serviceEntry})
 					//swap it back to use for next iteration
 					ep.Address = clusterIngress
@@ -166,7 +166,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 func createIngressOnlyVirtualService(rc *RemoteController, cname string, serviceEntry *networking.ServiceEntry, localFqdn string, meshPorts map[string]uint32) {
 
-	var vsProtocol = common.Http;
+	var vsProtocol = common.Http
 	virtualServiceName := getIstioResourceName(cname, "-default-vs")
 
 	for protocol := range meshPorts {
@@ -339,6 +339,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 				if len(se.Endpoints) == 0 {
 					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
+					cache.SeClusterCache.Delete(oldServiceEntry.Spec.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 				} else {
@@ -347,6 +348,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 
 					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
@@ -360,8 +362,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy,
 	cache *AdmiralCache) map[string]*SeDrTuple {
-	var defaultDrName = se.Hosts[0] + "-default-dr"
-	var defaultSeName = se.Hosts[0] + "-se"
+	var defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
+	var defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
 	var seDrSet = make(map[string]*SeDrTuple)
 	if globalTrafficPolicy != nil {
 		gtp := globalTrafficPolicy.Spec
@@ -375,27 +377,27 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 			if gtpTrafficPolicy.DnsPrefix != env && gtpTrafficPolicy.DnsPrefix != common.Default &&
 				gtpTrafficPolicy.Dns != host {
 				host = common.GetCnameVal([]string{gtpTrafficPolicy.DnsPrefix, se.Hosts[0]})
-				drName, seName = host + "-dr", host + "-se"
+				drName, seName = getIstioResourceName(host, "-dr"), getIstioResourceName(host, "-se")
 				modifiedSe = copyServiceEntry(se)
 				modifiedSe.Hosts[0] = host
 				modifiedSe.Addresses[0] = getUniqueAddress(cache, host)
 			}
-			var seDr = &SeDrTuple {
-				DrName: drName,
-				SeName: seName,
+			var seDr = &SeDrTuple{
+				DrName:          drName,
+				SeName:          seName,
 				DestinationRule: getDestinationRule(host, region, gtpTrafficPolicy),
-				ServiceEntry: modifiedSe,
+				ServiceEntry:    modifiedSe,
 			}
 			seDrSet[host] = seDr
 		}
 	}
 	//create a destination rule for default hostname if that wasn't overriden in gtp
 	if _, ok := seDrSet[se.Hosts[0]]; !ok {
-		var seDr = &SeDrTuple {
-			DrName: defaultDrName,
-			SeName: defaultSeName,
+		var seDr = &SeDrTuple{
+			DrName:          defaultDrName,
+			SeName:          defaultSeName,
 			DestinationRule: getDestinationRule(se.Hosts[0], region, nil),
-			ServiceEntry: se,
+			ServiceEntry:    se,
 		}
 		seDrSet[se.Hosts[0]] = seDr
 	}
@@ -439,6 +441,23 @@ func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStor
 		return address, true, err
 	}
 	return address, false, nil
+}
+
+func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry) ([]v1alpha3.ServiceEntry, error) {
+	remoteController := remoteRegistry.RemoteControllers[clusterID]
+	if remoteController != nil {
+		serviceEnteries, err := remoteController.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetSyncNamespace()).List(v12.ListOptions{})
+
+		if err != nil {
+			log.Errorf(LogFormat, "Get", "ServiceEntries", "", clusterID, err)
+			return nil, err
+		}
+
+		return serviceEnteries.Items, nil
+	} else {
+		err := fmt.Errorf("Admiral is not monitoring cluster %s", clusterID)
+		return nil, err
+	}
 }
 
 //an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
@@ -589,7 +608,6 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	return address
 }
 
-
 func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, meshPorts map[string]uint32, globalFqdn string, rc *RemoteController, serviceEntries map[string]*networking.ServiceEntry, address string, san []string) *networking.ServiceEntry {
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
 
@@ -608,8 +626,8 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 
 	if tmpSe == nil {
 		tmpSe = &networking.ServiceEntry{
-			Hosts: []string{globalFqdn},
-			Ports: sePorts,
+			Hosts:           []string{globalFqdn},
+			Ports:           sePorts,
 			Location:        networking.ServiceEntry_MESH_INTERNAL,
 			Resolution:      networking.ServiceEntry_DNS,
 			Addresses:       []string{address}, //It is possible that the address is an empty string. That is fine as the se creation will fail and log an error

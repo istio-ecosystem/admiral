@@ -27,6 +27,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
 )
 
 func TestCreateSeWithDrLabels(t *testing.T) {
@@ -78,6 +79,8 @@ func TestCreateSeWithDrLabels(t *testing.T) {
 func TestAddServiceEntriesWithDr(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
+	admiralCache.SeClusterCache = common.NewMapOfMaps()
+
 	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
@@ -96,10 +99,9 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"dev.bar.global"},
+		Hosts:     []string{"dev.bar.global"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
 	}
-
 
 	seConfig := v1alpha3.ServiceEntry{
 		Spec: se,
@@ -132,6 +134,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	host := "dev.bar.global"
 	west := "west"
 	east := "east"
+	eastWithCaps := "East"
 
 	admiralCache := AdmiralCache{}
 
@@ -154,8 +157,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	admiralCache.ConfigMapController = cacheController
 
 	se := &istionetworkingv1alpha3.ServiceEntry{
-		Addresses: []string {"240.10.1.0"},
-		Hosts: []string{host},
+		Addresses: []string{"240.10.1.0"},
+		Hosts:     []string{host},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
 			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
@@ -164,11 +167,11 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 
 	defaultPolicy := &model.TrafficPolicy{
 		LbType: model.TrafficPolicy_TOPOLOGY,
-		Dns: host,
+		Dns:    host,
 	}
 
 	trafficPolicyDefaultOverride := &model.TrafficPolicy{
-		LbType: model.TrafficPolicy_FAILOVER,
+		LbType:    model.TrafficPolicy_FAILOVER,
 		DnsPrefix: common.Default,
 		Target: []*model.TrafficGroup{
 			{
@@ -179,7 +182,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	}
 
 	trafficPolicyWest := &model.TrafficPolicy{
-		LbType: model.TrafficPolicy_FAILOVER,
+		LbType:    model.TrafficPolicy_FAILOVER,
 		DnsPrefix: west,
 		Target: []*model.TrafficGroup{
 			{
@@ -190,7 +193,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	}
 
 	trafficPolicyEast := &model.TrafficPolicy{
-		LbType: model.TrafficPolicy_FAILOVER,
+		LbType:    model.TrafficPolicy_FAILOVER,
 		DnsPrefix: east,
 		Target: []*model.TrafficGroup{
 			{
@@ -200,55 +203,65 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		},
 	}
 
-	gTPDefaultOverride := &v13.GlobalTrafficPolicy {
+	gTPDefaultOverride := &v13.GlobalTrafficPolicy{
 		Spec: model.GlobalTrafficPolicy{
-			Policy:               []*model.TrafficPolicy {
+			Policy: []*model.TrafficPolicy{
 				trafficPolicyDefaultOverride,
 			},
 		},
 	}
 
-	gTPMultipleDns := &v13.GlobalTrafficPolicy {
+	gTPMultipleDns := &v13.GlobalTrafficPolicy{
 		Spec: model.GlobalTrafficPolicy{
-			Policy:               []*model.TrafficPolicy {
+			Policy: []*model.TrafficPolicy{
 				defaultPolicy, trafficPolicyWest, trafficPolicyEast,
 			},
 		},
 	}
 
 	testCases := []struct {
-		name            string
-		env             string
-		locality        string
-		se       		*istionetworkingv1alpha3.ServiceEntry
-		gtp 			*v13.GlobalTrafficPolicy
-		seDrSet  		map[string]*SeDrTuple
+		name     string
+		env      string
+		locality string
+		se       *istionetworkingv1alpha3.ServiceEntry
+		gtp      *v13.GlobalTrafficPolicy
+		seDrSet  map[string]*SeDrTuple
 	}{
 		{
-			name:		"Should handle a nil GTP",
-			env:		"dev",
-			locality:	"us-west-2",
-			se:			se,
-			gtp:		nil,
-			seDrSet:	map[string]*SeDrTuple{host: nil,},
+			name:     "Should handle a nil GTP",
+			env:      "dev",
+			locality: "us-west-2",
+			se:       se,
+			gtp:      nil,
+			seDrSet:  map[string]*SeDrTuple{host: nil},
 		},
 		{
-			name:		"Should handle a GTP with default overide",
-			env:		"dev",
-			locality:	"us-west-2",
-			se:			se,
-			gtp:		gTPDefaultOverride,
-			seDrSet:	map[string]*SeDrTuple{host: nil,},
+			name:     "Should handle a GTP with default overide",
+			env:      "dev",
+			locality: "us-west-2",
+			se:       se,
+			gtp:      gTPDefaultOverride,
+			seDrSet:  map[string]*SeDrTuple{host: nil},
 		},
 		{
-			name:		"Should handle a GTP with multiple Dns",
-			env:		"dev",
-			locality:	"us-west-2",
-			se:			se,
-			gtp:		gTPMultipleDns,
-			seDrSet:	map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string {west, host}): nil,
-								common.GetCnameVal([]string {east, host}): nil},
+			name:     "Should handle a GTP with multiple Dns",
+			env:      "dev",
+			locality: "us-west-2",
+			se:       se,
+			gtp:      gTPMultipleDns,
+			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
+				common.GetCnameVal([]string{east, host}): nil},
 		},
+		{
+			name:     "Should handle a GTP with Dns prefix with Caps",
+			env:      "dev",
+			locality: "us-west-2",
+			se:       se,
+			gtp:      gTPMultipleDns,
+			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
+				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): nil},
+		},
+
 	}
 
 	//Run the test for every provided case
@@ -262,6 +275,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			for host, _ := range c.seDrSet {
 				if _, ok := result[host]; !ok {
 					t.Fatalf("Generated hosts %v is missing the required host: %v", generatedHosts, host)
+				} else if !isLower(result[host].SeName) || !isLower(result[host].DrName) {
+					t.Fatalf("Generated istio resource names %v %v are not all lowercase", result[host].SeName, result[host].DrName)
 				}
 			}
 		})
@@ -305,8 +320,8 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 		RolloutController:    r,
 	}
 
-	rr.remoteControllers["test.cluster"] = rc
-	modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
+	rr.RemoteControllers["test.cluster"] = rc
+	modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
 
 }
 
@@ -638,93 +653,93 @@ func TestCreateServiceEntry(t *testing.T) {
 	secondDeployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
 	se := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
 	oneEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
 	twoEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 
 	threeEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 	eastEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 
 	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+		Endpoints:       []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
 	}
 
 	grpcSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"e2e.my-first-service.mesh"},
-		Addresses:[]string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{ {Number: uint32(common.DefaultServiceEntryPort),
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "grpc", Protocol: "grpc"}},
-		Location: istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution: istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "admiral_dummy.com", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
 		},
 	}
 
@@ -734,7 +749,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		rc             *RemoteController
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
-		deployment	   v14.Deployment
+		deployment     v14.Deployment
 		serviceEntries map[string]*istionetworkingv1alpha3.ServiceEntry
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
@@ -743,8 +758,8 @@ func TestCreateServiceEntry(t *testing.T) {
 			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
-			deployment:		deployment,
+			meshPorts:      map[string]uint32{"grpc": uint32(80)},
+			deployment:     deployment,
 			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &grpcSe,
 		},
@@ -753,42 +768,42 @@ func TestCreateServiceEntry(t *testing.T) {
 			action:         admiral.Add,
 			rc:             rc,
 			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			deployment:		deployment,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			deployment:     deployment,
 			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
 			expectedResult: &se,
 		},
 		{
-			name:           "Delete the service entry with one endpoint",
-			action:         admiral.Delete,
-			rc:             rc,
-			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			deployment:		deployment,
+			name:         "Delete the service entry with one endpoint",
+			action:       admiral.Delete,
+			rc:           rc,
+			admiralCache: admiralCache,
+			meshPorts:    map[string]uint32{"http": uint32(80)},
+			deployment:   deployment,
 			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &oneEndpointSe,
 			},
 			expectedResult: &emptyEndpointSe,
 		},
 		{
-			name:           "Delete the service entry with two endpoints",
-			action:         admiral.Delete,
-			rc:             rc,
-			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			deployment:		deployment,
+			name:         "Delete the service entry with two endpoints",
+			action:       admiral.Delete,
+			rc:           rc,
+			admiralCache: admiralCache,
+			meshPorts:    map[string]uint32{"http": uint32(80)},
+			deployment:   deployment,
 			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &twoEndpointSe,
 			},
 			expectedResult: &eastEndpointSe,
 		},
 		{
-			name:           "Delete the service entry with three endpoints",
-			action:         admiral.Delete,
-			rc:             rc,
-			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			deployment:		deployment,
+			name:         "Delete the service entry with three endpoints",
+			action:       admiral.Delete,
+			rc:           rc,
+			admiralCache: admiralCache,
+			meshPorts:    map[string]uint32{"http": uint32(80)},
+			deployment:   deployment,
 			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &threeEndpointSe,
 			},
@@ -816,23 +831,23 @@ func TestCreateServiceEntry(t *testing.T) {
 		rc             *RemoteController
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
-		rollout		   argo.Rollout
+		rollout        argo.Rollout
 		expectedResult *istionetworkingv1alpha3.ServiceEntry
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
 			rc:             rc,
 			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"grpc": uint32(80)},
-			rollout:		rollout,
+			meshPorts:      map[string]uint32{"grpc": uint32(80)},
+			rollout:        rollout,
 			expectedResult: &grpcSe,
 		},
 		{
 			name:           "Should return a created service entry with http protocol",
 			rc:             rc,
 			admiralCache:   admiralCache,
-			meshPorts:      map[string]uint32 {"http": uint32(80)},
-			rollout:		rollout,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			rollout:        rollout,
 			expectedResult: &se,
 		},
 	}
@@ -879,7 +894,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 
 	meshPorts := map[string]uint32{common.Http: 80}
 
-	inputSe :=  &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
+	inputSe := &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
 	inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
 		&istionetworkingv1alpha3.ServiceEntry_Endpoint{
 			Address: "address",
@@ -891,7 +906,7 @@ func TestCreateIngressOnlyVirtualService(t *testing.T) {
 		serviceEntry   *istionetworkingv1alpha3.ServiceEntry
 		rc             *RemoteController
 		localFqdn      string
-		meshPorts 	   map[string]uint32
+		meshPorts      map[string]uint32
 		expectedResult string
 	}{
 		{
@@ -995,7 +1010,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		VirtualServiceController: v,
 	}
 	rc.ClusterID = "test.cluster"
-	rr.remoteControllers["test.cluster"] = rc
+	rr.RemoteControllers["test.cluster"] = rc
 
 	admiralCache := &AdmiralCache{
 		IdentityClusterCache:       common.NewMapOfMaps(),
@@ -1006,6 +1021,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		IdentityDependencyCache:    common.NewMapOfMaps(),
 		GlobalTrafficCache:         &globalTrafficCache{},
 		DependencyNamespaceCache:   common.NewSidecarEgressMap(),
+		SeClusterCache:             common.NewMapOfMaps(),
 	}
 	rr.AdmiralCache = admiralCache
 
@@ -1061,7 +1077,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := modifyServiceEntryForNewServiceOrPod(admiral.Add,"test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}
@@ -1072,4 +1088,13 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	if nil == serviceEntryResp {
 		t.Fatalf("Service entry returned should not be empty")
 	}
+}
+
+func isLower(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLower(r) && unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
 }

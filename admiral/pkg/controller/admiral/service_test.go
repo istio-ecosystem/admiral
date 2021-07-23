@@ -183,7 +183,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			cache:          &sc,
 			key:            "test-service",
 			ns:             "ns-incorrect",
-			expectedReturn: "admiral_dummy.com",
+			expectedReturn: "dummy.admiral.global",
 			expectedPort:   0,
 		},
 		{
@@ -207,7 +207,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			cache:          &sc,
 			key:            "test-service-ignored",
 			ns:             "ns",
-			expectedReturn: "admiral_dummy.com",
+			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
@@ -215,7 +215,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			cache:          &sc,
 			key:            "test-service-ignored-later",
 			ns:             "ns",
-			expectedReturn: "admiral_dummy.com",
+			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
