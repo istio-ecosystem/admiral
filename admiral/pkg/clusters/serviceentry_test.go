@@ -27,6 +27,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
 )
 
 func TestCreateSeWithDrLabels(t *testing.T) {
@@ -133,6 +134,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	host := "dev.bar.global"
 	west := "west"
 	east := "east"
+	eastWithCaps := "East"
 
 	admiralCache := AdmiralCache{}
 
@@ -250,6 +252,16 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
 				common.GetCnameVal([]string{east, host}): nil},
 		},
+		{
+			name:     "Should handle a GTP with Dns prefix with Caps",
+			env:      "dev",
+			locality: "us-west-2",
+			se:       se,
+			gtp:      gTPMultipleDns,
+			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
+				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): nil},
+		},
+
 	}
 
 	//Run the test for every provided case
@@ -263,6 +275,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			for host, _ := range c.seDrSet {
 				if _, ok := result[host]; !ok {
 					t.Fatalf("Generated hosts %v is missing the required host: %v", generatedHosts, host)
+				} else if !isLower(result[host].SeName) || !isLower(result[host].DrName) {
+					t.Fatalf("Generated istio resource names %v %v are not all lowercase", result[host].SeName, result[host].DrName)
 				}
 			}
 		})
@@ -1074,4 +1088,13 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	if nil == serviceEntryResp {
 		t.Fatalf("Service entry returned should not be empty")
 	}
+}
+
+func isLower(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLower(r) && unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
 }
