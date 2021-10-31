@@ -15,8 +15,6 @@ import (
 	"sync"
 )
 
-const IstioIngressServiceName = "istio-ingressgateway"
-
 // Handler interface contains the methods that are required
 type ServiceHandler interface {
 }

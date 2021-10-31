@@ -136,7 +136,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			for _, ep := range serviceEntry.Endpoints {
-				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					ep.Address = localFqdn
@@ -636,7 +636,7 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
 	}
 
-	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(admiral.IstioIngressServiceName, common.NamespaceIstioSystem)
+	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 	var locality string
 	if rc.NodeController.Locality != nil {
