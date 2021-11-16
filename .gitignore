@@ -2,5 +2,6 @@
 .idea/vcs.xml
 
 out*
-
-c.out
+*.out
+istio-*/
+*.tar.gz
