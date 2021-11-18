@@ -23,7 +23,6 @@ jobs:
 
           # Optional: golangci-lint command line arguments.
           args: >-
-            --out-format=github-actions
             --skip-dirs=admiral/pkg/client/clientset/versioned
             --tests=false
             --timeout=5m
