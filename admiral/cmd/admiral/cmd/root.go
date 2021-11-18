@@ -9,8 +9,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -58,10 +56,6 @@ func GetRootCmd(args []string) *cobra.Command {
 			if err != nil {
 				log.Error("Error setting up server:", err.Error())
 			}
-
-			go func() {
-				log.Println(http.ListenAndServe("localhost:8082", nil))
-			}()
 
 			service.Start(ctx, 8080, ret_routes, routes.Filter, remoteRegistry)
 
