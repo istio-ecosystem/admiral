@@ -5,7 +5,7 @@
 k8s_version=$1
 
 if [[ $IS_LOCAL == "false" ]]; then
-  sudo -E minikube start --vm-driver=none --cpus 4 --memory 4096 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
+  sudo -E minikube start --vm-driver=none --cpus 6 --memory 6144 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
 else
   minikube start --memory=4096 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
   #label node for locality load balancing
