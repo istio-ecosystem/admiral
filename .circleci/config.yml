@@ -54,6 +54,7 @@ jobs:
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
       CHANGE_MINIKUBE_NONE_USER: true
+    resource_class: large
     steps:
       - attach_workspace:
           at: .
