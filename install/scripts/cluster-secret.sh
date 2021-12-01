@@ -19,7 +19,7 @@ export KUBECONFIG=$remote_cluster
 
 #prep for creating kubeconfig of remote cluster
 export WORK_DIR=$(pwd)
-CLUSTER_NAME=$(kubectl config view --minify=true -o "jsonpath={.clusters[].name}" | sed -e 's/[^A-Za-z0-9._-]/_/g')
+CLUSTER_NAME=$(kubectl config view --minify=true -o "jsonpath={.clusters[].name}" | sed -e 's/[^A-Za-z0-9.-]/-/g')
 export KUBECFG_FILE=/tmp/${CLUSTER_NAME}
 SERVER=$(kubectl config view --minify=true -o "jsonpath={.clusters[].cluster.server}")
 NAMESPACE_SYNC=admiral-sync
