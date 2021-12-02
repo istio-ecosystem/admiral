@@ -3,9 +3,11 @@
 
 ### Prerequisites
 
-* One or more k8s clusters with version 1.13 or above
+* One or more k8s clusters with version 1.16 or above
 * [Install istio control plane](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster) on each of these k8s clusters
-* [Configure DNS redirect](https://istio.io/docs/setup/install/multicluster/gateways/#setup-dns) for entries ending in `global`
+* Configure DNS for service entries (hosts) ending in `global`
+    1. Istio 1.8 and above - [Enable DNS proxy mode](https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/) OR [Redirect DNS](https://istio.io/v1.6/docs/setup/install/multicluster/gateways/#setup-dns) 
+    2. Istio 1.6 and below - [Redirect DNS](https://istio.io/v1.6/docs/setup/install/multicluster/gateways/#setup-dns) 
 * Remove envoy cluster rewrite filter
 Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
 ```
