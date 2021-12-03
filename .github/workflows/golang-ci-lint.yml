@@ -16,14 +16,13 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: v1.29
+          version: latest
 
           # Optional: working directory, useful for monorepos
           # working-directory: somedir
 
           # Optional: golangci-lint command line arguments.
           args: >-
-            --out-format=github-actions
             --skip-dirs=admiral/pkg/client/clientset/versioned
             --tests=false
             --timeout=5m

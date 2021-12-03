@@ -53,8 +53,6 @@ func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []F
 	log.Printf("Starting admiral api server on port=%d", port)
 	log.Fatalln(s.server.ListenAndServe())
 
-	return
-
 }
 
 func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
@@ -86,12 +84,19 @@ func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 }
 
 func waitForStop(s *Service) {
-	for {
-		select {
-		case <-s.ctx.Done():
-			log.Println("context done stopping server")
-			s.stop()
-			return
+	//for {
+	//	select {
+	//	case <-s.ctx.Done():
+	//		log.Println("context done stopping server")
+	//		s.stop()
+	//		return
+	//	}
+	//}
+	for range s.ctx.Done() {
+		log.Println("context done stopping server")
+		err := s.stop()
+		if err != nil {
+			log.Println("error stopping server: ", err)
 		}
 	}
 }
