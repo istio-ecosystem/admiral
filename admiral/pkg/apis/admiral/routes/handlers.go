@@ -52,14 +52,16 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if len(clusterList) == 0 {
 			message := "No cluster is monitored by admiral"
-			log.Printf(message)
+			log.Println(message)
 			w.WriteHeader(200)
 			out, _ = json.Marshal(message)
-			w.Write(out)
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write(out)
+		}
+		_, err := w.Write(out)
+		if err != nil {
+			log.Println("Failed to write message: ", err)
 		}
 	}
 }
@@ -87,7 +89,11 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 			if len(serviceEntriesByCluster) == 0 {
 				log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, "No service entries configured for cluster - "+clusterName)
 				w.WriteHeader(200)
-				w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
+				_, err := w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
+				if err != nil {
+					log.Println("Error writing body: ", err)
+				}
+
 			} else {
 				response = serviceEntriesByCluster
 				out, err := json.Marshal(response)
