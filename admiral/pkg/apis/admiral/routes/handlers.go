@@ -103,7 +103,10 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 				} else {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(200)
-					w.Write(out)
+					_, err := w.Write(out)
+					if err != nil {
+						log.Println("failed to write resp body: ", err)
+					}
 				}
 			}
 		}
@@ -140,7 +143,10 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
-			w.Write(out)
+			_, err := w.Write(out)
+			if err != nil {
+				log.Println("failed to write resp body", err)
+			}
 		}
 	} else {
 		log.Printf("Identity not provided as part of the request")
