@@ -84,14 +84,6 @@ func (s *Service) newRouter(routes Routes, filter []Filter) *mux.Router {
 }
 
 func waitForStop(s *Service) {
-	//for {
-	//	select {
-	//	case <-s.ctx.Done():
-	//		log.Println("context done stopping server")
-	//		s.stop()
-	//		return
-	//	}
-	//}
 	for range s.ctx.Done() {
 		log.Println("context done stopping server")
 		err := s.stop()
