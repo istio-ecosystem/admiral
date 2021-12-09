@@ -81,7 +81,7 @@ jobs:
       - run:
           name: generate prereq yaml files
           command:  |
-            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_BRANCH}; fi
+            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_SHA1}; fi
             (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${TAG}")
             make gen-yaml
             cd tests
