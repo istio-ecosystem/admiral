@@ -2,5 +2,4 @@
 .idea/vcs.xml
 
 out*
-
-c.out
+*.tar.gz

@@ -88,7 +88,7 @@ override TAG=latest
 endif
 endif
 ifndef TAG
-override TAG=$(BRANCH)
+override TAG=$(SHA)
 endif
 
 docker-build: set-tag

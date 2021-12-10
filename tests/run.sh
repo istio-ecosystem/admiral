@@ -41,6 +41,6 @@ if [[ $IS_LOCAL == "false" ]]; then
   kubectl scale --replicas=0 rollout greeting -n sample-rollout-bluegreen
 fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
-./test4.sh "grpc-server" "sample"
+./test4.sh "webapp" "sample"
 
 ./cleanup.sh $istio_version
