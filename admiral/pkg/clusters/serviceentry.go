@@ -90,7 +90,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			rolloutInstance := rollout.Rollouts[env]
 
 			weightedServices = getServiceForRollout(rc, rolloutInstance)
-			if weightedServices == nil || len(weightedServices) == 0 {
+			if len(weightedServices) == 0 {
 				continue
 			}
 

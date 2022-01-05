@@ -90,7 +90,6 @@ func waitForStop(s *Service) {
 		if err != nil {
 			log.Println("error stopping server: ", err)
 		}
-		return
 	}
 }
 
