@@ -62,6 +62,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	var cname string
 	var serviceInstance *k8sV1.Service
+	var weightedServices map[string]*WeightedService
 	var rollout *admiral.RolloutClusterEntry
 
 	for _, rc := range remoteRegistry.RemoteControllers {
@@ -88,9 +89,15 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		} else if rollout != nil && rollout.Rollouts[env] != nil {
 			rolloutInstance := rollout.Rollouts[env]
 
-			serviceInstance = getServiceForRollout(rc, rolloutInstance)
-			if serviceInstance == nil {
+			weightedServices = getServiceForRollout(rc, rolloutInstance)
+			if weightedServices == nil || len(weightedServices) == 0 {
 				continue
+			}
+
+			//use any service within the weightedServices for determining ports etc.
+			for _, sInstance := range weightedServices {
+				serviceInstance = sInstance.Service
+				break
 			}
 
 			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rolloutInstance)
@@ -135,22 +142,29 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
+			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
-				clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
-					ep.Address = localFqdn
-					oldPorts := ep.Ports
-					ep.Ports = meshPorts
-					AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-						map[string]*networking.ServiceEntry{key: serviceEntry})
-					//swap it back to use for next iteration
-					ep.Address = clusterIngress
-					ep.Ports = oldPorts
+					// see if we have weighted services (rollouts with canary strategy)
+					if weightedServices != nil || len(weightedServices) > 1 {
+						//add one endpoint per each service, may be modify
+						var se = copyServiceEntry(serviceEntry)
+						updateEndpointsForWeightedServices(se, weightedServices, clusterIngress, meshPorts)
+						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+							map[string]*networking.ServiceEntry{key: se})
+					} else {
+						ep.Address = localFqdn
+						oldPorts := ep.Ports
+						ep.Ports = meshPorts
+						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+							map[string]*networking.ServiceEntry{key: serviceEntry})
+						//swap it back to use for next iteration
+						ep.Address = clusterIngress
+						ep.Ports = oldPorts
+					}
 				}
 			}
-			//add virtual service for routing locally in within the cluster
-			createIngressOnlyVirtualService(rc, cname, serviceEntry, localFqdn, meshPorts)
 		}
 
 		for _, val := range dependents.Map() {
@@ -164,28 +178,37 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	return serviceEntries
 }
 
-func createIngressOnlyVirtualService(rc *RemoteController, cname string, serviceEntry *networking.ServiceEntry, localFqdn string, meshPorts map[string]uint32) {
+//update endpoints for Argo rollouts specific Service Entries to account for traffic splitting (Canary strategy)
+func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, weightedServices map[string]*WeightedService, clusterIngress string, meshPorts map[string]uint32) {
+	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
+	var endpointToReplace *networking.ServiceEntry_Endpoint
 
-	var vsProtocol = common.Http
-	virtualServiceName := getIstioResourceName(cname, "-default-vs")
-
-	for protocol := range meshPorts {
-		vsProtocol = protocol
+	//collect all endpoints expect the one to replace
+	for _, ep := range serviceEntry.Endpoints {
+		if ep.Address == clusterIngress || ep.Address == "" {
+			endpointToReplace = ep
+		} else {
+			endpoints = append(endpoints, ep)
+		}
 	}
 
-	oldVirtualService, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(virtualServiceName, v12.GetOptions{})
-
-	//TODO handle non http ports
-	virtualService := makeIngressOnlyVirtualService(serviceEntry.Hosts[0], localFqdn, meshPorts[vsProtocol])
-
-	newVirtualService := createVirtualServiceSkeletion(*virtualService, virtualServiceName, common.GetSyncNamespace())
-
-	if len(serviceEntry.Endpoints) == 0 {
-		// after deleting the service entry, virtual service also need to be deleted if the service entry host no longer exists
-		deleteVirtualService(oldVirtualService, common.GetSyncNamespace(), rc)
-	} else {
-		addUpdateVirtualService(newVirtualService, oldVirtualService, common.GetSyncNamespace(), rc)
+	if endpointToReplace == nil {
+		return
 	}
+
+	//create endpoints based on weightedServices
+	for _, serviceInstance := range weightedServices {
+		//skip service instances with 0 weight
+		if serviceInstance.Weight <= 0 {
+			continue
+		}
+		var ep = copyEndpoint(endpointToReplace)
+		ep.Ports = meshPorts
+		ep.Address = serviceInstance.Service.Name + common.Sep + serviceInstance.Service.Namespace + common.DotLocalDomainSuffix
+		ep.Weight = uint32(serviceInstance.Weight)
+		endpoints = append(endpoints, ep)
+	}
+	serviceEntry.Endpoints = endpoints
 }
 
 func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {

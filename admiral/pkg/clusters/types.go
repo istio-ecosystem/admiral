@@ -258,8 +258,6 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	}
 
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
-
-	handleDependencyRecord(sourceIdentity, remoteRegitry, remoteRegitry.RemoteControllers, obj)
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
