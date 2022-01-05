@@ -57,17 +57,6 @@ func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-func makeIngressOnlyVirtualService(host string, destination string, port uint32) *v1alpha32.VirtualService {
-	return makeVirtualService(host, []string{common.MulticlusterIngressGateway}, destination, port)
-}
-
-func makeVirtualService(host string, gateways []string, destination string, port uint32) *v1alpha32.VirtualService {
-	return &v1alpha32.VirtualService{Hosts: []string{host},
-		Gateways: gateways,
-		ExportTo: []string{"*"},
-		Http:     []*v1alpha32.HTTPRoute{{Route: []*v1alpha32.HTTPRouteDestination{{Destination: &v1alpha32.Destination{Host: destination, Port: &v1alpha32.PortSelector{Number: port}}}}}}}
-}
-
 func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
 	var dr = &v1alpha32.DestinationRule{}
 	dr.Host = host
@@ -487,16 +476,6 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 }
 
-func deleteVirtualService(exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
-	if exist != nil {
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(exist.Name, &v12.DeleteOptions{})
-		if err != nil {
-			log.Errorf(LogErrFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, err)
-		} else {
-			log.Infof(LogFormat, "Delete", "VirtualService", exist.Name, rc.ClusterID, "Success")
-		}
-	}
-}
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
@@ -574,10 +553,6 @@ func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace st
 
 func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
-}
-
-func createVirtualServiceSkeletion(se v1alpha32.VirtualService, name string, namespace string) *v1alpha3.VirtualService {
-	return &v1alpha3.VirtualService{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
@@ -662,7 +637,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 
 	var canaryService, stableService, virtualServiceRouteName  string
 
-	var istioCanaryWeights = make(map[string]int32, 0)
+	var istioCanaryWeights = make(map[string]int32)
 
 	var blueGreenActiveService string
 	if rolloutStrategy.BlueGreen != nil {
@@ -690,7 +665,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 
 		if len(canaryService) > 0 && len(stableService) > 0 && virtualService != nil {
 			var vs = virtualService.Spec
-			if vs.Http != nil && len(vs.Http) > 0 {
+			if len(vs.Http) > 0 {
 				var httpRoute *v1alpha32.HTTPRoute
 				if len(virtualServiceRouteName) > 0 {
 					for _, route := range vs.Http {
@@ -724,7 +699,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		}
 	}
 
-	var matchedServices = make(map[string]*WeightedService, 0)
+	var matchedServices = make(map[string]*WeightedService)
 
 
 	//if we have more than one matching service we will pick the first one, for this to be deterministic we sort services

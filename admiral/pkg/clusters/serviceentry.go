@@ -147,7 +147,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					// see if we have weighted services (rollouts with canary strategy)
-					if weightedServices != nil || len(weightedServices) > 1 {
+					if len(weightedServices) > 1 {
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, weightedServices, clusterIngress, meshPorts)
