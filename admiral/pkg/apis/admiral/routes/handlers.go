@@ -29,7 +29,11 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(200)
 	response := fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
 
-	writeResponse("ReturnSuccessGet", w, []byte(response))
+	_, writeErr := w.Write([]byte(response))
+	if writeErr != nil {
+		log.Printf("Error writing body: %v", writeErr)
+		http.Error(w, "can't write body", http.StatusInternalServerError)
+	}
 }
 
 func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
@@ -59,14 +63,6 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println("Failed to write message: ", err)
 		}
-	}
-}
-
-func writeResponse(context string, w http.ResponseWriter, response []byte) {
-	_, err := w.Write(response)
-	if err != nil {
-		log.Printf("Error writing response for api %s: %v", context, err)
-		http.Error(w, "can't write body", http.StatusInternalServerError)
 	}
 }
 
