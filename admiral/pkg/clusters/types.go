@@ -23,7 +23,6 @@ type RemoteController struct {
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
-	PodController             *admiral.PodController
 	NodeController            *admiral.NodeController
 	ServiceEntryController    *istio.ServiceEntryController
 	DestinationRuleController *istio.DestinationRuleController

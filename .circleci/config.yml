@@ -7,12 +7,13 @@ jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.16
     steps:
     - checkout
     - run:
         name: Setting BRANCH, TAG & SHA variables
         command: |
+          env
           echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
           echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
           echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
@@ -54,6 +55,7 @@ jobs:
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
       CHANGE_MINIKUBE_NONE_USER: true
+    resource_class: large
     steps:
       - attach_workspace:
           at: .
@@ -80,7 +82,7 @@ jobs:
       - run:
           name: generate prereq yaml files
           command:  |
-            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_BRANCH}; fi
+            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_SHA1}; fi
             (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${TAG}")
             make gen-yaml
             cd tests
@@ -105,7 +107,7 @@ jobs:
             ./run.sh "1.19.11" "1.10.2" "../out"
   publish-github-release:
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.16
     working_directory: /go/pkg/mod/github.com/admiral
     steps:
     - attach_workspace:
