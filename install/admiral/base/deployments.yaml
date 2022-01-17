@@ -27,6 +27,8 @@ spec:
             - admiral-sync
             - --sync_period
             - 20s
+            - --gateway_app
+            - istio-eastwestgateway
           image: docker.io/admiralproj/admiral:latest
           imagePullPolicy: Always
           livenessProbe:

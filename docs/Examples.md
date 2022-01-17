@@ -3,11 +3,9 @@
 
 ### Prerequisites
 
-* One or more k8s clusters with version 1.16 or above
+* One or more k8s clusters with version 1.18 or above
 * [Install istio control plane](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster) on each of these k8s clusters
-* Configure DNS for service entries (hosts) ending in `global`
-    1. Istio 1.8 and above - [Enable DNS proxy mode](https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/) OR [Redirect DNS](https://istio.io/v1.6/docs/setup/install/multicluster/gateways/#setup-dns) 
-    2. Istio 1.6 and below - [Redirect DNS](https://istio.io/v1.6/docs/setup/install/multicluster/gateways/#setup-dns) 
+* Configure DNS for service entries (hosts) ending in `global` - [Enable DNS proxy mode](https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/)
 * Remove envoy cluster rewrite filter
 Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
 ```
@@ -56,10 +54,10 @@ export REMOTE_CLUSTER=<path_to_kubeconfig_for_remote_cluster>
 ```bash
 #Download and extract admiral
 
-wget https://github.com/istio-ecosystem/admiral/releases/download/v1.1/admiral-install-v1.1.tar.gz
-tar xvf admiral-install-v1.1.tar.gz
+wget https://github.com/istio-ecosystem/admiral/releases/download/v1.2/admiral-install-v1.2.tar.gz
+tar xvf admiral-install-v1.2.tar.gz
 
-export ADMIRAL_HOME=./admiral-install-v1.1
+export ADMIRAL_HOME=./admiral-install-v1.2
 ```
 
 ```bash
@@ -200,7 +198,7 @@ Two service entries were created in the `admiral-sync` namespace.
 ```
 NAME                      HOSTS                    LOCATION        RESOLUTION   AGE
 stage.greeting.global-se   [stage.greeting.global]   MESH_INTERNAL   DNS          76m
-stage.webapp.global-se   [stage.webapp.global]   MESH_INTERNAL   DNS          76m
+stage.webapp.global-se     [stage.webapp.global]     MESH_INTERNAL   DNS          76m
 ```
 
 ```kubectl get ServiceEntry stage.greeting.global-se  -n admiral-sync -o yaml```
@@ -211,18 +209,13 @@ Looking in more detail the hostname stage.greeting.global is pointing back the d
 apiVersion: networking.istio.io/v1alpha3
 kind: ServiceEntry
 metadata:
-  creationTimestamp: "2019-09-20T22:04:59Z"
-  generation: 1
   labels:
     identity: greeting
   name: stage.greeting.global-se
   namespace: admiral-sync
-  resourceVersion: "452814"
-  selfLink: /apis/networking.istio.io/v1alpha3/namespaces/admiral-sync/serviceentries/stage.greeting.global-se
-  uid: b02cdbee-dbf2-11e9-9461-0aa9b467cf9c
 spec:
   addresses:
-  - 127.0.10.2
+  - 240.0.10.2
   endpoints:
   - address: greeting.sample.svc.cluster.local
     locality: us-west-2

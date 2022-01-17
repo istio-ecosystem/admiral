@@ -45,16 +45,24 @@ spec:
         - emptyDir: {}
           name: log
   strategy:
-    # ----- Everything above this comment are the same as a deployment -----
     canary: # A new field that used to provide configurable options for a Canary strategy
+      canaryService: rollout-canary-svc  # required
+      stableService: rollout-stable-svc  # required
+      trafficRouting:
+        istio:
+          virtualService:
+            name: rollout-vsvc   # required
+            routes:
+              - primary
       steps:
-        - setWeight: 50
-        - pause: {}
+      - setWeight: 10
+      - pause:
+          duration: 1m
 ---
 kind: Service
 apiVersion: v1
 metadata:
-  name: rollout-canary
+  name: rollout-stable-svc
   labels:
     app: greeting
     identity: greeting
@@ -66,3 +74,39 @@ spec:
       targetPort: 80
   selector:
     app: greeting
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rollout-canary-svc
+  labels:
+    app: greeting
+    identity: greeting
+  namespace: sample
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  selector:
+    app: greeting
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: rollout-vsvc
+spec:
+  gateways:
+  - mesh
+  hosts:
+  - istio-rollout.dev.argoproj.io
+  http:
+    - name: primary        # referenced in canary.trafficRouting.istio.virtualService.routes
+      route:
+      - destination:
+          host: rollout-stable-svc # referenced in canary.stableService
+        weight: 100
+      - destination:
+          host: rollout-canary-svc # referenced in canary.canaryService
+        weight: 0

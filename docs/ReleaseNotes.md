@@ -1,5 +1,20 @@
 # Release notes
 
+## v1.2
+
+### Features
+ #### Support for latest versions of Istio
+ Admiral now supports latest Istio version 1.12.1 and the minimum version supported is 1.8.6. Istio introduced a concept of east-west gateway for multi-cluster traffic since 1.8.x release. This ingressgateway is special (runs in sni-dnat mode) and allows cross cluster mTLS traffic. Admiral now has a parameter to configure the ingressgateway app label (defaults to istio-ingressgateway for backward compatibility) to point to this new gateway.
+ #### [Admiral `vs` K8s MCS](./Architecture.md#admiral-vs-mcs-in-k8s)
+ Added compare and contrast between Admiral and ongoing development of MCS (Multi-Cluster Services) in K8s
+ #### Admiral now has APIs!
+ Admiral now supports APIs to get ServiceEntries (endpoints) by Cluster or Identity. This is an alpha feature, so feedback is appreciated. There is now a basic health check available to be used to configure a readiness probe.
+ #### Support for Argo Rollout Canary
+ 
+### Performance improvements 
+* Remove pod controller (reduces memory footprint of Admiral drastically) 
+* Do not trigger endpoint generation for dependency records
+
 ## v1.1
 
 This is a minor release that addresses some usability and clean up aspects. 

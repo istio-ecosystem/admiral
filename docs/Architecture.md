@@ -180,3 +180,15 @@ GTPs will only match with deployments in the same namespace. A lack of identity 
 | identity: "service1" | identity: "service2" | No       |
 | identity: "service1" | <none>               | No       |
 | <none>               | identity: "service1" | No       |
+
+
+# Admiral vs MCS in Kubernetes
+
+[MCS](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api) is an ongoing effort in Kubernetes to support Service discovery across clusters. The following table compares MCS with Admiral:
+
+| Item              | Admiral           | MCS               |
+|-------------------|------------------ |-------------------|
+| Service Discovery - `grouping service instances across clusters` | Identity Label on namespace   | [Namespace sameness](https://github.com/kubernetes/community/blob/master/sig-multicluster/namespace-sameness-position-statement.md)      |
+| Service Discovery - `exposing services outside a cluster boundary` | Assumes that a service is exposed by default, can opt out using an annotation  | By default a service is not exposed outside of the cluster boundary. [Service Export](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api#exporting-services) resource is used to export a Service    |
+| Cluster Name | Name of the secret provisioned for every cluster monitored by Admiral  | Using `ClusterProperty` called `id.k8s.io` provisioned in a cluster  |
+| Network  | Admiral assumes a non-flat network where each cluster is on a discrete network and that it has an ingress gateway with SNI routing enabled| MCS assumes a flat network by default, spec update for non-flat networks is a [WIP](https://github.com/kubernetes/enhancements/pull/3045)  |
