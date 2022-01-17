@@ -183,7 +183,7 @@ func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, w
 	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
 	var endpointToReplace *networking.ServiceEntry_Endpoint
 
-	//collect all endpoints expect the one to replace
+	//collect all endpoints except the one to replace
 	for _, ep := range serviceEntry.Endpoints {
 		if ep.Address == clusterIngress || ep.Address == "" {
 			endpointToReplace = ep
