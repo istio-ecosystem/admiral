@@ -1,9 +1,9 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
 metadata:
-  name: greeting
+  name: greeting-canary
   labels:
-    identity: greeting
+    identity: greeting.canary
 spec:
   replicas: 2
   selector:
@@ -12,10 +12,11 @@ spec:
   template:
     metadata:
       annotations:
+        admiral.io/env: canary
         sidecar.istio.io/inject: "true"
       labels:
         app: greeting
-        identity: greeting
+        identity: greeting.canary
     spec:
       containers:
         - image: nginx
@@ -57,7 +58,7 @@ spec:
       steps:
       - setWeight: 10
       - pause:
-          duration: 1m
+          duration: 300 #300 seconds
 ---
 kind: Service
 apiVersion: v1
@@ -65,7 +66,7 @@ metadata:
   name: rollout-stable-svc
   labels:
     app: greeting
-    identity: greeting
+    identity: greeting.canary
   namespace: sample
 spec:
   ports:
@@ -81,7 +82,7 @@ metadata:
   name: rollout-canary-svc
   labels:
     app: greeting
-    identity: greeting
+    identity: greeting.canary
   namespace: sample
 spec:
   ports:
