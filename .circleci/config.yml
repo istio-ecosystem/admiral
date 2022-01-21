@@ -48,7 +48,7 @@ jobs:
     machine:
       image: circleci/classic:201808-01
     environment:
-      K8S_VERSION: v1.19.11
+      K8S_VERSION: v1.20.14
       KUBECONFIG: /home/circleci/.kube/config
       MINIKUBE_VERSION: v1.18.1
       MINIKUBE_WANTUPDATENOTIFICATION: false
@@ -136,16 +136,22 @@ workflows:
   build-and-release:
     jobs:
       - build:
+          context:
+            - admiral_forks
           filters:
             tags:
               only: /.*/
       - run-integration-tests:
+          context:
+            - admiral_forks
           requires:
             - build
           filters:
             tags:
               only: /.*/
       - publish-github-release:
+          context:
+            - admiral_forks
           requires:
             - build
           filters:

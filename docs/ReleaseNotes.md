@@ -9,7 +9,7 @@
  Added compare and contrast between Admiral and ongoing development of MCS (Multi-Cluster Services) in K8s
  #### Admiral now has APIs!
  Admiral now supports APIs to get ServiceEntries (endpoints) by Cluster or Identity. This is an alpha feature, so feedback is appreciated. A `health check` endpoint is also available to be used as a `readiness probe`.
- #### Support for Argo Rollout Canary
+ #### [Support for Argo Rollout Canary](https://github.com/istio-ecosystem/admiral/issues/183)
  [Argo Rollouts](https://argoproj.github.io/argo-rollouts/) has a [Canary strategy]() which supports [TrafficRouting using Istio](https://argoproj.github.io/argo-rollouts/features/traffic-management/istio/). Admiral generated endpoints for Argo Rollouts now honor the Canary strategy defined using [host based Istio Traffic Routing](https://argoproj.github.io/argo-rollouts/features/traffic-management/istio/#host-level-traffic-splitting). Admiral watches for changes as Argo rollouts controller updates the traffic routing and configures the global mesh endpoints accordingly.
  
 ### Performance improvements 
