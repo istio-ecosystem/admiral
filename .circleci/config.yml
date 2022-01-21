@@ -136,22 +136,16 @@ workflows:
   build-and-release:
     jobs:
       - build:
-          context:
-            - admiral_forks
           filters:
             tags:
               only: /.*/
       - run-integration-tests:
-          context:
-            - admiral_forks
           requires:
             - build
           filters:
             tags:
               only: /.*/
       - publish-github-release:
-          context:
-            - admiral_forks
           requires:
             - build
           filters:

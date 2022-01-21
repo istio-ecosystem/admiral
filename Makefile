@@ -97,6 +97,8 @@ docker-build: set-tag
 
 docker-publish:
 ifndef DO_NOT_PUBLISH
+    docker_token=$(DOCKER_PASS)
+    echo $docker_token
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
 endif
 ifeq ($(TAG),)
