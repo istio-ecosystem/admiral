@@ -3,25 +3,17 @@
 
 ### Prerequisites
 
-* One or more k8s clusters with version 1.18 or above
+* One or more K8s clusters with K8s version 1.18 or above
 * [Install istio control plane](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster) on each of these k8s clusters
 * Configure DNS for service entries (hosts) ending in `global` - [Enable DNS proxy mode](https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/)
-* Remove envoy cluster rewrite filter
-Delete Istio's envoy filter for translating `global` to `svc.cluster.local` at istio-ingressgateway because we don't need that as Admiral generates Service Entries for cross cluster communication to just work!
-```
-    # Delete envoy filter for translating `global` to `svc.cluster.local`
-    kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
-```
 
 `Reference:` [K8s cluster installed with Istio_replicated control planes](https://istio.io/docs/setup/install/multicluster/gateways/#deploy-the-istio-control-plane-in-each-cluster)
-
 
 ## Example Installations & Demos
 
 ### Production Deployment
 
 ![](Admiral_Diagram.png)
-
 
 An admiral production set up would have two types of clusters:
 - cluster where admiral runs called the `main` cluster
