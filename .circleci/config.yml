@@ -17,6 +17,8 @@ jobs:
           echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
           echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
           echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
+          echo "export docker_token=$DOCKER_PASS" >> $BASH_ENV
+          echo $docker_token
           source $BASH_ENV
     - run:
         name: Build
@@ -37,6 +39,7 @@ jobs:
     - run:
         name: Publish Docker image
         command: |
+          make
           make docker-publish
     - persist_to_workspace:
         root: .
@@ -55,7 +58,7 @@ jobs:
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
       CHANGE_MINIKUBE_NONE_USER: true
-    resource_class: large
+    resource_class: xlarge
     steps:
       - attach_workspace:
           at: .
@@ -88,23 +91,23 @@ jobs:
             cd tests
             export IS_LOCAL=false
       - run:
-          name: Run Integration Test for Istio 1.8.6
+          name: Run Integration Test for Istio 1.10
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.19.11" "1.8.6" "../out"
+            ./run.sh "1.20.14" "1.10.6" "../out"
       - run:
-          name: Run Integration Test for Istio 1.9.6
+          name: Run Integration Test for Istio 1.11
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.19.11" "1.9.6" "../out"
+            ./run.sh "1.20.14" "1.11.4" "../out"
       - run:
-          name: Run Integration Test for Istio 1.10.2
+          name: Run Integration Test for Istio 1.12
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.19.11" "1.10.2" "../out"
+            ./run.sh "1.20.14" "1.12.2" "../out"
   publish-github-release:
     docker:
     - image: circleci/golang:1.16
