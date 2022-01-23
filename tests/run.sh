@@ -27,7 +27,8 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 #allow for stabilization of DNS and Istio SEs before running tests
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
-./test2.sh "webapp" "sample-rollout-bluegreen" "greeting"
+./test2.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
+./test2.sh "webapp" "sample-rollout-canary" "greeting.canary"
 #cleanup to fee up the pipeline minkube resources
 if [[ $IS_LOCAL == "false" ]]; then
   kubectl scale --replicas=0 deploy webapp -n sample

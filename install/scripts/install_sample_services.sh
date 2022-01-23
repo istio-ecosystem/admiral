@@ -15,6 +15,7 @@ fi
 
 kubectl apply -f $install_dir/yaml/sample.yaml
 kubectl apply -f $install_dir/yaml/gtp_failover.yaml
+kubectl apply -f $install_dir/yaml/sample-greeting-rollout-bluegreen.yaml
 kubectl apply -f $install_dir/yaml/sample-greeting-rollout-canary.yaml
 kubectl apply -f $install_dir/yaml/grpc.yaml
 
@@ -27,7 +28,7 @@ kubectl rollout status deployment greeting -n sample
 kubectl rollout status deployment webapp -n sample
 
 
-kubectl rollout status deployment webapp -n sample-rollout-bluegreen
+kubectl rollout status deployment webapp -n sample-rollout-bluegree
 
 #Verify that admiral created service names for 'greeting' service
 checkse() {
@@ -44,7 +45,7 @@ checkse() {
   fi
 }
 export -f checkse
-for identity in webapp greeting grpc-server; do
+for identity in webapp greeting greeting.canary greeting.bluegreen grpc-server; do
   timeout 90s bash -c "until checkse $identity; do sleep 10; done"
   if [[ $? -eq 124 ]]
   then
