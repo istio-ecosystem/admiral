@@ -6,6 +6,12 @@ k8s_version=$1
 
 echo "Creating K8s cluster with version: $k8s_version"
 
+minikube
+
+echo $IS_LOCAL
+
+echo $HOME
+
 if [[ $IS_LOCAL == "false" ]]; then
   sudo -E minikube start --vm-driver=none --cpus 6 --memory 6144 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
 else
