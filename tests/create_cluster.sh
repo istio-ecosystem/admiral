@@ -8,7 +8,7 @@ echo "Creating K8s cluster with version: $k8s_version"
 
 if [[ $IS_LOCAL == "false" ]]; then
   sudo --help
-  sudo -E minikube start --vm-driver=docker --cpus 6 --memory 6144 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
+  sudo -E minikube start --vm-driver=docker --cpus 6 --memory 4096 --kubernetes-version=$k8s_version &> $HOME/minikube.log 2>&1 < /dev/null
 else
   echo "Creating K8s cluster with virtualbox vm driver"
   minikube start --memory=4096 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
