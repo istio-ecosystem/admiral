@@ -92,16 +92,19 @@ jobs:
           command:  |
             cd tests
             export IS_LOCAL=false
+            ./run.sh "1.20.14" "1.10.6" "../out"
       - run:
           name: Run Integration Test for Istio 1.11
           command:  |
             cd tests
             export IS_LOCAL=false
+            ./run.sh "1.20.14" "1.11.4" "../out"
       - run:
           name: Run Integration Test for Istio 1.12
           command:  |
             cd tests
             export IS_LOCAL=false
+            ./run.sh "1.20.14" "1.12.2" "../out"
   publish-github-release:
     docker:
     - image: circleci/golang:1.16
