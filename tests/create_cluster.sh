@@ -9,7 +9,7 @@ echo "Creating K8s cluster with version: $k8s_version"
 if [[ $IS_LOCAL == "false" ]]; then
   sudo apt-get install -y conntrack
   sudo sysctl fs.protected_regular=0
-  sudo -E minikube start --vm-driver=none -kubernetes-version=$k8s_version
+  sudo -E minikube start --vm-driver=none --kubernetes-version=$k8s_version
 else
   echo "Creating K8s cluster with virtualbox vm driver"
   minikube start --memory=4096 --cpus=4 --kubernetes-version=$k8s_version --vm-driver "virtualbox"
