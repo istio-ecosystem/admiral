@@ -360,9 +360,9 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 					oldDestinationRule = nil
 				}
 
-				if len(se.Endpoints) == 0 {
+				if len(seDr.ServiceEntry.Endpoints) == 0 {
 					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
-					cache.SeClusterCache.Delete(oldServiceEntry.Spec.Hosts[0])
+					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 				} else {
@@ -669,7 +669,7 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 		locality, finalProtocol, port)
 
 	// if the action is deleting an endpoint from service entry, loop through the list and delete matching ones
-	if event == admiral.Add {
+	if event == admiral.Add || event == admiral.Update {
 		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 	} else if event == admiral.Delete {
 		// create a tmp endpoint list to store all the endpoints that we intend to keep
