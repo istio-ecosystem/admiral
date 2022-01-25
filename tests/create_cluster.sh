@@ -7,6 +7,7 @@ k8s_version=$1
 echo "Creating K8s cluster with version: $k8s_version"
 
 if [[ $IS_LOCAL == "false" ]]; then
+  sudo apt-get update
   sudo apt-get install -y conntrack
   sudo sysctl fs.protected_regular=0
   sudo -E minikube start --vm-driver=none --kubernetes-version=$k8s_version
