@@ -2,6 +2,8 @@
 
 ## v1.2
 
+Admiral 1.2 is finally out after a year long wait! Thanks to the admiral community for constant feedback and all the bugs that have been reported.
+
 ### Features
  #### Support for latest versions of Istio
  Admiral now supports latest Istio version 1.12.2 and the minimum version now supported is 1.8.6. Istio introduced a concept of east-west gateway for multi-cluster traffic since 1.8.x release. This ingressgateway is special (runs in sni-dnat mode) and allows cross cluster mTLS traffic. Admiral now has a parameter to configure the ingressgateway app label (defaults to istio-ingressgateway for backward compatibility) to use this new gateway when generating a ServiceEntry.
@@ -13,8 +15,8 @@
  [Argo Rollouts](https://argoproj.github.io/argo-rollouts/) has a [Canary strategy]() which supports [TrafficRouting using Istio](https://argoproj.github.io/argo-rollouts/features/traffic-management/istio/). Admiral generated endpoints for Argo Rollouts now honor the Canary strategy defined using [host based Istio Traffic Routing](https://argoproj.github.io/argo-rollouts/features/traffic-management/istio/#host-level-traffic-splitting). Admiral watches for changes as Argo rollouts controller updates the traffic routing and configures the global mesh endpoints accordingly.
  
 ### Performance improvements 
-* Remove pod controller (reduces memory footprint of Admiral drastically) 
-* Do not trigger endpoint generation for dependency record updates (this is taken care off by regular deployment syncs)
+* Removed pod controller (reduces memory footprint of Admiral drastically, this was never used) 
+* Endpoint generation is no longer triggered for dependency record updates (this is taken care off by regular deployment/rollout syncs - 5 mins by default)
 
 ## v1.1
 
