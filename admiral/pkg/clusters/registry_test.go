@@ -312,16 +312,6 @@ func TestAdded(t *testing.T) {
 
 }
 
-func TestMakeVirtualService(t *testing.T) {
-	vs := makeVirtualService("test.local", []string{common.MulticlusterIngressGateway}, "dest", 8080)
-	if vs.Hosts[0] != "test.local" {
-		t.Fail()
-	}
-	if vs.Http[0].Route[0].Destination.Host != "dest" {
-		t.Fail()
-	}
-}
-
 func TestPodHandler(t *testing.T) {
 
 	p := common.AdmiralParams{

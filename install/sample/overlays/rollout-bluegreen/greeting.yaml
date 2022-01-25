@@ -17,7 +17,7 @@ spec:
         sidecar.istio.io/inject: "true"
       labels:
         app: greeting
-        identity: greeting
+        identity: greeting.bluegreen
     spec:
       containers:
         - image: nginx
@@ -67,7 +67,7 @@ metadata:
   name: rollout-bluegreen-active
   labels:
     app: greeting
-    identity: greeting
+    identity: greeting.bluegreen
   namespace: sample
 spec:
   ports:
@@ -84,7 +84,7 @@ metadata:
   name: rollout-bluegreen-preview
   labels:
     app: greeting
-    identity: greeting
+    identity: greeting.bluegreen
   namespace: sample
 spec:
   ports:
