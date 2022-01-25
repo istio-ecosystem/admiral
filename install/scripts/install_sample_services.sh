@@ -28,7 +28,7 @@ kubectl rollout status deployment greeting -n sample
 kubectl rollout status deployment webapp -n sample
 
 
-kubectl rollout status deployment webapp -n sample-rollout-bluegree
+kubectl rollout status deployment webapp -n sample-rollout-bluegreen
 
 #Verify that admiral created service names for 'greeting' service
 checkse() {
