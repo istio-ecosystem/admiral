@@ -27,28 +27,33 @@ spec:
             - admiral-sync
             - --sync_period
             - 20s
+            - --gateway_app
+            - istio-eastwestgateway
           image: docker.io/admiralproj/admiral:latest
           imagePullPolicy: Always
-          #          livenessProbe:
-          #            failureThreshold: 5
-          #            httpGet:
-          #              path: /health/full
-          #              port: 8443
-          #              scheme: HTTPS
-          #            initialDelaySeconds: 90
-          #            periodSeconds: 5
-          #            successThreshold: 1
-          #            timeoutSeconds: 1
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
           name: admiral
           ports:
-            - containerPort: 8443
+            - containerPort: 8080
               name: service
-            - containerPort: 8490
-              name: metrics
           resources:
             limits:
               cpu: 1
-              memory: 1028M
+              memory: 2048M
             requests:
               cpu: 0.25
               memory: 256M

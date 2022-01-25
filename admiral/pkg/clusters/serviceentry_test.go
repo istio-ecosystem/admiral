@@ -864,102 +864,6 @@ func TestCreateServiceEntry(t *testing.T) {
 
 }
 
-func TestCreateIngressOnlyVirtualService(t *testing.T) {
-
-	fakeIstioClientCreate := istiofake.NewSimpleClientset()
-	rcCreate := &RemoteController{
-		VirtualServiceController: &istio.VirtualServiceController{
-			IstioClient: fakeIstioClientCreate,
-		},
-	}
-	fakeIstioClientUpdate := istiofake.NewSimpleClientset()
-	rcUpdate := &RemoteController{
-		VirtualServiceController: &istio.VirtualServiceController{
-			IstioClient: fakeIstioClientUpdate,
-		},
-	}
-
-	cname := "qa.mysvc.global"
-
-	vsname := cname + "-default-vs"
-
-	localFqdn := "mysvc.newmynamespace.svc.cluster.local"
-	localFqdn2 := "mysvc.mynamespace.svc.cluster.local"
-
-	vsTobeUpdated := makeVirtualService(cname, []string{common.MulticlusterIngressGateway}, localFqdn, 80)
-
-	rcUpdate.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Create(&v1alpha3.VirtualService{
-		Spec:       *vsTobeUpdated,
-		ObjectMeta: v12.ObjectMeta{Name: vsname, Namespace: common.GetSyncNamespace()}})
-
-	meshPorts := map[string]uint32{common.Http: 80}
-
-	inputSe := &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}}
-	inputSe.Endpoints = []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-		&istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			Address: "address",
-		},
-	}
-
-	testCases := []struct {
-		name           string
-		serviceEntry   *istionetworkingv1alpha3.ServiceEntry
-		rc             *RemoteController
-		localFqdn      string
-		meshPorts      map[string]uint32
-		expectedResult string
-	}{
-		{
-			name:           "Should return a created virtual service",
-			rc:             rcCreate,
-			serviceEntry:   inputSe,
-			localFqdn:      localFqdn,
-			meshPorts:      meshPorts,
-			expectedResult: localFqdn,
-		},
-		{
-			name:           "Should return an updated virtual service",
-			rc:             rcCreate,
-			serviceEntry:   inputSe,
-			localFqdn:      localFqdn2,
-			meshPorts:      meshPorts,
-			expectedResult: localFqdn2,
-		},
-		{
-			name:           "Should return virtual service deleted when endpoint not exist any more",
-			rc:             rcCreate,
-			serviceEntry:   &istionetworkingv1alpha3.ServiceEntry{Hosts: []string{"qa.mysvc.global"}},
-			localFqdn:      localFqdn,
-			meshPorts:      meshPorts,
-			expectedResult: "",
-		},
-	}
-
-	//Run the test for every provided case
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			createIngressOnlyVirtualService(c.rc, cname, c.serviceEntry, c.localFqdn, c.meshPorts)
-			vs, err := c.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(vsname, v12.GetOptions{})
-			if err != nil {
-				// for the last test case when deleting virtual service is needed, then we should be expecting not found error for virtual service
-				if c.expectedResult == "" && strings.Contains(err.Error(), "not found") {
-					return
-				}
-				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, err)
-			}
-			if vs != nil && vs.Spec.Http[0].Route[0].Destination.Host != c.expectedResult {
-				if vs != nil {
-					t.Errorf("Virtual service update failed with expected local fqdn: %v, got: %v", localFqdn2, vs.Spec.Http[0].Route[0].Destination.Host)
-				}
-				t.FailNow()
-			}
-			if len(vs.Spec.Gateways) > 1 || vs.Spec.Gateways[0] != common.MulticlusterIngressGateway {
-				t.Errorf("Virtual service gateway expected: %v, got: %v", common.MulticlusterIngressGateway, vs.Spec.Gateways)
-			}
-		})
-	}
-}
-
 func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	const NAMESPACE = "test-test"
@@ -1088,6 +992,99 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	if nil == serviceEntryResp {
 		t.Fatalf("Service entry returned should not be empty")
 	}
+}
+
+func TestUpdateEndpointsForWeightedServices(t *testing.T) {
+	t.Parallel()
+
+	const CLUSTER_INGRESS_1 = "ingress1.com"
+	const CLUSTER_INGRESS_2 = "ingress2.com"
+	const CANARY_SERVICE = "canaryService"
+	const STABLE_SERVICE = "stableService"
+	const NAMESPACE  = "namespace"
+
+	se := &istionetworkingv1alpha3.ServiceEntry{
+		Endpoints:            []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http" : 15443,}},
+			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		},
+	}
+
+	meshPorts := map[string]uint32{"http": 8080}
+
+	weightedServices := map[string]*WeightedService{
+		CANARY_SERVICE: {Weight: 10, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
+		STABLE_SERVICE: {Weight: 90, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
+	}
+	weightedServicesZeroWeight := map[string]*WeightedService{
+		CANARY_SERVICE: {Weight: 0, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
+		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
+	}
+
+	wantedEndpoints := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
+		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
+	}
+
+	wantedEndpointsZeroWeights := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
+	}
+
+	testCases := []struct {
+		name                string
+		inputServiceEntry	*istionetworkingv1alpha3.ServiceEntry
+		weightedServices map[string]*WeightedService
+		clusterIngress string
+		meshPorts map[string]uint32
+		wantedEndpoints []*istionetworkingv1alpha3.ServiceEntry_Endpoint
+	}{
+		{
+			name:                "should return endpoints with assigned weights",
+			inputServiceEntry: copyServiceEntry(se),
+			weightedServices: weightedServices,
+			clusterIngress: CLUSTER_INGRESS_1,
+			meshPorts: meshPorts,
+			wantedEndpoints: wantedEndpoints,
+		},
+		{
+			name:                "should return endpoints as is",
+			inputServiceEntry: copyServiceEntry(se),
+			weightedServices: weightedServices,
+			clusterIngress: "random",
+			meshPorts: meshPorts,
+			wantedEndpoints: copyServiceEntry(se).Endpoints,
+		},
+		{
+			name:                "should not return endpoints with zero weight",
+			inputServiceEntry: copyServiceEntry(se),
+			weightedServices: weightedServicesZeroWeight,
+			clusterIngress: CLUSTER_INGRESS_1,
+			meshPorts: meshPorts,
+			wantedEndpoints: wantedEndpointsZeroWeights,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			updateEndpointsForWeightedServices(c.inputServiceEntry,
+				c.weightedServices, c.clusterIngress, c.meshPorts)
+			if len(c.inputServiceEntry.Endpoints) != len(c.wantedEndpoints) {
+				t.Errorf("Wanted %d endpoints, got: %d", len(c.wantedEndpoints), len(c.inputServiceEntry.Endpoints))
+			}
+			for _, ep := range c.wantedEndpoints {
+				for _, epResult := range c.inputServiceEntry.Endpoints {
+					if ep.Address == epResult.Address {
+						if ep.Weight != epResult.Weight {
+							t.Errorf("Wanted endpoint weight %d, got: %d for Address %s", ep.Weight, epResult.Weight, ep.Address)
+						}
+					}
+				}
+			}
+		})
+	}
+
 }
 
 func isLower(s string) bool {

@@ -7,6 +7,9 @@ function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 istio_version=$1
 os=$2
 
+
+echo "Installing Istio version: $istio_version"
+
 #Download & extract Istio
 
 #Downloading istiofunction ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
@@ -25,41 +28,66 @@ kubectl create secret generic cacerts -n istio-system --from-file="istio-$istio_
 
 #Generate, install and verify Istio CRDs
 
-if [ $(ver $istio_version) -lt $(ver 1.5.0) ]
+if [ $(ver $istio_version) -lt $(ver 1.8.6) ]
 then
-    helm template "istio-$istio_version/install/kubernetes/helm/istio-init" --name istio-init --namespace istio-system | kubectl apply -f -
-    #Make sure Istio crds are installed
-    crds_count=0
-    while [ $crds_count -lt 1 ]
-    do
-      crds_count=$(kubectl get crds | grep 'istio.io' | wc -l)
-    done
-
-    helm template "istio-$istio_version/install/kubernetes/helm/istio" --name istio --namespace istio-system -f "istio-$istio_version/install/kubernetes/helm/istio/example-values/values-istio-multicluster-gateways.yaml" | kubectl apply -f -
-
-    #Verify that pilot is up and running
-    kubectl rollout status deployment istio-pilot -n istio-system
-
-    #Verify that sidecar injector is running
-    kubectl rollout status deployment istio-sidecar-injector -n istio-system
-
-    # Delete envoy filter for translating `global` to `svc.cluster.local`
-    kubectl delete envoyfilter istio-multicluster-ingressgateway -n istio-system
-
-elif [ $(ver $istio_version) -lt $(ver 1.6.0) ]
-then
-    "./istio-$istio_version/bin/istioctl" manifest apply -f "istio-$istio_version/install/kubernetes/operator/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false
-    #Verify that istiod is up and running
-    #Verify that istiod is up and running
-    kubectl rollout status deployment istiod -n istio-system
-elif [ $(ver $istio_version) -lt $(ver 1.8.0) ]
-then
-   "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set addonComponents.prometheus.enabled=false --set values.global.multiCluster.includeEnvoyFilter=false
-    #Verify that istiod is up and running
-    kubectl rollout status deployment istiod -n istio-system
+    echo "Istio version $istio_version is no longer officially supported by this version of Admiral"
+    exit 1
 else
-    echo "y" | "./istio-$istio_version/bin/istioctl" install -f "istio-$istio_version/manifests/examples/multicluster/values-istio-multicluster-gateways.yaml" --set components.egressGateways[0].enabled=false --set values.global.multiCluster.includeEnvoyFilter=false
-    #Verify that istiod is up and running
-    kubectl rollout status deployment istiod -n istio-system
+    #install istio core with DNS proxying enabled and multicluster enabled
+# TODO Also add east-west gateway to this installation
+cat <<EOF > cluster1.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  meshConfig:
+    defaultConfig:
+      proxyMetadata:
+        # Enable Istio agent to handle DNS requests for known hosts
+        # Unknown hosts will automatically be resolved using upstream dns servers in resolv.conf
+        ISTIO_META_DNS_CAPTURE: "true"
+  values:
+    pilot:
+      resources:
+        requests:
+          cpu: 20m
+          memory: 128Mi
+    global:
+      meshID: admiral1
+      multiCluster:
+        clusterName: admiral1
+      network: admiral1
+      proxy:
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 80m
+            memory: 256Mi
+  components:
+    ingressGateways:
+      - name: istio-eastwestgateway
+        label:
+          istio: eastwestgateway
+          app: istio-eastwestgateway
+        enabled: true
+        k8s:
+          env:
+            # sni-dnat adds the clusters required for AUTO_PASSTHROUGH mode
+            - name: ISTIO_META_ROUTER_MODE
+              value: "sni-dnat"
+          service:
+            ports:
+              - name: status-port
+                port: 15021
+                targetPort: 15021
+              - name: tls
+                port: 15443
+                targetPort: 15443
+EOF
+
+    "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml -y
 fi
+rm -rf cluster1.yaml
+kubectl rollout status deployment istiod -n istio-system
 

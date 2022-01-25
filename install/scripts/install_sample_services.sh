@@ -16,6 +16,7 @@ fi
 kubectl apply -f $install_dir/yaml/sample.yaml
 kubectl apply -f $install_dir/yaml/gtp_failover.yaml
 kubectl apply -f $install_dir/yaml/sample-greeting-rollout-bluegreen.yaml
+kubectl apply -f $install_dir/yaml/sample-greeting-rollout-canary.yaml
 kubectl apply -f $install_dir/yaml/grpc.yaml
 
 #Install the dependency CR
@@ -44,8 +45,8 @@ checkse() {
   fi
 }
 export -f checkse
-for identity in webapp greeting grpc-server; do
-  timeout 90s bash -c "until checkse $identity; do sleep 10; done"
+for identity in webapp greeting greeting.canary greeting.bluegreen grpc-server; do
+  timeout 180s bash -c "until checkse $identity; do sleep 10; done"
   if [[ $? -eq 124 ]]
   then
     exit 1
