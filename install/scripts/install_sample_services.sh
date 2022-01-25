@@ -46,7 +46,7 @@ checkse() {
 }
 export -f checkse
 for identity in webapp greeting greeting.canary greeting.bluegreen grpc-server; do
-  timeout 90s bash -c "until checkse $identity; do sleep 10; done"
+  timeout 180s bash -c "until checkse $identity; do sleep 10; done"
   if [[ $? -eq 124 ]]
   then
     exit 1
