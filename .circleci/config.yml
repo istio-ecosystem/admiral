@@ -7,12 +7,13 @@ jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.16
     steps:
     - checkout
     - run:
         name: Setting BRANCH, TAG & SHA variables
         command: |
+          env
           echo "export TAG=$CIRCLE_TAG" >> $BASH_ENV
           echo "export BRANCH=$CIRCLE_BRANCH" >> $BASH_ENV
           echo "export SHA=$CIRCLE_SHA1" >> $BASH_ENV
@@ -45,15 +46,16 @@ jobs:
 
   run-integration-tests:
     machine:
-      image: circleci/classic:201808-01
+      image: ubuntu-2004:202010-01
     environment:
-      K8S_VERSION: v1.16.8
+      K8S_VERSION: v1.20.14
       KUBECONFIG: /home/circleci/.kube/config
-      MINIKUBE_VERSION: v1.16.0
+      MINIKUBE_VERSION: v1.18.1
       MINIKUBE_WANTUPDATENOTIFICATION: false
       MINIKUBE_WANTREPORTERRORPROMPT: false
       MINIKUBE_HOME: /home/circleci
       CHANGE_MINIKUBE_NONE_USER: true
+    resource_class: large
     steps:
       - attach_workspace:
           at: .
@@ -67,6 +69,7 @@ jobs:
           name: setup minikube
           command: |
             curl -Lo minikube https://github.com/kubernetes/minikube/releases/download/${MINIKUBE_VERSION}/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+            minikube version
       - run:
           name: setup helm
           command: curl -fsSL https://raw.githubusercontent.com/helm/helm/master/scripts/get | bash -s -- -v v2.17.0
@@ -79,32 +82,32 @@ jobs:
       - run:
           name: generate prereq yaml files
           command:  |
-            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_BRANCH}; fi
+            if [[ $CIRCLE_BRANCH == "master" ]]; then export TAG=latest; else export TAG=${CIRCLE_SHA1}; fi
             (cd "./install/admiral/overlays/demosinglecluster" && kustomize edit set image "docker.io/admiralproj/admiral=docker.io/admiralproj/admiral:${TAG}")
             make gen-yaml
             cd tests
             export IS_LOCAL=false
       - run:
-          name: Run Integration Test for Istio 1.5.7
+          name: Run Integration Test for Istio 1.10
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.5.7" "../out"
+            ./run.sh "1.20.14" "1.10.6" "../out"
       - run:
-          name: Run Integration Test for Istio 1.6.13
+          name: Run Integration Test for Istio 1.11
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.6.13" "../out"
+            ./run.sh "1.20.14" "1.11.4" "../out"
       - run:
-          name: Run Integration Test for Istio 1.7.6
+          name: Run Integration Test for Istio 1.12
           command:  |
             cd tests
             export IS_LOCAL=false
-            ./run.sh "1.16.8" "1.7.6" "../out"
+            ./run.sh "1.20.14" "1.12.2" "../out"
   publish-github-release:
     docker:
-    - image: circleci/golang:1.11
+    - image: circleci/golang:1.16
     working_directory: /go/pkg/mod/github.com/admiral
     steps:
     - attach_workspace:

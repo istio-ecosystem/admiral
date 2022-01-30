@@ -114,6 +114,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.EnvKey, "env_key", "admiral.io/env",
 		"The annotation or label, on a pod spec in a deployment, which will be used to group deployments across regions/clusters under a single environment. Defaults to `admiral.io/env`. "+
 			"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GatewayApp, "gateway_app", "istio-ingressgateway",
+		"The the value of the `app` label to use to match and find the service that represents the ingress for cross cluster traffic (AUTO_PASSTHROUGH mode)")
 
 	return rootCmd
 }

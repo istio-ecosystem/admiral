@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
@@ -302,7 +303,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
 
-			if err := c.addCallback(restConfig, clusterID, 2*time.Minute); err != nil {
+			if err := c.addCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
 				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
 				continue
 			}
@@ -326,7 +327,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			}
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
-			if err := c.updateCallback(restConfig, clusterID, 2*time.Minute); err != nil {
+			if err := c.updateCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
 				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
 					clusterID, secretName, err)
 			}

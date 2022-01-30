@@ -23,7 +23,6 @@ type RemoteController struct {
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
-	PodController             *admiral.PodController
 	NodeController            *admiral.NodeController
 	ServiceEntryController    *istio.ServiceEntryController
 	DestinationRuleController *istio.DestinationRuleController
@@ -258,8 +257,6 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	}
 
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
-
-	handleDependencyRecord(sourceIdentity, remoteRegitry, remoteRegitry.RemoteControllers, obj)
 }
 
 func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {

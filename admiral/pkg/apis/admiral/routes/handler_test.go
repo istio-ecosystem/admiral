@@ -48,10 +48,9 @@ func TestGetClusters (t *testing.T) {
 		{
 			name:   "success with two clusters case",
 			remoteCluster:     map[string]*secret.RemoteCluster{
-				"cluster1": &secret.RemoteCluster{},
-				"cluster2": &secret.RemoteCluster{},
+				"cluster1": {},
 			},
-			expectedErr:      []string{"cluster1", "cluster2"},
+			expectedErr:      []string{"cluster1"},
 			statusCode:        200,
 		},
 		{
