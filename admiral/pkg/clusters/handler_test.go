@@ -26,26 +26,37 @@ func TestIgnoreIstioResource(t *testing.T) {
 	testCases := []struct {
 		name           string
 		exportTo       []string
+		annotations	   map[string]string
 		expectedResult bool
 	}{
 		{
 			name:           "Should return false when exportTo is not present",
 			exportTo:       nil,
+			annotations: 	nil,
 			expectedResult: false,
 		},
 		{
 			name:           "Should return false when its exported to *",
 			exportTo:       []string{"*"},
+			annotations: 	nil,
 			expectedResult: false,
 		},
 		{
 			name:           "Should return true when its exported to .",
 			exportTo:       []string{"."},
+			annotations: 	nil,
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when its exported to a handful of namespaces",
 			exportTo:       []string{"namespace1", "namespace2"},
+			annotations: 	nil,
+			expectedResult: true,
+		},
+		{
+			name:           "Should return true when admiral ignore annotation is set",
+			exportTo:       []string{"*"},
+			annotations: 	map[string]string{common.AdmiralIgnoreAnnotation: "true"},
 			expectedResult: true,
 		},
 	}
@@ -53,7 +64,7 @@ func TestIgnoreIstioResource(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := IgnoreIstioResource(c.exportTo)
+			result := IgnoreIstioResource(c.exportTo, c.annotations)
 			if result == c.expectedResult {
 				//perfect
 			} else {
@@ -200,6 +211,14 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	happyPath.Namespace = "other-ns"
 	happyPath.Name = "vs-name"
 
+	vsNotGeneratedByAdmiral := v1alpha32.VirtualService{
+		Spec: v1alpha3.VirtualService{
+			Hosts: []string{"e2e.blah.something"},
+		},
+	}
+	vsNotGeneratedByAdmiral.Namespace = "other-ns"
+	vsNotGeneratedByAdmiral.Name = "vs-name-other-nss"
+
 	cnameCache := common.NewMapOfMaps()
 	noDependencClustersHandler := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
@@ -240,6 +259,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		},
 	})
 	handlerFullClient := VirtualServiceHandler{
+		ClusterID: "cluster2.k8s.global",
 		RemoteRegistry: &RemoteRegistry{
 			RemoteControllers: map[string]*RemoteController{
 				"cluster.k8s.global": &RemoteController{
@@ -285,6 +305,27 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			event:         0,
 		},
 		{
+			name:          "Add event for VS in SourceNamespace",
+			vs:            &happyPath,
+			expectedError: nil,
+			handler:       &handlerFullClient,
+			event:         0,
+		},
+		{
+			name:          "Update event for VS in SourceNamespace",
+			vs:            &vsNotGeneratedByAdmiral,
+			expectedError: nil,
+			handler:       &handlerFullClient,
+			event:         1,
+		},
+		{
+			name:          "Delete event for VS in SourceNamespace",
+			vs:            &vsNotGeneratedByAdmiral,
+			expectedError: nil,
+			handler:       &handlerFullClient,
+			event:         2,
+		},
+		{
 			name:          "New Virtual Service",
 			vs:            &happyPath,
 			expectedError: nil,
@@ -310,6 +351,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
+
 			err := handleVirtualServiceEvent(c.vs, c.handler, c.event, common.VirtualService)
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
