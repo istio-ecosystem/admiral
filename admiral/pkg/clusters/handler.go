@@ -104,46 +104,46 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 }
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
 }
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
@@ -153,7 +153,7 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
@@ -163,7 +163,7 @@ func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
@@ -178,7 +178,12 @@ func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {}
 
 func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
 
-func IgnoreIstioResource(exportTo []string) bool {
+func IgnoreIstioResource(exportTo []string, annotations map[string]string) bool {
+
+	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true"  {
+		return true
+	}
+
 	if len(exportTo) == 0 {
 		return false
 	} else {
@@ -211,121 +216,138 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host)
 
-	if dependentClusters == nil {
-		log.Infof("Skipping event: %s from cluster %s for %v", "DestinationRule", clusterId, destinationRule)
-		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "No dependent clusters found")
-		return
-	}
+	if dependentClusters != nil && len(dependentClusters.Map()) > 0 {
 
-	log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
+		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
 
-	//Create label based service entry in source and dependent clusters for subset routing to work
-	host := destinationRule.Host
+		//Create label based service entry in source and dependent clusters for subset routing to work
+		host := destinationRule.Host
 
-	basicSEName := getIstioResourceName(host, "-se")
+		basicSEName := getIstioResourceName(host, "-se")
 
-	seName := getIstioResourceName(obj.Name, "-se")
+		seName := getIstioResourceName(obj.Name, "-se")
 
-	allDependentClusters := make(map[string]string)
+		allDependentClusters := make(map[string]string)
 
-	util.MapCopy(allDependentClusters, dependentClusters.Map())
+		util.MapCopy(allDependentClusters, dependentClusters.Map())
 
-	allDependentClusters[clusterId] = clusterId
+		allDependentClusters[clusterId] = clusterId
 
-	for _, dependentCluster := range allDependentClusters {
+		for _, dependentCluster := range allDependentClusters {
 
-		rc := r.RemoteControllers[dependentCluster]
+			rc := r.RemoteControllers[dependentCluster]
 
-		var newServiceEntry *v1alpha3.ServiceEntry
+			var newServiceEntry *v1alpha3.ServiceEntry
 
-		var existsServiceEntry *v1alpha3.ServiceEntry
+			var existsServiceEntry *v1alpha3.ServiceEntry
 
-		var drServiceEntries = make(map[string]*v1alpha32.ServiceEntry)
+			var drServiceEntries = make(map[string]*v1alpha32.ServiceEntry)
 
-		exist, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(basicSEName, v12.GetOptions{})
+			exist, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(basicSEName, v12.GetOptions{})
 
-		var identityId = ""
+			var identityId = ""
 
-		if exist == nil || err != nil {
+			if exist == nil || err != nil {
 
-			log.Warnf(LogFormat, "Find", "ServiceEntry", basicSEName, dependentCluster, "Failed")
+				log.Warnf(LogFormat, "Find", "ServiceEntry", basicSEName, dependentCluster, "Failed")
 
-		} else {
+			} else {
 
-			serviceEntry := exist.Spec
+				serviceEntry := exist.Spec
 
-			identityRaw, ok := r.AdmiralCache.CnameIdentityCache.Load(serviceEntry.Hosts[0])
+				identityRaw, ok := r.AdmiralCache.CnameIdentityCache.Load(serviceEntry.Hosts[0])
 
-			if ok {
-				identityId = fmt.Sprintf("%v", identityRaw)
-				if dependentCluster == clusterId {
-					localIdentityId = identityId
+				if ok {
+					identityId = fmt.Sprintf("%v", identityRaw)
+					if dependentCluster == clusterId {
+						localIdentityId = identityId
+					}
+					drServiceEntries = createSeWithDrLabels(rc, dependentCluster == clusterId, identityId, seName, &serviceEntry, &destinationRule, r.AdmiralCache.ServiceEntryAddressStore, r.AdmiralCache.ConfigMapController)
 				}
-				drServiceEntries = createSeWithDrLabels(rc, dependentCluster == clusterId, identityId, seName, &serviceEntry, &destinationRule, r.AdmiralCache.ServiceEntryAddressStore, r.AdmiralCache.ConfigMapController)
+
 			}
 
-		}
+			if event == common.Delete {
 
-		if event == common.Delete {
-
-			err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-			if err != nil {
-				log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-			} else {
-				log.Error(LogFormat, err)
-			}
-			err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-			if err != nil {
-				log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
-			} else {
-				log.Error(LogFormat, err)
-			}
-			for _, subset := range destinationRule.Subsets {
-				sseName := seName + common.Dash + subset.Name
-				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 				if err != nil {
-					log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
 				} else {
 					log.Error(LogFormat, err)
 				}
-			}
-			err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-			if err != nil {
-				log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
+				if err != nil {
+					log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+				} else {
+					log.Error(LogFormat, err)
+				}
+				for _, subset := range destinationRule.Subsets {
+					sseName := seName + common.Dash + subset.Name
+					err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+					if err != nil {
+						log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+					} else {
+						log.Error(LogFormat, err)
+					}
+				}
+				err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
+				if err != nil {
+					log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
+				} else {
+					log.Error(LogFormat, err)
+				}
+
 			} else {
-				log.Error(LogFormat, err)
+
+				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
+
+				//copy destination rule only to other clusters
+				if dependentCluster != clusterId {
+					addUpdateDestinationRule(obj, exist, syncNamespace, rc)
+				}
+
+				for _seName, se := range drServiceEntries {
+					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
+					newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
+					if err != nil {
+						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
+					}
+					if newServiceEntry != nil {
+						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
+						r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
+					}
+					//cache the subset service entries for updating them later for pod events
+					if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
+						r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
+					}
+				}
+
+				if dependentCluster == clusterId {
+					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
+					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
+				}
+
 			}
+		}
+		return
+	} else {
+		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "No dependent clusters found")
+	}
 
-		} else {
-
-			exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
-
-			//copy destination rule only to other clusters
-			if dependentCluster != clusterId {
+	//copy the DestinationRule `as is` if they are not generated by Admiral
+	for _, rc := range r.RemoteControllers {
+		if rc.ClusterID != clusterId {
+			if event == common.Delete {
+				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				if err != nil {
+					log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+				} else {
+					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
+				}
+			} else {
+				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
 				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
-
-			for _seName, se := range drServiceEntries {
-				existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
-				newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
-				if err != nil {
-					log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
-				}
-				if newServiceEntry != nil {
-					addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
-					r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
-				}
-				//cache the subset service entries for updating them later for pod events
-				if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
-					r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
-				}
-			}
-
-			if dependentCluster == clusterId {
-				//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-				createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
-			}
-
 		}
 	}
 }
@@ -406,49 +428,72 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0])
 
-	if dependentClusters == nil {
-		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "No dependent clusters found")
+	if dependentClusters != nil && len(dependentClusters.Map()) > 0 {
+
+		for _, dependentCluster := range dependentClusters.Map() {
+
+			rc := r.RemoteControllers[dependentCluster]
+
+			if clusterId != dependentCluster {
+
+				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
+
+				if event == common.Delete {
+					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+					if err != nil {
+						return err
+					}
+
+				} else {
+
+					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
+
+					//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
+					for _, httpRoute := range virtualService.Http {
+						for _, destination := range httpRoute.Route {
+							//get at index 0, we do not support wildcards or multiple hosts currently
+							if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
+								destination.Destination.Host = virtualService.Hosts[0]
+							}
+						}
+					}
+
+					for _, tlsRoute := range virtualService.Tls {
+						for _, destination := range tlsRoute.Route {
+							//get at index 0, we do not support wildcards or multiple hosts currently
+							if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
+								destination.Destination.Host = virtualService.Hosts[0]
+							}
+						}
+					}
+
+					addUpdateVirtualService(obj, exist, syncNamespace, rc)
+				}
+			}
+		}
 		return nil
+	} else {
+		log.Infof(LogFormat,"Event", "VirtualService", obj.Name, clusterId, "No dependent clusters found")
 	}
 
-	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
-
-	for _, dependentCluster := range dependentClusters.Map() {
-
-		rc := r.RemoteControllers[dependentCluster]
-
-		if clusterId != dependentCluster {
-
+	//copy the VirtualService `as is` if they are not generated by Admiral (not in CnameDependentClusterCache)
+	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Replicating `as is` to all clusters")
+	for _, rc := range r.RemoteControllers {
+		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 				if err != nil {
+					log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
 					return err
+				} else {
+					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 				}
-
 			} else {
-
 				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
-
-				//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
-				for _, httpRoute := range virtualService.Http {
-					for _, destination := range httpRoute.Route {
-						//get at index 0, we do not support wildcards or multiple hosts currently
-						destination.Destination.Host = virtualService.Hosts[0]
-					}
-				}
-
-				for _, tlsRoute := range virtualService.Tls {
-					for _, destination := range tlsRoute.Route {
-						//get at index 0, we do not support wildcards or multiple hosts currently
-						destination.Destination.Host = virtualService.Hosts[0]
-					}
-				}
-
 				addUpdateVirtualService(obj, exist, syncNamespace, rc)
 			}
 		}
-
 	}
 	return nil
 }
@@ -456,6 +501,10 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
 	var err error
 	var op string
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
 	if exist == nil || len(exist.Spec.Hosts) == 0 {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
@@ -479,6 +528,10 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
 	if exist == nil || exist.Spec.Hosts == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
@@ -513,6 +566,10 @@ func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *Remo
 func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	var err error
 	var op string
+	if obj.Annotations == nil {
+		obj.Annotations = map[string]string{}
+	}
+	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
 	if exist == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
