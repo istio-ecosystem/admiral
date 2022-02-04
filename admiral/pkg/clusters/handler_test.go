@@ -27,44 +27,64 @@ func TestIgnoreIstioResource(t *testing.T) {
 		name           string
 		exportTo       []string
 		annotations	   map[string]string
+		namespace	   string
 		expectedResult bool
 	}{
 		{
 			name:           "Should return false when exportTo is not present",
 			exportTo:       nil,
 			annotations: 	nil,
+			namespace:		"ns",
 			expectedResult: false,
 		},
 		{
 			name:           "Should return false when its exported to *",
 			exportTo:       []string{"*"},
 			annotations: 	nil,
+			namespace:		"ns",
 			expectedResult: false,
 		},
 		{
 			name:           "Should return true when its exported to .",
 			exportTo:       []string{"."},
 			annotations: 	nil,
+			namespace:		"ns",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when its exported to a handful of namespaces",
 			exportTo:       []string{"namespace1", "namespace2"},
 			annotations: 	nil,
+			namespace:		"ns",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when admiral ignore annotation is set",
 			exportTo:       []string{"*"},
 			annotations: 	map[string]string{common.AdmiralIgnoreAnnotation: "true"},
+			namespace:		"ns",
 			expectedResult: true,
+		},
+		{
+			name:           "Should return true when its from istio-system namespace",
+			exportTo:       []string{"*"},
+			annotations: 	nil,
+			namespace:		"istio-system",
+			expectedResult: false,
+		},
+		{
+			name:           "Should return true when its from admiral-sync namespace",
+			exportTo:       []string{"*"},
+			annotations: 	nil,
+			namespace:		"admiral-sync",
+			expectedResult: false,
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := IgnoreIstioResource(c.exportTo, c.annotations)
+			result := IgnoreIstioResource(c.exportTo, c.annotations, c.namespace)
 			if result == c.expectedResult {
 				//perfect
 			} else {

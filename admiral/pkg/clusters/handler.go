@@ -104,46 +104,53 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 }
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
 }
 
 func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
 }
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
@@ -153,7 +160,8 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
@@ -163,7 +171,8 @@ func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations) {
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
@@ -178,9 +187,13 @@ func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {}
 
 func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
 
-func IgnoreIstioResource(exportTo []string, annotations map[string]string) bool {
+func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {
 
 	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true"  {
+		return true
+	}
+
+	if namespace == common.NamespaceIstioSystem || namespace == common.NamespaceKubeSystem || namespace == common.GetSyncNamespace() {
 		return true
 	}
 
@@ -208,11 +221,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	syncNamespace := common.GetSyncNamespace()
 
 	r := dh.RemoteRegistry
-
-	if obj.Namespace == syncNamespace || obj.Namespace == common.NamespaceKubeSystem {
-		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
-		return
-	}
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host)
 
@@ -398,11 +406,6 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	r := vh.RemoteRegistry
 
 	syncNamespace := common.GetSyncNamespace()
-
-	if obj.Namespace == syncNamespace {
-		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping the namespace: "+obj.Namespace)
-		return nil
-	}
 
 	if len(virtualService.Hosts) > 1 {
 		log.Errorf(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+obj.Namespace)
