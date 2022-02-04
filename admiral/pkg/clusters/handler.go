@@ -573,7 +573,7 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
-	if exist == nil {
+	if exist == nil || exist.Name == "" || exist.Spec.Host == "" {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(obj)
