@@ -16,6 +16,7 @@ import (
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -989,6 +990,265 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 					} else {
 						t.Fatalf("Expected a service with name=%s but none returned", key)
 					}
+				}
+			}
+		})
+	}
+}
+
+func TestSkipDestructiveUpdate(t *testing.T) {
+
+	twoEndpointSe := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	twoEndpointSeUpdated := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 90}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	oneEndpointSe := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		},
+	}
+
+    newSeTwoEndpoints := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       twoEndpointSe,
+	}
+
+	newSeTwoEndpointsUpdated := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       twoEndpointSeUpdated,
+	}
+
+	newSeOneEndpoint := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       oneEndpointSe,
+	}
+
+	oldSeTwoEndpoints := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       twoEndpointSe,
+	}
+
+	oldSeOneEndpoint := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       oneEndpointSe,
+	}
+
+
+	rcWarmupPhase := &RemoteController{
+		StartTime: time.Now(),
+	}
+
+	rcNotinWarmupPhase := &RemoteController{
+		StartTime: time.Now().Add(time.Duration(-21) * time.Minute),
+	}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name            string
+		rc 			    *RemoteController
+		newSe		    *v1alpha32.ServiceEntry
+		oldSe           *v1alpha32.ServiceEntry
+		skipDestructive bool
+		diff	   	    string
+	}{
+		{
+			name:           "Should return false when in warm up phase but not destructive",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          oldSeOneEndpoint,
+			skipDestructive: false,
+			diff: 			"",
+		},
+		{
+			name:           "Should return true when in warm up phase but is destructive",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: true,
+			diff: 			"Delete",
+		},
+		{
+			name:           "Should return false when not in warm up phase but is destructive",
+			rc:       		rcNotinWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: false,
+			diff: 			"Delete",
+		},
+		{
+			name:           "Should return false when in warm up phase but is constructive",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeTwoEndpoints,
+			oldSe:          oldSeOneEndpoint,
+			skipDestructive: false,
+			diff: 			"Add",
+		},
+		{
+			name:           "Should return false when not in warm up phase but endpoints updated",
+			rc:       		rcNotinWarmupPhase,
+			newSe: 			newSeTwoEndpointsUpdated,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: false,
+			diff: 			"Update",
+		},
+		{
+			name:           "Should return true when in warm up phase but endpoints are updated (destructive)",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeTwoEndpointsUpdated,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: true,
+			diff: 			"Update",
+		},
+
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			skipDestructive, diff := skipDestructiveUpdate(c.rc, c.newSe, c.oldSe)
+			if skipDestructive == c.skipDestructive {
+				//perfect
+			} else {
+				t.Errorf("Result Failed. Got %v, expected %v", skipDestructive, c.skipDestructive)
+			}
+			if c.diff == ""  || (c.diff != "" && strings.Contains(diff, c.diff)) {
+				//perfect
+			} else {
+				t.Errorf("Diff Failed. Got %v, expected %v", diff, c.diff)
+			}
+		})
+	}
+}
+
+func TestAddUpdateServiceEntry(t *testing.T) {
+
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+
+	seCtrl := &istio.ServiceEntryController{
+		IstioClient: fakeIstioClient,
+	}
+
+	twoEndpointSe := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	oneEndpointSe := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		},
+	}
+
+	newSeOneEndpoint := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       oneEndpointSe,
+	}
+
+	oldSeTwoEndpoints := &v1alpha32.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		Spec:       twoEndpointSe,
+	}
+
+	rcWarmupPhase := &RemoteController{
+		ServiceEntryController: seCtrl,
+		StartTime: time.Now(),
+	}
+
+	rcNotinWarmupPhase := &RemoteController{
+		ServiceEntryController: seCtrl,
+		StartTime: time.Now().Add(time.Duration(-21) * time.Minute),
+	}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name            string
+		rc 			    *RemoteController
+		newSe		    *v1alpha32.ServiceEntry
+		oldSe           *v1alpha32.ServiceEntry
+		skipDestructive bool
+	}{
+		{
+			name:           "Should add a new SE",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          nil,
+			skipDestructive: false,
+		},
+		{
+			name:           "Should not update SE when in warm up mode and the update is destructive",
+			rc:       		rcWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: true,
+		},
+		{
+			name:           "Should update an SE",
+			rc:       		rcNotinWarmupPhase,
+			newSe: 			newSeOneEndpoint,
+			oldSe:          oldSeTwoEndpoints,
+			skipDestructive: false,
+		},
+
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc)
+			if c.skipDestructive {
+				//verify the update did not go through
+				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(c.oldSe.Name, v12.GetOptions{})
+				_, diff := getServiceEntryDiff(c.oldSe, se)
+				if diff != "" {
+					t.Errorf("Failed. Got %v, expected %v", se.Spec.String(), c.oldSe.Spec.String())
 				}
 			}
 		})
