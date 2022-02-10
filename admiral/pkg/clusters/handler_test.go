@@ -1188,12 +1188,12 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 	}
 
 	newSeOneEndpoint := &v1alpha32.ServiceEntry{
-		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
+		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "namespace"},
 		Spec:       oneEndpointSe,
 	}
 
 	oldSeTwoEndpoints := &v1alpha32.ServiceEntry{
-		ObjectMeta: v12.ObjectMeta{Name: "se2", Namespace: "random"},
+		ObjectMeta: v12.ObjectMeta{Name: "se2", Namespace: "namespace"},
 		Spec:       twoEndpointSe,
 	}
 
