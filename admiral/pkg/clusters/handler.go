@@ -541,13 +541,12 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	if exist == nil || exist.Spec.Hosts == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		log.Infof(LogFormat + " SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
 		op = "Add"
+		log.Infof(LogFormat + " SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
-		exist.Spec = obj.Spec
 		op = "Update"
 		skipUpdate, diff := skipDestructiveUpdate(rc, obj, exist)
 		if diff != "" {
@@ -557,6 +556,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
 			return
 		} else {
+			exist.Spec = obj.Spec
 			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(exist)
 		}
 
@@ -583,6 +583,10 @@ func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old
 //Diffs only endpoints
 func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (destructive bool, diff string) {
 
+	//we diff only if both objects exist
+	if old == nil || new == nil {
+		return false, ""
+	}
 	destructive = false
 	format := "%s %s before: %v, after: %v;"
 	var buffer bytes.Buffer
