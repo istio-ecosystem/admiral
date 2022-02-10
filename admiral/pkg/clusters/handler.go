@@ -573,7 +573,7 @@ func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old
 	skipDestructive = false
 	destructive, diff := getServiceEntryDiff(new, old)
 	//do not update SEs during bootup phase if they are destructive
-	if time.Now().Sub(rc.StartTime) < (2 * common.GetAdmiralParams().CacheRefreshDuration) && destructive {
+	if time.Since(rc.StartTime) < (2 * common.GetAdmiralParams().CacheRefreshDuration) && destructive {
 		skipDestructive = true
 	}
 
@@ -606,7 +606,7 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 		}
 	}
 
-	for key, _ := range oldEndpointMap {
+	for key := range oldEndpointMap {
 		if _, ok := found[key]; !ok {
 			destructive = true
 			buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Delete", oldEndpointMap[key].String(), ""))
