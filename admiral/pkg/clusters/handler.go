@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"bytes"
 	"fmt"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/gogo/protobuf/types"
@@ -15,8 +16,10 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 )
 
 const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
@@ -540,12 +543,23 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 		obj.ResourceVersion = ""
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
 		op = "Add"
+		log.Infof(LogFormat + " SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
-		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(exist)
+		skipUpdate, diff := skipDestructiveUpdate(rc, obj, exist)
+		if diff != "" {
+			log.Infof(LogFormat + " diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
+		}
+		if skipUpdate {
+			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
+			return
+		} else {
+			exist.Spec = obj.Spec
+			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(exist)
+		}
+
 	}
 
 	if err != nil {
@@ -553,6 +567,58 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	} else {
 		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Success")
 	}
+}
+
+func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (skipDestructive bool, diff string) {
+	skipDestructive = false
+	destructive, diff := getServiceEntryDiff(new, old)
+	//do not update SEs during bootup phase if they are destructive
+	if time.Since(rc.StartTime) < (2 * common.GetAdmiralParams().CacheRefreshDuration) && destructive {
+		skipDestructive = true
+	}
+
+	return skipDestructive, diff
+}
+
+//Diffs only endpoints
+func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (destructive bool, diff string) {
+
+	//we diff only if both objects exist
+	if old == nil || new == nil {
+		return false, ""
+	}
+	destructive = false
+	format := "%s %s before: %v, after: %v;"
+	var buffer bytes.Buffer
+	seNew := new.Spec
+	seOld := old.Spec
+
+	oldEndpointMap := make(map[string]*v1alpha32.ServiceEntry_Endpoint)
+	found := make(map[string]string)
+	for _, oEndpoint := range seOld.Endpoints {
+		oldEndpointMap[oEndpoint.Address] = oEndpoint
+	}
+	for _, nEndpoint := range seNew.Endpoints {
+		if val, ok := oldEndpointMap[nEndpoint.Address]; ok {
+			found[nEndpoint.Address] = "1"
+			if !reflect.DeepEqual(val, nEndpoint) {
+				destructive = true
+				buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Update", val.String(), nEndpoint.String()))
+			}
+		} else {
+			buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Add", "", nEndpoint.String()))
+		}
+	}
+
+	for key := range oldEndpointMap {
+		if _, ok := found[key]; !ok {
+			destructive = true
+			buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Delete", oldEndpointMap[key].String(), ""))
+		}
+	}
+
+	diff = buffer.String()
+	return destructive, diff
 }
 
 func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {

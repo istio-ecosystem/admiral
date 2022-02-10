@@ -120,6 +120,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		stop:      stop,
 		ClusterID: clusterID,
 		ApiServer: clientConfig.Host,
+		StartTime: time.Now(),
 	}
 
 	var err error

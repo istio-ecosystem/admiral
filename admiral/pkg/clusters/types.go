@@ -15,11 +15,13 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"sync"
+	"time"
 )
 
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
+	StartTime				  time.Time
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
