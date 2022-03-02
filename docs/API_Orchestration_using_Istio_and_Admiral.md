@@ -27,6 +27,7 @@ Runtime orchestration is enabled in a combination of API Gateway and Istio Servi
 
 ## Linking OpenAPI 3.0 Contract to Runtime Orchestration
 Custom extensions `x-orx-containers` and `x-orx-proxies` are used in API contracts to indicate the API orchestration pattern. The parser CLI tool parses the API contract and generates the deployment, service and Istio virtual services to be deployed to the target Kubernetes cluster.
+
 ```sh
 paths:
   /banking:
