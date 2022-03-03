@@ -10,7 +10,7 @@ Runtime orchestration for APIs is a paradigm that enables API owners to provide 
 The solution thus shall be a framework that offers dynamic injection, end to end security and capabilities to abstract business logic while keeping the principles under purview.
 <br />
 
-OpenAPI 3.0 specification is the pervasive standard used for API contract definition. By leveraging the extensionsibility of OpenAPI, the solution shall define runtime orchestration constructs. API creators could leverage this to define their runtime semantics such that an off-the-shelf framework can dynamically load and link the attributes in the OpenAPI extension to the Istio substrate. This apparatus thus creates linkage between API defintions, Kubernetes resources and Istio VirtualServices along with routing rules et al towards optimized execution. The solution covers both north-south and east-west traffic manifestations. 
+OpenAPI 3.0 specification is the pervasive standard used for API contract definition. By leveraging the extensionsibility of OpenAPI, the solution shall define runtime orchestration constructs. API creators could leverage this to define their runtime semantics such that an off-the-shelf framework can dynamically load and link the attributes in the OpenAPI extension to the Istio substrate. This apparatus thus creates linkage between API defintions, Kubernetes resources and Istio VirtualServices along with routing rules et al towards optimized execution. The solution provides consistent routing for north-south and east-west traffic manifestations with zero additional overhead for east-west traffic routing. 
 
 API runtime orchestration supports API patterns e.g.  
 
