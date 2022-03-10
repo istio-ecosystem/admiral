@@ -3,13 +3,14 @@ package clusters
 import (
 	"errors"
 	"fmt"
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"math"
 	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	log "github.com/sirupsen/logrus"
@@ -115,7 +116,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		sourceServices[rc.ClusterID] = serviceInstance
 	}
 
-	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity)
+	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity).Copy()
 
 	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
 
@@ -167,7 +168,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			}
 		}
 
-		for _, val := range dependents.Map() {
+		for _, val := range dependents {
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, map[string]string{cname: "1"})
 		}
 

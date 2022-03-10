@@ -64,8 +64,8 @@ type LabelSet struct {
 	AdmiralIgnoreLabel                  string
 	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
 	GlobalTrafficDeploymentLabel        string //label used to tie together deployments and globaltrafficpolicy objects. Configured separately from the identity key because this one _must_ be a label
-	EnvKey								string //key used to group deployments by env. The order would be to use annotation `EnvKey` and then label `EnvKey` and then fallback to label `env` label
-	GatewayApp							string //the value for `app` key that will be used to fetch the loadblancer for cross cluster calls, also referred to as east west gateway
+	EnvKey                              string //key used to group deployments by env. The order would be to use annotation `EnvKey` and then label `EnvKey` and then fallback to label `env` label
+	GatewayApp                          string //the value for `app` key that will be used to fetch the loadblancer for cross cluster calls, also referred to as east west gateway
 }
 
 func NewSidecarEgressMap() *SidecarEgressMap {
@@ -105,12 +105,26 @@ func (s *Map) Delete(key string) {
 	delete(s.cache, key)
 }
 
-func (s *Map) Map() map[string]string {
+func (s *Map) Copy() map[string]string {
 	if s != nil {
-		return s.cache
+		defer s.mutex.Unlock()
+		s.mutex.Lock()
+		var copy = make(map[string]string)
+		for k, v := range s.cache {
+			copy[k] = v
+		}
+		return copy
 	} else {
 		return nil
 	}
+}
+
+func (s *Map) Range(fn func(k string, v string)) {
+	s.mutex.Lock()
+	for k, v := range s.cache {
+		fn(k, v)
+	}
+	s.mutex.Unlock()
 }
 
 func (s *MapOfMaps) Put(pkey string, key string, value string) {
@@ -125,7 +139,10 @@ func (s *MapOfMaps) Put(pkey string, key string, value string) {
 }
 
 func (s *MapOfMaps) Get(key string) *Map {
-	return s.cache[key]
+	s.mutex.Lock()
+	val := s.cache[key]
+	s.mutex.Unlock()
+	return val
 }
 
 func (s *MapOfMaps) Delete(key string) {
@@ -136,6 +153,14 @@ func (s *MapOfMaps) Delete(key string) {
 
 func (s *MapOfMaps) Map() map[string]*Map {
 	return s.cache
+}
+
+func (s *MapOfMaps) Range(fn func(k string, v *Map)) {
+	s.mutex.Lock()
+	for k, v := range s.cache {
+		fn(k, v)
+	}
+	s.mutex.Unlock()
 }
 
 func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string, cnames map[string]string) {

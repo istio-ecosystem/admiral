@@ -3,12 +3,14 @@ package routes
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
-	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 type RouteOpts struct {
@@ -126,16 +128,18 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 
 	if identity != "" {
 
-		for cname, serviceCluster := range opts.RemoteRegistry.AdmiralCache.SeClusterCache.Map() {
+		m := opts.RemoteRegistry.AdmiralCache.SeClusterCache
+
+		m.Range(func(cname string, serviceCluster *common.Map) {
 			if strings.Contains(cname, identity) {
 				var identityServiceEntry IdentityServiceEntry
 				identityServiceEntry.Cname = cname
-				for _, clusterId := range serviceCluster.Map() {
-					identityServiceEntry.ClusterNames = append(identityServiceEntry.ClusterNames, clusterId)
-				}
+				serviceCluster.Range(func(k string, clusterID string) {
+					identityServiceEntry.ClusterNames = append(identityServiceEntry.ClusterNames, clusterID)
+				})
 				response = append(response, identityServiceEntry)
 			}
-		}
+		})
 		out, err := json.Marshal(response)
 		if err != nil {
 			log.Printf("Failed to marshall response GetServiceEntriesByIdentity call")
