@@ -228,7 +228,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host).Copy()
 
-	if dependentClusters != nil && len(dependentClusters) > 0 {
+	if len(dependentClusters) > 0 {
 
 		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
 
@@ -435,7 +435,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0]).Copy()
 
-	if dependentClusters != nil && len(dependentClusters) > 0 {
+	if len(dependentClusters) > 0 {
 
 		for _, dependentCluster := range dependentClusters {
 
