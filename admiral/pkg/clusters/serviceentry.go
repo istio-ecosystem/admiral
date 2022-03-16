@@ -134,7 +134,11 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		rc := remoteRegistry.RemoteControllers[sourceCluster]
 		var meshPorts map[string]uint32
-		var isBlueGreenStrategy = sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen != nil && sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.PreviewService != ""
+		isBlueGreenStrategy := false
+
+		if len(sourceRollouts) > 0 {
+			isBlueGreenStrategy = sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen != nil && sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.PreviewService != ""
+		}
 
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
