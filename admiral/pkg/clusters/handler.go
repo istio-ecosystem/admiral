@@ -3,10 +3,15 @@ package clusters
 import (
 	"bytes"
 	"fmt"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/gogo/protobuf/types"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
@@ -16,10 +21,6 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"reflect"
-	"sort"
-	"strings"
-	"time"
 )
 
 const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
@@ -45,8 +46,8 @@ type SidecarHandler struct {
 }
 
 type WeightedService struct {
-	Weight int32
-	Service  *k8sV1.Service
+	Weight  int32
+	Service *k8sV1.Service
 }
 
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *v1.Dependency) {
@@ -70,9 +71,9 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 		processGtp = false
 	}
 	outlierDetection := &v1alpha32.OutlierDetection{
-		BaseEjectionTime:  &types.Duration{Seconds: 300},
+		BaseEjectionTime:      &types.Duration{Seconds: 300},
 		Consecutive_5XxErrors: &types.UInt32Value{Value: uint32(10)},
-		Interval:          &types.Duration{Seconds: 60},
+		Interval:              &types.Duration{Seconds: 60},
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
@@ -108,28 +109,28 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 }
 
 func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
@@ -137,7 +138,7 @@ func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
 
 func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
@@ -145,7 +146,7 @@ func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
 
 func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
@@ -153,7 +154,7 @@ func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
@@ -164,7 +165,7 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
@@ -175,7 +176,7 @@ func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace=" + obj.Namespace)
+		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
 	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
@@ -192,7 +193,7 @@ func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
 
 func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {
 
-	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true"  {
+	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		return true
 	}
 
@@ -416,7 +417,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	}
 
 	//check if this virtual service is used by Argo rollouts for canary strategy, if so, update the corresponding SE with appropriate weights
-    if common.GetAdmiralParams().ArgoRolloutsEnabled {
+	if common.GetAdmiralParams().ArgoRolloutsEnabled {
 		rollouts, err := vh.RemoteRegistry.RemoteControllers[clusterId].RolloutController.RolloutClient.Rollouts(obj.Namespace).List(v12.ListOptions{})
 
 		if err != nil {
@@ -480,7 +481,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 		}
 		return nil
 	} else {
-		log.Infof(LogFormat,"Event", "VirtualService", obj.Name, clusterId, "No dependent clusters found")
+		log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "No dependent clusters found")
 	}
 
 	//copy the VirtualService `as is` if they are not generated by Admiral (not in CnameDependentClusterCache)
@@ -510,7 +511,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
-	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
+	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 	if exist == nil || len(exist.Spec.Hosts) == 0 {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
@@ -537,20 +538,20 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
-	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
+	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 	if exist == nil || exist.Spec.Hosts == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
 		op = "Add"
-		log.Infof(LogFormat + " SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
+		log.Infof(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		op = "Update"
 		skipUpdate, diff := skipDestructiveUpdate(rc, obj, exist)
 		if diff != "" {
-			log.Infof(LogFormat + " diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
+			log.Infof(LogFormat+" diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
 		}
 		if skipUpdate {
 			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
@@ -573,7 +574,7 @@ func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old
 	skipDestructive = false
 	destructive, diff := getServiceEntryDiff(new, old)
 	//do not update SEs during bootup phase if they are destructive
-	if time.Since(rc.StartTime) < (2 * common.GetAdmiralParams().CacheRefreshDuration) && destructive {
+	if time.Since(rc.StartTime) < (2*common.GetAdmiralParams().CacheRefreshDuration) && destructive {
 		skipDestructive = true
 	}
 
@@ -603,17 +604,17 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 			found[nEndpoint.Address] = "1"
 			if !reflect.DeepEqual(val, nEndpoint) {
 				destructive = true
-				buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Update", val.String(), nEndpoint.String()))
+				buffer.WriteString(fmt.Sprintf(format, "endpoint", "Update", val.String(), nEndpoint.String()))
 			}
 		} else {
-			buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Add", "", nEndpoint.String()))
+			buffer.WriteString(fmt.Sprintf(format, "endpoint", "Add", "", nEndpoint.String()))
 		}
 	}
 
 	for key := range oldEndpointMap {
 		if _, ok := found[key]; !ok {
 			destructive = true
-			buffer.WriteString(fmt.Sprintf(format,  "endpoint", "Delete", oldEndpointMap[key].String(), ""))
+			buffer.WriteString(fmt.Sprintf(format, "endpoint", "Delete", oldEndpointMap[key].String(), ""))
 		}
 	}
 
@@ -638,7 +639,7 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
-	obj.Annotations["app.kubernetes.io/created-by"] =  "admiral"
+	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 	if exist == nil || exist.Name == "" || exist.Spec.Host == "" {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
@@ -744,7 +745,7 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 
 // A rollout can use one of 2 stratergies :-
 // 1. Canary strategy - which can use a virtual service to manage the weights associated with a stable and canary service. Admiral created endpoints in service entries will use the weights assigned in the Virtual Service
-// 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will always use the active service
+// 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will use repective service to create active and preview endpoints
 func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[string]*WeightedService {
 
 	if rollout == nil {
@@ -761,14 +762,17 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		return nil
 	}
 
-	var canaryService, stableService, virtualServiceRouteName  string
+	var canaryService, stableService, virtualServiceRouteName string
 
 	var istioCanaryWeights = make(map[string]int32)
 
 	var blueGreenActiveService string
+	var blueGreenPreviewService string
+
 	if rolloutStrategy.BlueGreen != nil {
-		// If rollout uses blue green strategy, use the active service
+		// If rollout uses blue green strategy
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
+		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
 	} else if rolloutStrategy.Canary != nil && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
 		canaryService = rolloutStrategy.Canary.CanaryService
 		stableService = rolloutStrategy.Canary.StableService
@@ -827,7 +831,6 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 
 	var matchedServices = make(map[string]*WeightedService)
 
-
 	//if we have more than one matching service we will pick the first one, for this to be deterministic we sort services
 	var servicesInNamespace = cachedService.Service[rollout.Namespace]
 
@@ -842,7 +845,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		var service = servicesInNamespace[s]
 		var match = true
 		//skip services that are not referenced in the rollout
-		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService {
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
 			log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 			continue
 		}
@@ -863,8 +866,11 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		if match {
 			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
 			if len(ports) > 0 {
-				//if the strategy is bluegreen or using canary with NO istio traffic management, pick the first service that matches
-				if len(istioCanaryWeights) == 0 {
+				// if the strategy is bluegreen return matched services
+				// else if using canary with NO istio traffic management, pick the first service that matches
+				if rolloutStrategy.BlueGreen != nil {
+					matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
+				} else if len(istioCanaryWeights) == 0 {
 					matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
 					break
 				}

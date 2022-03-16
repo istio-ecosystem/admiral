@@ -1,9 +1,10 @@
 package common
 
 import (
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var admiralParams = AdmiralParams{
@@ -69,6 +70,10 @@ func GetLabelSet() *LabelSet {
 
 func GetHostnameSuffix() string {
 	return admiralParams.HostnameSuffix
+}
+
+func GetPreviewHostnamePrefix() string {
+	return admiralParams.PreviewHostnamePrefix
 }
 
 func GetWorkloadIdentifier() string {
