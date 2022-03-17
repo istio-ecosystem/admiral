@@ -118,7 +118,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		sourceServices[rc.ClusterID] = serviceInstance
 	}
 
-	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity)
+	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity).Copy()
 
 	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
 
@@ -198,7 +198,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			}
 		}
 
-		for _, val := range dependents.Map() {
+		for _, val := range dependents {
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, cnames)
 		}
 

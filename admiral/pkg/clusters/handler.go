@@ -226,9 +226,9 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	r := dh.RemoteRegistry
 
-	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host)
+	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host).Copy()
 
-	if dependentClusters != nil && len(dependentClusters.Map()) > 0 {
+	if len(dependentClusters) > 0 {
 
 		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
 
@@ -241,7 +241,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		allDependentClusters := make(map[string]string)
 
-		util.MapCopy(allDependentClusters, dependentClusters.Map())
+		util.MapCopy(allDependentClusters, dependentClusters)
 
 		allDependentClusters[clusterId] = clusterId
 
@@ -433,11 +433,11 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 		}
 	}
 
-	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0])
+	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0]).Copy()
 
-	if dependentClusters != nil && len(dependentClusters.Map()) > 0 {
+	if len(dependentClusters) > 0 {
 
-		for _, dependentCluster := range dependentClusters.Map() {
+		for _, dependentCluster := range dependentClusters {
 
 			rc := r.RemoteControllers[dependentCluster]
 
@@ -715,22 +715,24 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 	return matchedService
 }
 
-func getDependentClusters(dependents *common.Map, identityClusterCache *common.MapOfMaps, sourceServices map[string]*k8sV1.Service) map[string]string {
+func getDependentClusters(dependents map[string]string, identityClusterCache *common.MapOfMaps, sourceServices map[string]*k8sV1.Service) map[string]string {
 	var dependentClusters = make(map[string]string)
-	//TODO optimize this map construction
-	if dependents != nil {
-		for identity, clusters := range identityClusterCache.Map() {
-			for depIdentity := range dependents.Map() {
-				if identity == depIdentity {
-					for _, clusterId := range clusters.Map() {
-						_, ok := sourceServices[clusterId]
-						if !ok {
-							dependentClusters[clusterId] = clusterId
-						}
-					}
-				}
-			}
+
+	if dependents == nil {
+		return dependentClusters
+	}
+
+	for depIdentity := range dependents {
+		clusters := identityClusterCache.Get(depIdentity)
+		if clusters == nil {
+			continue
 		}
+		clusters.Range(func(k string, clusterID string) {
+			_, ok := sourceServices[clusterID]
+			if !ok {
+				dependentClusters[clusterID] = clusterID
+			}
+		})
 	}
 	return dependentClusters
 }

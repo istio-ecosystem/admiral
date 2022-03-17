@@ -2,11 +2,16 @@ package clusters
 
 import (
 	"context"
+	"log"
+	"sync"
+	"testing"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -14,10 +19,6 @@ import (
 	v13 "k8s.io/api/core/v1"
 	time2 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"log"
-	"sync"
-	"testing"
-	"time"
 )
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(v1.GlobalTrafficPolicy{}.Status)
@@ -860,6 +861,7 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 
 	admiralCacle.GlobalTrafficCache = gtpCache
 	registry.AdmiralCache = admiralCacle
+	admiralCacle.argoRolloutsEnabled = true
 	handler.RemoteRegistry = registry
 
 	e2eGtp := v1.GlobalTrafficPolicy{}
