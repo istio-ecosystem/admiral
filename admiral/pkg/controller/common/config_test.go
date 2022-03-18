@@ -50,6 +50,9 @@ func TestConfigManagement(t *testing.T) {
 	if GetHostnameSuffix() != "mesh" {
 		t.Errorf("Hostname suffix mismatch, expected mesh, got %v", GetHostnameSuffix())
 	}
+	if GetPreviewHostnamePrefix() != "preview" {
+		t.Errorf("Prefix for preview hostname mismatch, expected preview, got %v", GetPreviewHostnamePrefix())
+	}
 	if GetSyncNamespace() != "ns" {
 		t.Errorf("Sync namespace mismatch, expected ns, got %v", GetSyncNamespace())
 	}
