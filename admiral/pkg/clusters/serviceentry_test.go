@@ -1144,6 +1144,22 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	if nil == previewServiceEntryResp {
 		t.Fatalf("Preview Service entry returned should not be empty")
 	}
+
+	// When Preview service is not defined in BlueGreen strategy
+	rollout.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME},
+	}
+
+	se = modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+
+	if len(se) != 1 {
+		t.Fatalf("Expected 1 service entries to be created but found %d", len(se))
+	}
+	serviceEntryResp = se["test.test.mesh"]
+
+	if nil == serviceEntryResp {
+		t.Fatalf("Service entry returned should not be empty")
+	}
 }
 
 func TestUpdateEndpointsForWeightedServices(t *testing.T) {

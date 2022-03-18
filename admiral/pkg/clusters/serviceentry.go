@@ -137,7 +137,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		isBlueGreenStrategy := false
 
 		if len(sourceRollouts) > 0 {
-			isBlueGreenStrategy = sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen != nil && sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.PreviewService != ""
+			isBlueGreenStrategy = sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen != nil
 		}
 
 		if len(sourceDeployments) > 0 {

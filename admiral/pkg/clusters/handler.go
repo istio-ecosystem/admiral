@@ -847,7 +847,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		var service = servicesInNamespace[s]
 		var match = true
 		//skip services that are not referenced in the rollout
-		if len(blueGreenActiveService) > 0 && len(blueGreenPreviewService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
 			log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 			continue
 		}
