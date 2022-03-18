@@ -23,12 +23,16 @@ kubectl apply -f $install_dir/yaml/grpc.yaml
 
 kubectl apply -f $install_dir/yaml/sample_dep.yaml
 
+# Update BlueGreen Rollout with new preview release
+kubectl apply -f $install_dir/yaml/greeting_preview.yaml
+
 #wait for the deployments to come up
 kubectl rollout status deployment greeting -n sample
 kubectl rollout status deployment webapp -n sample
 
 
 kubectl rollout status deployment webapp -n sample-rollout-bluegreen
+
 
 #Verify that admiral created service names for 'greeting' service
 checkse() {
