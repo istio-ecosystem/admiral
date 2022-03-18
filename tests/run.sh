@@ -28,7 +28,6 @@ $install_dir/scripts/install_sample_services.sh $install_dir
 sleep 10
 ./test1.sh "webapp" "sample" "greeting"
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
-sleep 20
 ./test5.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
 ./test2.sh "webapp" "sample-rollout-canary" "greeting.canary"
 #cleanup to fee up the pipeline minkube resources
@@ -41,4 +40,4 @@ fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 ./test4.sh "webapp" "sample"
 
-./cleanup.sh $istio_version
+# ./cleanup.sh $istio_version
