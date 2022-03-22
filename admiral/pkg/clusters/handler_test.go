@@ -1,6 +1,11 @@
 package clusters
 
 import (
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/gogo/protobuf/types"
 	"github.com/google/go-cmp/cmp"
@@ -9,17 +14,89 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	coreV1 "k8s.io/api/core/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"strings"
-	"testing"
-	"time"
 )
+
+func TestGetDependentClusters(t *testing.T) {
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("id1", "dep1", "cl1")
+	identityClusterCache.Put("id2", "dep2", "cl2")
+	identityClusterCache.Put("id3", "dep3", "cl3")
+
+	testCases := []struct {
+		name                 string
+		dependents           map[string]string
+		identityClusterCache *common.MapOfMaps
+		sourceServices       map[string]*k8sV1.Service
+		expectedResult       map[string]string
+	}{
+		{
+			name:           "nil dependents map",
+			dependents:     nil,
+			expectedResult: make(map[string]string),
+		},
+		{
+			name:                 "empty dependents map",
+			dependents:           map[string]string{},
+			identityClusterCache: identityClusterCache,
+			expectedResult:       map[string]string{},
+		},
+		{
+			name: "no dependent match",
+			dependents: map[string]string{
+				"id99": "val1",
+			},
+			identityClusterCache: identityClusterCache,
+			expectedResult:       map[string]string{},
+		},
+		{
+			name: "no service for matched dep cluster",
+			dependents: map[string]string{
+				"id1": "val1",
+			},
+			identityClusterCache: identityClusterCache,
+			sourceServices: map[string]*k8sV1.Service{
+				"cl1": &k8sV1.Service{},
+			},
+			expectedResult: map[string]string{},
+		},
+		{
+			name: "found service for matched dep cluster",
+			dependents: map[string]string{
+				"id1": "val1",
+			},
+			identityClusterCache: identityClusterCache,
+			sourceServices: map[string]*k8sV1.Service{
+				"cl99": &k8sV1.Service{
+					ObjectMeta: v12.ObjectMeta{
+						Name: "testservice",
+					},
+				},
+			},
+			expectedResult: map[string]string{
+				"cl1": "cl1",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualResult := getDependentClusters(tc.dependents, tc.identityClusterCache, tc.sourceServices)
+			assert.Equal(t, len(tc.expectedResult), len(actualResult))
+			assert.True(t, reflect.DeepEqual(actualResult, tc.expectedResult))
+		})
+	}
+
+}
 
 func TestIgnoreIstioResource(t *testing.T) {
 
@@ -27,57 +104,57 @@ func TestIgnoreIstioResource(t *testing.T) {
 	testCases := []struct {
 		name           string
 		exportTo       []string
-		annotations	   map[string]string
-		namespace	   string
+		annotations    map[string]string
+		namespace      string
 		expectedResult bool
 	}{
 		{
 			name:           "Should return false when exportTo is not present",
 			exportTo:       nil,
-			annotations: 	nil,
-			namespace:		"random-ns",
+			annotations:    nil,
+			namespace:      "random-ns",
 			expectedResult: false,
 		},
 		{
 			name:           "Should return false when its exported to *",
 			exportTo:       []string{"*"},
-			annotations: 	nil,
-			namespace:		"random-ns",
+			annotations:    nil,
+			namespace:      "random-ns",
 			expectedResult: false,
 		},
 		{
 			name:           "Should return true when its exported to .",
 			exportTo:       []string{"."},
-			annotations: 	nil,
-			namespace:		"random-ns",
+			annotations:    nil,
+			namespace:      "random-ns",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when its exported to a handful of namespaces",
 			exportTo:       []string{"namespace1", "namespace2"},
-			annotations: 	nil,
-			namespace:		"random-ns",
+			annotations:    nil,
+			namespace:      "random-ns",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when admiral ignore annotation is set",
 			exportTo:       []string{"*"},
-			annotations: 	map[string]string{common.AdmiralIgnoreAnnotation: "true"},
-			namespace:		"random-ns",
+			annotations:    map[string]string{common.AdmiralIgnoreAnnotation: "true"},
+			namespace:      "random-ns",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when its from istio-system namespace",
 			exportTo:       []string{"*"},
-			annotations: 	nil,
-			namespace:		"istio-system",
+			annotations:    nil,
+			namespace:      "istio-system",
 			expectedResult: true,
 		},
 		{
 			name:           "Should return true when its from admiral sync namespace",
 			exportTo:       []string{"*"},
-			annotations: 	nil,
-			namespace:		"ns",
+			annotations:    nil,
+			namespace:      "ns",
 			expectedResult: true,
 		},
 	}
@@ -98,9 +175,9 @@ func TestIgnoreIstioResource(t *testing.T) {
 func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:  &types.Duration{Seconds: 300},
+		BaseEjectionTime:      &types.Duration{Seconds: 300},
 		Consecutive_5XxErrors: &types.UInt32Value{Value: 10},
-		Interval:          &types.Duration{Seconds: 60}}
+		Interval:              &types.Duration{Seconds: 60}}
 	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
 
 	noGtpDr := v1alpha3.DestinationRule{
@@ -426,18 +503,18 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	service.Spec.Ports = ports
 
 	stableService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name:STABLESERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: STABLESERVICENAME, Namespace: NAMESPACE},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
-			Ports: ports,
+			Ports:    ports,
 		},
 	}
 
 	canaryService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name:CANARYSERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: CANARYSERVICENAME, Namespace: NAMESPACE},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
-			Ports: ports,
+			Ports:    ports,
 		},
 	}
 
@@ -493,30 +570,30 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	virtualService := &v1alpha32.VirtualService{
 		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_1, Namespace: NAMESPACE},
-		Spec:v1alpha3.VirtualService{
-			Http:                 []*v1alpha3.HTTPRoute{{Route:[]*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight:80},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight:20},
+		Spec: v1alpha3.VirtualService{
+			Http: []*v1alpha3.HTTPRoute{{Route: []*v1alpha3.HTTPRouteDestination{
+				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 80},
+				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 20},
 			}}},
 		},
 	}
 
 	vsMutipleRoutesWithMatch := &v1alpha32.VirtualService{
 		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_2, Namespace: NAMESPACE},
-		Spec:v1alpha3.VirtualService{
-			Http:                 []*v1alpha3.HTTPRoute{{Name:VS_ROUTE_PRIMARY, Route:[]*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight:80},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight:20},
+		Spec: v1alpha3.VirtualService{
+			Http: []*v1alpha3.HTTPRoute{{Name: VS_ROUTE_PRIMARY, Route: []*v1alpha3.HTTPRouteDestination{
+				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 80},
+				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 20},
 			}}},
 		},
 	}
 
 	vsMutipleRoutesWithZeroWeight := &v1alpha32.VirtualService{
 		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_4, Namespace: NAMESPACE},
-		Spec:v1alpha3.VirtualService{
-			Http:                 []*v1alpha3.HTTPRoute{{Name:"random", Route:[]*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight:100},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight:0},
+		Spec: v1alpha3.VirtualService{
+			Http: []*v1alpha3.HTTPRoute{{Name: "random", Route: []*v1alpha3.HTTPRouteDestination{
+				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 100},
+				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 0},
 			}}},
 		},
 	}
@@ -613,7 +690,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CANARYSERVICENAME,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string {VS_ROUTE_PRIMARY}},
+					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{VS_ROUTE_PRIMARY}},
 				},
 			},
 		},
@@ -632,7 +709,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CANARYSERVICENAME,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string {"random"}},
+					VirtualService: argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string{"random"}},
 				},
 			},
 		},
@@ -676,16 +753,16 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		},
 	}
 
-	resultForDummy := map[string]*WeightedService {"dummy": {Weight:1, Service:service1},}
+	resultForDummy := map[string]*WeightedService{"dummy": {Weight: 1, Service: service1}}
 
-	resultForRandomMatch := map[string]*WeightedService {CANARYSERVICENAME: {Weight:1, Service:canaryService},}
+	resultForRandomMatch := map[string]*WeightedService{CANARYSERVICENAME: {Weight: 1, Service: canaryService}}
 
-	resultForStableServiceOnly := map[string]*WeightedService {STABLESERVICENAME: {Weight:1, Service:stableService},}
+	resultForStableServiceOnly := map[string]*WeightedService{STABLESERVICENAME: {Weight: 1, Service: stableService}}
 
-	resultForCanaryWithIstio := map[string]*WeightedService {STABLESERVICENAME: {Weight:80, Service:stableService},
-		CANARYSERVICENAME: {Weight:20, Service:canaryService},}
+	resultForCanaryWithIstio := map[string]*WeightedService{STABLESERVICENAME: {Weight: 80, Service: stableService},
+		CANARYSERVICENAME: {Weight: 20, Service: canaryService}}
 
-	resultForCanaryWithStableService := map[string]*WeightedService {STABLESERVICENAME: {Weight:100, Service:stableService},}
+	resultForCanaryWithStableService := map[string]*WeightedService{STABLESERVICENAME: {Weight: 100, Service: stableService}}
 
 	testCases := []struct {
 		name    string
@@ -933,7 +1010,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 		},
 	}
 
-	resultForBlueGreen := map[string]*WeightedService {SERVICENAME: {Weight:1, Service:activeService},}
+	resultForBlueGreen := map[string]*WeightedService{SERVICENAME: {Weight: 1, Service: activeService}}
 
 	testCases := []struct {
 		name    string
@@ -955,7 +1032,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 			name:    "canaryRolloutHappyCase",
 			rollout: &bgRollout,
 			rc:      rc,
-			result:  resultForBlueGreen ,
+			result:  resultForBlueGreen,
 		},
 		{
 			name:    "canaryRolloutNilRollout",
@@ -1039,7 +1116,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		},
 	}
 
-    newSeTwoEndpoints := &v1alpha32.ServiceEntry{
+	newSeTwoEndpoints := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
 		Spec:       twoEndpointSe,
 	}
@@ -1064,7 +1141,6 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Spec:       oneEndpointSe,
 	}
 
-
 	rcWarmupPhase := &RemoteController{
 		StartTime: time.Now(),
 	}
@@ -1076,61 +1152,60 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name            string
-		rc 			    *RemoteController
-		newSe		    *v1alpha32.ServiceEntry
+		rc              *RemoteController
+		newSe           *v1alpha32.ServiceEntry
 		oldSe           *v1alpha32.ServiceEntry
 		skipDestructive bool
-		diff	   	    string
+		diff            string
 	}{
 		{
-			name:           "Should return false when in warm up phase but not destructive",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          oldSeOneEndpoint,
+			name:            "Should return false when in warm up phase but not destructive",
+			rc:              rcWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           oldSeOneEndpoint,
 			skipDestructive: false,
-			diff: 			"",
+			diff:            "",
 		},
 		{
-			name:           "Should return true when in warm up phase but is destructive",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should return true when in warm up phase but is destructive",
+			rc:              rcWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: true,
-			diff: 			"Delete",
+			diff:            "Delete",
 		},
 		{
-			name:           "Should return false when not in warm up phase but is destructive",
-			rc:       		rcNotinWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should return false when not in warm up phase but is destructive",
+			rc:              rcNotinWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: false,
-			diff: 			"Delete",
+			diff:            "Delete",
 		},
 		{
-			name:           "Should return false when in warm up phase but is constructive",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeTwoEndpoints,
-			oldSe:          oldSeOneEndpoint,
+			name:            "Should return false when in warm up phase but is constructive",
+			rc:              rcWarmupPhase,
+			newSe:           newSeTwoEndpoints,
+			oldSe:           oldSeOneEndpoint,
 			skipDestructive: false,
-			diff: 			"Add",
+			diff:            "Add",
 		},
 		{
-			name:           "Should return false when not in warm up phase but endpoints updated",
-			rc:       		rcNotinWarmupPhase,
-			newSe: 			newSeTwoEndpointsUpdated,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should return false when not in warm up phase but endpoints updated",
+			rc:              rcNotinWarmupPhase,
+			newSe:           newSeTwoEndpointsUpdated,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: false,
-			diff: 			"Update",
+			diff:            "Update",
 		},
 		{
-			name:           "Should return true when in warm up phase but endpoints are updated (destructive)",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeTwoEndpointsUpdated,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should return true when in warm up phase but endpoints are updated (destructive)",
+			rc:              rcWarmupPhase,
+			newSe:           newSeTwoEndpointsUpdated,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: true,
-			diff: 			"Update",
+			diff:            "Update",
 		},
-
 	}
 
 	//Run the test for every provided case
@@ -1142,7 +1217,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 			} else {
 				t.Errorf("Result Failed. Got %v, expected %v", skipDestructive, c.skipDestructive)
 			}
-			if c.diff == ""  || (c.diff != "" && strings.Contains(diff, c.diff)) {
+			if c.diff == "" || (c.diff != "" && strings.Contains(diff, c.diff)) {
 				//perfect
 			} else {
 				t.Errorf("Diff Failed. Got %v, expected %v", diff, c.diff)
@@ -1152,7 +1227,6 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 }
 
 func TestAddUpdateServiceEntry(t *testing.T) {
-
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
 
@@ -1201,44 +1275,43 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 
 	rcWarmupPhase := &RemoteController{
 		ServiceEntryController: seCtrl,
-		StartTime: time.Now(),
+		StartTime:              time.Now(),
 	}
 
 	rcNotinWarmupPhase := &RemoteController{
 		ServiceEntryController: seCtrl,
-		StartTime: time.Now().Add(time.Duration(-21) * time.Minute),
+		StartTime:              time.Now().Add(time.Duration(-21) * time.Minute),
 	}
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name            string
-		rc 			    *RemoteController
-		newSe		    *v1alpha32.ServiceEntry
+		rc              *RemoteController
+		newSe           *v1alpha32.ServiceEntry
 		oldSe           *v1alpha32.ServiceEntry
 		skipDestructive bool
 	}{
 		{
-			name:           "Should add a new SE",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          nil,
+			name:            "Should add a new SE",
+			rc:              rcWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           nil,
 			skipDestructive: false,
 		},
 		{
-			name:           "Should not update SE when in warm up mode and the update is destructive",
-			rc:       		rcWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should not update SE when in warm up mode and the update is destructive",
+			rc:              rcWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: true,
 		},
 		{
-			name:           "Should update an SE",
-			rc:       		rcNotinWarmupPhase,
-			newSe: 			newSeOneEndpoint,
-			oldSe:          oldSeTwoEndpoints,
+			name:            "Should update an SE",
+			rc:              rcNotinWarmupPhase,
+			newSe:           newSeOneEndpoint,
+			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: false,
 		},
-
 	}
 
 	//Run the test for every provided case

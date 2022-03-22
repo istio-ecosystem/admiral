@@ -1,9 +1,14 @@
 package common
 
 import (
-	"github.com/google/go-cmp/cmp"
+	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/uuid"
 )
 
 func TestMapOfMaps(t *testing.T) {
@@ -83,4 +88,106 @@ func TestAdmiralParams(t *testing.T) {
 	if !strings.Contains(admiralParamsStr, expectedContainsStr) {
 		t.Errorf("AdmiralParams String doesn't have the expected Stringified value expected to contain %v", expectedContainsStr)
 	}
+}
+
+func TestMapOfMapConcurrency(t *testing.T) {
+
+	mapOfMaps := NewMapOfMaps()
+	mapOfMaps.Put("pkey1", "dev.a.global2", "127.0.10.2")
+	mapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.1")
+	mapOfMaps.Put("pkey3", "stage.a.global", "127.0.10.1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				mapOfMaps.Put(string(uuid.NewUUID()), "test1", "value1")
+			}
+		}
+	}(ctx)
+
+	time.Sleep(1 * time.Second)
+
+	mapOfMaps.Range(func(k string, v *Map) {
+		assert.NotNil(t, k)
+	})
+
+}
+
+func TestMapOfMapsRange(t *testing.T) {
+
+	mapOfMaps := NewMapOfMaps()
+	mapOfMaps.Put("pkey1", "dev.a.global2", "127.0.10.2")
+	mapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.1")
+	mapOfMaps.Put("pkey3", "stage.a.global", "127.0.10.1")
+
+	keys := make(map[string]string, len(mapOfMaps.Map()))
+	for _, k := range keys {
+		keys[k] = k
+	}
+
+	numOfIter := 0
+	mapOfMaps.Range(func(k string, v *Map) {
+		assert.NotNil(t, keys[k])
+		numOfIter++
+	})
+
+	assert.Equal(t, 3, numOfIter)
+
+}
+
+func TestMapConcurrency(t *testing.T) {
+
+	m := NewMap()
+	m.Put("pkey1", "127.0.10.2")
+	m.Put("pkey2", "127.0.10.1")
+	m.Put("pkey3", "127.0.10.1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				m.Put(string(uuid.NewUUID()), "value1")
+			}
+		}
+	}(ctx)
+
+	time.Sleep(1 * time.Second)
+
+	m.Range(func(k string, v string) {
+		assert.NotNil(t, k)
+	})
+
+}
+
+func TestMapRange(t *testing.T) {
+
+	m := NewMap()
+	m.Put("pkey1", "127.0.10.2")
+	m.Put("pkey2", "127.0.10.1")
+	m.Put("pkey3", "127.0.10.1")
+
+	keys := make(map[string]string, len(m.cache))
+	for _, k := range keys {
+		keys[k] = k
+	}
+
+	numOfIter := 0
+	m.Range(func(k string, v string) {
+		assert.NotNil(t, keys[k])
+		numOfIter++
+	})
+
+	assert.Equal(t, 3, numOfIter)
+
 }
