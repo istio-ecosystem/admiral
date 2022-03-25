@@ -605,10 +605,9 @@ func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController,
 		if _, ok := rolloutServices[destRollout.Spec.Strategy.BlueGreen.PreviewService]; ok {
 			previewGlobalFqdn := common.GetPreviewHostnamePrefix() + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 			previewAddress := getUniqueAddress(admiralCache, previewGlobalFqdn)
-			if len(previewGlobalFqdn) == 0 || len(previewAddress) == 0 {
-				return nil
+			if len(previewGlobalFqdn) != 0 && len(previewAddress) != 0 {
+				generateServiceEntry(event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san)
 			}
-			generateServiceEntry(event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san)
 		}
 	}
 
