@@ -40,4 +40,4 @@ fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 ./test4.sh "webapp" "sample"
 
-# ./cleanup.sh $istio_version
+./cleanup.sh $istio_version
