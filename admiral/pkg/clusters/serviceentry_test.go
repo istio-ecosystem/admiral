@@ -1006,7 +1006,6 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		PreviewHostnamePrefix: "preview",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
-	t.Logf(common.GetPreviewHostnamePrefix())
 	config := rest.Config{
 		Host: "localhost",
 	}

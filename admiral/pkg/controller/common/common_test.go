@@ -1,17 +1,16 @@
 package common
 
 import (
-	"reflect"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	v12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
 )
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(v12.GlobalTrafficPolicy{}.Status)
@@ -30,7 +29,6 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
-		PreviewHostnamePrefix:      "preview",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"

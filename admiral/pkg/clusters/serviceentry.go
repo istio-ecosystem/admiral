@@ -159,7 +159,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						activeServiceName := sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.ActiveService
 						previewServiceName := sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.PreviewService
 						oldPorts := ep.Ports
-						if previewService, ok := weightedServices[previewServiceName]; strings.HasPrefix(key, common.GetPreviewHostnamePrefix()+common.Sep) && ok {
+						if previewService, ok := weightedServices[previewServiceName]; strings.HasPrefix(key, common.BlueGreenRolloutPreviewPrefix+common.Sep) && ok {
 							previewServiceInstance := previewService.Service
 							localFqdn := previewServiceInstance.Name + common.Sep + previewServiceInstance.Namespace + common.DotLocalDomainSuffix
 							cnames[localFqdn] = "1"
@@ -603,7 +603,7 @@ func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController,
 	if destRollout.Spec.Strategy.BlueGreen != nil && destRollout.Spec.Strategy.BlueGreen.PreviewService != "" {
 		rolloutServices := getServiceForRollout(rc, destRollout)
 		if _, ok := rolloutServices[destRollout.Spec.Strategy.BlueGreen.PreviewService]; ok {
-			previewGlobalFqdn := common.GetPreviewHostnamePrefix() + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
+			previewGlobalFqdn := common.BlueGreenRolloutPreviewPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 			previewAddress := getUniqueAddress(admiralCache, previewGlobalFqdn)
 			if len(previewGlobalFqdn) != 0 && len(previewAddress) != 0 {
 				generateServiceEntry(event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san)
