@@ -142,9 +142,8 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
-		} else if !isBlueGreenStrategy {
-			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 		}
+
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
 				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
@@ -156,22 +155,9 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				if ep.Address == clusterIngress || ep.Address == "" {
 					// Update endpoints with locafqdn for active and preview se of bluegreen rollout
 					if isBlueGreenStrategy {
-						activeServiceName := sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.ActiveService
-						previewServiceName := sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen.PreviewService
 						oldPorts := ep.Ports
-						if previewService, ok := weightedServices[previewServiceName]; strings.HasPrefix(key, common.BlueGreenRolloutPreviewPrefix+common.Sep) && ok {
-							previewServiceInstance := previewService.Service
-							localFqdn := previewServiceInstance.Name + common.Sep + previewServiceInstance.Namespace + common.DotLocalDomainSuffix
-							cnames[localFqdn] = "1"
-							ep.Address = localFqdn
-							ep.Ports = GetMeshPortsForRollout(sourceCluster, previewServiceInstance, sourceRollouts[sourceCluster])
-						} else if activeService, ok := weightedServices[activeServiceName]; ok {
-							activeServiceInstance := activeService.Service
-							localFqdn := activeServiceInstance.Name + common.Sep + activeServiceInstance.Namespace + common.DotLocalDomainSuffix
-							cnames[localFqdn] = "1"
-							ep.Address = localFqdn
-							ep.Ports = GetMeshPortsForRollout(sourceCluster, activeServiceInstance, sourceRollouts[sourceCluster])
-						}
+						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], weightedServices, cnames, ep, sourceCluster, key)
+
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
@@ -180,6 +166,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						// see if we have weighted services (rollouts with canary strategy)
 					} else if len(weightedServices) > 1 {
 						//add one endpoint per each service, may be modify
+						meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, weightedServices, clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
@@ -207,6 +194,26 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 	}
 	return serviceEntries
+}
+
+func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,
+	ep *networking.ServiceEntry_Endpoint, sourceCluster string, meshHost string) {
+	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
+	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
+
+	if previewService, ok := weightedServices[previewServiceName]; strings.HasPrefix(meshHost, common.BlueGreenRolloutPreviewPrefix+common.Sep) && ok {
+		previewServiceInstance := previewService.Service
+		localFqdn := previewServiceInstance.Name + common.Sep + previewServiceInstance.Namespace + common.DotLocalDomainSuffix
+		cnames[localFqdn] = "1"
+		ep.Address = localFqdn
+		ep.Ports = GetMeshPortsForRollout(sourceCluster, previewServiceInstance, rollout)
+	} else if activeService, ok := weightedServices[activeServiceName]; ok {
+		activeServiceInstance := activeService.Service
+		localFqdn := activeServiceInstance.Name + common.Sep + activeServiceInstance.Namespace + common.DotLocalDomainSuffix
+		cnames[localFqdn] = "1"
+		ep.Address = localFqdn
+		ep.Ports = GetMeshPortsForRollout(sourceCluster, activeServiceInstance, rollout)
+	}
 }
 
 //update endpoints for Argo rollouts specific Service Entries to account for traffic splitting (Canary strategy)
