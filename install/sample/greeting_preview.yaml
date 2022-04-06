@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-conf-preview
+  namespace: sample-rollout-bluegreen
+data:
+  nginx.conf: |
+    user nginx;
+    worker_processes  3;
+    error_log  /var/log/nginx/error.log;
+    events {
+      worker_connections  10240;
+    }
+    http {
+      log_format  main
+              'remote_addr:$remote_addr\t'
+              'time_local:$time_local\t'
+              'method:$request_method\t'
+              'uri:$request_uri\t'
+              'host:$host\t'
+              'status:$status\t'
+              'bytes_sent:$body_bytes_sent\t'
+              'referer:$http_referer\t'
+              'useragent:$http_user_agent\t'
+              'forwardedfor:$http_x_forwarded_for\t'
+              'request_time:$request_time';
+      access_log	/var/log/nginx/access.log main;
+      server {
+          listen       80;
+          server_name  _;
+          location / {
+              return 200 "Hello World! - Admiral Preview!!";
+
+          }
+      }
+    }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: greeting
+  namespace: sample-rollout-bluegreen
+  labels:
+    identity: greeting
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: greeting
+  template:
+    metadata:
+      annotations:
+        admiral.io/env: stage
+        sidecar.istio.io/inject: "true"
+      labels:
+        app: greeting
+        identity: greeting.bluegreen
+    spec:
+      containers:
+        - image: nginx
+          name: greeting
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - mountPath: /etc/nginx
+              name: nginx-conf
+              readOnly: true
+            - mountPath: /var/log/nginx
+              name: log
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "50Mi"
+            limits:
+              cpu: "20m"
+              memory: "75Mi"
+      volumes:
+        - configMap:
+            items:
+              - key: nginx.conf
+                path: nginx.conf
+            name: nginx-conf-preview
+          name: nginx-conf
+        - emptyDir: {}
+          name: log
+  strategy:
+    blueGreen:
+      # activeService specifies the service to update with the new template hash at time of promotion.
+      # This field is mandatory for the blueGreen update strategy.
+      activeService: rollout-bluegreen-active
+      # previewService specifies the service to update with the new template hash before promotion.
+      # This allows the preview stack to be reachable without serving production traffic.
+      # This field is optional.
+      previewService: rollout-bluegreen-preview
+      # autoPromotionEnabled disables automated promotion of the new stack by pausing the rollout
+      # immediately before the promotion. If omitted, the default behavior is to promote the new
+      # stack as soon as the ReplicaSet are completely ready/available.
+      # Rollouts can be resumed using: `kubectl argo rollouts resume ROLLOUT`
+      autoPromotionEnabled: false
