@@ -3,6 +3,14 @@ package clusters
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+	"unicode"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
@@ -17,17 +25,10 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v14 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
 	coreV1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
-	"reflect"
-	"strconv"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-	"unicode"
 )
 
 func TestCreateSeWithDrLabels(t *testing.T) {
@@ -261,7 +262,6 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): nil},
 		},
-
 	}
 
 	//Run the test for every provided case
@@ -994,6 +994,250 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	}
 }
 
+func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
+
+	const NAMESPACE = "test-test"
+	const ACTIVE_SERVICENAME = "serviceNameActive"
+	const PREVIEW_SERVICENAME = "serviceNamePreview"
+	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+
+	p := common.AdmiralParams{
+		KubeconfigPath:        "testdata/fake.config",
+		PreviewHostnamePrefix: "preview",
+	}
+	rr, _ := InitAdmiral(context.Background(), p)
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+
+	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	v, e := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	if e != nil {
+		t.Fail()
+	}
+	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+
+	cacheWithEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{
+			"test.test.mesh-se":         common.LocalAddressPrefix + ".10.1",
+			"preview.test.test.mesh-se": common.LocalAddressPrefix + ".10.2",
+		},
+		Addresses: []string{common.LocalAddressPrefix + ".10.1", common.LocalAddressPrefix + ".10.2"},
+	}
+
+	fakeIstioClient := istiofake.NewSimpleClientset()
+	rc := &RemoteController{
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		DeploymentController:     d,
+		RolloutController:        r,
+		ServiceController:        s,
+		VirtualServiceController: v,
+	}
+	rc.ClusterID = "test.cluster"
+	rr.RemoteControllers["test.cluster"] = rc
+
+	admiralCache := &AdmiralCache{
+		IdentityClusterCache:       common.NewMapOfMaps(),
+		ServiceEntryAddressStore:   &cacheWithEntry,
+		CnameClusterCache:          common.NewMapOfMaps(),
+		CnameIdentityCache:         &sync.Map{},
+		CnameDependentClusterCache: common.NewMapOfMaps(),
+		IdentityDependencyCache:    common.NewMapOfMaps(),
+		GlobalTrafficCache:         &globalTrafficCache{},
+		DependencyNamespaceCache:   common.NewSidecarEgressMap(),
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
+	rr.AdmiralCache = admiralCache
+
+	rollout := argo.Rollout{}
+
+	rollout.Spec = argo.RolloutSpec{
+		Template: coreV1.PodTemplateSpec{
+			ObjectMeta: v12.ObjectMeta{
+				Labels: map[string]string{"identity": "test"},
+			},
+		},
+	}
+
+	rollout.Namespace = NAMESPACE
+	rollout.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME, PreviewService: PREVIEW_SERVICENAME},
+	}
+	labelMap := make(map[string]string)
+	labelMap["identity"] = "test"
+
+	matchLabel4 := make(map[string]string)
+	matchLabel4["app"] = "test"
+
+	labelSelector4 := v12.LabelSelector{
+		MatchLabels: matchLabel4,
+	}
+	rollout.Spec.Selector = &labelSelector4
+
+	r.Cache.UpdateRolloutToClusterCache("bar", &rollout)
+
+	selectorMap := make(map[string]string)
+	selectorMap["app"] = "test"
+	selectorMap[ROLLOUT_POD_HASH_LABEL] = "hash"
+
+	port1 := coreV1.ServicePort{
+		Port: 8080,
+		Name: "random1",
+	}
+
+	port2 := coreV1.ServicePort{
+		Port: 8081,
+		Name: "random2",
+	}
+
+	ports := []coreV1.ServicePort{port1, port2}
+
+	activeService := &coreV1.Service{
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+		},
+	}
+	activeService.Name = ACTIVE_SERVICENAME
+	activeService.Namespace = NAMESPACE
+	activeService.Spec.Ports = ports
+
+	s.Cache.Put(activeService)
+
+	previewService := &coreV1.Service{
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+		},
+	}
+	previewService.Name = PREVIEW_SERVICENAME
+	previewService.Namespace = NAMESPACE
+	previewService.Spec.Ports = ports
+
+	s.Cache.Put(previewService)
+
+	se := modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+
+	if nil == se {
+		t.Fatalf("no service entries found")
+	}
+	if len(se) != 2 {
+		t.Fatalf("Expected 2 service entries to be created but found %d", len(se))
+	}
+	serviceEntryResp := se["test.test.mesh"]
+	if nil == serviceEntryResp {
+		t.Fatalf("Service entry returned should not be empty")
+	}
+	previewServiceEntryResp := se["preview.test.test.mesh"]
+	if nil == previewServiceEntryResp {
+		t.Fatalf("Preview Service entry returned should not be empty")
+	}
+
+	// When Preview service is not defined in BlueGreen strategy
+	rollout.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME},
+	}
+
+	se = modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+
+	if len(se) != 1 {
+		t.Fatalf("Expected 1 service entries to be created but found %d", len(se))
+	}
+	serviceEntryResp = se["test.test.mesh"]
+
+	if nil == serviceEntryResp {
+		t.Fatalf("Service entry returned should not be empty")
+	}
+}
+
+func TestUpdateEndpointsForBlueGreen(t *testing.T) {
+	const CLUSTER_INGRESS_1 = "ingress1.com"
+	const ACTIVE_SERVICE = "activeService"
+	const PREVIEW_SERVICE = "previewService"
+	const NAMESPACE = "namespace"
+	const ACTIVE_MESH_HOST = "qal.example.mesh"
+	const PREVIEW_MESH_HOST = "preview.qal.example.mesh"
+
+	rollout := argo.Rollout{}
+	rollout.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{
+			ActiveService:  ACTIVE_SERVICE,
+			PreviewService: PREVIEW_SERVICE,
+		},
+	}
+	rollout.Spec.Template.Annotations = map[string]string{}
+	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
+
+	endpoint := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
+	}
+
+	meshPorts := map[string]uint32{"http": 8080}
+
+	weightedServices := map[string]*WeightedService{
+		ACTIVE_SERVICE:  {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: ACTIVE_SERVICE, Namespace: NAMESPACE}}},
+		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
+	}
+
+	activeWantedEndpoints := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
+	}
+
+	previewWantedEndpoints := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
+	}
+
+	testCases := []struct {
+		name             string
+		rollout          argo.Rollout
+		inputEndpoint    istionetworkingv1alpha3.ServiceEntry_Endpoint
+		weightedServices map[string]*WeightedService
+		clusterIngress   string
+		meshPorts        map[string]uint32
+		meshHost         string
+		wantedEndpoints  istionetworkingv1alpha3.ServiceEntry_Endpoint
+	}{
+		{
+			name:             "should return endpoint with active service address",
+			rollout:          rollout,
+			inputEndpoint:    endpoint,
+			weightedServices: weightedServices,
+			meshPorts:        meshPorts,
+			meshHost:         ACTIVE_MESH_HOST,
+			wantedEndpoints:  activeWantedEndpoints,
+		},
+		{
+			name:             "should return endpoint with preview service address",
+			rollout:          rollout,
+			inputEndpoint:    endpoint,
+			weightedServices: weightedServices,
+			meshPorts:        meshPorts,
+			meshHost:         PREVIEW_MESH_HOST,
+			wantedEndpoints:  previewWantedEndpoints,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			updateEndpointsForBlueGreen(&c.rollout, c.weightedServices, map[string]string{}, &c.inputEndpoint, "test", c.meshHost)
+			if c.inputEndpoint.Address != c.wantedEndpoints.Address {
+				t.Errorf("Wanted %s endpoint, got: %s", c.wantedEndpoints.Address, c.inputEndpoint.Address)
+			}
+		})
+	}
+}
+
 func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	t.Parallel()
 
@@ -1001,12 +1245,12 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	const CLUSTER_INGRESS_2 = "ingress2.com"
 	const CANARY_SERVICE = "canaryService"
 	const STABLE_SERVICE = "stableService"
-	const NAMESPACE  = "namespace"
+	const NAMESPACE = "namespace"
 
 	se := &istionetworkingv1alpha3.ServiceEntry{
-		Endpoints:            []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http" : 15443,}},
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		},
 	}
 
@@ -1022,47 +1266,47 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	}
 
 	wantedEndpoints := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
 		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
 	}
 
 	wantedEndpointsZeroWeights := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http" : 15443}},
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
 	}
 
 	testCases := []struct {
-		name                string
-		inputServiceEntry	*istionetworkingv1alpha3.ServiceEntry
-		weightedServices map[string]*WeightedService
-		clusterIngress string
-		meshPorts map[string]uint32
-		wantedEndpoints []*istionetworkingv1alpha3.ServiceEntry_Endpoint
+		name              string
+		inputServiceEntry *istionetworkingv1alpha3.ServiceEntry
+		weightedServices  map[string]*WeightedService
+		clusterIngress    string
+		meshPorts         map[string]uint32
+		wantedEndpoints   []*istionetworkingv1alpha3.ServiceEntry_Endpoint
 	}{
 		{
-			name:                "should return endpoints with assigned weights",
+			name:              "should return endpoints with assigned weights",
 			inputServiceEntry: copyServiceEntry(se),
-			weightedServices: weightedServices,
-			clusterIngress: CLUSTER_INGRESS_1,
-			meshPorts: meshPorts,
-			wantedEndpoints: wantedEndpoints,
+			weightedServices:  weightedServices,
+			clusterIngress:    CLUSTER_INGRESS_1,
+			meshPorts:         meshPorts,
+			wantedEndpoints:   wantedEndpoints,
 		},
 		{
-			name:                "should return endpoints as is",
+			name:              "should return endpoints as is",
 			inputServiceEntry: copyServiceEntry(se),
-			weightedServices: weightedServices,
-			clusterIngress: "random",
-			meshPorts: meshPorts,
-			wantedEndpoints: copyServiceEntry(se).Endpoints,
+			weightedServices:  weightedServices,
+			clusterIngress:    "random",
+			meshPorts:         meshPorts,
+			wantedEndpoints:   copyServiceEntry(se).Endpoints,
 		},
 		{
-			name:                "should not return endpoints with zero weight",
+			name:              "should not return endpoints with zero weight",
 			inputServiceEntry: copyServiceEntry(se),
-			weightedServices: weightedServicesZeroWeight,
-			clusterIngress: CLUSTER_INGRESS_1,
-			meshPorts: meshPorts,
-			wantedEndpoints: wantedEndpointsZeroWeights,
+			weightedServices:  weightedServicesZeroWeight,
+			clusterIngress:    CLUSTER_INGRESS_1,
+			meshPorts:         meshPorts,
+			wantedEndpoints:   wantedEndpointsZeroWeights,
 		},
 	}
 
