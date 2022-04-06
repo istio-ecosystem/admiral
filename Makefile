@@ -56,6 +56,7 @@ dep:
 setup:
 	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
 
+model-gen: deepcopy-gen -i ./admiral/pkg/apis/admiral/model/ -O zz_generated.deepcopy
 
 gen-all: api-gen crd-gen
 

@@ -28,6 +28,7 @@ type AdmiralV1Interface interface {
 	RESTClient() rest.Interface
 	DependenciesGetter
 	GlobalTrafficPoliciesGetter
+	RoutingPoliciesGetter
 }
 
 // AdmiralV1Client is used to interact with features provided by the admiral.io group.
@@ -41,6 +42,10 @@ func (c *AdmiralV1Client) Dependencies(namespace string) DependencyInterface {
 
 func (c *AdmiralV1Client) GlobalTrafficPolicies(namespace string) GlobalTrafficPolicyInterface {
 	return newGlobalTrafficPolicies(c, namespace)
+}
+
+func (c *AdmiralV1Client) RoutingPolicies(namespace string) RoutingPolicyInterface {
+	return newRoutingPolicies(c, namespace)
 }
 
 // NewForConfig creates a new AdmiralV1Client for the given config.

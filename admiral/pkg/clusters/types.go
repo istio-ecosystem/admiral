@@ -31,6 +31,7 @@ type RemoteController struct {
 	VirtualServiceController  *istio.VirtualServiceController
 	SidecarController         *istio.SidecarController
 	RolloutController         *admiral.RolloutController
+	RoutingConfigController	  *admiral.RoutingPolicyController
 	stop                      chan struct{}
 	//listener for normal types
 }
@@ -91,6 +92,23 @@ type GlobalTrafficHandler struct {
 type RolloutHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
+}
+
+type RoutingPolicyHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID	   string
+}
+
+func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
+	log.Info("Added routing policy")
+}
+
+func (r RoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
+	log.Info("Updated routing policy")
+}
+
+func (r RoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
+	log.Info("Deleted routing policy")
 }
 
 type globalTrafficCache struct {

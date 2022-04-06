@@ -21,3 +21,5 @@ package v1
 type DependencyExpansion interface{}
 
 type GlobalTrafficPolicyExpansion interface{}
+
+type RoutingPolicyExpansion interface{}
