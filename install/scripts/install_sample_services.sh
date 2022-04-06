@@ -30,6 +30,29 @@ kubectl rollout status deployment webapp -n sample
 
 kubectl rollout status deployment webapp -n sample-rollout-bluegreen
 
+checkRolloutStatus() {
+  rolloutName=$1
+  namespace=$2
+  status=$(kubectl get rollout -n $2 $1 -o jsonpath="{.status.readyReplicas}")
+
+  if [[ "$status" == "1" ]]; then
+    return 0
+  else
+    echo "Waiting rollout $1 in $2  namespace is not in Running phase $status"
+    return 1
+  fi
+}
+
+export -f checkRolloutStatus 
+
+timeout 180s bash -c "until checkRolloutStatus greeting sample-rollout-bluegreen ; do sleep 10; done"
+if [[ $? -eq 124 ]]
+  then
+    exit 1
+fi
+# Update BlueGreen Rollout with new preview release
+kubectl apply -f $install_dir/yaml/greeting_preview.yaml
+
 #Verify that admiral created service names for 'greeting' service
 checkse() {
   identity=$1

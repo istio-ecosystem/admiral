@@ -1,37 +1,39 @@
 package common
 
 import (
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"sort"
+	"strings"
+
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	"sort"
-	"strings"
 )
 
 const (
-	NamespaceKubeSystem        = "kube-system"
-	NamespaceIstioSystem       = "istio-system"
-	Env                        = "env"
-	Http                       = "http"
-	Grpc                       = "grpc"
-	GrpcWeb                    = "grpc-web"
-	Http2                      = "http2"
-	DefaultMtlsPort            = 15443
-	DefaultServiceEntryPort    = 80
-	Sep                        = "."
-	Dash                       = "-"
-	Slash                      = "/"
-	DotLocalDomainSuffix       = ".svc.cluster.local"
-	Mesh                       = "mesh"
-	MulticlusterIngressGateway = "istio-multicluster-ingressgateway"
-	LocalAddressPrefix         = "240.0"
-	NodeRegionLabel            = "failure-domain.beta.kubernetes.io/region"
-	SpiffePrefix               = "spiffe://"
-	SidecarEnabledPorts        = "traffic.sidecar.istio.io/includeInboundPorts"
-	Default                    = "default"
-	AdmiralIgnoreAnnotation    = "admiral.io/ignore"
-	AdmiralCnameCaseSensitive  = "admiral.io/cname-case-sensitive"
+	NamespaceKubeSystem           = "kube-system"
+	NamespaceIstioSystem          = "istio-system"
+	Env                           = "env"
+	Http                          = "http"
+	Grpc                          = "grpc"
+	GrpcWeb                       = "grpc-web"
+	Http2                         = "http2"
+	DefaultMtlsPort               = 15443
+	DefaultServiceEntryPort       = 80
+	Sep                           = "."
+	Dash                          = "-"
+	Slash                         = "/"
+	DotLocalDomainSuffix          = ".svc.cluster.local"
+	Mesh                          = "mesh"
+	MulticlusterIngressGateway    = "istio-multicluster-ingressgateway"
+	LocalAddressPrefix            = "240.0"
+	NodeRegionLabel               = "failure-domain.beta.kubernetes.io/region"
+	SpiffePrefix                  = "spiffe://"
+	SidecarEnabledPorts           = "traffic.sidecar.istio.io/includeInboundPorts"
+	Default                       = "default"
+	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
+	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
+	BlueGreenRolloutPreviewPrefix = "preview"
 )
 
 type Event int
@@ -87,7 +89,7 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 	return strings.ToLower(cname)
 }
 
-func GetCnameVal(vals[] string) string {
+func GetCnameVal(vals []string) string {
 	return strings.Join(vals, Sep)
 }
 

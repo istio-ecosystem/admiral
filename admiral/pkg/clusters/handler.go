@@ -747,7 +747,7 @@ func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_En
 
 // A rollout can use one of 2 stratergies :-
 // 1. Canary strategy - which can use a virtual service to manage the weights associated with a stable and canary service. Admiral created endpoints in service entries will use the weights assigned in the Virtual Service
-// 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will always use the active service
+// 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will use repective service to create active and preview endpoints
 func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[string]*WeightedService {
 
 	if rollout == nil {
@@ -769,9 +769,12 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 	var istioCanaryWeights = make(map[string]int32)
 
 	var blueGreenActiveService string
+	var blueGreenPreviewService string
+
 	if rolloutStrategy.BlueGreen != nil {
-		// If rollout uses blue green strategy, use the active service
+		// If rollout uses blue green strategy
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
+		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
 	} else if rolloutStrategy.Canary != nil && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
 		canaryService = rolloutStrategy.Canary.CanaryService
 		stableService = rolloutStrategy.Canary.StableService
@@ -844,7 +847,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		var service = servicesInNamespace[s]
 		var match = true
 		//skip services that are not referenced in the rollout
-		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService {
+		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
 			log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 			continue
 		}
@@ -865,8 +868,11 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		if match {
 			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
 			if len(ports) > 0 {
-				//if the strategy is bluegreen or using canary with NO istio traffic management, pick the first service that matches
-				if len(istioCanaryWeights) == 0 {
+				// if the strategy is bluegreen return matched services
+				// else if using canary with NO istio traffic management, pick the first service that matches
+				if rolloutStrategy.BlueGreen != nil {
+					matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
+				} else if len(istioCanaryWeights) == 0 {
 					matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
 					break
 				}
