@@ -50,6 +50,17 @@ func TestServiceCache_Put(t *testing.T) {
 		t.Errorf("Service with admiral.io/ignore annotation should not be in cache")
 	}
 
+	secondSvc := &v1.Service{}
+	secondSvc.Name = "First Test Service"
+	secondSvc.Namespace = "ns"
+	secondSvc.Labels = map[string]string{"admiral.io/ignore": "true"}
+
+	serviceCache.Put(secondSvc)
+
+	if serviceCache.Get("ns") != nil {
+		t.Errorf("Service with admiral.io/ignore label should not be in cache")
+	}
+
 	service := &v1.Service{}
 	service.Name = "Test Service"
 	service.Namespace = "ns"
@@ -77,7 +88,7 @@ func TestServiceCache_Put(t *testing.T) {
 		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns").Service["ns"]))
 	}
 
-	serviceCache.Delete(serviceCache.Get("ns"))
+	serviceCache.Delete(service)
 
 	if serviceCache.Get("ns") != nil {
 		t.Errorf("Didn't delete successfully, expected nil, got %v", serviceCache.Get("ns"))
