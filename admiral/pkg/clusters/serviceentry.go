@@ -142,6 +142,8 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
+		} else {
+			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 		}
 
 		for key, serviceEntry := range serviceEntries {
@@ -166,7 +168,6 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						// see if we have weighted services (rollouts with canary strategy)
 					} else if len(weightedServices) > 1 {
 						//add one endpoint per each service, may be modify
-						meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, weightedServices, clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
