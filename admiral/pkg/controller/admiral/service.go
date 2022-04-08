@@ -42,7 +42,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	s.mutex.Lock()
 	identity := s.getKey(service)
 	existing := s.cache[identity]
-	if service.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+	if s.shouldIgnoreBasedOnLabels(service) {
 		if existing != nil {
 			delete(existing.Service[identity], service.Name)
 		}
@@ -72,10 +72,17 @@ func (s *serviceCache) Get(key string) *ServiceClusterEntry {
 	return s.cache[key]
 }
 
-func (s *serviceCache) Delete(pod *ServiceClusterEntry) {
+func (s *serviceCache) Delete(service *k8sV1.Service) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
-	delete(s.cache, pod.Identity)
+	identity := s.getKey(service)
+	existing := s.cache[identity]
+	if existing != nil {
+		delete(existing.Service[identity], service.Name)
+		if len(existing.Service[identity]) == 0 {
+			delete(s.cache, identity)
+		}
+	}
 }
 
 func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, int) {
@@ -157,10 +164,11 @@ func HandleAddUpdateService(obj interface{}, s *ServiceController) {
 	s.Cache.Put(service)
 }
 
-func (s *ServiceController) Deleted(ojb interface{}) {
-	//pod := ojb.(*k8sV1.Pod)
+func (s *ServiceController) Deleted(obj interface{}) {
+	service := obj.(*k8sV1.Service)
+	s.Cache.Delete(service)
+}
 
-	//TODO figure this out
-	//d.Cache.Delete(dep)
-
+func (s *serviceCache) shouldIgnoreBasedOnLabels(service *k8sV1.Service) bool {
+	return service.Annotations[common.AdmiralIgnoreAnnotation] == "true" || service.Labels[common.AdmiralIgnoreAnnotation] == "true"
 }
