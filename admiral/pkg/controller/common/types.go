@@ -41,6 +41,7 @@ type AdmiralParams struct {
 	LabelSet                   *LabelSet
 	LogLevel                   int
 	HostnameSuffix             string
+	PreviewHostnamePrefix      string
 	WorkloadSidecarUpdate      string
 	WorkloadSidecarName        string
 }
