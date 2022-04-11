@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	log "github.com/sirupsen/logrus"
+	"strconv"
 	"time"
 )
 
@@ -19,21 +20,59 @@ func main() {
 
 	var DynamodbClient *DynamoClient
 	DynamodbClient = NewDynamoClient()
-//	whiteListRecords, err := DynamodbClient.GetWhitelistRecords()
-	whiteListRecords, err := DynamodbClient.GetReadWriteLease()
+	/*	readWriteLeases, err := DynamodbClient.GetReadWriteLease()
 
-	if len(whiteListRecords) ==2{
+	if len(readWriteLeases) ==1{
 	 record:=ReadWriteLease{}
 	 record.LeaseName ="e2e"
 	 record.LeaseOwner="me"
-	 record.UpdatedTime = time.Now().String()
-	 DynamodbClient.addUpdateRecord(record)
+	 record.Notes ="tester"
+//	 record.UpdatedTime = time.Now().String()
+//	 record.UpdatedTime = strconv.FormatInt(time.Now().UTC().Unix(), 10)
+     record.UpdatedTime = time.Now().UTC().Unix()
+	 DynamodbClient.updatedReadWriteLease(record)
 	}
 	if err != nil {
 		fmt.Println("Errored!")
 	}
 
-	fmt.Println(whiteListRecords);
+	fmt.Println(readWriteLeases);*/
+	leaseName := "qal"
+	podIdentifier := "pod1"
+	waitDuration := 15 * time.Second
+	waitTimeInSeconds :=15
+	failureThreshold := 3
+	for {
+		fmt.Println("Retrieving latest  value of read write value for leaseName :" , leaseName )
+		readWriteLeases, err := DynamodbClient.GetReadWriteLease()
+		if nil!=err{
+			log.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Error("Error retrieving the latest lease")
+		}
+		readWriteLease := getLease(readWriteLeases,leaseName)
+		currentTime := time.Now().UTC().Unix()
+		if "" == readWriteLease.LeaseOwner {
+			log.Info("Lease with name=" , leaseName, " does not exist. Creating a new lease with owner=" , podIdentifier)
+			readWriteLease.LeaseOwner = podIdentifier
+			readWriteLease.UpdatedTime = currentTime
+			DynamodbClient.updatedReadWriteLease(readWriteLease)
+		}else if podIdentifier == readWriteLease.LeaseOwner {
+			log.Info("Lease with name=", leaseName, " is owned by current pod. Extending lease ownership till ", currentTime)
+			readWriteLease.UpdatedTime = currentTime
+			DynamodbClient.updatedReadWriteLease(readWriteLease)
+		}else if readWriteLease.UpdatedTime < (currentTime - int64(waitTimeInSeconds*failureThreshold)){
+			log.Info("Current time time is more than the failureInterval. Taking over the lease from ", readWriteLease.LeaseOwner)
+			readWriteLease.LeaseOwner = podIdentifier
+			readWriteLease.UpdatedTime = currentTime
+			DynamodbClient.updatedReadWriteLease(readWriteLease)
+		}else {
+			log.Info("Lease held by ", readWriteLease.LeaseOwner, " till ", readWriteLease.UpdatedTime)
+		}
+		sleep(waitDuration,waitTimeInSeconds)
+	}
+
+
 
 
 /*	rootCmd := cmd.GetRootCmd(os.Args[1:])
@@ -43,17 +82,29 @@ func main() {
 	}*/
 }
 
+func sleep(sleepDuration time.Duration, sleepSeconds int){
+	log.Info("Sleeping for ", sleepSeconds, " seconds")
+	time.Sleep(sleepDuration)
+}
+
+func getLease(allLeases [] ReadWriteLease, leaseName string) ReadWriteLease  {
+ for _, readWriteLease := range  allLeases {
+ 	if readWriteLease.LeaseName == leaseName {
+ 		return  readWriteLease
+	}
+ }
+ readWriteLease := ReadWriteLease{}
+ readWriteLease.LeaseName = leaseName;
+ readWriteLease.Notes ="Created at "+strconv.FormatInt(time.Now().UTC().Unix(), 10)
+ return readWriteLease
+}
+
 
 type ReadWriteLease struct {
 	LeaseName string `json:"leaseName"`
 	LeaseOwner string `json:"leaseOwner"`
-	UpdatedTime string `json:"updatedTime"`
-}
-
-type WhitelistRecord struct {
-	AccountNumber string `json:"accountNumber"`
-	RoleName string `json:"roleName"`
-	Labels string `json:"labels"`
+	UpdatedTime int64 `json:"updatedTime"`
+	Notes string `json:notes`
 }
 
 type DynamoClient struct {
@@ -66,12 +117,8 @@ func NewDynamoClient() *DynamoClient {
 	}
 }
 
-func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease){
-	log.Info("Updating read write lease ", lease)
 
-}
-
-func (client *DynamoClient) addUpdateRecord(lease ReadWriteLease) error {
+func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease) error {
 	svc := client.svc
 	tableName := "admiral-lease"
 	av, err := dynamodbattribute.MarshalMap(lease)
@@ -97,6 +144,7 @@ func (client *DynamoClient) addUpdateRecord(lease ReadWriteLease) error {
 		"leaseName": lease.LeaseName,
 		"leaseOwner": lease.LeaseOwner,
 		 "updatedTime": lease.UpdatedTime,
+		 "notes": lease.Notes,
 	}).Info("Successfully added item to table " + tableName)
 
 	return err
@@ -134,108 +182,6 @@ func (client *DynamoClient) GetReadWriteLease() ([]ReadWriteLease, error) {
 	}
 	return readWriteLeases, nil
 }
-
-func (client *DynamoClient) GetWhitelistRecords() ([]WhitelistRecord, error) {
-	var whitelistRecords []WhitelistRecord
-	svc := client.svc
-	log.Info("Fetching existing whitelist rules...")
-	whitelistRules, err := svc.Scan(&dynamodb.ScanInput{
-		TableName: aws.String("aviso-whitelist"),
-	})
-	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("Failed to scan dynamo table")
-		return nil, err
-	}
-
-	log.WithFields(log.Fields{
-		"whitelistRules": whitelistRules,
-	}).Debug("retrieved records...")
-
-	item := WhitelistRecord{}
-
-	for _, v := range whitelistRules.Items {
-		err = dynamodbattribute.UnmarshalMap(v, &item)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Panic("Failed to unmarshall record")
-		}
-		whitelistRecords = append(whitelistRecords, item)
-	}
-	return whitelistRecords, nil
-}
-
-/*func (client *DynamoClient) QueryDynamo(accountNumber string, roleName string) (bool, error) {
-	svc := client.svc
-	result, err := svc.GetItem(&dynamodb.GetItemInput{
-		TableName: aws.String(Config.DynamoConfig.Table),
-		Key: map[string]*dynamodb.AttributeValue{
-			"accountNumber": {
-				S: aws.String(accountNumber),
-			},
-			"roleName": {
-				S: aws.String(roleName),
-			},
-		},
-	})
-
-	if result.Item != nil {
-		return true, nil
-	}
-
-	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("Error occured retrieving record from dynamoDB")
-		return false, err
-	}
-
-	return false, nil
-}*/
-
-/*func (client *DynamoClient) WriteWhitelistRecord(rule v1.Rule) error {
-	svc := client.svc
-	whitelistRecord := WhitelistRecord {
-		AccountNumber: rule.Account,
-		RoleName: rule.Role,
-		Labels:  "cluster",
-	}
-
-	return client.addRecord(whitelistRecord, svc)
-}*/
-
-
-/*func (client *DynamoClient) addRecord(item WhitelistRecord, svc dynamodbiface.DynamoDBAPI) error {
-	tableName := Config.DynamoConfig.Table
-	av, err := dynamodbattribute.MarshalMap(item)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"error" : err.Error(),
-		}).Error("Error marshalling new whitelist item.")
-		return err
-	}
-
-	input := &dynamodb.PutItemInput{
-		Item:      av,
-		TableName: aws.String(tableName),
-	}
-	_, err = svc.PutItem(input)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("Got error calling PutItem:")
-		return err
-	}
-	log.WithFields(log.Fields{
-		"role": item.RoleName,
-		"account": item.AccountNumber,
-	}).Info("Successfully added item to table " + tableName)
-
-	return err
-}
-*/
 
 func GetDynamoSvc() *dynamodb.DynamoDB {
 	dynamoArn :="arn:aws:iam::930875703956:role/IKSDynamoAccess"
