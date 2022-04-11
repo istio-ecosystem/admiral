@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/dr"
 	v12 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/rest"
 	"sync"
@@ -27,6 +28,10 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	log.Infof("Initializing Admiral with params: %v", params)
 
 	common.InitializeConfig(params)
+
+	log.Infof("Starting DR checks")
+
+	go dr.StartDynamoDBBasedDRChecks()
 
 	w := RemoteRegistry{
 		ctx: ctx,
