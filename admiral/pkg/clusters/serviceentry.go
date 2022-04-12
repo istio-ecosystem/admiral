@@ -169,10 +169,10 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
 						// see if we have weighted services (rollouts with canary strategy)
-					} else if len(weightedServices) > 1 {
+					} else if len(sourceWeightedServices[sourceCluster]) > 1 {
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
-						updateEndpointsForWeightedServices(se, weightedServices, clusterIngress, meshPorts)
+						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 							map[string]*networking.ServiceEntry{key: se})
 					} else {
