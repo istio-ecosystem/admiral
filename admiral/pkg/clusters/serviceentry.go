@@ -59,6 +59,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
+	sourceWeightedServices := make(map[string]map[string]*WeightedService)
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
 	sourceRollouts := make(map[string]*argo.Rollout)
 
@@ -120,6 +121,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
 		sourceServices[rc.ClusterID] = serviceInstance
+		sourceWeightedServices[rc.ClusterID] = weightedServices
 	}
 
 	util.LogElapsedTimeSince("BuildServiceEntry", sourceIdentity, env, "", start)
@@ -159,7 +161,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 					// Update endpoints with locafqdn for active and preview se of bluegreen rollout
 					if isBlueGreenStrategy {
 						oldPorts := ep.Ports
-						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], weightedServices, cnames, ep, sourceCluster, key)
+						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
 							map[string]*networking.ServiceEntry{key: serviceEntry})
