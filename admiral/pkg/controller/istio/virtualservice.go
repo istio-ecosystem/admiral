@@ -42,7 +42,7 @@ func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceH
 
 	drController.informer = informers.NewVirtualServiceInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController(stopCh, &drController, drController.informer)
+	admiral.NewController("virtualservice-ctrl-" + config.Host, stopCh, &drController, drController.informer)
 
 	return &drController, nil
 }

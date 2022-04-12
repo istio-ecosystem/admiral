@@ -142,7 +142,7 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 		cache.Indexers{},
 	)
 
-	NewController(stopCh, &deploymentController, deploymentController.informer)
+	NewController("deployment-ctrl-" + config.Host, stopCh, &deploymentController, deploymentController.informer)
 
 	return &deploymentController, nil
 }

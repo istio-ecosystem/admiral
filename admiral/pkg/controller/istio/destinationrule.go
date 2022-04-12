@@ -47,7 +47,7 @@ func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRul
 
 	drController.informer = informers.NewDestinationRuleInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController(stopCh, &drController, drController.informer)
+	admiral.NewController("destinationrule-ctrl-" + config.Host, stopCh, &drController, drController.informer)
 
 	return &drController, nil
 }
