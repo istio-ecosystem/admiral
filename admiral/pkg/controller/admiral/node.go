@@ -44,7 +44,7 @@ func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest
 		cache.Indexers{},
 	)
 
-	NewController(stopCh, &nodeController, nodeController.informer)
+	NewController("node-ctrl-" + config.Host, stopCh, &nodeController, nodeController.informer)
 
 	return &nodeController, nil
 }

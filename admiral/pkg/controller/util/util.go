@@ -1,7 +1,9 @@
 package util
 
 import (
+	log "github.com/sirupsen/logrus"
 	"reflect"
+	"time"
 )
 
 func MapCopy(dst, src interface{}) {
@@ -35,4 +37,15 @@ func Contains(vs []string, t string) bool {
 		}
 	}
 	return false
+}
+
+func LogElapsedTime(op, identity, env, clusterId string) func() {
+	start := time.Now()
+	return func() {
+		LogElapsedTimeSince(op, identity, env, clusterId, start)
+	}
+}
+
+func LogElapsedTimeSince(op, identity, env, clusterId string, start time.Time) {
+	log.Infof("op=%s identity=%s env=%s cluster=%s time=%v\n", op, identity, env, clusterId, time.Since(start).Milliseconds())
 }
