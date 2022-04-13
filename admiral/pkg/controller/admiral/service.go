@@ -146,7 +146,7 @@ func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
 	)
 
-	NewController(stopCh, &serviceController, serviceController.informer)
+	NewController("service-ctrl-" + config.Host , stopCh, &serviceController, serviceController.informer)
 
 	return &serviceController, nil
 }
