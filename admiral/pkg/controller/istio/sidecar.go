@@ -47,7 +47,7 @@ func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config
 
 	sidecarController.informer = informers.NewSidecarInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController(stopCh, &sidecarController, sidecarController.informer)
+	admiral.NewController("sidecar-ctrl-" + config.Host, stopCh, &sidecarController, sidecarController.informer)
 
 	return &sidecarController, nil
 }

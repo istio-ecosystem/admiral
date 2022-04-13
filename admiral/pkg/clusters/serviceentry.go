@@ -54,6 +54,9 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 }
 
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+
+	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
+
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
@@ -67,6 +70,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var weightedServices map[string]*WeightedService
 	var rollout *admiral.RolloutClusterEntry
 
+	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
@@ -118,18 +122,15 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		sourceServices[rc.ClusterID] = serviceInstance
 	}
 
+	util.LogElapsedTimeSince("BuildServiceEntry", sourceIdentity, env, "", start)
+
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity).Copy()
 
-	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
-
-	//update cname dependent cluster cache
-	for clusterId := range dependentClusters {
-		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
-	}
-
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
-
+	//handle local updates (source clusters first)
 	//update the address to local fqdn for service entry in a cluster local to the service instance
+
+	start = time.Now()
+
 	for sourceCluster, serviceInstance := range sourceServices {
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		rc := remoteRegistry.RemoteControllers[sourceCluster]
@@ -186,14 +187,33 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			}
 		}
 
+		if common.GetWorkloadSidecarUpdate() == "enabled" {
+			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
+		}
+
 		for _, val := range dependents {
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, cnames)
 		}
 
-		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
-		}
 	}
+
+	util.LogElapsedTimeSince("WriteServiceEntryToSourceClusters", sourceIdentity, env, "", start)
+
+	//Write to dependent clusters
+
+	start = time.Now()
+
+	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
+
+	//update cname dependent cluster cache
+	for clusterId := range dependentClusters {
+		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
+	}
+
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
+
+	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
+
 	return serviceEntries
 }
 
