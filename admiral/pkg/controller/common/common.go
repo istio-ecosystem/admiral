@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sort"
 	"strings"
 
@@ -252,4 +254,12 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 		environment = Default
 	}
 	return environment
+}
+
+func GetGtpKey(gtp *v1.GlobalTrafficPolicy) string {
+	return fmt.Sprintf("%s.%s", GetGtpEnv(gtp))
+}
+
+func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
+	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
 }
