@@ -118,7 +118,7 @@ func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHan
 		cache.Indexers{},
 	)
 
-	NewController(stopCh, &globalTrafficController, globalTrafficController.informer)
+	NewController("gtp-ctrl-" + configPath.Host, stopCh, &globalTrafficController, globalTrafficController.informer)
 
 	return &globalTrafficController, nil
 }

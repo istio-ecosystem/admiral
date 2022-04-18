@@ -84,7 +84,7 @@ func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configP
 		cache.Indexers{},
 	)
 
-	NewController(stopCh, &depController, depController.informer)
+	NewController("dependency-ctrl-" + namespace, stopCh, &depController, depController.informer)
 
 	return &depController, nil
 }
