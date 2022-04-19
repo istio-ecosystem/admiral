@@ -312,38 +312,6 @@ func TestAdded(t *testing.T) {
 
 }
 
-func TestPodHandler(t *testing.T) {
-
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-
-	})
-	rr.RemoteControllers["test.cluster"] = rc
-
-	ph := PodHandler{
-		RemoteRegistry: rr,
-	}
-
-	pod := k8sCoreV1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "test",
-		},
-		Spec: k8sCoreV1.PodSpec{
-			Hostname: "test.local",
-		},
-	}
-
-	ph.Added(&pod)
-
-	ph.Deleted(&pod)
-}
-
 func TestGetServiceForDeployment(t *testing.T) {
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
 		//res := i.(istio.Config)

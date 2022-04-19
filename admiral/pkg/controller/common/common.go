@@ -159,12 +159,7 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 }
 
 func GetGtpIdentity(gtp *v1.GlobalTrafficPolicy) string {
-	var identity = gtp.Labels[GetGlobalTrafficDeploymentLabel()]
-	if len(identity) == 0 {
-		log.Errorf("GTP identifier label (%s) for name=%v in namespace=%s not set", GetGlobalTrafficDeploymentLabel(), gtp.Name, gtp.Namespace)
-		return fmt.Sprintf("%s.%s", gtp.Name, gtp.Namespace)
-	}
-	return identity
+	return gtp.Labels[GetGlobalTrafficDeploymentLabel()]
 }
 
 func GetGtpKey(gtp *v1.GlobalTrafficPolicy) string {

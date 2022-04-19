@@ -234,6 +234,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 }
 
 func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
+	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
 	for _, gtpsInCluster := range gtps {
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)

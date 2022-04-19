@@ -43,6 +43,7 @@ func init() {
 	common.InitializeConfig(p)
 }
 
+//TODO fix test
 func TestGlobalTrafficHandler(t *testing.T) {
 	//lots of setup
 	handler := GlobalTrafficHandler{}
@@ -51,8 +52,6 @@ func TestGlobalTrafficHandler(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	fakeClient := fake.NewSimpleClientset()
@@ -184,8 +183,6 @@ func TestGlobalTrafficHandler(t *testing.T) {
 			//clearing admiralCache
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -194,23 +191,17 @@ func TestGlobalTrafficHandler(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), c.expectedDeploymentCacheValue, ignoreUnexported) {
-				t.Fatalf("Deployment Mismatch. Diff: %v", cmp.Diff(c.expectedDeploymentCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), ignoreUnexported))
-			}
-
 			handler.Deleted(c.gtp)
 
 			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv) != nil {
 				t.Fatalf("Delete failed for Identity Cache")
-			}
-			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name) != nil {
-				t.Fatalf("Delete failed for Dependency Cache")
 			}
 
 		})
 	}
 }
 
+//TODO fix test
 func TestGlobalTrafficHandler_Updated(t *testing.T) {
 	//lots of setup
 	handler := GlobalTrafficHandler{}
@@ -219,8 +210,6 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	fakeClient := fake.NewSimpleClientset()
@@ -361,8 +350,6 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 			//clearing admiralCache
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -372,17 +359,11 @@ func TestGlobalTrafficHandler_Updated(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), c.expectedDeploymentCacheValue, ignoreUnexported) {
-				t.Fatalf("Deployment Mismatch. Diff: %v", cmp.Diff(c.expectedDeploymentCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name), ignoreUnexported))
-			}
 
 			handler.Deleted(c.updatedGTP)
 
 			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv) != nil {
 				t.Fatalf("Delete failed for Identity Cache")
-			}
-			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetDeployment(c.gtp.Name) != nil {
-				t.Fatalf("Delete failed for Dependency Cache")
 			}
 
 		})
@@ -401,7 +382,6 @@ func TestDeploymentHandler(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
 	fakeCrdClient := admiralFake.NewSimpleClientset()
@@ -461,7 +441,6 @@ func TestDeploymentHandler(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -503,7 +482,6 @@ func TestGlobalTrafficCache(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
 	//Struct of test case info. Name is required.
@@ -546,9 +524,8 @@ func TestGlobalTrafficCache(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 			gtpCache.mutex = &sync.Mutex{}
-			err := gtpCache.Put(c.gtp, c.deployment)
+			err := gtpCache.Put(c.gtp)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -562,15 +539,7 @@ func TestGlobalTrafficCache(t *testing.T) {
 				t.Fatalf("GTP Mismatch: %v", cmp.Diff(foundGtp, nil, ignoreUnexported))
 			}
 
-			foundDeployment := gtpCache.GetDeployment(c.gtpName)
-			if !cmp.Equal(foundDeployment, c.deployment, ignoreUnexported) {
-				t.Fatalf("Deployment Mismatch: %v", cmp.Diff(foundDeployment, c.deployment, ignoreUnexported))
-			}
-
-			gtpCache.Delete(c.gtp)
-			if len(gtpCache.dependencyCache) != 0 {
-				t.Fatalf("Dependency cache not cleared properly on delete")
-			}
+			gtpCache.Delete(common.GetGtpIdentity(c.gtp), common.GetGtpEnv(c.gtp))
 			if len(gtpCache.identityCache) != 0 {
 				t.Fatalf("Identity cache not cleared properly on delete")
 			}
@@ -579,6 +548,7 @@ func TestGlobalTrafficCache(t *testing.T) {
 
 }
 
+//TODO fix test
 func TestRolloutHandler(t *testing.T) {
 
 	p := common.AdmiralParams{
@@ -591,7 +561,6 @@ func TestRolloutHandler(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	fakeCrdClient := admiralFake.NewSimpleClientset()
@@ -656,7 +625,6 @@ func TestRolloutHandler(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -699,7 +667,6 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	//Struct of test case info. Name is required.
@@ -742,12 +709,8 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 			gtpCache.mutex = &sync.Mutex{}
-			err := gtpCache.PutRollout(c.gtp, c.rollout)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
+
 			foundGtp := gtpCache.GetFromIdentity(c.identity, c.environment)
 			if c.rollout != nil && !cmp.Equal(foundGtp, c.gtp, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch: %v", cmp.Diff(foundGtp, c.gtp, ignoreUnexported))
@@ -758,15 +721,7 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 				t.Fatalf("GTP Mismatch: %v", cmp.Diff(foundGtp, nil, ignoreUnexported))
 			}
 
-			foundRollout := gtpCache.GetRollout(c.gtpName)
-			if !cmp.Equal(foundRollout, c.rollout, ignoreUnexported) {
-				t.Fatalf("Rollout Mismatch: %v", cmp.Diff(foundRollout, c.rollout, ignoreUnexported))
-			}
-
-			gtpCache.Delete(c.gtp)
-			if len(gtpCache.dependencyCache) != 0 {
-				t.Fatalf("Dependency cache not cleared properly on delete")
-			}
+			gtpCache.Delete(common.GetGtpIdentity(c.gtp), common.GetGtpEnv(c.gtp))
 			if len(gtpCache.identityCache) != 0 {
 				t.Fatalf("Identity cache not cleared properly on delete")
 			}
@@ -775,6 +730,7 @@ func TestGlobalTrafficCacheForRollout(t *testing.T) {
 
 }
 
+//TODO fix test
 func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 	//lots of setup
 	handler := GlobalTrafficHandler{}
@@ -783,8 +739,6 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 	gtpCache.mutex = &sync.Mutex{}
 
 	fakeClient := fake.NewSimpleClientset()
@@ -928,8 +882,6 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 			//clearing admiralCache
 			gtpCache = &globalTrafficCache{}
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-			gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
-			gtpCache.dependencyCache = make(map[string]*v12.Deployment)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
@@ -939,17 +891,11 @@ func TestGlobalTrafficHandler_Updated_ForRollouts(t *testing.T) {
 			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), c.expectedIdentityCacheValue, ignoreUnexported) {
 				t.Fatalf("GTP Mismatch. Diff: %v", cmp.Diff(c.expectedIdentityCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv), ignoreUnexported))
 			}
-			if !cmp.Equal(handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name), c.expectedRolloutCacheValue, ignoreUnexported) {
-				t.Fatalf("Rollout Mismatch. Diff: %v", cmp.Diff(c.expectedRolloutCacheValue, handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name), ignoreUnexported))
-			}
 
 			handler.Deleted(c.updatedGTP)
 
 			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(c.expectedIdentity, c.expectedEnv) != nil {
 				t.Fatalf("Delete failed for Identity Cache")
-			}
-			if handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache.GetRollout(c.gtp.Name) != nil {
-				t.Fatalf("Delete failed for Dependency Cache")
 			}
 
 		})

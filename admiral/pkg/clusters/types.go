@@ -12,7 +12,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
-	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"sync"
 	"time"
@@ -97,12 +96,6 @@ type globalTrafficCache struct {
 	//map of global traffic policies key=environment.identity, value: GlobalTrafficPolicy object
 	identityCache map[string]*v1.GlobalTrafficPolicy
 
-	//map of dependencies. key=namespace.globaltrafficpolicy name. value Deployment object
-	dependencyCache map[string]*k8sAppsV1.Deployment
-
-	//map of dependencies. key=namespace.globaltrafficpolicy name. value Rollout object
-	dependencyRolloutCache map[string]*argo.Rollout
-
 	mutex *sync.Mutex
 }
 
@@ -137,11 +130,6 @@ func (g *globalTrafficCache) Delete(identity string, environment string) {
 }
 
 type DeploymentHandler struct {
-	RemoteRegistry *RemoteRegistry
-	ClusterID      string
-}
-
-type PodHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
 }
@@ -209,20 +197,6 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
-}
-
-func (pc *PodHandler) Added(obj *k8sV1.Pod) {
-	log.Infof(LogFormat, "Event", "deployment", obj.Name, pc.ClusterID, "Received")
-
-	globalIdentifier := common.GetPodGlobalIdentifier(obj)
-
-	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, "Event", "deployment", obj.Name, "", "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
-		return
-	}
-
-	//TODO Skip pod events until GTP is implemented
-	//modifyServiceEntryForNewServiceOrPod(obj.Namespace, globalIdentifier, pc.RemoteRegistry)
 }
 
 func getCacheKey(environment string, identity string) string {

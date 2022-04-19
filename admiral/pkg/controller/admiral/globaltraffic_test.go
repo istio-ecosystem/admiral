@@ -4,9 +4,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
+	"sync"
 	"testing"
 	"time"
 )
@@ -74,28 +76,217 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 
 }
 
-func TestGlobalTrafficGetByLabel(t *testing.T) {
-	config, err := clientcmd.BuildConfigFromFlags("", "../../test/resources/admins@fake-cluster.k8s.local")
-	if err != nil {
-		t.Errorf("%v", err)
+func TestGlobalTrafficController_Updated(t *testing.T) {
+
+	gth := test.MockGlobalTrafficHandler{}
+	cache := gtpCache{
+		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+		mutex: &sync.Mutex{},
 	}
-	stop := make(chan struct{})
-	handler := test.MockGlobalTrafficHandler{}
-
-	globalTrafficController, err := NewGlobalTrafficController(stop, &handler, config, time.Duration(1000))
-
-	if err != nil {
-		t.Errorf("Unexpected err %v", err)
+	gtpController := GlobalTrafficController{
+		GlobalTrafficHandler: &gth,
+		Cache:             &cache,
 	}
+	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
+		Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
+	},}
+	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+	gtpUpdated := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
+		Policy: []*model.TrafficPolicy {{DnsPrefix: "helloUpdated"}},
+	},}
+	gtpUpdated.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+	gtpUpdatedToIgnore := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}}
+	gtpUpdatedToIgnore.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+	gtpUpdatedToIgnore.Annotations = map[string]string{"admiral.io/ignore": "true"}
 
-	if globalTrafficController == nil {
-		t.Errorf("GlobalTraffic controller should never be nil without an error thrown")
+	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}}
+	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+
+	//add the base object to cache
+	gtpController.Added(&gtp)
+
+	testCases := []struct {
+		name                  string
+		gtp            		  *v1.GlobalTrafficPolicy
+		expectedGtps 		  []*v1.GlobalTrafficPolicy
+	}{
+		{
+			name:                  	"Gtp with should be updated",
+			gtp:            		&gtpUpdated,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{&gtpUpdated},
+		},
+		{
+			name:                  	"Should remove gtp from cache when update with Ignore annotation",
+			gtp:            		&gtpUpdatedToIgnore,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{},
+		},
 	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			gtpController.Updated(c.gtp, gtp)
+			gtpKey := common.GetGtpKey(c.gtp)
+			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
+			if len(matchedGtps) != len(c.expectedGtps) {
+				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
+			} else {
+				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
+				for _, gtp := range matchedGtps {
+					gtpMap[gtp.Name] = gtp
+				}
+				for _, expectedGtp := range c.expectedGtps {
+					if val, ok := gtpMap[expectedGtp.Name]; !ok {
+						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
+					} else {
+						if gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix != val.Spec.Policy[0].DnsPrefix {
+							t.Errorf("Test %s failed; gtp %v not updated. matched gtps, dnsPrefix mismatch expected %v, got %v", c.name, expectedGtp.Name, gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix, val.Spec.Policy[0].DnsPrefix)
+						}
+					}
+				}
+			}
+		})
+	}
+}
 
-	gtps := globalTrafficController.GetGTPByLabel("payments", "namespace1")
+func TestGlobalTrafficController_Deleted(t *testing.T) {
 
-	if gtps != nil || len(gtps) > 0 {
-		t.Errorf("gtps is not empty")
+	gth := test.MockGlobalTrafficHandler{}
+	cache := gtpCache{
+		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+		mutex: &sync.Mutex{},
+	}
+	gtpController := GlobalTrafficController{
+		GlobalTrafficHandler: &gth,
+		Cache:             &cache,
+	}
+	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
+		Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
+	},}
+	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+
+	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
+		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
+	},}
+	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+
+	gtp3 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2"}, Spec: model.GlobalTrafficPolicy{
+		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
+	},}
+	gtp3.Labels = map[string]string{"identity": "id2", "admiral.io/env": "stage"}
+
+	//add the base object to cache
+	gtpController.Added(&gtp)
+	gtpController.Added(&gtp2)
+
+	testCases := []struct {
+		name                  string
+		gtp            		  *v1.GlobalTrafficPolicy
+		expectedGtps 		  []*v1.GlobalTrafficPolicy
+	}{
+		{
+			name:                  	"Should delete gtp",
+			gtp:            		&gtp,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{&gtp2},
+		},
+		{
+			name:                  	"Deleting non existing gtp should be a no-op",
+			gtp:            		&gtp3,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{},
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			gtpController.Deleted(c.gtp)
+			gtpKey := common.GetGtpKey(c.gtp)
+			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
+			if len(matchedGtps) != len(c.expectedGtps) {
+				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
+			} else {
+				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
+				for _, gtp := range matchedGtps {
+					gtpMap[gtp.Name] = gtp
+				}
+				for _, expectedGtp := range c.expectedGtps {
+					if val, ok := gtpMap[expectedGtp.Name]; !ok {
+						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
+					} else {
+						if gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix != val.Spec.Policy[0].DnsPrefix {
+							t.Errorf("Test %s failed; gtp %v not updated. matched gtps, dnsPrefix mismatch expected %v, got %v", c.name, expectedGtp.Name, gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix, val.Spec.Policy[0].DnsPrefix)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestGlobalTrafficController_Added(t *testing.T) {
+
+	gth := test.MockGlobalTrafficHandler{}
+	cache := gtpCache{
+		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+		mutex: &sync.Mutex{},
+	}
+	gtpController := GlobalTrafficController{
+		GlobalTrafficHandler: &gth,
+		Cache:             &cache,
+	}
+	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}}
+	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+	gtpWithIgnoreLabels := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtpWithIgnoreLabels", Namespace: "namespace2"}}
+	gtpWithIgnoreLabels.Labels = map[string]string{"identity": "id2", "admiral.io/env": "stage"}
+	gtpWithIgnoreLabels.Annotations = map[string]string{"admiral.io/ignore": "true"}
+
+	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}}
+	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+
+	gtp3 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace3"}}
+	gtp3.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+
+	testCases := []struct {
+		name                  string
+		gtp            		  *v1.GlobalTrafficPolicy
+		expectedGtps 		  []*v1.GlobalTrafficPolicy
+	}{
+		{
+			name:                  	"Gtp should be added to the cache",
+			gtp:            		&gtp,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{&gtp},
+		},
+		{
+			name:                  	"Gtp with ignore annotation should not be added to the cache",
+			gtp:            		&gtpWithIgnoreLabels,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{},
+		},
+		{
+			name:                  	"Should cache multiple gtps in a namespace",
+			gtp:            		&gtp2,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{&gtp, &gtp2},
+		},
+		{
+			name:                  	"Should cache gtps in from multiple namespaces",
+			gtp:            		&gtp3,
+			expectedGtps: 			[]*v1.GlobalTrafficPolicy{&gtp3},
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			gtpController.Added(c.gtp)
+			gtpKey := common.GetGtpKey(c.gtp)
+			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
+			if len(matchedGtps) != len(c.expectedGtps) {
+				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
+			} else {
+				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
+				for _, gtp := range matchedGtps {
+					gtpMap[gtp.Name] = gtp
+				}
+				for _, expectedGtp := range c.expectedGtps {
+					if _, ok := gtpMap[expectedGtp.Name]; !ok {
+						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
+					}
+				}
+			}
+		})
 	}
 }
 
