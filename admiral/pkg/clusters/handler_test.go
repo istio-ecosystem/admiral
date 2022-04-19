@@ -176,8 +176,10 @@ func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		Consecutive_5XxErrors: &types.UInt32Value{Value: 10},
-		Interval:              &types.Duration{Seconds: 60}}
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 10},
+		Interval:              &types.Duration{Seconds: 60},
+		MaxEjectionPercent: 100,
+	}
 	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
 
 	noGtpDr := v1alpha3.DestinationRule{

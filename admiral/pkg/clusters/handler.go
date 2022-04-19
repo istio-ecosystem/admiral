@@ -72,8 +72,9 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 	}
 	outlierDetection := &v1alpha32.OutlierDetection{
 		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		Consecutive_5XxErrors: &types.UInt32Value{Value: uint32(10)},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: uint32(10)},
 		Interval:              &types.Duration{Seconds: 60},
+		MaxEjectionPercent: 100,
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
