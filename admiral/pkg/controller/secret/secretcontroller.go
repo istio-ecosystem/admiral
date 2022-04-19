@@ -141,21 +141,21 @@ func NewController(
 	secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
-			log.Infof("Processing add: %s", key)
+			log.Infof("Processing cluster add: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
-			log.Infof("Processing update: %s", key)
+			log.Infof("Processing cluster update: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			log.Infof("Processing delete: %s", key)
+			log.Infof("Processing cluster delete: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}

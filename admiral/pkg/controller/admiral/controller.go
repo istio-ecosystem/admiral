@@ -39,14 +39,16 @@ type InformerCacheObj struct {
 }
 
 type Controller struct {
+	name      string
 	delegator Delegator
 	queue     workqueue.RateLimitingInterface
 	informer  cache.SharedIndexInformer
 }
 
-func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {
+func NewController(name string, stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {
 
 	controller := Controller{
+		name: name,
 		informer:  informer,
 		delegator: delegator,
 		queue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
@@ -54,25 +56,24 @@ func NewController(stopCh <-chan struct{}, delegator Delegator, informer cache.S
 
 	controller.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			log.Debugf("Informer: add : %v", obj)
 			key, err := cache.MetaNamespaceKeyFunc(obj)
-
 			if err == nil {
+				log.Infof("Informer Add controller=%v obj=%v", controller.name, key)
 				controller.queue.Add(InformerCacheObj{key: key, eventType: Add, obj: obj})
 			}
 
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			log.Debugf("Informer Update: %v", newObj)
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
 			if err == nil {
+				log.Infof("Informer Update controller=%v obj=%v", controller.name, key)
 				controller.queue.Add(InformerCacheObj{key: key, eventType: Update, obj: newObj, oldObj: oldObj})
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			log.Debugf("Informer Delete: %v", obj)
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 			if err == nil {
+				log.Infof("Informer Delete controller=%v obj=%v", controller.name, key)
 				controller.queue.Add(InformerCacheObj{key: key, eventType: Delete, obj: obj})
 			}
 		},
@@ -88,18 +89,18 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	log.Info("Starting controller")
+	log.Infof("Starting controller=%v", c.name)
 
 	go c.informer.Run(stopCh)
 
 	// Wait for the caches to be synced before starting workers
-	log.Info(" Waiting for informer caches to sync")
+	log.Infof(" Waiting for informer caches to sync for controller=%v", c.name)
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
-		utilruntime.HandleError(fmt.Errorf(" timed out waiting for caches to sync"))
+		utilruntime.HandleError(fmt.Errorf(" timed out waiting for caches to sync for controller=%v", c.name))
 		return
 	}
 
-	log.Info("informer caches synced")
+	log.Infof("Informer caches synced for controller=%v, current keys=%v", c.name, c.informer.GetStore().ListKeys())
 	wait.Until(c.runWorker, 5*time.Second, stopCh)
 }
 
