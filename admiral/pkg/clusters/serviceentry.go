@@ -253,9 +253,13 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 
 	mostRecentGtp := gtpsOrdered[0]
 
-	log.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
+	err := cache.GlobalTrafficCache.Put(gtpsOrdered[0])
 
-	cache.GlobalTrafficCache.Put(gtpsOrdered[0])
+	if err != nil {
+		log.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
+	} else {
+		log.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
+	}
 }
 
 func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,

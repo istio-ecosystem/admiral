@@ -3,7 +3,6 @@ package clusters
 import (
 	"context"
 	"errors"
-	"fmt"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -197,10 +196,6 @@ func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
 
 func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
 	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
-}
-
-func getCacheKey(environment string, identity string) string {
-	return fmt.Sprintf("%s.%s", environment, identity)
 }
 
 func (rh *RolloutHandler) Added(obj *argo.Rollout) {

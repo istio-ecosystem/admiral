@@ -1021,6 +1021,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		t.Fail()
 	}
 	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	gtpc, e := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{
@@ -1047,6 +1048,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		RolloutController:        r,
 		ServiceController:        s,
 		VirtualServiceController: v,
+		GlobalTraffic: 			  gtpc,
 	}
 	rc.ClusterID = "test.cluster"
 	rr.RemoteControllers["test.cluster"] = rc
