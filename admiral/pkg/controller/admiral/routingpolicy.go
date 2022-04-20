@@ -7,6 +7,7 @@ import (
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"time"
@@ -30,6 +31,7 @@ type RoutingPolicyClusterEntry struct {
 }
 
 type RoutingPolicyController struct {
+	K8sClient			 kubernetes.Interface
 	CrdClient            clientset.Interface
 	RoutingPolicyHandler RoutingPolicyHandler
 	informer             cache.SharedIndexInformer
@@ -56,6 +58,11 @@ func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyH
 	rpController.RoutingPolicyHandler = handler
 
 	var err error
+
+	rpController.K8sClient, err = K8sClientFromConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create routing policy controller k8s client: %v", err)
+	}
 
 	rpController.CrdClient, err = AdmiralCrdClientFromConfig(configPath)
 	if err != nil {

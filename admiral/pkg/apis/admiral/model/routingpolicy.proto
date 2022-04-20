@@ -29,18 +29,5 @@ option go_package = "model";
 message RoutingPolicy {
   string plugin = 1;
   repeated string hosts = 2;
-  PolicyConfig config = 3;
-
-}
-
-message PolicyConfig {
-  CacheConfig cache = 1;
-  string directorServiceUrl = 2;
-  string algo = 3;
-  repeated string pathPrefix = 4;
-}
-
-message CacheConfig {
-  string prefix = 1;
-  int32 ttlSec = 2;
+  map<string, string> config = 3;
 }
