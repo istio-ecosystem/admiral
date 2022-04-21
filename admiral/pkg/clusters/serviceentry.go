@@ -469,7 +469,7 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 			var seDr = &SeDrTuple{
 				DrName:          drName,
 				SeName:          seName,
-				DestinationRule: getDestinationRule(host, region, gtpTrafficPolicy),
+				DestinationRule: getDestinationRule(modifiedSe, region, gtpTrafficPolicy),
 				ServiceEntry:    modifiedSe,
 			}
 			seDrSet[host] = seDr
@@ -480,7 +480,7 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 		var seDr = &SeDrTuple{
 			DrName:          defaultDrName,
 			SeName:          defaultSeName,
-			DestinationRule: getDestinationRule(se.Hosts[0], region, nil),
+			DestinationRule: getDestinationRule(se, region, nil),
 			ServiceEntry:    se,
 		}
 		seDrSet[se.Hosts[0]] = seDr
