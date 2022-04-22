@@ -149,7 +149,14 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 		environment = gtp.Labels[GetEnvKey()]
 	}
 	if len(environment) == 0 {
+		environment = gtp.Spec.Selector[GetEnvKey()]
+	}
+	if len(environment) == 0 {
 		environment = gtp.Labels[Env]
+		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
+	}
+	if len(environment) == 0 {
+		environment = gtp.Spec.Selector[Env]
 		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
 	}
 	if len(environment) == 0 {
@@ -159,7 +166,11 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 }
 
 func GetGtpIdentity(gtp *v1.GlobalTrafficPolicy) string {
-	return gtp.Labels[GetGlobalTrafficDeploymentLabel()]
+	identity := gtp.Labels[GetGlobalTrafficDeploymentLabel()]
+	if len(identity) == 0 {
+		identity = gtp.Spec.Selector[GetGlobalTrafficDeploymentLabel()]
+	}
+	return identity
 }
 
 func GetGtpKey(gtp *v1.GlobalTrafficPolicy) string {
