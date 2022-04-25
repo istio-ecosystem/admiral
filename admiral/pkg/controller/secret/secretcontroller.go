@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 	"time"
@@ -44,6 +45,13 @@ const (
 // LoadKubeConfig is a unit test override variable for loading the k8s config.
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
+
+var (
+	remoteClusters = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "clusters_monitored",
+		Help: "Gauge for the clusters monitored by Admiral",
+	})
+)
 
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
@@ -162,6 +170,7 @@ func NewController(
 		},
 	})
 
+	prometheus.MustRegister(remoteClusters)
 	return controller
 }
 
@@ -334,6 +343,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		}
 
 	}
+	remoteClusters.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -348,5 +358,6 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
+	remoteClusters.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
