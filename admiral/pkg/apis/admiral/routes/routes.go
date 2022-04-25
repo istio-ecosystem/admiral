@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/filters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
 )
@@ -44,6 +45,12 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 			Method:      "GET",
 			Pattern:     "/identity/{identity}/serviceentries",
 			HandlerFunc: opts.GetServiceEntriesByIdentity,
+		},
+		server.Route{
+			Name:        "Get metrics in prometheus format",
+			Method:      "GET",
+			Pattern:     "/metrics",
+			HandlerFunc: promhttp.Handler().ServeHTTP,
 		},
 	}
 }
