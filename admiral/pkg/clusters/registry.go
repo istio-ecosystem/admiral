@@ -28,12 +28,10 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 
-	w := RemoteRegistry{
-		ctx: ctx,
-	}
+	w := NewRemoteRegistry(ctx)
 
 	wd := DependencyHandler{
-		RemoteRegistry: &w,
+		RemoteRegistry: w,
 	}
 
 	var err error
@@ -77,14 +75,14 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
-	err = createSecretController(ctx, &w)
+	err = createSecretController(ctx, w)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with secret control init: %v", err)
 	}
 
 	go w.shutdown()
 
-	return &w, nil
+	return w, nil
 }
 
 func createSecretController(ctx context.Context, w *RemoteRegistry) error {
@@ -100,6 +98,7 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 		w.createCacheController,
 		w.updateCacheController,
 		w.deleteCacheController,
+		w.MetricsRegistry,
 		common.GetClusterRegistriesNamespace(),
 		ctx, common.GetSecretResolver())
 

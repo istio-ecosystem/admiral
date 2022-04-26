@@ -10,6 +10,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
@@ -21,7 +22,7 @@ import (
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
-	StartTime				  time.Time
+	StartTime                 time.Time
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
@@ -59,6 +60,14 @@ type RemoteRegistry struct {
 	secretClient      k8s.Interface
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
+	MetricsRegistry   *prometheus.Registry
+}
+
+func NewRemoteRegistry(ctx context.Context) *RemoteRegistry {
+	return &RemoteRegistry{
+		ctx:             ctx,
+		MetricsRegistry: prometheus.NewRegistry(),
+	}
 }
 
 func (r *RemoteRegistry) shutdown() {
@@ -414,7 +423,7 @@ func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
 // helper function to handle add and delete for RolloutHandler
 func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
 
-	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName,  "Received")
+	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {

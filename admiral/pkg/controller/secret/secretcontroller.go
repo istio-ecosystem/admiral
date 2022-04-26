@@ -46,9 +46,7 @@ const (
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
-var (
-	remoteClusters = common.CreateGauge(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
-)
+var remoteClustersMetric prometheus.Gauge
 
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
@@ -91,14 +89,9 @@ func newClustersStore() *ClusterStore {
 }
 
 // NewController returns a new secret controller
-func NewController(
-	kubeclientset kubernetes.Interface,
-	namespace string,
-	cs *ClusterStore,
-	addCallback addSecretCallback,
-	updateCallback updateSecretCallback,
-	removeCallback removeSecretCallback,
-	secretResolverType string) *Controller {
+func NewController(kubeclientset kubernetes.Interface, namespace string, cs *ClusterStore, addCallback addSecretCallback,
+	updateCallback updateSecretCallback, removeCallback removeSecretCallback, secretResolverType string,
+	registry *prometheus.Registry) *Controller {
 
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -167,7 +160,7 @@ func NewController(
 		},
 	})
 
-	prometheus.MustRegister(remoteClusters)
+	remoteClustersMetric = common.CreateGauge(registry, common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
@@ -192,17 +185,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 // StartSecretController creates the secret controller.
-func StartSecretController(
-	k8s kubernetes.Interface,
-	addCallback addSecretCallback,
-	updateCallback updateSecretCallback,
-	removeCallback removeSecretCallback,
-	namespace string,
-	ctx context.Context,
-	secretResolverType string) (*Controller, error) {
+func StartSecretController(k8s kubernetes.Interface, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, registry *prometheus.Registry, namespace string, ctx context.Context, secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType, registry)
 
 	go controller.Run(ctx.Done())
 
@@ -340,7 +326,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		}
 
 	}
-	remoteClusters.Set(float64(len(c.Cs.RemoteClusters)))
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -355,6 +341,6 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
-	remoteClusters.Set(float64(len(c.Cs.RemoteClusters)))
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }

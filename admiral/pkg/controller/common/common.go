@@ -2,6 +2,7 @@ package common
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"sort"
 	"strings"
 
@@ -256,8 +257,8 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 	return environment
 }
 
-func CreateGauge(name string, help string) prometheus.Gauge {
-	return prometheus.NewGauge(prometheus.GaugeOpts{
+func CreateGauge(registry *prometheus.Registry, name string, help string) prometheus.Gauge {
+	return promauto.With(registry).NewGauge(prometheus.GaugeOpts{
 		Name: name,
 		Help: help,
 	})

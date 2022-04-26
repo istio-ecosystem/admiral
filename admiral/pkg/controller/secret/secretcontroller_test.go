@@ -228,8 +228,9 @@ func Test_SecretController(t *testing.T) {
 
 	// Start the secret controller and sleep to allow secret process to start.
 	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller and nil error
+	registry := prometheus.NewRegistry()
 	g.Expect(
-		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
+		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, registry, secretNameSpace, context.TODO(), "")).
 		ShouldNot(BeNil())
 
 	for i, step := range steps {
@@ -278,7 +279,7 @@ func Test_SecretController(t *testing.T) {
 			}
 
 			g.Eventually(func() float64 {
-				mf, _ := prometheus.DefaultGatherer.Gather()
+				mf, _ := registry.Gather()
 				var clustersMonitored *io_prometheus_client.MetricFamily
 				for _, m := range mf {
 					if *m.Name == "clusters_monitored" {
