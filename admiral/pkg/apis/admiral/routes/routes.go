@@ -46,6 +46,11 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 			Pattern:     "/identity/{identity}/serviceentries",
 			HandlerFunc: opts.GetServiceEntriesByIdentity,
 		},
+	}
+}
+
+func NewMetricsServer() server.Routes {
+	return server.Routes{
 		server.Route{
 			Name:        "Get metrics in prometheus format",
 			Method:      "GET",

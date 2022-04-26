@@ -50,14 +50,20 @@ func GetRootCmd(args []string) *cobra.Command {
 			}
 
 			service := server.Service{}
+			metricsService := server.Service{}
 			opts.RemoteRegistry = remoteRegistry
-			ret_routes := routes.NewAdmiralAPIServer(&opts)
+
+			mainRoutes := routes.NewAdmiralAPIServer(&opts)
+			metricRoute := routes.NewMetricsServer()
 
 			if err != nil {
 				log.Error("Error setting up server:", err.Error())
 			}
 
-			service.Start(ctx, 8080, ret_routes, routes.Filter, remoteRegistry)
+			go func() {
+				metricsService.Start(ctx, 6900, metricRoute, routes.Filter, remoteRegistry)
+			}()
+			service.Start(ctx, 8080, mainRoutes, routes.Filter, remoteRegistry)
 
 			log.WithFields(log.Fields{
 				"error": err.Error(),

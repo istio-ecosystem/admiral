@@ -50,7 +50,7 @@ func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []F
 
 	s.server = http.Server{Addr: ":" + strconv.Itoa(port), Handler: router}
 
-	log.Printf("Starting admiral api server on port=%d", port)
+	log.Printf("Starting server on port=%d", port)
 	log.Fatalln(s.server.ListenAndServe())
 
 }
