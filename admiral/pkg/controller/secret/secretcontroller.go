@@ -47,10 +47,7 @@ const (
 var LoadKubeConfig = clientcmd.Load
 
 var (
-	remoteClusters = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "clusters_monitored",
-		Help: "Gauge for the clusters monitored by Admiral",
-	})
+	remoteClusters = common.CreateGauge(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 )
 
 // addSecretCallback prototype for the add secret callback function.

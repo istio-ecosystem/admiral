@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"sort"
 	"strings"
 
@@ -34,6 +35,7 @@ const (
 	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
+	ClustersMonitoredMetricName   = "clusters_monitored"
 )
 
 type Event int
@@ -252,4 +254,11 @@ func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 		environment = Default
 	}
 	return environment
+}
+
+func CreateGauge(name string, help string) prometheus.Gauge {
+	return prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: name,
+		Help: help,
+	})
 }
