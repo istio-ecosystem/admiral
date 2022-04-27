@@ -88,7 +88,14 @@ func newClustersStore() *ClusterStore {
 }
 
 // NewController returns a new secret controller
-func NewController(kubeclientset kubernetes.Interface, namespace string, cs *ClusterStore, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, secretResolverType string) *Controller {
+func NewController(
+	kubeclientset kubernetes.Interface,
+	namespace string,
+	cs *ClusterStore,
+	addCallback addSecretCallback,
+	updateCallback updateSecretCallback,
+	removeCallback removeSecretCallback,
+	secretResolverType string) *Controller {
 
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -182,7 +189,14 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 // StartSecretController creates the secret controller.
-func StartSecretController(k8s kubernetes.Interface, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, namespace string, ctx context.Context, secretResolverType string) (*Controller, error) {
+func StartSecretController(
+	k8s kubernetes.Interface,
+	addCallback addSecretCallback,
+	updateCallback updateSecretCallback,
+	removeCallback removeSecretCallback,
+	namespace string,
+	ctx context.Context,
+	secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
 	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)

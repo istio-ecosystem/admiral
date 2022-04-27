@@ -29,6 +29,7 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
+		PrometheusEnabled:          true,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"

@@ -100,3 +100,8 @@ func GetPrometheusEnabled() bool {
 func SetKubeconfigPath(path string) {
 	admiralParams.KubeconfigPath = path
 }
+
+// for unit test only
+func SetEnablePrometheus(value bool) {
+	admiralParams.PrometheusEnabled = value
+}
