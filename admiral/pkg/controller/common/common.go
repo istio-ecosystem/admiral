@@ -34,7 +34,6 @@ const (
 	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
-	ClustersMonitoredMetricName   = "clusters_monitored"
 )
 
 type Event int

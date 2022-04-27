@@ -2,6 +2,8 @@ package common
 
 import "github.com/prometheus/client_golang/prometheus"
 
+const ClustersMonitoredMetricName = "clusters_monitored"
+
 type Gauge interface {
 	Set(value float64)
 }
