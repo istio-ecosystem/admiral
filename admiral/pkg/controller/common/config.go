@@ -91,7 +91,7 @@ func GetEnvKey() string {
 	return admiralParams.LabelSet.EnvKey
 }
 
-func GetPrometheusEnabled() bool {
+func GetMetricsEnabled() bool {
 	return admiralParams.MetricsEnabled
 }
 

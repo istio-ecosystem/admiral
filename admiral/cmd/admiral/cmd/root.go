@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -60,10 +61,17 @@ func GetRootCmd(args []string) *cobra.Command {
 				log.Error("Error setting up server:", err.Error())
 			}
 
+			wg := new(sync.WaitGroup)
+			wg.Add(2)
 			go func() {
 				metricsService.Start(ctx, 6900, metricRoutes, routes.Filter, remoteRegistry)
+				wg.Done()
 			}()
-			service.Start(ctx, 8080, mainRoutes, routes.Filter, remoteRegistry)
+			go func() {
+				service.Start(ctx, 8080, mainRoutes, routes.Filter, remoteRegistry)
+				wg.Done()
+			}()
+			wg.Wait()
 
 			log.WithFields(log.Fields{
 				"error": err.Error(),

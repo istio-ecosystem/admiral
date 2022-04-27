@@ -9,7 +9,7 @@ type Gauge interface {
 }
 
 func NewGaugeFrom(name string, help string) Gauge {
-	if !GetPrometheusEnabled() {
+	if !GetMetricsEnabled() {
 		return &Noop{}
 	}
 	opts := prometheus.GaugeOpts{Name: name, Help: help}

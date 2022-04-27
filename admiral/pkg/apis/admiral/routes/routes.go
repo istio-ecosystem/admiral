@@ -53,7 +53,7 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 
 func NewMetricsServer() server.Routes {
 
-	if common.GetPrometheusEnabled() {
+	if common.GetMetricsEnabled() {
 		return server.Routes{
 			server.Route{
 				Name:        "Get metrics in prometheus format",
