@@ -28,6 +28,17 @@ func TestReturnSuccessGET(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
+func TestReturnSuccessMetrics(t *testing.T) {
+	url := "https://admiral.com/metrics"
+	r := httptest.NewRequest("GET", url, strings.NewReader(""))
+	w := httptest.NewRecorder()
+
+	Noop(w, r)
+	resp := w.Result()
+
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
 func TestGetClusters(t *testing.T) {
 	url := "https://admiral.com/clusters"
 	opts := RouteOpts{
