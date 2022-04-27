@@ -122,7 +122,7 @@ func GetRootCmd(args []string) *cobra.Command {
 			"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GatewayApp, "gateway_app", "istio-ingressgateway",
 		"The the value of the `app` label to use to match and find the service that represents the ingress for cross cluster traffic (AUTO_PASSTHROUGH mode)")
-	rootCmd.PersistentFlags().BoolVar(&params.PrometheusEnabled, "prometheus", true, "Enable prometheus metrics collections")
+	rootCmd.PersistentFlags().BoolVar(&params.MetricsEnabled, "metrics", true, "Enable prometheus metrics collections")
 
 	return rootCmd
 }

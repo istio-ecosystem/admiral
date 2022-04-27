@@ -206,7 +206,7 @@ func Test_SecretController(t *testing.T) {
 		secret1                        = makeSecret("s1", "c1", []byte("kubeconfig1-0"))
 	)
 
-	p := common.AdmiralParams{PrometheusEnabled: true}
+	p := common.AdmiralParams{MetricsEnabled: true}
 	common.InitializeConfig(p)
 
 	steps := []struct {

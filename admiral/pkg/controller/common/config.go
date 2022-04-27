@@ -92,7 +92,7 @@ func GetEnvKey() string {
 }
 
 func GetPrometheusEnabled() bool {
-	return admiralParams.PrometheusEnabled
+	return admiralParams.MetricsEnabled
 }
 
 ///Setters - be careful
@@ -103,5 +103,5 @@ func SetKubeconfigPath(path string) {
 
 // for unit test only
 func SetEnablePrometheus(value bool) {
-	admiralParams.PrometheusEnabled = value
+	admiralParams.MetricsEnabled = value
 }
