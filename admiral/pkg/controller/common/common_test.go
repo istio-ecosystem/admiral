@@ -34,7 +34,6 @@ func init() {
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 	p.LabelSet.EnvKey = "admiral.io/env"
-
 	InitializeConfig(p)
 }
 

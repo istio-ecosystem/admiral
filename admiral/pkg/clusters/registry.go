@@ -28,7 +28,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 
-	w := NewRemoteRegistry(ctx)
+	w := &RemoteRegistry{ctx: ctx}
 
 	wd := DependencyHandler{
 		RemoteRegistry: w,
@@ -94,13 +94,7 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
 
-	controller, err = secret.StartSecretController(w.secretClient,
-		w.createCacheController,
-		w.updateCacheController,
-		w.deleteCacheController,
-		w.MetricsRegistry,
-		common.GetClusterRegistriesNamespace(),
-		ctx, common.GetSecretResolver())
+	controller, err = secret.StartSecretController(w.secretClient, w.createCacheController, w.updateCacheController, w.deleteCacheController, common.GetClusterRegistriesNamespace(), ctx, common.GetSecretResolver())
 
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)

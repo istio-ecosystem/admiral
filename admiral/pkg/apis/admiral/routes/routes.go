@@ -3,9 +3,11 @@ package routes
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/filters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
+	"net/http"
 )
 
 var Filter = server.Filters{
@@ -50,12 +52,27 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 }
 
 func NewMetricsServer() server.Routes {
+
+	if common.GetPrometheusEnabled() {
+		return server.Routes{
+			server.Route{
+				Name:        "Get metrics in prometheus format",
+				Method:      "GET",
+				Pattern:     "/metrics",
+				HandlerFunc: promhttp.Handler().ServeHTTP,
+			},
+		}
+	}
 	return server.Routes{
 		server.Route{
-			Name:        "Get metrics in prometheus format",
+			Name:        "Noop metrics",
 			Method:      "GET",
 			Pattern:     "/metrics",
-			HandlerFunc: promhttp.Handler().ServeHTTP,
+			HandlerFunc: Noop,
 		},
 	}
+}
+
+func Noop(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }

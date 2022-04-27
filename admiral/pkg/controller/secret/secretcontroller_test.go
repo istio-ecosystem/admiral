@@ -17,6 +17,7 @@ package secret
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	"k8s.io/client-go/rest"
@@ -205,6 +206,9 @@ func Test_SecretController(t *testing.T) {
 		secret1                        = makeSecret("s1", "c1", []byte("kubeconfig1-0"))
 	)
 
+	p := common.AdmiralParams{PrometheusEnabled: true}
+	common.InitializeConfig(p)
+
 	steps := []struct {
 		// only set one of these per step. The others should be nil.
 		add    *v1.Secret
@@ -228,9 +232,9 @@ func Test_SecretController(t *testing.T) {
 
 	// Start the secret controller and sleep to allow secret process to start.
 	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller and nil error
-	registry := prometheus.NewRegistry()
+	registry := prometheus.DefaultGatherer
 	g.Expect(
-		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, registry, secretNameSpace, context.TODO(), "")).
+		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
 		ShouldNot(BeNil())
 
 	for i, step := range steps {

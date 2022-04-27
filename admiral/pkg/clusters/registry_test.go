@@ -235,8 +235,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-	rr := NewRemoteRegistry(context.TODO())
-	err := createSecretController(context.Background(), rr)
+	rr := RemoteRegistry{}
+	err := createSecretController(context.Background(), &rr)
 
 	if err != nil {
 		t.Fail()
@@ -244,8 +244,8 @@ func TestCreateSecretController(t *testing.T) {
 
 	common.SetKubeconfigPath("fail")
 
-	rr = NewRemoteRegistry(context.TODO())
-	err = createSecretController(context.Background(), rr)
+	rr = RemoteRegistry{}
+	err = createSecretController(context.Background(), &rr)
 
 	common.SetKubeconfigPath("testdata/fake.config")
 

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 	"time"
@@ -46,7 +45,7 @@ const (
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
-var remoteClustersMetric prometheus.Gauge
+var remoteClustersMetric common.Gauge
 
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
@@ -89,9 +88,7 @@ func newClustersStore() *ClusterStore {
 }
 
 // NewController returns a new secret controller
-func NewController(kubeclientset kubernetes.Interface, namespace string, cs *ClusterStore, addCallback addSecretCallback,
-	updateCallback updateSecretCallback, removeCallback removeSecretCallback, secretResolverType string,
-	registry *prometheus.Registry) *Controller {
+func NewController(kubeclientset kubernetes.Interface, namespace string, cs *ClusterStore, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, secretResolverType string) *Controller {
 
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
@@ -160,7 +157,7 @@ func NewController(kubeclientset kubernetes.Interface, namespace string, cs *Clu
 		},
 	})
 
-	remoteClustersMetric = common.CreateGauge(registry, common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
+	remoteClustersMetric = common.NewGaugeFrom(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
@@ -185,10 +182,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 }
 
 // StartSecretController creates the secret controller.
-func StartSecretController(k8s kubernetes.Interface, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, registry *prometheus.Registry, namespace string, ctx context.Context, secretResolverType string) (*Controller, error) {
+func StartSecretController(k8s kubernetes.Interface, addCallback addSecretCallback, updateCallback updateSecretCallback, removeCallback removeSecretCallback, namespace string, ctx context.Context, secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType, registry)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
 
 	go controller.Run(ctx.Done())
 

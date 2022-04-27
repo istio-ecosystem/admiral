@@ -91,6 +91,10 @@ func GetEnvKey() string {
 	return admiralParams.LabelSet.EnvKey
 }
 
+func GetPrometheusEnabled() bool {
+	return admiralParams.PrometheusEnabled
+}
+
 ///Setters - be careful
 
 func SetKubeconfigPath(path string) {
