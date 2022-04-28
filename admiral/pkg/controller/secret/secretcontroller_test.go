@@ -17,6 +17,9 @@ package secret
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
 	"k8s.io/client-go/rest"
 	"sync"
 	"testing"
@@ -203,6 +206,9 @@ func Test_SecretController(t *testing.T) {
 		secret1                        = makeSecret("s1", "c1", []byte("kubeconfig1-0"))
 	)
 
+	p := common.AdmiralParams{MetricsEnabled: true}
+	common.InitializeConfig(p)
+
 	steps := []struct {
 		// only set one of these per step. The others should be nil.
 		add    *v1.Secret
@@ -213,16 +219,20 @@ func Test_SecretController(t *testing.T) {
 		wantAdded   string
 		wantUpdated string
 		wantDeleted string
+
+		// clusters-monitored metric
+		clustersMonitored float64
 	}{
-		{add: secret0, wantAdded: "c0"},
-		{update: secret0UpdateKubeconfigChanged, wantUpdated: "c0"},
-		{add: secret1, wantAdded: "c1"},
-		{delete: secret0, wantDeleted: "c0"},
-		{delete: secret1, wantDeleted: "c1"},
+		{add: secret0, wantAdded: "c0", clustersMonitored: 1},
+		{update: secret0UpdateKubeconfigChanged, wantUpdated: "c0", clustersMonitored: 1},
+		{add: secret1, wantAdded: "c1", clustersMonitored: 2},
+		{delete: secret0, wantDeleted: "c0", clustersMonitored: 1},
+		{delete: secret1, wantDeleted: "c1", clustersMonitored: 0},
 	}
 
 	// Start the secret controller and sleep to allow secret process to start.
 	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller and nil error
+	registry := prometheus.DefaultGatherer
 	g.Expect(
 		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
 		ShouldNot(BeNil())
@@ -271,6 +281,17 @@ func Test_SecretController(t *testing.T) {
 					return added == "" && updated == "" && deleted == ""
 				}).Should(Equal(true))
 			}
+
+			g.Eventually(func() float64 {
+				mf, _ := registry.Gather()
+				var clustersMonitored *io_prometheus_client.MetricFamily
+				for _, m := range mf {
+					if *m.Name == "clusters_monitored" {
+						clustersMonitored = m
+					}
+				}
+				return *clustersMonitored.Metric[0].Gauge.Value
+			}).Should(Equal(step.clustersMonitored))
 		})
 	}
 }

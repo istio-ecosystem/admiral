@@ -87,4 +87,8 @@ func TestConfigManagement(t *testing.T) {
 		t.Fatalf("Workload Sidecar Name mismatch. Expected /mypath/custom/kubeconfig, got %v", GetKubeconfigPath())
 	}
 
+	if GetMetricsEnabled() != true {
+		t.Errorf("Enable Prometheus mismatch, expected false, got %v", GetMetricsEnabled())
+	}
+
 }

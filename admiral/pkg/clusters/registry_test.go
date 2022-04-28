@@ -449,24 +449,24 @@ func TestUpdateCacheController(t *testing.T) {
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		oldConfig *rest.Config
-		newConfig *rest.Config
-		clusterId string
+		name          string
+		oldConfig     *rest.Config
+		newConfig     *rest.Config
+		clusterId     string
 		shouldRefresh bool
 	}{
 		{
-			name: "Should update controller when kubeconfig changes",
-			oldConfig: originalConfig,
-			newConfig: changedConfig,
-			clusterId: "test.cluster",
+			name:          "Should update controller when kubeconfig changes",
+			oldConfig:     originalConfig,
+			newConfig:     changedConfig,
+			clusterId:     "test.cluster",
 			shouldRefresh: true,
 		},
 		{
-			name: "Should not update controller when kubeconfig doesn't change",
-			oldConfig: originalConfig,
-			newConfig: originalConfig,
-			clusterId: "test.cluster",
+			name:          "Should not update controller when kubeconfig doesn't change",
+			oldConfig:     originalConfig,
+			newConfig:     originalConfig,
+			clusterId:     "test.cluster",
 			shouldRefresh: false,
 		},
 	}
@@ -476,7 +476,7 @@ func TestUpdateCacheController(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			rr.RemoteControllers[c.clusterId].ApiServer = c.oldConfig.Host
-			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig,  time.Second*time.Duration(300))
+			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
 			if err != nil {
 				t.Fatalf("Unexpected error creating controller %v", err)
 			}
