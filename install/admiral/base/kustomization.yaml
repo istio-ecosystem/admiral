@@ -11,3 +11,4 @@ resources:
   - roles.yaml
   - role_bindings.yaml
   - service_accounts.yaml
+  - services.yaml
