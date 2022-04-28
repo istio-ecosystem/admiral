@@ -139,4 +139,5 @@ gen-yaml:
 	cp ./install/sample/gtp_failover.yaml ./out/yaml/gtp_failover.yaml
 	cp ./install/sample/gtp_topology.yaml ./out/yaml/gtp_topology.yaml
 	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
+	cp ./install/prometheus/prometheus.yaml ./out/yaml/prometheus.yaml
 	cp ./install/scripts/*.sh ./out/scripts/

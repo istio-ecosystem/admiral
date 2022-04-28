@@ -13,6 +13,10 @@ spec:
       app: admiral
   template:
     metadata:
+      annotations:
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "6900"
+        prometheus.io/scrape: "true"
       labels:
         app: admiral
     spec:
@@ -50,6 +54,8 @@ spec:
           ports:
             - containerPort: 8080
               name: service
+            - containerPort: 6900
+              name: metrics
           resources:
             limits:
               cpu: 1
