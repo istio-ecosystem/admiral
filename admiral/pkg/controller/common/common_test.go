@@ -29,12 +29,12 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
+		MetricsEnabled:             true,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 	p.LabelSet.EnvKey = "admiral.io/env"
-
 	InitializeConfig(p)
 }
 

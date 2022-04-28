@@ -42,6 +42,7 @@ type AdmiralParams struct {
 	LogLevel                   int
 	HostnameSuffix             string
 	PreviewHostnamePrefix      string
+	MetricsEnabled             bool
 	WorkloadSidecarUpdate      string
 	WorkloadSidecarName        string
 }

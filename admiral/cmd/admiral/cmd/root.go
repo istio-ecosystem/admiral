@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,14 +51,27 @@ func GetRootCmd(args []string) *cobra.Command {
 			}
 
 			service := server.Service{}
+			metricsService := server.Service{}
 			opts.RemoteRegistry = remoteRegistry
-			ret_routes := routes.NewAdmiralAPIServer(&opts)
+
+			mainRoutes := routes.NewAdmiralAPIServer(&opts)
+			metricRoutes := routes.NewMetricsServer()
 
 			if err != nil {
 				log.Error("Error setting up server:", err.Error())
 			}
 
-			service.Start(ctx, 8080, ret_routes, routes.Filter, remoteRegistry)
+			wg := new(sync.WaitGroup)
+			wg.Add(2)
+			go func() {
+				metricsService.Start(ctx, 6900, metricRoutes, routes.Filter, remoteRegistry)
+				wg.Done()
+			}()
+			go func() {
+				service.Start(ctx, 8080, mainRoutes, routes.Filter, remoteRegistry)
+				wg.Done()
+			}()
+			wg.Wait()
 
 			log.WithFields(log.Fields{
 				"error": err.Error(),
@@ -116,6 +130,7 @@ func GetRootCmd(args []string) *cobra.Command {
 			"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GatewayApp, "gateway_app", "istio-ingressgateway",
 		"The the value of the `app` label to use to match and find the service that represents the ingress for cross cluster traffic (AUTO_PASSTHROUGH mode)")
+	rootCmd.PersistentFlags().BoolVar(&params.MetricsEnabled, "metrics", true, "Enable prometheus metrics collections")
 
 	return rootCmd
 }
