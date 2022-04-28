@@ -13,6 +13,8 @@ fi
 
 #Install admiral
 
+kubectl delete svc -n admiral admiral-http
+kubectl delete svc -n admiral admiral-metrics
 kubectl apply -f $install_dir/yaml/remotecluster.yaml
 kubectl apply -f $install_dir/yaml/demosinglecluster.yaml
 
