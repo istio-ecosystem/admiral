@@ -21,7 +21,7 @@ import (
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
-	StartTime				  time.Time
+	StartTime                 time.Time
 	GlobalTraffic             *admiral.GlobalTrafficController
 	DeploymentController      *admiral.DeploymentController
 	ServiceController         *admiral.ServiceController
@@ -432,7 +432,7 @@ func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
 // helper function to handle add and delete for RolloutHandler
 func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
 
-	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName,  "Received")
+	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {

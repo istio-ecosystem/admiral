@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-func TestReturnSuccessGET (t *testing.T) {
+func TestReturnSuccessGET(t *testing.T) {
 	url := "https://admiral.com/health"
 	opts := RouteOpts{}
 	r := httptest.NewRequest("GET", url, strings.NewReader(""))
@@ -28,7 +28,18 @@ func TestReturnSuccessGET (t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
-func TestGetClusters (t *testing.T) {
+func TestReturnSuccessMetrics(t *testing.T) {
+	url := "https://admiral.com/metrics"
+	r := httptest.NewRequest("GET", url, strings.NewReader(""))
+	w := httptest.NewRecorder()
+
+	Noop(w, r)
+	resp := w.Result()
+
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestGetClusters(t *testing.T) {
 	url := "https://admiral.com/clusters"
 	opts := RouteOpts{
 		RemoteRegistry: &clusters.RemoteRegistry{
@@ -40,30 +51,30 @@ func TestGetClusters (t *testing.T) {
 		},
 	}
 	testCases := []struct {
-		name string
+		name          string
 		remoteCluster map[string]*secret.RemoteCluster
-		expectedErr interface{}
-		statusCode int
+		expectedErr   interface{}
+		statusCode    int
 	}{
 		{
-			name:   "success with two clusters case",
-			remoteCluster:     map[string]*secret.RemoteCluster{
+			name: "success with two clusters case",
+			remoteCluster: map[string]*secret.RemoteCluster{
 				"cluster1": {},
 			},
-			expectedErr:      []string{"cluster1"},
-			statusCode:        200,
+			expectedErr: []string{"cluster1"},
+			statusCode:  200,
 		},
 		{
-			name:   "success with no cluster case",
-			remoteCluster:     map[string]*secret.RemoteCluster{},
-			expectedErr:       "No cluster is monitored by admiral",
-			statusCode:        200,
+			name:          "success with no cluster case",
+			remoteCluster: map[string]*secret.RemoteCluster{},
+			expectedErr:   "No cluster is monitored by admiral",
+			statusCode:    200,
 		},
 	}
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			r:= httptest.NewRequest("GET", url, strings.NewReader(""))
+			r := httptest.NewRequest("GET", url, strings.NewReader(""))
 			w := httptest.NewRecorder()
 			opts.RemoteRegistry.SecretController.Cs.RemoteClusters = c.remoteCluster
 			opts.GetClusters(w, r)
@@ -72,7 +83,7 @@ func TestGetClusters (t *testing.T) {
 			expectedOutput, _ := json.Marshal(c.expectedErr)
 			if bytes.Compare(body, expectedOutput) != 0 {
 				t.Errorf("Error mismatch. Got %v, want %v", string(body), c.expectedErr)
-				t.Errorf("%d",bytes.Compare(body, expectedOutput))
+				t.Errorf("%d", bytes.Compare(body, expectedOutput))
 			}
 			if c.statusCode != 200 && resp.StatusCode != c.statusCode {
 				t.Errorf("Status code mismatch. Got %v, want %v", resp.StatusCode, c.statusCode)
@@ -81,64 +92,64 @@ func TestGetClusters (t *testing.T) {
 	}
 }
 
-func TestGetServiceEntriesByCluster (t *testing.T) {
+func TestGetServiceEntriesByCluster(t *testing.T) {
 	url := "https://admiral.com/cluster/cluster1/serviceentries"
 	opts := RouteOpts{
 		RemoteRegistry: &clusters.RemoteRegistry{},
 	}
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	testCases := []struct {
-		name string
-		clusterName string
+		name              string
+		clusterName       string
 		remoteControllers map[string]*clusters.RemoteController
-		expectedErr string
-		statusCode int
+		expectedErr       string
+		statusCode        int
 	}{
 		{
-			name:             "failure with admiral not monitored cluster",
-		    clusterName:      "bar",
+			name:              "failure with admiral not monitored cluster",
+			clusterName:       "bar",
 			remoteControllers: nil,
-			expectedErr:      "Admiral is not monitoring cluster bar\n",
+			expectedErr:       "Admiral is not monitoring cluster bar\n",
 			statusCode:        404,
 		},
 		{
-			name:             "failure with cluster not provided request",
-			clusterName:      "",
+			name:              "failure with cluster not provided request",
+			clusterName:       "",
 			remoteControllers: nil,
-			expectedErr:      "Cluster name not provided as part of the request\n",
+			expectedErr:       "Cluster name not provided as part of the request\n",
 			statusCode:        400,
 		},
 		{
-			name:             "success with no service entry for cluster",
-			clusterName:      "cluster1",
-			remoteControllers:map[string]*clusters.RemoteController{
+			name:        "success with no service entry for cluster",
+			clusterName: "cluster1",
+			remoteControllers: map[string]*clusters.RemoteController{
 				"cluster1": &clusters.RemoteController{
-					ServiceEntryController:    &istio.ServiceEntryController{
+					ServiceEntryController: &istio.ServiceEntryController{
 						IstioClient: fakeIstioClient,
 					},
 				},
 			},
-			expectedErr:      "No service entries configured for cluster - cluster1",
-			statusCode:        200,
+			expectedErr: "No service entries configured for cluster - cluster1",
+			statusCode:  200,
 		},
 		{
-			name:             "success with service entry for cluster",
-			clusterName:      "cluster1",
-			remoteControllers:     map[string]*clusters.RemoteController{
+			name:        "success with service entry for cluster",
+			clusterName: "cluster1",
+			remoteControllers: map[string]*clusters.RemoteController{
 				"cluster1": &clusters.RemoteController{
-					ServiceEntryController:    &istio.ServiceEntryController{
+					ServiceEntryController: &istio.ServiceEntryController{
 						IstioClient: fakeIstioClient,
 					},
 				},
 			},
-			expectedErr:      "",
-			statusCode:        200,
+			expectedErr: "",
+			statusCode:  200,
 		},
 	}
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			r:= httptest.NewRequest("GET", url, nil)
+			r := httptest.NewRequest("GET", url, nil)
 			r = mux.SetURLVars(r, map[string]string{"clustername": c.clusterName})
 			w := httptest.NewRecorder()
 			opts.RemoteRegistry.RemoteControllers = c.remoteControllers
@@ -158,41 +169,41 @@ func TestGetServiceEntriesByCluster (t *testing.T) {
 	}
 }
 
-func TestGetServiceEntriesByIdentity (t *testing.T) {
+func TestGetServiceEntriesByIdentity(t *testing.T) {
 	url := "https://admiral.com/identity/service1/serviceentries"
 	opts := RouteOpts{
 		RemoteRegistry: &clusters.RemoteRegistry{
 			AdmiralCache: &clusters.AdmiralCache{
-				SeClusterCache: common.NewMapOfMaps() ,
+				SeClusterCache: common.NewMapOfMaps(),
 			},
 		},
 	}
 	testCases := []struct {
-		name string
-		identity string
-		host string
+		name        string
+		identity    string
+		host        string
 		expectedErr string
-		statusCode int
+		statusCode  int
 	}{
 		{
-			name:             "failure with identity not provided request",
-			identity:         "",
-			host:            "",
-			expectedErr:      "Identity not provided as part of the request\n",
-			statusCode:       400,
+			name:        "failure with identity not provided request",
+			identity:    "",
+			host:        "",
+			expectedErr: "Identity not provided as part of the request\n",
+			statusCode:  400,
 		},
 		{
-			name:             "success with service entry for service",
-			identity:         "meshhealthcheck",
-			host:             "anil-test-bdds-10-k8s-e2e.intuit.services.mesh.meshhealthcheck.mesh",
-			expectedErr:      "Identity not provided as part of the request\n",
-			statusCode:       200,
+			name:        "success with service entry for service",
+			identity:    "meshhealthcheck",
+			host:        "anil-test-bdds-10-k8s-e2e.intuit.services.mesh.meshhealthcheck.mesh",
+			expectedErr: "Identity not provided as part of the request\n",
+			statusCode:  200,
 		},
 	}
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			r:= httptest.NewRequest("GET", url, nil)
+			r := httptest.NewRequest("GET", url, nil)
 			r = mux.SetURLVars(r, map[string]string{"identity": c.identity})
 			w := httptest.NewRecorder()
 			if c.host != "" {
@@ -210,4 +221,3 @@ func TestGetServiceEntriesByIdentity (t *testing.T) {
 		})
 	}
 }
-

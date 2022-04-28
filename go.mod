@@ -19,6 +19,8 @@ require (
 	github.com/mailru/easyjson v0.7.1 // indirect
 	github.com/onsi/ginkgo v1.10.2 // indirect
 	github.com/onsi/gomega v1.7.0
+	github.com/prometheus/client_golang v1.5.0
+	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.9.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
