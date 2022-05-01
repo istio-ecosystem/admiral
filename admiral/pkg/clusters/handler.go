@@ -107,7 +107,7 @@ func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTraffic
 
 	outlierDetection := &v1alpha32.OutlierDetection{
 		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: uint32(10)},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: uint32(50)},
 		Interval:              &types.Duration{Seconds: 60},
 	}
 
