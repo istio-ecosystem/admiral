@@ -1372,35 +1372,35 @@ func TestIsBlueGreenStrategy(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			name: "Given rollout is configured with blue green rollout strategy" +
+			name: "Given argo rollout is configured with blue green rollout strategy" +
 				"When isBlueGreenStrategy is called" +
 				"Then it should return true",
 			rollout:        rolloutWithBlueGreenStrategy,
 			expectedResult: true,
 		},
 		{
-			name: "Given rollout is configured with canary rollout strategy" +
+			name: "Given argo rollout is configured with canary rollout strategy" +
 				"When isBlueGreenStrategy is called" +
 				"Then it should return false",
 			rollout:        rolloutWithCanaryStrategy,
 			expectedResult: false,
 		},
 		{
-			name: "Given rollout is configured without any rollout strategy" +
+			name: "Given argo rollout is configured without any rollout strategy" +
 				"When isBlueGreenStrategy is called" +
 				"Then it should return false",
 			rollout:        rolloutWithNoStrategy,
 			expectedResult: false,
 		},
 		{
-			name: "Given rollout is nil" +
+			name: "Given argo rollout is nil" +
 				"When isBlueGreenStrategy is called" +
 				"Then it should return false",
 			rollout:        emptyRollout,
 			expectedResult: false,
 		},
 		{
-			name: "Given spec in argo rollout is nil" +
+			name: "Given argo rollout has an empty Spec" +
 				"When isBlueGreenStrategy is called" +
 				"Then it should return false",
 			rollout:        rolloutWithEmptySpec,
