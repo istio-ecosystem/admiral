@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	v12 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/rest"
 	"sync"
 	"time"
 
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
@@ -46,8 +44,6 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.dependencyCache = make(map[string]*v12.Deployment)
-	gtpCache.dependencyRolloutCache = make(map[string]*argo.Rollout)
 	gtpCache.mutex = &sync.Mutex{}
 
 	w.AdmiralCache = &AdmiralCache{
