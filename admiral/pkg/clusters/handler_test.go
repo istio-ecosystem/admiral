@@ -176,10 +176,16 @@ func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		Consecutive_5XxErrors: &types.UInt32Value{Value: 10},
-		Interval:              &types.Duration{Seconds: 60}}
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
+		Interval:              &types.Duration{Seconds: 60},
+		MaxEjectionPercent: 100,
+	}
 	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
 
+
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
+	}}
 	noGtpDr := v1alpha3.DestinationRule{
 		Host:          "qa.myservice.global",
 		TrafficPolicy: mTLS,
@@ -243,35 +249,35 @@ func TestGetDestinationRule(t *testing.T) {
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name            string
-		host            string
+		se              *v1alpha3.ServiceEntry
 		locality        string
 		gtpPolicy       *model.TrafficPolicy
 		destinationRule *v1alpha3.DestinationRule
 	}{
 		{
 			name:            "Should handle a nil GTP",
-			host:            "qa.myservice.global",
+			se:              se,
 			locality:        "uswest2",
 			gtpPolicy:       nil,
 			destinationRule: &noGtpDr,
 		},
 		{
 			name:            "Should return default DR with empty locality",
-			host:            "qa.myservice.global",
+			se:              se,
 			locality:        "",
 			gtpPolicy:       failoverGTPPolicy,
 			destinationRule: &noGtpDr,
 		},
 		{
 			name:            "Should handle a topology GTP",
-			host:            "qa.myservice.global",
+			se:              se,
 			locality:        "uswest2",
 			gtpPolicy:       topologyGTPPolicy,
 			destinationRule: &basicGtpDr,
 		},
 		{
 			name:            "Should handle a failover GTP",
-			host:            "qa.myservice.global",
+			se:              se,
 			locality:        "uswest2",
 			gtpPolicy:       failoverGTPPolicy,
 			destinationRule: &failoverGtpDr,
@@ -281,9 +287,100 @@ func TestGetDestinationRule(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getDestinationRule(c.host, c.locality, c.gtpPolicy)
+			result := getDestinationRule(c.se, c.locality, c.gtpPolicy)
 			if !cmp.Equal(result, c.destinationRule) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.destinationRule))
+			}
+		})
+	}
+}
+
+func TestGetOutlierDetection(t *testing.T) {
+	//Do setup here
+	outlierDetection := &v1alpha3.OutlierDetection{
+		BaseEjectionTime:      &types.Duration{Seconds: 300},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
+		Interval:              &types.Duration{Seconds: 60},
+		MaxEjectionPercent: 100,
+	}
+
+	outlierDetectionOneHostRemote := &v1alpha3.OutlierDetection{
+		BaseEjectionTime:      &types.Duration{Seconds: 300},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
+		Interval:              &types.Duration{Seconds: 60},
+		MaxEjectionPercent: 34,
+	}
+
+	topologyGTPPolicy := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_TOPOLOGY,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-west-2",
+				Weight: 100,
+			},
+		},
+	}
+
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
+	}}
+
+	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+		{Address: "east.com", Locality: "us-east-2"},
+	}}
+
+	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+		{Address: "hello.ns.svc.cluster.local", Locality: "us-east-2"},
+	}}
+
+	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+		{Address: "95.45.25.34", Locality: "us-east-2"},
+	}}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name            string
+		se              *v1alpha3.ServiceEntry
+		locality        string
+		gtpPolicy       *model.TrafficPolicy
+		outlierDetection *v1alpha3.OutlierDetection
+	}{
+		{
+			name:            "Should return nil for cluster local only endpoint",
+			se:              seOneHostLocal,
+			locality:        "uswest2",
+			gtpPolicy:       topologyGTPPolicy,
+			outlierDetection: nil,
+		},
+		{
+			name:            "Should return nil for one IP endpoint",
+			se:              seOneHostRemoteIp,
+			locality:        "uswest2",
+			gtpPolicy:       topologyGTPPolicy,
+			outlierDetection: nil,
+		},
+		{
+			name:            "Should return 34% ejection for remote endpoint with one entry",
+			se:              seOneHostRemote,
+			locality:        "uswest2",
+			gtpPolicy:       topologyGTPPolicy,
+			outlierDetection: outlierDetectionOneHostRemote,
+		},
+		{
+			name:            "Should return 100% ejection for two remote endpoints",
+			se:              se,
+			locality:        "uswest2",
+			gtpPolicy:       topologyGTPPolicy,
+			outlierDetection: outlierDetection,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getOutlierDetection(c.se, c.locality, c.gtpPolicy)
+			if !cmp.Equal(result, c.outlierDetection) {
+				t.Fatalf("OutlierDetection Mismatch. Diff: %v", cmp.Diff(result, c.outlierDetection))
 			}
 		})
 	}

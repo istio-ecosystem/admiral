@@ -3,6 +3,7 @@ package clusters
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"reflect"
 	"sort"
 	"strings"
@@ -61,19 +62,14 @@ func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
 }
 
-func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
+func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
 	var dr = &v1alpha32.DestinationRule{}
-	dr.Host = host
+	dr.Host = se.Hosts[0]
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.TLSSettings{Mode: v1alpha32.TLSSettings_ISTIO_MUTUAL}}
 	processGtp := true
 	if len(locality) == 0 {
-		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
+		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
 		processGtp = false
-	}
-	outlierDetection := &v1alpha32.OutlierDetection{
-		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		Consecutive_5XxErrors: &types.UInt32Value{Value: uint32(10)},
-		Interval:              &types.Duration{Seconds: 60},
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
@@ -103,8 +99,31 @@ func getDestinationRule(host string, locality string, gtpTrafficPolicy *model.Tr
 			dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 		}
 	}
-	dr.TrafficPolicy.OutlierDetection = outlierDetection
+	dr.TrafficPolicy.OutlierDetection = getOutlierDetection(se, locality, gtpTrafficPolicy)
 	return dr
+}
+
+func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.OutlierDetection {
+
+	outlierDetection := &v1alpha32.OutlierDetection{
+		BaseEjectionTime:      &types.Duration{Seconds: 300},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: uint32(50)},
+		Interval:              &types.Duration{Seconds: 60},
+	}
+
+	//Scenario 1: Only one endpoint present and is local service (ends in svc.cluster.local) - no outlier detection (optimize this for headless services in future?)
+	if len(se.Endpoints) == 1 && (strings.Contains(se.Endpoints[0].Address, common.DotLocalDomainSuffix) || net.ParseIP(se.Endpoints[0].Address).To4() != nil) {
+		return nil
+	} else if len(se.Endpoints) == 1 {
+		//Scenario 2: Only one endpoint present and is remote - outlier detection with 34% ejection (protection against zone specific issues)
+		outlierDetection.MaxEjectionPercent = 34
+	} else {
+		//Scenario 3: Two endpoints present each with different locality and both remote - outlier detection with 100% ejection
+		//Scenario 4: Two endpoints present each with different locality with one local and other remote - outlier detection with 100% ejection
+		//for service entries with more than 2 endpoints eject 100% to failover to other endpoint within or outside the same region
+		outlierDetection.MaxEjectionPercent = 100
+	}
+	return outlierDetection
 }
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
