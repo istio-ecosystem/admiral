@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -70,6 +71,11 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var serviceInstance *k8sV1.Service
 	var weightedServices map[string]*WeightedService
 	var rollout *admiral.RolloutClusterEntry
+	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
+
+	var namespace string
+
+	var gtpKey = common.ConstructGtpKey(sourceIdentity, env)
 
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
@@ -87,7 +93,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			if serviceInstance == nil {
 				continue
 			}
-
+			namespace = deploymentInstance.Namespace
 			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deploymentInstance)
 
 			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
@@ -106,7 +112,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				serviceInstance = sInstance.Service
 				break
 			}
-
+			namespace = rolloutInstance.Namespace
 			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rolloutInstance)
 
 			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
@@ -117,6 +123,11 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			continue
 		}
 
+		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
+		if len(gtps) > 0 {
+			gtps[rc.ClusterID] = gtpsInNamespace
+		}
+
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
@@ -125,6 +136,9 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	}
 
 	util.LogElapsedTimeSince("BuildServiceEntry", sourceIdentity, env, "", start)
+
+	//cache the latest GTP in global cache to be reused during DR creation
+	updateGlobalGtpCache(remoteRegistry.AdmiralCache, sourceIdentity, env, gtps)
 
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity).Copy()
 
@@ -213,6 +227,38 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
 	return serviceEntries
+}
+
+//Does two things;
+//i)  Picks the GTP that was created most recently from the passed in GTP list (GTPs from all clusters)
+//ii) Updates the global GTP cache with the selected GTP in i)
+func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
+	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
+	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
+	for _, gtpsInCluster := range gtps {
+		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
+	}
+	if len(gtpsOrdered) == 0 {
+		cache.GlobalTrafficCache.Delete(env, identity)
+		return
+	} else if len(gtpsOrdered) > 1 {
+		//sort by creation time with most recent at the beginning
+		sort.Slice(gtpsOrdered, func(i, j int) bool {
+			iTime := gtpsOrdered[i].CreationTimestamp.Nanosecond()
+			jTime := gtpsOrdered[j].CreationTimestamp.Nanosecond()
+			return iTime > jTime
+		})
+	}
+
+	mostRecentGtp := gtpsOrdered[0]
+
+	err := cache.GlobalTrafficCache.Put(mostRecentGtp)
+
+	if err != nil {
+		log.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
+	} else {
+		log.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
+	}
 }
 
 func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,

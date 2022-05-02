@@ -3,17 +3,20 @@ package clusters
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
-	"sync"
-	"time"
 )
 
 type RemoteController struct {
@@ -57,6 +60,7 @@ type RemoteRegistry struct {
 	secretClient      k8s.Interface
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
+	StartTime         time.Time
 }
 
 func (r *RemoteRegistry) shutdown() {
@@ -143,6 +147,59 @@ type ServiceHandler struct {
 	ClusterID      string
 }
 
+func (sh *ServiceHandler) Added(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Added", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func (sh *ServiceHandler) Updated(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Updated", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Deleted", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
+	if svc.Spec.Selector == nil {
+		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName);
+	}
+	if remoteRegistry.RemoteControllers[clusterName] == nil {
+		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName);
+	}
+	deploymentController := remoteRegistry.RemoteControllers[clusterName].DeploymentController
+	rolloutController := remoteRegistry.RemoteControllers[clusterName].RolloutController
+	if deploymentController != nil {
+		matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployements) > 0 {
+			for _, deployment := range matchingDeployements {
+				HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+			}
+		}
+	}
+	if common.GetAdmiralParams().ArgoRolloutsEnabled && rolloutController != nil {
+		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+
+		if len(matchingRollouts) > 0 {
+			for _, rollout := range matchingRollouts {
+				HandleEventForRollout(admiral.Update, &rollout, remoteRegistry, clusterName)
+			}
+		}
+	}
+	return nil
+}
+
 func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
@@ -180,14 +237,26 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
@@ -229,7 +298,6 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 
 // helper function to handle add and delete for DeploymentHandler
 func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
-	log.Infof(LogFormat, event, "deployment", obj.Name, clusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
@@ -242,4 +310,23 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+}
+
+// HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
+func HandleEventForGlobalTrafficPolicy(gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) error {
+
+	globalIdentifier := common.GetGtpIdentity(gtp)
+
+	if len(globalIdentifier) == 0 {
+		return fmt.Errorf(LogFormat, "Event", "globaltrafficpolicy", gtp.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+gtp.Namespace)
+	}
+
+	env := common.GetGtpEnv(gtp)
+
+	// For now we're going to force all the events to update only in order to prevent
+	// the endpoints from being deleted.
+	// TODO: Need to come up with a way to prevent deleting default endpoints so that this hack can be removed.
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	modifyServiceEntryForNewServiceOrPod(admiral.Update, env, globalIdentifier, remoteRegistry)
+	return nil
 }
