@@ -8,6 +8,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -123,22 +124,8 @@ func TestGlobalTrafficController_Updated(t *testing.T) {
 			gtpController.Updated(c.gtp, gtp)
 			gtpKey := common.GetGtpKey(c.gtp)
 			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
-			if len(matchedGtps) != len(c.expectedGtps) {
+			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
 				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
-			} else {
-				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
-				for _, gtp := range matchedGtps {
-					gtpMap[gtp.Name] = gtp
-				}
-				for _, expectedGtp := range c.expectedGtps {
-					if val, ok := gtpMap[expectedGtp.Name]; !ok {
-						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
-					} else {
-						if gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix != val.Spec.Policy[0].DnsPrefix {
-							t.Errorf("Test %s failed; gtp %v not updated. matched gtps, dnsPrefix mismatch expected %v, got %v", c.name, expectedGtp.Name, gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix, val.Spec.Policy[0].DnsPrefix)
-						}
-					}
-				}
 			}
 		})
 	}
@@ -194,22 +181,8 @@ func TestGlobalTrafficController_Deleted(t *testing.T) {
 			gtpController.Deleted(c.gtp)
 			gtpKey := common.GetGtpKey(c.gtp)
 			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
-			if len(matchedGtps) != len(c.expectedGtps) {
+			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
 				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
-			} else {
-				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
-				for _, gtp := range matchedGtps {
-					gtpMap[gtp.Name] = gtp
-				}
-				for _, expectedGtp := range c.expectedGtps {
-					if val, ok := gtpMap[expectedGtp.Name]; !ok {
-						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
-					} else {
-						if gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix != val.Spec.Policy[0].DnsPrefix {
-							t.Errorf("Test %s failed; gtp %v not updated. matched gtps, dnsPrefix mismatch expected %v, got %v", c.name, expectedGtp.Name, gtpMap[expectedGtp.Name].Spec.Policy[0].DnsPrefix, val.Spec.Policy[0].DnsPrefix)
-						}
-					}
-				}
 			}
 		})
 	}
@@ -267,18 +240,8 @@ func TestGlobalTrafficController_Added(t *testing.T) {
 			gtpController.Added(c.gtp)
 			gtpKey := common.GetGtpKey(c.gtp)
 			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
-			if len(matchedGtps) != len(c.expectedGtps) {
+			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
 				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
-			} else {
-				gtpMap := make(map[string]*v1.GlobalTrafficPolicy)
-				for _, gtp := range matchedGtps {
-					gtpMap[gtp.Name] = gtp
-				}
-				for _, expectedGtp := range c.expectedGtps {
-					if _, ok := gtpMap[expectedGtp.Name]; !ok {
-						t.Errorf("Test %s failed; expected gtp %v but not found. matched gtps %v", c.name, expectedGtp.Name, matchedGtps)
-					}
-				}
 			}
 		})
 	}
