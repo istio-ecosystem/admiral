@@ -233,6 +233,9 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	return serviceEntries
 }
 
+//Does two things;
+//i)  Picks the GTP that was created most recently from the passed in GTP list (GTPs from all clusters)
+//ii) Updates the global GTP cache with the selected GTP in i)
 func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
 	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
@@ -253,10 +256,10 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 
 	mostRecentGtp := gtpsOrdered[0]
 
-	err := cache.GlobalTrafficCache.Put(gtpsOrdered[0])
+	err := cache.GlobalTrafficCache.Put(mostRecentGtp)
 
 	if err != nil {
-		log.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
+		log.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
 	} else {
 		log.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
 	}

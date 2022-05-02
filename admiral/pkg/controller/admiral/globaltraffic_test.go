@@ -78,29 +78,26 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 
 func TestGlobalTrafficController_Updated(t *testing.T) {
 
-	gth := test.MockGlobalTrafficHandler{}
-	cache := gtpCache{
-		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
-		mutex: &sync.Mutex{},
-	}
-	gtpController := GlobalTrafficController{
-		GlobalTrafficHandler: &gth,
-		Cache:             &cache,
-	}
-	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
-	},}
-	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
-	gtpUpdated := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "helloUpdated"}},
-	},}
-	gtpUpdated.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
-	gtpUpdatedToIgnore := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}}
-	gtpUpdatedToIgnore.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
-	gtpUpdatedToIgnore.Annotations = map[string]string{"admiral.io/ignore": "true"}
+	var (
 
-	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}}
-	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+		gth = test.MockGlobalTrafficHandler{}
+		cache = gtpCache{
+			cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+			mutex: &sync.Mutex{},
+		}
+		gtpController = GlobalTrafficController{
+			GlobalTrafficHandler: &gth,
+			Cache:             &cache,
+		}
+		gtp = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
+		},}
+		gtpUpdated = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "helloUpdated"}},
+		},}
+		gtpUpdatedToIgnore = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}, Annotations: map[string]string{"admiral.io/ignore": "true"}}}
+
+	)
 
 	//add the base object to cache
 	gtpController.Added(&gtp)
@@ -149,29 +146,28 @@ func TestGlobalTrafficController_Updated(t *testing.T) {
 
 func TestGlobalTrafficController_Deleted(t *testing.T) {
 
-	gth := test.MockGlobalTrafficHandler{}
-	cache := gtpCache{
-		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
-		mutex: &sync.Mutex{},
-	}
-	gtpController := GlobalTrafficController{
-		GlobalTrafficHandler: &gth,
-		Cache:             &cache,
-	}
-	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
-	},}
-	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+	var (
+		gth = test.MockGlobalTrafficHandler{}
+		cache = gtpCache{
+			cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+			mutex: &sync.Mutex{},
+		}
+		gtpController = GlobalTrafficController{
+			GlobalTrafficHandler: &gth,
+			Cache:             &cache,
+		}
+		gtp = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
+		},}
 
-	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
-	},}
-	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+		gtp2 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
+		},}
 
-	gtp3 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2"}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
-	},}
-	gtp3.Labels = map[string]string{"identity": "id2", "admiral.io/env": "stage"}
+		gtp3 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", Labels: map[string]string{"identity": "id2", "admiral.io/env": "stage"}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
+		},}
+	)
 
 	//add the base object to cache
 	gtpController.Added(&gtp)
@@ -221,26 +217,24 @@ func TestGlobalTrafficController_Deleted(t *testing.T) {
 
 func TestGlobalTrafficController_Added(t *testing.T) {
 
-	gth := test.MockGlobalTrafficHandler{}
-	cache := gtpCache{
-		cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
-		mutex: &sync.Mutex{},
-	}
-	gtpController := GlobalTrafficController{
-		GlobalTrafficHandler: &gth,
-		Cache:             &cache,
-	}
-	gtp := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1"}}
-	gtp.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
-	gtpWithIgnoreLabels := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtpWithIgnoreLabels", Namespace: "namespace2"}}
-	gtpWithIgnoreLabels.Labels = map[string]string{"identity": "id2", "admiral.io/env": "stage"}
-	gtpWithIgnoreLabels.Annotations = map[string]string{"admiral.io/ignore": "true"}
+	var (
 
-	gtp2 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1"}}
-	gtp2.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+		gth = test.MockGlobalTrafficHandler{}
+		cache = gtpCache{
+			cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+			mutex: &sync.Mutex{},
+		}
+		gtpController = GlobalTrafficController{
+			GlobalTrafficHandler: &gth,
+			Cache:             &cache,
+		}
+		gtp = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}},}
+		gtpWithIgnoreLabels = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtpWithIgnoreLabels", Namespace: "namespace2", Labels: map[string]string{"identity": "id2", "admiral.io/env": "stage"}, Annotations: map[string]string{"admiral.io/ignore": "true"}}}
 
-	gtp3 := v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace3"}}
-	gtp3.Labels = map[string]string{"identity": "id", "admiral.io/env": "stage"}
+		gtp2 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}}
+
+		gtp3 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace3", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}}
+	)
 
 	testCases := []struct {
 		name                  string

@@ -1337,26 +1337,26 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 
 func TestUpdateGlobalGtpCache(t *testing.T) {
 
-	admiralCache := &AdmiralCache{GlobalTrafficCache: &globalTrafficCache{identityCache: make(map[string]*v13.GlobalTrafficPolicy), mutex: &sync.Mutex{}}}
+	var (
+		admiralCache = &AdmiralCache{GlobalTrafficCache: &globalTrafficCache{identityCache: make(map[string]*v13.GlobalTrafficPolicy), mutex: &sync.Mutex{}}}
 
-	identity1 := "identity1"
+		identity1 = "identity1"
 
-	env_stage := "stage"
+		env_stage = "stage"
 
-	gtp := &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30)))}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
-	},}
-	gtp.Labels = map[string]string{"identity": identity1, "env": env_stage}
+		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
+		},}
 
-	gtp2 := &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
-	},}
-	gtp2.Labels = map[string]string{"identity": identity1, "env": env_stage}
+		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
+		},}
 
-	gtp3 := &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp:  v12.NewTime(time.Now())}, Spec: model.GlobalTrafficPolicy{
-		Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
-	},}
-	gtp3.Labels = map[string]string{"identity": identity1, "env": env_stage}
+		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp:  v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
+		},}
+
+	)
 
 	testCases := []struct {
 		name        string
@@ -1398,14 +1398,8 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			updateGlobalGtpCache(admiralCache, c.identity, c.env, c.gtps)
 			gtp := admiralCache.GlobalTrafficCache.GetFromIdentity(c.identity, c.env)
-			if c.expectedGtp == nil && gtp == nil {
-				//all good
-			} else if c.expectedGtp == nil && gtp != nil {
-				t.Errorf("Test %s failed expected no gtp, got %v", c.name, gtp.Name)
-			} else if c.expectedGtp != nil && gtp == nil {
-				t.Errorf("Test %s failed expected gtp: %v but got none", c.name, c.expectedGtp.Name)
-			} else if c.expectedGtp.Name != gtp.Name {
-				t.Errorf("Test %s failed expected gtp: %v got %v", c.name, c.expectedGtp.Name, gtp.Name)
+			if !reflect.DeepEqual(c.expectedGtp, gtp) {
+				t.Errorf("Test %s failed expected gtp: %v got %v", c.name, c.expectedGtp, gtp)
 			}
 		})
 	}
