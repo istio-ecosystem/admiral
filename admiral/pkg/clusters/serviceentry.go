@@ -137,11 +137,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
 		rc := remoteRegistry.RemoteControllers[sourceCluster]
 		var meshPorts map[string]uint32
-		isBlueGreenStrategy := false
-
-		if len(sourceRollouts) > 0 {
-			isBlueGreenStrategy = sourceRollouts[sourceCluster].Spec.Strategy.BlueGreen != nil
-		}
+		blueGreenStrategy := isBlueGreenStrategy(sourceRollouts[sourceCluster])
 
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
@@ -159,7 +155,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					// Update endpoints with locafqdn for active and preview se of bluegreen rollout
-					if isBlueGreenStrategy {
+					if blueGreenStrategy {
 						oldPorts := ep.Ports
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
@@ -760,4 +756,13 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 	serviceEntries[globalFqdn] = tmpSe
 
 	return tmpSe
+}
+
+func isBlueGreenStrategy(rollout *argo.Rollout) bool {
+	if rollout != nil && &rollout.Spec != (&argo.RolloutSpec{}) && rollout.Spec.Strategy != (argo.RolloutStrategy{}) {
+		if rollout.Spec.Strategy.BlueGreen != nil {
+			return true
+		}
+	}
+	return false
 }

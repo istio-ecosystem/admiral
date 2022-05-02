@@ -1339,3 +1339,81 @@ func isLower(s string) bool {
 	}
 	return true
 }
+
+func TestIsBlueGreenStrategy(t *testing.T) {
+	var (
+		emptyRollout                 *argo.Rollout
+		rolloutWithBlueGreenStrategy = &argo.Rollout{
+			Spec: argo.RolloutSpec{
+				Strategy: argo.RolloutStrategy{
+					BlueGreen: &argo.BlueGreenStrategy{
+						ActiveService: "active",
+					},
+				},
+			},
+		}
+		rolloutWithCanaryStrategy = &argo.Rollout{
+			Spec: argo.RolloutSpec{
+				Strategy: argo.RolloutStrategy{
+					Canary: &argo.CanaryStrategy{
+						CanaryService: "canaryservice",
+					},
+				},
+			},
+		}
+		rolloutWithNoStrategy = &argo.Rollout{
+			Spec: argo.RolloutSpec{},
+		}
+		rolloutWithEmptySpec = &argo.Rollout{}
+	)
+	cases := []struct {
+		name           string
+		rollout        *argo.Rollout
+		expectedResult bool
+	}{
+		{
+			name: "Given argo rollout is configured with blue green rollout strategy" +
+				"When isBlueGreenStrategy is called" +
+				"Then it should return true",
+			rollout:        rolloutWithBlueGreenStrategy,
+			expectedResult: true,
+		},
+		{
+			name: "Given argo rollout is configured with canary rollout strategy" +
+				"When isBlueGreenStrategy is called" +
+				"Then it should return false",
+			rollout:        rolloutWithCanaryStrategy,
+			expectedResult: false,
+		},
+		{
+			name: "Given argo rollout is configured without any rollout strategy" +
+				"When isBlueGreenStrategy is called" +
+				"Then it should return false",
+			rollout:        rolloutWithNoStrategy,
+			expectedResult: false,
+		},
+		{
+			name: "Given argo rollout is nil" +
+				"When isBlueGreenStrategy is called" +
+				"Then it should return false",
+			rollout:        emptyRollout,
+			expectedResult: false,
+		},
+		{
+			name: "Given argo rollout has an empty Spec" +
+				"When isBlueGreenStrategy is called" +
+				"Then it should return false",
+			rollout:        rolloutWithEmptySpec,
+			expectedResult: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result := isBlueGreenStrategy(c.rollout)
+			if result != c.expectedResult {
+				t.Errorf("expected: %t, got: %t", c.expectedResult, result)
+			}
+		})
+	}
+}
