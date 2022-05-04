@@ -75,7 +75,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	var namespace string
 
-	var gtpKey = common.ConstructGtpKey(sourceIdentity, env)
+	var gtpKey = common.ConstructGtpKey(env, sourceIdentity)
 
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
