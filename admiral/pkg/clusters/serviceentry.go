@@ -124,7 +124,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
-		if len(gtps) > 0 {
+		if len(gtpsInNamespace) > 0 {
 			gtps[rc.ClusterID] = gtpsInNamespace
 		}
 
