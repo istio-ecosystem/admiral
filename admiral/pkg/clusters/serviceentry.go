@@ -75,7 +75,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	var namespace string
 
-	var gtpKey = common.ConstructGtpKey(sourceIdentity, env)
+	var gtpKey = common.ConstructGtpKey(env, sourceIdentity)
 
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
@@ -435,7 +435,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 		splitByEnv := strings.Split(se.Hosts[0], common.Sep)
 		var env = splitByEnv[0]
 
-		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(env, identityId)
+		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, env)
 
 		for _, sourceCluster := range sourceClusters {
 
