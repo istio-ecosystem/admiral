@@ -435,7 +435,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 		splitByEnv := strings.Split(se.Hosts[0], common.Sep)
 		var env = splitByEnv[0]
 
-		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(identityId, env)
+		globalTrafficPolicy := cache.GlobalTrafficCache.GetFromIdentity(env, identityId)
 
 		for _, sourceCluster := range sourceClusters {
 
