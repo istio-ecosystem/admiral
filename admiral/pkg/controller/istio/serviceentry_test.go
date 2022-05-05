@@ -19,7 +19,7 @@ func TestNewServiceEntryController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockServiceEntryHandler{}
 
-	serviceEntryController, err := NewServiceEntryController(stop, &handler, config, time.Duration(1000))
+	serviceEntryController, err := NewServiceEntryController("test", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

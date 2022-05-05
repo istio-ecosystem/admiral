@@ -2,14 +2,15 @@ package admiral
 
 import (
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
+	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	"time"
 )
 
 const (
@@ -48,7 +49,7 @@ type Controller struct {
 func NewController(name string, stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {
 
 	controller := Controller{
-		name: name,
+		name:      name,
 		informer:  informer,
 		delegator: delegator,
 		queue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
@@ -144,4 +145,33 @@ func (c *Controller) processItem(informerCacheObj InformerCacheObj) error {
 		c.delegator.Added(informerCacheObj.obj)
 	}
 	return nil
+}
+
+type MonitoredDelegator struct {
+	clusterID  string
+	objectType string
+	d          Delegator
+}
+
+func NewMonitoredDelegator(d Delegator, clusterID string, objectType string) *MonitoredDelegator {
+	return &MonitoredDelegator{
+		clusterID:  clusterID,
+		objectType: objectType,
+		d:          d,
+	}
+}
+
+func (s *MonitoredDelegator) Added(obj interface{}) {
+	common.EventsProcessed.With(s.clusterID, s.objectType, common.AddEventLabelValue).Inc()
+	s.d.Added(obj)
+}
+
+func (s *MonitoredDelegator) Updated(obj interface{}, oldObj interface{}) {
+	common.EventsProcessed.With(s.clusterID, s.objectType, common.UpdateEventLabelValue).Inc()
+	s.d.Updated(obj, oldObj)
+}
+
+func (s *MonitoredDelegator) Deleted(obj interface{}) {
+	common.EventsProcessed.With(s.clusterID, s.objectType, common.DeleteEventLabelValue).Inc()
+	s.d.Deleted(obj)
 }

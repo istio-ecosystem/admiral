@@ -124,11 +124,10 @@ func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Ro
 	return false //labels are fine, we should not ignore
 }
 
-func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration) (*RolloutController, error) {
+func NewRolloutsController(clusterID string, stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration) (*RolloutController, error) {
 
 	roController := RolloutController{}
 	roController.RolloutHandler = handler
-	roController.labelSet = common.GetLabelSet()
 
 	rolloutCache := rolloutCache{}
 	rolloutCache.cache = make(map[string]*RolloutClusterEntry)
@@ -157,14 +156,9 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	//Initialize informer
 	roController.informer = argoRolloutsInformerFactory.Argoproj().V1alpha1().Rollouts().Informer()
 
-	NewController("rollouts-ctrl-" + config.Host , stopCh, &roController, roController.informer)
+	mcd := NewMonitoredDelegator(&roController, clusterID, "rollout")
+	NewController("rollouts-ctrl-"+config.Host, stopCh, mcd, roController.informer)
 	return &roController, nil
-}
-
-func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*RolloutController, error) {
-	rc, err := NewRolloutsController(stopCh, handler, config, resyncPeriod)
-	rc.labelSet = labelSet
-	return rc, err
 }
 
 func (roc *RolloutController) Added(ojb interface{}) {

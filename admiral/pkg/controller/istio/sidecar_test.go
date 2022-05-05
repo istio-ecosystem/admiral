@@ -19,7 +19,7 @@ func TestNewSidecarController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockSidecarHandler{}
 
-	sidecarController, err := NewSidecarController(stop, &handler, config, time.Duration(1000))
+	sidecarController, err := NewSidecarController("", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

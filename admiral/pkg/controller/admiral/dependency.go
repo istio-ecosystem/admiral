@@ -84,7 +84,8 @@ func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configP
 		cache.Indexers{},
 	)
 
-	NewController("dependency-ctrl-" + namespace, stopCh, &depController, depController.informer)
+	mcd := NewMonitoredDelegator(&depController, "primary", "dependency")
+	NewController("dependency-ctrl-"+namespace, stopCh, mcd, depController.informer)
 
 	return &depController, nil
 }

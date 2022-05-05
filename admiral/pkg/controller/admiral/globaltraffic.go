@@ -25,7 +25,7 @@ type GlobalTrafficHandler interface {
 type GlobalTrafficController struct {
 	CrdClient            clientset.Interface
 	GlobalTrafficHandler GlobalTrafficHandler
-	Cache             	*gtpCache
+	Cache                *gtpCache
 	informer             cache.SharedIndexInformer
 }
 
@@ -47,7 +47,7 @@ func (p *gtpCache) Put(obj *v1.GlobalTrafficPolicy) {
 	if namespaceGtps == nil {
 		namespaceGtps = make(map[string]*v1.GlobalTrafficPolicy)
 	}
-	if common.ShouldIgnoreResource(obj.ObjectMeta){
+	if common.ShouldIgnoreResource(obj.ObjectMeta) {
 		delete(namespaceGtps, obj.Name)
 	} else {
 		namespaceGtps[obj.Name] = obj
@@ -84,18 +84,18 @@ func (p *gtpCache) Get(key, namespace string) []*v1.GlobalTrafficPolicy {
 	namespacesWithGtp := p.cache[key]
 	matchedGtps := make([]*v1.GlobalTrafficPolicy, 0)
 	for ns, gtps := range namespacesWithGtp {
-		 if namespace == ns {
-			 for _, gtp := range gtps {
-			 	logrus.Debugf("GTP match for identity=%s, from namespace=%v", key, ns)
-			 	//make a copy for safer iterations elsewhere
-			 	matchedGtps = append(matchedGtps, gtp.DeepCopy())
-			 }
-		 }
+		if namespace == ns {
+			for _, gtp := range gtps {
+				logrus.Debugf("GTP match for identity=%s, from namespace=%v", key, ns)
+				//make a copy for safer iterations elsewhere
+				matchedGtps = append(matchedGtps, gtp.DeepCopy())
+			}
+		}
 	}
 	return matchedGtps
 }
 
-func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
+func NewGlobalTrafficController(clusterID string, stopCh <-chan struct{}, handler GlobalTrafficHandler, configPath *rest.Config, resyncPeriod time.Duration) (*GlobalTrafficController, error) {
 
 	globalTrafficController := GlobalTrafficController{}
 
@@ -121,7 +121,8 @@ func NewGlobalTrafficController(stopCh <-chan struct{}, handler GlobalTrafficHan
 		cache.Indexers{},
 	)
 
-	NewController("gtp-ctrl-" + configPath.Host, stopCh, &globalTrafficController, globalTrafficController.informer)
+	mcd := NewMonitoredDelegator(&globalTrafficController, clusterID, "globaltrafficpolicy")
+	NewController("gtp-ctrl-"+configPath.Host, stopCh, mcd, globalTrafficController.informer)
 
 	return &globalTrafficController, nil
 }

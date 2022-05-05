@@ -31,7 +31,7 @@ type ServiceEntryController struct {
 	informer            cache.SharedIndexInformer
 }
 
-func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {
+func NewServiceEntryController(clusterID string, stopCh <-chan struct{}, handler ServiceEntryHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceEntryController, error) {
 
 	seController := ServiceEntryController{}
 	seController.ServiceEntryHandler = handler
@@ -47,7 +47,8 @@ func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandl
 
 	seController.informer = informers.NewServiceEntryInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController("serviceentry-ctrl-" + config.Host, stopCh, &seController, seController.informer)
+	mcd := admiral.NewMonitoredDelegator(&seController, clusterID, "serviceentry")
+	admiral.NewController("serviceentry-ctrl-"+config.Host, stopCh, mcd, seController.informer)
 
 	return &seController, nil
 }
@@ -65,5 +66,4 @@ func (sec *ServiceEntryController) Updated(ojb interface{}, oldObj interface{}) 
 func (sec *ServiceEntryController) Deleted(ojb interface{}) {
 	se := ojb.(*networking.ServiceEntry)
 	sec.ServiceEntryHandler.Deleted(se)
-
 }

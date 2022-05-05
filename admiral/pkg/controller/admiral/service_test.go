@@ -25,7 +25,7 @@ func TestNewServiceController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockServiceHandler{}
 
-	serviceController, err := NewServiceController(stop, &handler, config, time.Duration(1000))
+	serviceController, err := NewServiceController("test", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
