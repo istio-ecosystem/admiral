@@ -126,7 +126,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
 		if len(gtpsInNamespace) > 0 {
 			if log.IsLevelEnabled(log.DebugLevel) {
-				log.Debugf("GTPs found for identity=%s in env=%s namespace=%s gtp=%v", sourceIdentity, env, namespace, gtps)
+				log.Debugf("GTPs found for identity=%s in env=%s namespace=%s gtp=%v", sourceIdentity, env, namespace, gtpsInNamespace)
 			}
 			gtps[rc.ClusterID] = gtpsInNamespace
 		} else {
