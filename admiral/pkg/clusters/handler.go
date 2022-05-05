@@ -256,7 +256,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 		basicSEName := getIstioResourceName(host, "-se")
 
-		seName := getIstioResourceName(obj.Name, "-se")
+		seName := getIstioResourceName(host, "-se")
 
 		allDependentClusters := make(map[string]string)
 

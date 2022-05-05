@@ -124,8 +124,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
-		if len(gtps) > 0 {
+		if len(gtpsInNamespace) > 0 {
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.Debugf("GTPs found for identity=%s in env=%s namespace=%s gtp=%v", sourceIdentity, env, namespace, gtps)
+			}
 			gtps[rc.ClusterID] = gtpsInNamespace
+		} else {
+			log.Debugf("No GTPs found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
 		}
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
@@ -239,14 +244,17 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
 	}
 	if len(gtpsOrdered) == 0 {
+		log.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
 		cache.GlobalTrafficCache.Delete(env, identity)
 		return
 	} else if len(gtpsOrdered) > 1 {
+		log.Debugf("More than one GTP found for identity=%s in env=%s.", identity, env)
 		//sort by creation time with most recent at the beginning
 		sort.Slice(gtpsOrdered, func(i, j int) bool {
-			iTime := gtpsOrdered[i].CreationTimestamp.Nanosecond()
-			jTime := gtpsOrdered[j].CreationTimestamp.Nanosecond()
-			return iTime > jTime
+			iTime := gtpsOrdered[i].CreationTimestamp
+			jTime := gtpsOrdered[j].CreationTimestamp
+			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v name2=%s creationTime2=%v", identity, env, gtpsOrdered[i].Name, iTime, gtpsOrdered[j].Name, jTime)
+			return iTime.After(jTime.Time)
 		})
 	}
 
