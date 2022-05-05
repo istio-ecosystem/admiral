@@ -55,6 +55,9 @@ func (p *gtpCache) Put(obj *v1.GlobalTrafficPolicy) {
 
 	namespacesWithGtps[obj.Namespace] = namespaceGtps
 	p.cache[key] = namespacesWithGtps
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("GTP cache for key=%s gtp=%v", key, namespacesWithGtps)
+	}
 }
 
 func (p *gtpCache) Delete(obj *v1.GlobalTrafficPolicy) {
