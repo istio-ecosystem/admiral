@@ -67,12 +67,12 @@ install-protoc-mac:
 api-gen:
 	#make sure the protobuf matches the generation plugin
 	$(GOCMD) generate ./...
-	go install k8s.io/code-generator/cmd/deepcopy-gen
+	#go install k8s.io/code-generator/cmd/deepcopy-gen
 
 crd-gen:
 	go get -d -u -fix k8s.io/code-generator@v0.17.3
 	go get -d -u -fix k8s.io/apimachinery@v0.17.3
-	go get -d -u -fix k8s.io/gengo
+	#go get -d -u -fix k8s.io/gengo
 	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
 
 # Cross compilation

@@ -26,8 +26,10 @@ import (
 )
 
 // DependencyLister helps list Dependencies.
+// All objects returned here must be treated as read-only.
 type DependencyLister interface {
 	// List lists all Dependencies in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Dependency, err error)
 	// Dependencies returns an object that can list and get Dependencies.
 	Dependencies(namespace string) DependencyNamespaceLister
@@ -58,10 +60,13 @@ func (s *dependencyLister) Dependencies(namespace string) DependencyNamespaceLis
 }
 
 // DependencyNamespaceLister helps list and get Dependencies.
+// All objects returned here must be treated as read-only.
 type DependencyNamespaceLister interface {
 	// List lists all Dependencies in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.Dependency, err error)
 	// Get retrieves the Dependency from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.Dependency, error)
 	DependencyNamespaceListerExpansion
 }

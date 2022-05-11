@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var dependenciesResource = schema.GroupVersionResource{Group: "admiral.io", Vers
 var dependenciesKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1", Kind: "Dependency"}
 
 // Get takes name of the dependency, and returns the corresponding dependency object, and an error if there is any.
-func (c *FakeDependencies) Get(name string, options v1.GetOptions) (result *admiralv1.Dependency, err error) {
+func (c *FakeDependencies) Get(ctx context.Context, name string, options v1.GetOptions) (result *admiralv1.Dependency, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(dependenciesResource, c.ns, name), &admiralv1.Dependency{})
 
@@ -50,7 +52,7 @@ func (c *FakeDependencies) Get(name string, options v1.GetOptions) (result *admi
 }
 
 // List takes label and field selectors, and returns the list of Dependencies that match those selectors.
-func (c *FakeDependencies) List(opts v1.ListOptions) (result *admiralv1.DependencyList, err error) {
+func (c *FakeDependencies) List(ctx context.Context, opts v1.ListOptions) (result *admiralv1.DependencyList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(dependenciesResource, dependenciesKind, c.ns, opts), &admiralv1.DependencyList{})
 
@@ -72,14 +74,14 @@ func (c *FakeDependencies) List(opts v1.ListOptions) (result *admiralv1.Dependen
 }
 
 // Watch returns a watch.Interface that watches the requested dependencies.
-func (c *FakeDependencies) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeDependencies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(dependenciesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a dependency and creates it.  Returns the server's representation of the dependency, and an error, if there is any.
-func (c *FakeDependencies) Create(dependency *admiralv1.Dependency) (result *admiralv1.Dependency, err error) {
+func (c *FakeDependencies) Create(ctx context.Context, dependency *admiralv1.Dependency, opts v1.CreateOptions) (result *admiralv1.Dependency, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(dependenciesResource, c.ns, dependency), &admiralv1.Dependency{})
 
@@ -90,7 +92,7 @@ func (c *FakeDependencies) Create(dependency *admiralv1.Dependency) (result *adm
 }
 
 // Update takes the representation of a dependency and updates it. Returns the server's representation of the dependency, and an error, if there is any.
-func (c *FakeDependencies) Update(dependency *admiralv1.Dependency) (result *admiralv1.Dependency, err error) {
+func (c *FakeDependencies) Update(ctx context.Context, dependency *admiralv1.Dependency, opts v1.UpdateOptions) (result *admiralv1.Dependency, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(dependenciesResource, c.ns, dependency), &admiralv1.Dependency{})
 
@@ -102,7 +104,7 @@ func (c *FakeDependencies) Update(dependency *admiralv1.Dependency) (result *adm
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeDependencies) UpdateStatus(dependency *admiralv1.Dependency) (*admiralv1.Dependency, error) {
+func (c *FakeDependencies) UpdateStatus(ctx context.Context, dependency *admiralv1.Dependency, opts v1.UpdateOptions) (*admiralv1.Dependency, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(dependenciesResource, "status", c.ns, dependency), &admiralv1.Dependency{})
 
@@ -113,23 +115,23 @@ func (c *FakeDependencies) UpdateStatus(dependency *admiralv1.Dependency) (*admi
 }
 
 // Delete takes name of the dependency and deletes it. Returns an error if one occurs.
-func (c *FakeDependencies) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeDependencies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(dependenciesResource, c.ns, name), &admiralv1.Dependency{})
+		Invokes(testing.NewDeleteActionWithOptions(dependenciesResource, c.ns, name, opts), &admiralv1.Dependency{})
 
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeDependencies) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(dependenciesResource, c.ns, listOptions)
+func (c *FakeDependencies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(dependenciesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &admiralv1.DependencyList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched dependency.
-func (c *FakeDependencies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *admiralv1.Dependency, err error) {
+func (c *FakeDependencies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *admiralv1.Dependency, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, name, pt, data, subresources...), &admiralv1.Dependency{})
 
