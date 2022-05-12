@@ -11,6 +11,8 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"sync"
 	"time"
@@ -29,7 +31,7 @@ type RemoteController struct {
 	VirtualServiceController  *istio.VirtualServiceController
 	SidecarController         *istio.SidecarController
 	RolloutController         *admiral.RolloutController
-	RoutingConfigController	  *admiral.RoutingPolicyController
+	RoutingPolicyController   *admiral.RoutingPolicyController
 	stop                      chan struct{}
 	//listener for normal types
 }
@@ -98,6 +100,11 @@ type RoutingPolicyHandler struct {
 }
 
 func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
+	log.Infof("Namespace is %v", obj.Namespace)
+	listOpts := metav1.ListOptions{}
+	for _, remoteCluster := range r.RemoteRegistry.RemoteControllers {
+		remoteCluster.RoutingPolicyController.K8sClient.CoreV1().Namespaces().List(listOpts)
+	}
 	log.Info("Added routing policy")
 }
 

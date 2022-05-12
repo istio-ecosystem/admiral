@@ -7,13 +7,8 @@ spec:
   hosts:
     - qal.qbo.Intuit.sbe.salsa.platform.mesh
   config:
-    cache:
-      prefix: cache-v1
-      ttlSec: 86400
+    cachePrefix: cache-v1
+    cachettlSec: "86400"
     dispatcherUrl: qal.Intuit.sbe.salsa.platform.dispatcher.mesh
     algo: QBODispatcher
-    pathPrefix:
-      - "/wpcatalog"
-      - "/consumercatalog"
-      - "/v1/company/{id}/auth/hydrate"
-      - "/consumercatalog"
+    pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"

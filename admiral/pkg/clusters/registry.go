@@ -148,7 +148,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting Routing Policies controller for custerID: %v", clusterID)
-	rc.RoutingConfigController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
 		return fmt.Errorf(" Error with VirtualServiceController init: %v", err)
