@@ -24,7 +24,12 @@ import (
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+const (
+	ROLLOUT_POD_HASH_LABEL          string = "rollouts-pod-template-hash"
+	DefaultBaseEjectionTime         int64  = 300
+	DefaultConsecutiveGatewayErrors uint32 = 50
+	DefaultInterval                 int64  = 60
+)
 
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
@@ -106,9 +111,27 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.OutlierDetection {
 
 	outlierDetection := &v1alpha32.OutlierDetection{
-		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: uint32(50)},
-		Interval:              &types.Duration{Seconds: 60},
+		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &types.Duration{Seconds: DefaultInterval},
+	}
+
+	if gtpTrafficPolicy != nil && gtpTrafficPolicy.OutlierDetection != nil {
+		if gtpTrafficPolicy.OutlierDetection.BaseEjectionTime > 0 {
+			outlierDetection.BaseEjectionTime = &types.Duration{
+				Seconds: gtpTrafficPolicy.OutlierDetection.BaseEjectionTime,
+			}
+		}
+		if gtpTrafficPolicy.OutlierDetection.ConsecutiveGatewayErrors > 0 {
+			outlierDetection.ConsecutiveGatewayErrors = &types.UInt32Value{
+				Value: gtpTrafficPolicy.OutlierDetection.ConsecutiveGatewayErrors,
+			}
+		}
+		if gtpTrafficPolicy.OutlierDetection.Interval > 0 {
+			outlierDetection.Interval = &types.Duration{
+				Seconds: gtpTrafficPolicy.OutlierDetection.Interval,
+			}
+		}
 	}
 
 	//Scenario 1: Only one endpoint present and is local service (ends in svc.cluster.local) - no outlier detection (optimize this for headless services in future?)
