@@ -1,7 +1,6 @@
-package dr
+package clusters
 
 import (
-	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -13,55 +12,12 @@ import (
 	"time"
 )
 
-
-
-
-func StartDynamoDBBasedDRChecks() {
-
-	var DynamodbClient *DynamoClient
-	DynamodbClient = NewDynamoClient()
-	leaseName := "qal"
-	podIdentifier := "pod1"
-	waitDuration := 15 * time.Second
-	waitTimeInSeconds :=15
-	failureThreshold := 3
-	for {
-		fmt.Println("Retrieving latest  value of read write value for leaseName :" , leaseName )
-		readWriteLeases, err := DynamodbClient.getReadWriteLease()
-		if nil!=err{
-			log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Error("Error retrieving the latest lease")
-		}
-		readWriteLease := getLease(readWriteLeases,leaseName)
-		currentTime := time.Now().UTC().Unix()
-		if "" == readWriteLease.LeaseOwner {
-			log.Info("Lease with name=" , leaseName, " does not exist. Creating a new lease with owner=" , podIdentifier)
-			readWriteLease.LeaseOwner = podIdentifier
-			readWriteLease.UpdatedTime = currentTime
-			DynamodbClient.updatedReadWriteLease(readWriteLease)
-		}else if podIdentifier == readWriteLease.LeaseOwner {
-			log.Info("Lease with name=", leaseName, " is owned by current pod. Extending lease ownership till ", currentTime)
-			readWriteLease.UpdatedTime = currentTime
-			DynamodbClient.updatedReadWriteLease(readWriteLease)
-		}else if readWriteLease.UpdatedTime < (currentTime - int64(waitTimeInSeconds*failureThreshold)){
-			log.Info("Current time time is more than the failureInterval. Taking over the lease from ", readWriteLease.LeaseOwner)
-			readWriteLease.LeaseOwner = podIdentifier
-			readWriteLease.UpdatedTime = currentTime
-			DynamodbClient.updatedReadWriteLease(readWriteLease)
-		}else {
-			log.Info("Lease held by ", readWriteLease.LeaseOwner, " till ", readWriteLease.UpdatedTime)
-		}
-		sleep(waitDuration,waitTimeInSeconds)
-	}
-}
-
 func sleep(sleepDuration time.Duration, sleepSeconds int){
 	log.Info("Sleeping for ", sleepSeconds, " seconds")
 	time.Sleep(sleepDuration)
 }
 
-func getLease(allLeases [] ReadWriteLease, leaseName string) ReadWriteLease  {
+func getLease(allLeases []ReadWriteLease, leaseName string) ReadWriteLease {
 	for _, readWriteLease := range  allLeases {
 		if readWriteLease.LeaseName == leaseName {
 			return  readWriteLease
