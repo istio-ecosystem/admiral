@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/dr"
 	v12 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/rest"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +21,20 @@ import (
 const (
 	LogFormat    = "op=%s type=%v name=%v cluster=%s message=%s"
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
+	LogFormatForReadOnlyMode = "type=%v name=%v cluster=%s message=%s"
 )
+
+
+func startAdmiralStateChecker (admiralStateCheckerName string,as AdmiralState){
+	var  admiralStateChecker AdmiralStateChecker
+	switch  strings.ToLower(admiralStateCheckerName) {
+	case "noopstatechecker":
+		admiralStateChecker = NoOPStateChecker{}
+	case "dynamodbbasedstatechecker":
+		admiralStateChecker = DynamoDBBasedStateChecker{}
+	}
+	RunAdmiralStateCheck(admiralStateChecker,as)
+}
 
 func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
 
@@ -29,9 +42,8 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 
-	log.Infof("Starting DR checks")
-
-	go dr.StartDynamoDBBasedDRChecks()
+    as:= AdmiralState{READ_ONLY_ENABLED}
+    startAdmiralStateChecker(params.AdmiralStateCheckerName,as)
 
 	w := RemoteRegistry{
 		ctx: ctx,
