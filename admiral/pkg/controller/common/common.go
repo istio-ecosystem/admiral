@@ -1,7 +1,8 @@
 package common
 
 import (
-	"sort"
+	"fmt"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -142,114 +143,44 @@ func GetValueForKeyFromDeployment(key string, deployment *k8sAppsV1.Deployment) 
 	return value
 }
 
-//Returns the list of deployments to which this GTP should apply. It is assumed that all inputs already are an identity match
-//If the GTP has an identity label, it should match all deployments which share that label
-//If the GTP does not have an identity label, it should return all deployments without an identity label
-//IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
-func MatchDeploymentsToGTP(gtp *v1.GlobalTrafficPolicy, deployments []k8sAppsV1.Deployment) []k8sAppsV1.Deployment {
-	if gtp == nil || gtp.Name == "" {
-		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
-		return nil
-	}
-
-	gtpEnv := GetGtpEnv(gtp)
-
-	if len(deployments) == 0 {
-		return nil
-	}
-
-	var envMatchedDeployments []k8sAppsV1.Deployment
-
-	for _, deployment := range deployments {
-		deploymentEnvironment := GetEnv(&deployment)
-		if deploymentEnvironment == gtpEnv {
-			envMatchedDeployments = append(envMatchedDeployments, deployment)
-		}
-	}
-
-	if len(envMatchedDeployments) == 0 {
-		return nil
-	}
-
-	for _, deployment := range deployments {
-		log.Infof("Newly added GTP with name=%v matched with Deployment %v in namespace %v. Env=%v", gtp.Name, deployment.Name, deployment.Namespace, gtpEnv)
-	}
-	return envMatchedDeployments
-}
-
-//Find the GTP that best matches the deployment.
-//It's assumed that the set of GTPs passed in has already been matched via the GtpDeploymentLabel. Now it's our job to choose the best one.
-//In order:
-// - If one and only one GTP matches the env label of the deployment - use that one. Use "default" as the default env label for all GTPs and deployments.
-// - If multiple GTPs match the deployment label, use the oldest one (Using an old one has less chance of new behavior which could impact workflows)
-//IMPORTANT: If an environment label is specified on either the GTP or the deployment, the same value must be specified on the other for them to match
-func MatchGTPsToDeployment(gtpList []v1.GlobalTrafficPolicy, deployment *k8sAppsV1.Deployment) *v1.GlobalTrafficPolicy {
-	if deployment == nil || deployment.Name == "" {
-		log.Warn("Nil or empty GlobalTrafficPolicy provided for deployment match. Returning nil.")
-		return nil
-	}
-	deploymentEnvironment := GetEnv(deployment)
-
-	//If one and only one GTP matches the env label of the deployment - use that one
-	if len(gtpList) == 1 {
-		gtpEnv := GetGtpEnv(&gtpList[0])
-		if gtpEnv == deploymentEnvironment {
-			log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, gtpList[0].Name, deployment.Namespace, gtpEnv)
-			return &gtpList[0]
-		} else {
-			return nil
-		}
-	}
-
-	if len(gtpList) == 0 {
-		return nil
-	}
-
-	var envMatchedGTPList []v1.GlobalTrafficPolicy
-
-	for _, gtp := range gtpList {
-		gtpEnv := GetGtpEnv(&gtp)
-		if gtpEnv == deploymentEnvironment {
-			envMatchedGTPList = append(envMatchedGTPList, gtp)
-		}
-	}
-
-	//if one matches the environment from the gtp, return it
-	if len(envMatchedGTPList) == 1 {
-		log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, envMatchedGTPList[0].Name, deployment.Namespace, deploymentEnvironment)
-		return &envMatchedGTPList[0]
-	}
-
-	//No GTPs matched the environment label
-	if len(envMatchedGTPList) == 0 {
-		return nil
-	}
-
-	//Using age as a tiebreak
-	sort.Slice(envMatchedGTPList, func(i, j int) bool {
-		iTime := envMatchedGTPList[i].CreationTimestamp.Nanosecond()
-		jTime := envMatchedGTPList[j].CreationTimestamp.Nanosecond()
-		return iTime < jTime
-	})
-
-	log.Warnf("Multiple GTPs found that match the deployment with name=%v in namespace %v. Using the oldest one, you may want to clean up your configs to prevent this in the future", deployment.Name, deployment.Namespace)
-	//return oldest gtp
-	log.Infof("Newly added deployment with name=%v matched with GTP %v in namespace %v. Env=%v", deployment.Name, envMatchedGTPList[0].Name, deployment.Namespace, deploymentEnvironment)
-	return &envMatchedGTPList[0]
-
-}
-
 func GetGtpEnv(gtp *v1.GlobalTrafficPolicy) string {
 	var environment = gtp.Annotations[GetEnvKey()]
 	if len(environment) == 0 {
 		environment = gtp.Labels[GetEnvKey()]
 	}
 	if len(environment) == 0 {
+		environment = gtp.Spec.Selector[GetEnvKey()]
+	}
+	if len(environment) == 0 {
 		environment = gtp.Labels[Env]
+		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
+	}
+	if len(environment) == 0 {
+		environment = gtp.Spec.Selector[Env]
 		log.Warnf("Using deprecated approach to use env label for GTP, name=%v in namespace=%v", gtp.Name, gtp.Namespace)
 	}
 	if len(environment) == 0 {
 		environment = Default
 	}
 	return environment
+}
+
+func GetGtpIdentity(gtp *v1.GlobalTrafficPolicy) string {
+	identity := gtp.Labels[GetGlobalTrafficDeploymentLabel()]
+	if len(identity) == 0 {
+		identity = gtp.Spec.Selector[GetGlobalTrafficDeploymentLabel()]
+	}
+	return identity
+}
+
+func GetGtpKey(gtp *v1.GlobalTrafficPolicy) string {
+	return ConstructGtpKey(GetGtpEnv(gtp), GetGtpIdentity(gtp))
+}
+
+func ConstructGtpKey(env, identity string) string {
+	return fmt.Sprintf("%s.%s", env, identity)
+}
+
+func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
+	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
 }

@@ -47,7 +47,7 @@ func NewServiceEntryController(stopCh <-chan struct{}, handler ServiceEntryHandl
 
 	seController.informer = informers.NewServiceEntryInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController(stopCh, &seController, seController.informer)
+	admiral.NewController("serviceentry-ctrl-" + config.Host, stopCh, &seController, seController.informer)
 
 	return &seController, nil
 }

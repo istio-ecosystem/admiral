@@ -40,6 +40,36 @@ $ADMIRAL_HOME/admiral/cmd/admiral/main.go --kube_config "<Path_to_Kubeconfig>"
 $ADMIRAL_HOME/install/scripts/cluster-secret.sh <Path_to_Kubeconfig_Admiral_Cluster> <Path_to_Kubeconfig_Remote_Cluster> admiral
 ```
 
+* `Optional`: Run `admiral` inside the minikube cluster
+```bash
+# point to the admiral primary cluster
+export KUBECONFIG=<Path_to_Kubeconfig_Admiral_Cluster>
+
+# build the yaml files
+make gen-yaml
+
+# run the install scripts
+$ADMIRAL_HOME/install/scripts/install_admiral.sh $ADMIRAL_HOME/out/
+
+# get the http url for admiral api
+minikube service admiral-http -n admiral --url
+
+# get the http url for admiral metrics api
+minikube service admiral-metrics -n admiral --url
+```
+
+* `Optional`: Install prometheus for metrics.
+```bash
+# build the yaml files
+make gen-yaml
+
+# run the install scripts
+$ADMIRAL_HOME/install/scripts/install_prometheus.sh $ADMIRAL_HOME/out
+
+# get the http url for prometheus dashboard
+minikube service prometheus -n istio-system --url
+```
+
 ## Protobuf code generation
 * If you've made changes to protobuf model objects and need to re-generate their clientsets, use `sh hack/update-codegen.sh` and checkin the generated files
 

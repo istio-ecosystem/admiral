@@ -312,38 +312,6 @@ func TestAdded(t *testing.T) {
 
 }
 
-func TestPodHandler(t *testing.T) {
-
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-
-	})
-	rr.RemoteControllers["test.cluster"] = rc
-
-	ph := PodHandler{
-		RemoteRegistry: rr,
-	}
-
-	pod := k8sCoreV1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "test",
-		},
-		Spec: k8sCoreV1.PodSpec{
-			Hostname: "test.local",
-		},
-	}
-
-	ph.Added(&pod)
-
-	ph.Deleted(&pod)
-}
-
 func TestGetServiceForDeployment(t *testing.T) {
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
 		//res := i.(istio.Config)
@@ -449,24 +417,24 @@ func TestUpdateCacheController(t *testing.T) {
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name string
-		oldConfig *rest.Config
-		newConfig *rest.Config
-		clusterId string
+		name          string
+		oldConfig     *rest.Config
+		newConfig     *rest.Config
+		clusterId     string
 		shouldRefresh bool
 	}{
 		{
-			name: "Should update controller when kubeconfig changes",
-			oldConfig: originalConfig,
-			newConfig: changedConfig,
-			clusterId: "test.cluster",
+			name:          "Should update controller when kubeconfig changes",
+			oldConfig:     originalConfig,
+			newConfig:     changedConfig,
+			clusterId:     "test.cluster",
 			shouldRefresh: true,
 		},
 		{
-			name: "Should not update controller when kubeconfig doesn't change",
-			oldConfig: originalConfig,
-			newConfig: originalConfig,
-			clusterId: "test.cluster",
+			name:          "Should not update controller when kubeconfig doesn't change",
+			oldConfig:     originalConfig,
+			newConfig:     originalConfig,
+			clusterId:     "test.cluster",
 			shouldRefresh: false,
 		},
 	}
@@ -476,7 +444,7 @@ func TestUpdateCacheController(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			rr.RemoteControllers[c.clusterId].ApiServer = c.oldConfig.Host
-			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig,  time.Second*time.Duration(300))
+			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
 			if err != nil {
 				t.Fatalf("Unexpected error creating controller %v", err)
 			}

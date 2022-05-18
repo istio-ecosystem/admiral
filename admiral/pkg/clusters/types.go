@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+const  READ_WRITE_ENABLED = false
+const READ_ONLY_ENABLED = true;
+
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
@@ -49,6 +52,30 @@ type AdmiralCache struct {
 
 	argoRolloutsEnabled bool
 }
+
+type AdmiralState struct {
+	ReadOnly  bool
+}
+
+type AdmiralStateChecker interface {
+	runStateCheck(as AdmiralState)
+	shouldRunOnIndependentGoRoutine() bool
+	stateCheckBasedDREnabled() bool
+	getStateCheckerName() string
+}
+
+func RunAdmiralStateCheck(asc AdmiralStateChecker, as AdmiralState){
+	log.Infof("Starting DR checks")
+	if asc.shouldRunOnIndependentGoRoutine() {
+		log.Info("Starting Admiral State Checker  on a new Go Routine")
+		go asc.runStateCheck(as)
+	}else {
+		log.Infof("Starting Admiral State Checker on existing Go Routine")
+		asc.runStateCheck(as)
+	}
+}
+
+
 
 type RemoteRegistry struct {
 	sync.Mutex

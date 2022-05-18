@@ -157,7 +157,7 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	//Initialize informer
 	roController.informer = argoRolloutsInformerFactory.Argoproj().V1alpha1().Rollouts().Informer()
 
-	NewController(stopCh, &roController, roController.informer)
+	NewController("rollouts-ctrl-" + config.Host , stopCh, &roController, roController.informer)
 	return &roController, nil
 }
 

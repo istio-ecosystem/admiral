@@ -45,6 +45,8 @@ const (
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
+var remoteClustersMetric common.Gauge
+
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
 
@@ -141,27 +143,28 @@ func NewController(
 	secretsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
-			log.Infof("Processing add: %s", key)
+			log.Infof("Processing cluster add: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(newObj)
-			log.Infof("Processing update: %s", key)
+			log.Infof("Processing cluster update: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			log.Infof("Processing delete: %s", key)
+			log.Infof("Processing cluster delete: %s", key)
 			if err == nil {
 				queue.Add(key)
 			}
 		},
 	})
 
+	remoteClustersMetric = common.NewGaugeFrom(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
@@ -334,6 +337,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		}
 
 	}
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -348,5 +352,6 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
