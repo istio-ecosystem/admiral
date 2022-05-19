@@ -33,6 +33,10 @@ option go_package = "model";
 //       weight: 10
 //     - region: us-east2
 //       weight: 90
+//     outlier_detection:
+//       base_ejection_time: 180
+//       consecutive_gateway_errors: 100
+//       interval: 60
 //
 // ```
 
@@ -74,6 +78,19 @@ message TrafficPolicy {
     //REQUIRED: dnsPrefix that will be prefixed for the service names being generated with this traffic policy
     //Ex: dnsPrefix = west => generated service name = west.stage.servicename.global
     string dnsPrefix = 4;
+
+   message OutlierDetection {
+       //REQUIRED: Minimum duration of time in seconds, the endpoint will be ejected
+       int64 base_ejection_time = 1;
+       //REQUIRED: No. of consecutive failures in specified interval after which the endpoint will be ejected
+       uint32 consecutive_gateway_errors = 2;
+       //REQUIRED: Time interval between ejection sweep analysis
+       int64 interval = 3;
+   }
+
+   //OPTIONAL: to configure the outlierDetection in DestinationRule
+    OutlierDetection outlier_detection = 5;
+
 }
 
 message TrafficGroup {

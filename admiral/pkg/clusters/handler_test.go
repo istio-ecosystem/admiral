@@ -175,15 +175,14 @@ func TestIgnoreIstioResource(t *testing.T) {
 func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:      &types.Duration{Seconds: 300},
+		BaseEjectionTime:         &types.Duration{Seconds: 300},
 		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
-		Interval:              &types.Duration{Seconds: 60},
-		MaxEjectionPercent: 100,
+		Interval:                 &types.Duration{Seconds: 60},
+		MaxEjectionPercent:       100,
 	}
 	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
 
-
-	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
 		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
 	}}
 	noGtpDr := v1alpha3.DestinationRule{
@@ -298,17 +297,17 @@ func TestGetDestinationRule(t *testing.T) {
 func TestGetOutlierDetection(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
-		Interval:              &types.Duration{Seconds: 60},
-		MaxEjectionPercent: 100,
+		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &types.Duration{Seconds: DefaultInterval},
+		MaxEjectionPercent:       100,
 	}
 
 	outlierDetectionOneHostRemote := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:      &types.Duration{Seconds: 300},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
-		Interval:              &types.Duration{Seconds: 60},
-		MaxEjectionPercent: 34,
+		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &types.Duration{Seconds: DefaultInterval},
+		MaxEjectionPercent:       34,
 	}
 
 	topologyGTPPolicy := &model.TrafficPolicy{
@@ -321,57 +320,169 @@ func TestGetOutlierDetection(t *testing.T) {
 		},
 	}
 
-	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
 		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
 	}}
 
-	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
 		{Address: "east.com", Locality: "us-east-2"},
 	}}
 
-	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
 		{Address: "hello.ns.svc.cluster.local", Locality: "us-east-2"},
 	}}
 
-	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"},Endpoints:[]*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
 		{Address: "95.45.25.34", Locality: "us-east-2"},
 	}}
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
-		name            string
-		se              *v1alpha3.ServiceEntry
-		locality        string
-		gtpPolicy       *model.TrafficPolicy
+		name             string
+		se               *v1alpha3.ServiceEntry
+		locality         string
+		gtpPolicy        *model.TrafficPolicy
 		outlierDetection *v1alpha3.OutlierDetection
 	}{
+
 		{
-			name:            "Should return nil for cluster local only endpoint",
-			se:              seOneHostLocal,
-			locality:        "uswest2",
-			gtpPolicy:       topologyGTPPolicy,
+			name:             "Should return nil for cluster local only endpoint",
+			se:               seOneHostLocal,
+			locality:         "uswest2",
+			gtpPolicy:        topologyGTPPolicy,
 			outlierDetection: nil,
 		},
 		{
-			name:            "Should return nil for one IP endpoint",
-			se:              seOneHostRemoteIp,
-			locality:        "uswest2",
-			gtpPolicy:       topologyGTPPolicy,
+			name:             "Should return nil for one IP endpoint",
+			se:               seOneHostRemoteIp,
+			locality:         "uswest2",
+			gtpPolicy:        topologyGTPPolicy,
 			outlierDetection: nil,
 		},
 		{
-			name:            "Should return 34% ejection for remote endpoint with one entry",
-			se:              seOneHostRemote,
-			locality:        "uswest2",
-			gtpPolicy:       topologyGTPPolicy,
+			name:             "Should return 34% ejection for remote endpoint with one entry",
+			se:               seOneHostRemote,
+			locality:         "uswest2",
+			gtpPolicy:        topologyGTPPolicy,
 			outlierDetection: outlierDetectionOneHostRemote,
 		},
 		{
-			name:            "Should return 100% ejection for two remote endpoints",
-			se:              se,
-			locality:        "uswest2",
-			gtpPolicy:       topologyGTPPolicy,
+			name:             "Should return 100% ejection for two remote endpoints",
+			se:               se,
+			locality:         "uswest2",
+			gtpPolicy:        topologyGTPPolicy,
 			outlierDetection: outlierDetection,
+		},
+		{
+			name:             "Should use the default outlier detection if gtpPolicy is nil",
+			se:               se,
+			locality:         "uswest2",
+			gtpPolicy:        nil,
+			outlierDetection: outlierDetection,
+		},
+		{
+			name:             "Should use the default outlier detection if OutlierDetection is nil inside gtpPolicy",
+			se:               se,
+			locality:         "uswest2",
+			gtpPolicy:        topologyGTPPolicy,
+			outlierDetection: outlierDetection,
+		},
+		{
+			name:     "Should apply the default BaseEjectionTime if it is not configured in the outlier detection config",
+			se:       se,
+			locality: "uswest2",
+			gtpPolicy: &model.TrafficPolicy{
+				LbType: model.TrafficPolicy_TOPOLOGY,
+				Target: []*model.TrafficGroup{
+					{
+						Region: "us-west-2",
+						Weight: 100,
+					},
+				},
+				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
+					ConsecutiveGatewayErrors: 10,
+					Interval:                 60,
+				},
+			},
+			outlierDetection: &v1alpha3.OutlierDetection{
+				BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
+				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 10},
+				Interval:                 &types.Duration{Seconds: 60},
+				MaxEjectionPercent:       100,
+			},
+		},
+		{
+			name:     "Should apply the default ConsecutiveGatewayErrors if it is not configured in the outlier detection config",
+			se:       se,
+			locality: "uswest2",
+			gtpPolicy: &model.TrafficPolicy{
+				LbType: model.TrafficPolicy_TOPOLOGY,
+				Target: []*model.TrafficGroup{
+					{
+						Region: "us-west-2",
+						Weight: 100,
+					},
+				},
+				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
+					BaseEjectionTime: 600,
+					Interval:         60,
+				},
+			},
+			outlierDetection: &v1alpha3.OutlierDetection{
+				BaseEjectionTime:         &types.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+				Interval:                 &types.Duration{Seconds: 60},
+				MaxEjectionPercent:       100,
+			},
+		},
+		{
+			name:     "Should apply the default Interval if it is not configured in the outlier detection config",
+			se:       se,
+			locality: "uswest2",
+			gtpPolicy: &model.TrafficPolicy{
+				LbType: model.TrafficPolicy_TOPOLOGY,
+				Target: []*model.TrafficGroup{
+					{
+						Region: "us-west-2",
+						Weight: 100,
+					},
+				},
+				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
+					BaseEjectionTime:         600,
+					ConsecutiveGatewayErrors: 50,
+				},
+			},
+			outlierDetection: &v1alpha3.OutlierDetection{
+				BaseEjectionTime:         &types.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
+				Interval:                 &types.Duration{Seconds: DefaultInterval},
+				MaxEjectionPercent:       100,
+			},
+		},
+		{
+			name:     "Default outlier detection config should be overriden by the outlier detection config specified in the TrafficPolicy",
+			se:       se,
+			locality: "uswest2",
+			gtpPolicy: &model.TrafficPolicy{
+				LbType: model.TrafficPolicy_TOPOLOGY,
+				Target: []*model.TrafficGroup{
+					{
+						Region: "us-west-2",
+						Weight: 100,
+					},
+				},
+				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
+					BaseEjectionTime:         600,
+					ConsecutiveGatewayErrors: 10,
+					Interval:                 60,
+				},
+			},
+			outlierDetection: &v1alpha3.OutlierDetection{
+				BaseEjectionTime:         &types.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 10},
+				Interval:                 &types.Duration{Seconds: 60},
+				MaxEjectionPercent:       100,
+			},
 		},
 	}
 
