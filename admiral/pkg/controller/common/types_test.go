@@ -222,7 +222,7 @@ func TestSidecarEgressGet(t *testing.T) {
 
 }
 
-func TestTestSidecarEgressRange(t *testing.T) {
+func TestSidecarEgressRange(t *testing.T) {
 
 	egressMap := NewSidecarEgressMap()
 	egressMap.Put("pkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
