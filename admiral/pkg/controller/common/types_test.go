@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -200,10 +201,14 @@ func TestSidecarEgressGet(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
 	defer cancel()
 
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Producer go routine
 	go func(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
+				wg.Done()
 				return
 			default:
 				egressMap.Put("pkey1", string(uuid.NewUUID()), "fqdn", map[string]string{"pkey2": "pkey2"})
@@ -211,15 +216,20 @@ func TestSidecarEgressGet(t *testing.T) {
 		}
 	}(ctx)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			assert.NotNil(t, egressMap.Get("pkey1"))
+	// Consumer go routine
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				wg.Done()
+				return
+			default:
+				assert.NotNil(t, egressMap.Get("pkey1"))
+			}
 		}
-	}
+	}(ctx)
 
+	wg.Wait()
 }
 
 func TestSidecarEgressRange(t *testing.T) {
