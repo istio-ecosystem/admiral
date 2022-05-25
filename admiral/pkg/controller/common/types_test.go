@@ -205,10 +205,10 @@ func TestSidecarEgressGet(t *testing.T) {
 	wg.Add(2)
 	// Producer go routine
 	go func(ctx context.Context) {
+		defer wg.Done()
 		for {
 			select {
 			case <-ctx.Done():
-				wg.Done()
 				return
 			default:
 				egressMap.Put("pkey1", string(uuid.NewUUID()), "fqdn", map[string]string{"pkey2": "pkey2"})
@@ -218,10 +218,10 @@ func TestSidecarEgressGet(t *testing.T) {
 
 	// Consumer go routine
 	go func(ctx context.Context) {
+		defer wg.Done()
 		for {
 			select {
 			case <-ctx.Done():
-				wg.Done()
 				return
 			default:
 				assert.NotNil(t, egressMap.Get("pkey1"))
