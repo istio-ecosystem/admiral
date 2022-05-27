@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -185,6 +186,62 @@ func TestMapRange(t *testing.T) {
 	numOfIter := 0
 	m.Range(func(k string, v string) {
 		assert.NotNil(t, keys[k])
+		numOfIter++
+	})
+
+	assert.Equal(t, 3, numOfIter)
+
+}
+
+func TestSidecarEgressGet(t *testing.T) {
+
+	egressMap := NewSidecarEgressMap()
+	egressMap.Put("pkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Producer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				egressMap.Put("pkey1", string(uuid.NewUUID()), "fqdn", map[string]string{"pkey2": "pkey2"})
+			}
+		}
+	}(ctx)
+
+	// Consumer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				assert.NotNil(t, egressMap.Get("pkey1"))
+			}
+		}
+	}(ctx)
+
+	wg.Wait()
+}
+
+func TestSidecarEgressRange(t *testing.T) {
+
+	egressMap := NewSidecarEgressMap()
+	egressMap.Put("pkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey2", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey3", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+
+	numOfIter := 0
+	egressMap.Range(func(k string, v map[string]SidecarEgress) {
+		assert.NotNil(t, v)
 		numOfIter++
 	})
 
