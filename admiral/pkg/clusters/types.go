@@ -58,13 +58,13 @@ type AdmiralState struct {
 }
 
 type AdmiralStateChecker interface {
-	runStateCheck(as AdmiralState)
+	runStateCheck(as *AdmiralState)
 	shouldRunOnIndependentGoRoutine() bool
 	stateCheckBasedDREnabled() bool
 	getStateCheckerName() string
 }
 
-func RunAdmiralStateCheck(asc AdmiralStateChecker, as AdmiralState){
+func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState){
 	log.Infof("Starting DR checks")
 	if asc.shouldRunOnIndependentGoRoutine() {
 		log.Info("Starting Admiral State Checker  on a new Go Routine")
@@ -84,6 +84,7 @@ type RemoteRegistry struct {
 	secretClient      k8s.Interface
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
+	AdmiralState      *AdmiralState
 }
 
 func (r *RemoteRegistry) shutdown() {

@@ -344,7 +344,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
 					}
 					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
+						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc,r.AdmiralState)
 						r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 					//cache the subset service entries for updating them later for pod events
@@ -551,14 +551,27 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 }
 
-func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController, admiralState *AdmiralState) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
-	if exist == nil || exist.Spec.Hosts == nil {
+	seExists:= (exist == nil || exist.Spec.Hosts == nil)
+	log.Info("Memory location of admiral state is = " ,&admiralState)
+	// If current Admiral pod is in read-only mode, do not create/update/delete service entry objects
+	if (*admiralState).ReadOnly {
+		if seExists {
+			op = "Add"
+		}else {
+            op = "Update"
+		}
+		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as Admiral pod is in read only mode")
+		return
+	}
+
+	if seExists {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)

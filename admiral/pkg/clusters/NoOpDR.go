@@ -16,7 +16,7 @@ func (NoOPStateChecker) getStateCheckerName()  string {
 	return "noopstatechecker"
 }
 
-func (NoOPStateChecker) runStateCheck(as AdmiralState){
+func (NoOPStateChecker) runStateCheck(as *AdmiralState){
 	fmt.Print("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
 	as.ReadOnly = READ_WRITE_ENABLED
 }

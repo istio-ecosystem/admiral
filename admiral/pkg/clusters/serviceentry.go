@@ -167,7 +167,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
 				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-					map[string]*networking.ServiceEntry{key: serviceEntry})
+					map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
@@ -179,7 +179,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: serviceEntry})
+							map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -189,13 +189,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: se})
+							map[string]*networking.ServiceEntry{key: se},remoteRegistry.AdmiralState)
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: serviceEntry})
+							map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -227,7 +227,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries,remoteRegistry.AdmiralState)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -431,7 +431,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 }
 
 //This will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
+func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry, admiralState *AdmiralState) {
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
@@ -481,7 +481,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc,admiralState)
 						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 

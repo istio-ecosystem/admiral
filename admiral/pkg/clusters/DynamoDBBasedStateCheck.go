@@ -20,7 +20,7 @@ func (DynamoDBBasedStateChecker) getStateCheckerName() string{
 	return "dynamodbbasedstatechecker"
 }
 
-func (DynamoDBBasedStateChecker) runStateCheck(as AdmiralState){
+func (DynamoDBBasedStateChecker) runStateCheck(as *AdmiralState){
 	as.ReadOnly = READ_ONLY_ENABLED
 	var DynamodbClient *DynamoClient
 	DynamodbClient = NewDynamoClient()
@@ -29,8 +29,10 @@ func (DynamoDBBasedStateChecker) runStateCheck(as AdmiralState){
 	waitDuration := 15 * time.Second
 	waitTimeInSeconds :=15
 	failureThreshold := 3
+	const SKIP_LEASE_CHECK_POD_NAME = "SKIP-LEASE-POD"
 	for {
 		fmt.Println("Retrieving latest  value of read write value for leaseName :" , leaseName )
+		log.Info("Memory location  from state checker of admiral state is = " ,&as.ReadOnly)
 		readWriteLeases, err := DynamodbClient.getReadWriteLease()
 		if nil!=err{
 			log.WithFields(log.Fields{
@@ -45,8 +47,11 @@ func (DynamoDBBasedStateChecker) runStateCheck(as AdmiralState){
 			readWriteLease.UpdatedTime = currentTime
 			DynamodbClient.updatedReadWriteLease(readWriteLease)
 			//Not updating read-write mode until we confirm this pod has the lease
+		}else if SKIP_LEASE_CHECK_POD_NAME == readWriteLease.LeaseOwner {
+			log.Info("Lease held by skip lease check pod. Setting Admiral to read only mode")
+			as.ReadOnly = READ_ONLY_ENABLED;
 		}else if podIdentifier == readWriteLease.LeaseOwner {
-			//		admiralState.ReadOnly = READ_WRITE_ENABLED
+			as.ReadOnly = READ_WRITE_ENABLED
 			log.Info("Lease with name=", leaseName, " is owned by current pod. Extending lease ownership till ", currentTime)
 			readWriteLease.UpdatedTime = currentTime
 			DynamodbClient.updatedReadWriteLease(readWriteLease)
@@ -58,7 +63,7 @@ func (DynamoDBBasedStateChecker) runStateCheck(as AdmiralState){
 			//Not updating read-write mode until we confirm this pod has the lease
 		}else {
 			log.Info("Lease held by ", readWriteLease.LeaseOwner, " till ", readWriteLease.UpdatedTime)
-			//		admiralState.ReadOnly = READ_ONLY_ENABLED;
+			as.ReadOnly = READ_ONLY_ENABLED;
 		}
 		sleep(waitDuration,waitTimeInSeconds)
 	}

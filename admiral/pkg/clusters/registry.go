@@ -23,7 +23,7 @@ const (
 )
 
 
-func startAdmiralStateChecker (admiralStateCheckerName string,as AdmiralState){
+func startAdmiralStateChecker (admiralStateCheckerName string,as *AdmiralState){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(admiralStateCheckerName) {
 	case "noopstatechecker":
@@ -41,10 +41,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	common.InitializeConfig(params)
 
     as:= AdmiralState{READ_ONLY_ENABLED}
-    startAdmiralStateChecker(params.AdmiralStateCheckerName,as)
+    startAdmiralStateChecker(params.AdmiralStateCheckerName,&as)
 
 	w := RemoteRegistry{
 		ctx: ctx,
+		AdmiralState: &as,
 	}
 
 	wd := DependencyHandler{
