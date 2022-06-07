@@ -71,8 +71,8 @@ func (s *serviceCache) getKey(service *k8sV1.Service) string {
 }
 
 func (s *serviceCache) Get(key string) *ServiceClusterEntry {
-	defer s.mutex.Unlock()
 	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	return s.cache[key]
 }
 
