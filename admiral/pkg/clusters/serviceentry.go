@@ -205,7 +205,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
+			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc,remoteRegistry.AdmiralState)
 		}
 
 		for _, val := range dependents {
@@ -322,10 +322,11 @@ func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, w
 	serviceEntry.Endpoints = endpoints
 }
 
-func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
+func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController, admiralState *AdmiralState) {
 
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
+
 
 	if sidecarConfig == nil || sidecarEgressMap == nil {
 		return
@@ -361,15 +362,19 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 
 	//insert into cluster
 	if newSidecarConfig != nil {
-		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc)
+		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc,admiralState)
 	}
 }
 
-func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
+func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController, admiralState *AdmiralState) {
 	var err error
 	exist.Labels = obj.Labels
 	exist.Annotations = obj.Annotations
 	exist.Spec = obj.Spec
+	if(*admiralState).ReadOnly {
+		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
+		return
+	}
 	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
 
 	if err != nil {
@@ -472,10 +477,10 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				}
 
 				if len(seDr.ServiceEntry.Endpoints) == 0 {
-					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
+					deleteServiceEntry(oldServiceEntry, syncNamespace, rc,admiralState)
 					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
+					deleteDestinationRule(oldDestinationRule, syncNamespace, rc,admiralState)
 				} else {
 					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
@@ -487,7 +492,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
 					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc,admiralState)
 				}
 			}
 		}
