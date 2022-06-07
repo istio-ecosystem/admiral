@@ -299,42 +299,45 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 			}
 
 			if event == common.Delete {
-
-				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-				} else {
-					log.Error(LogFormat, err)
-				}
-				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
-				} else {
-					log.Error(LogFormat, err)
-				}
-				for _, subset := range destinationRule.Subsets {
-					sseName := seName + common.Dash + subset.Name
-					err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+				admiralState := r.AdmiralState
+				if(*admiralState).ReadOnly {
+					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Skipped deleting linked DestinationRule/ServiceEntry as Admiral pod is in read only ")
+				}else {
+					err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
 					if err != nil {
-						log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
+					} else {
+						log.Error(LogFormat, err)
+					}
+					err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
+					if err != nil {
+						log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
+					} else {
+						log.Error(LogFormat, err)
+					}
+					for _, subset := range destinationRule.Subsets {
+						sseName := seName + common.Dash + subset.Name
+						err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
+						if err != nil {
+							log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
+						} else {
+							log.Error(LogFormat, err)
+						}
+					}
+					err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
+					if err != nil {
+						log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
 					} else {
 						log.Error(LogFormat, err)
 					}
 				}
-				err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
-				} else {
-					log.Error(LogFormat, err)
-				}
-
 			} else {
 
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
 
 				//copy destination rule only to other clusters
 				if dependentCluster != clusterId {
-					addUpdateDestinationRule(obj, exist, syncNamespace, rc)
+					addUpdateDestinationRule(obj, exist, syncNamespace, rc,r.AdmiralState)
 				}
 
 				for _seName, se := range drServiceEntries {
@@ -355,7 +358,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
+					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule,r.AdmiralState)
 				}
 
 			}
@@ -369,22 +372,27 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
-				} else {
-					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
+				admiralState:= r.AdmiralState
+				if (*admiralState).ReadOnly {
+					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
+				}else {
+					err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+					if err != nil {
+						log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+					} else {
+						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
+					}
 				}
 			} else {
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
+				addUpdateDestinationRule(obj, exist, syncNamespace, rc,r.AdmiralState)
 			}
 		}
 	}
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *v1alpha32.DestinationRule) {
+	destinationRule *v1alpha32.DestinationRule, admiralState *AdmiralState ) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -413,7 +421,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		newDestinationRule := createDestinationRuleSkeletion(*destinationRule, localDrName, syncNamespace)
 
 		if newDestinationRule != nil {
-			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
+			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController,admiralState)
 		}
 	}
 }
@@ -465,12 +473,16 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
 
 				if event == common.Delete {
-					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-					if err != nil {
-						return err
+					admiralState := r.AdmiralState
+					if (*admiralState).ReadOnly {
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
+					}else {
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+						err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+						if err != nil {
+							return err
+						}
 					}
-
 				} else {
 
 					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
@@ -494,7 +506,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 						}
 					}
 
-					addUpdateVirtualService(obj, exist, syncNamespace, rc)
+					addUpdateVirtualService(obj, exist, syncNamespace, rc,r.AdmiralState)
 				}
 			}
 		}
@@ -508,30 +520,48 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
-					return err
-				} else {
-					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+				admiralState := r.AdmiralState
+				if(*admiralState).ReadOnly {
+					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
+				}else {
+					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+					if err != nil {
+						log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+						return err
+					} else {
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+					}
 				}
 			} else {
 				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateVirtualService(obj, exist, syncNamespace, rc)
+				addUpdateVirtualService(obj, exist, syncNamespace, rc,r.AdmiralState)
 			}
 		}
 	}
 	return nil
 }
 
-func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
+func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
-	if exist == nil || len(exist.Spec.Hosts) == 0 {
+	vsIsNew:= (exist == nil || len(exist.Spec.Hosts) == 0)
+
+	// If current Admiral pod is in read-only mode, do not create/update/delete virtual service objects
+	if (*admiralState).ReadOnly {
+		if vsIsNew {
+			op = "Add"
+		}else {
+			op = "Update"
+		}
+		log.Infof(LogFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
+		return
+	}
+
+	if vsIsNew {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(obj)
@@ -558,20 +588,20 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
-	seExists:= (exist == nil || exist.Spec.Hosts == nil)
+	seIsNew:= (exist == nil || exist.Spec.Hosts == nil)
 	log.Info("Memory location of admiral state is = " ,&admiralState)
 	// If current Admiral pod is in read-only mode, do not create/update/delete service entry objects
 	if (*admiralState).ReadOnly {
-		if seExists {
+		if seIsNew {
 			op = "Add"
 		}else {
             op = "Update"
 		}
-		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as Admiral pod is in read only mode")
+		log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
 		return
 	}
 
-	if seExists {
+	if seIsNew {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
@@ -654,8 +684,12 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	return destructive, diff
 }
 
-func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	if exist != nil {
+		if (*admiralState).ReadOnly {
+			log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
+			return
+		}
 		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name, &v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
@@ -665,14 +699,26 @@ func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *Remo
 	}
 }
 
-func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController, admiralState *AdmiralState) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
-	if exist == nil || exist.Name == "" || exist.Spec.Host == "" {
+	// If current Admiral pod is in read-only mode, do not create/update/delete destination rule objects
+	drIsNew:=(exist == nil || exist.Name == "" || exist.Spec.Host == "")
+	if (*admiralState).ReadOnly {
+		if drIsNew {
+			op = "Add"
+		}else {
+			op = "Update"
+		}
+		log.Infof(LogFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
+		return
+	}
+
+	if drIsNew {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
 		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(obj)
@@ -692,8 +738,12 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	}
 }
 
-func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	if exist != nil {
+		if (*admiralState).ReadOnly {
+			log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
+			return
+		}
 		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name, &v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
