@@ -299,38 +299,16 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 			}
 
 			if event == common.Delete {
-				admiralState := r.AdmiralState
-				if(*admiralState).ReadOnly {
-					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Skipped deleting linked DestinationRule/ServiceEntry as Admiral pod is in read only ")
-				}else {
-					err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
-					} else {
-						log.Error(LogFormat, err)
-					}
-					err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
-					} else {
-						log.Error(LogFormat, err)
-					}
-					for _, subset := range destinationRule.Subsets {
-						sseName := seName + common.Dash + subset.Name
-						err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
-						if err != nil {
-							log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
-						} else {
-							log.Error(LogFormat, err)
-						}
-					}
-					err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
-					} else {
-						log.Error(LogFormat, err)
-					}
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name, clusterId,r.AdmiralState)
+
+				deleteServiceEntriesPostStateCheck(rc,syncNamespace,seName,clusterId,r.AdmiralState)
+
+				for _, subset := range destinationRule.Subsets {
+					sseName := seName + common.Dash + subset.Name
+					deleteServiceEntriesPostStateCheck(rc,syncNamespace,sseName,clusterId,r.AdmiralState)
 				}
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,localDrName,clusterId,r.AdmiralState)
+
 			} else {
 
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
@@ -372,23 +350,56 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				admiralState:= r.AdmiralState
-				if (*admiralState).ReadOnly {
-					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
-				}else {
-					err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
-					} else {
-						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
-					}
-				}
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
 			} else {
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
 				addUpdateDestinationRule(obj, exist, syncNamespace, rc,r.AdmiralState)
 			}
 		}
 	}
+}
+
+func deleteDestinationRulePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState){
+	if(*admiralState).ReadOnly {
+		log.Infof(LogFormat, "Delete", "DestinationRule", objName, clusterId, "Skipped deleting as Admiral pod is in read only ")
+		return
+	}
+	err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(objName, &v12.DeleteOptions{})
+
+	if err != nil {
+		log.Infof(LogErrFormat, "Delete", "DestinationRule", objName, clusterId, err)
+	} else {
+		log.Infof(LogFormat, "Delete", "DestinationRule", objName, clusterId, "Success")
+	}
+}
+
+func deleteServiceEntriesPostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState){
+	if(*admiralState).ReadOnly {
+		log.Infof(LogFormat, "Delete", "ServiceEntry", objName, clusterId, "Skipped deleting as Admiral pod is in read only")
+		return
+	}
+	err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(objName, &v12.DeleteOptions{})
+	if err != nil {
+		log.Infof(LogErrFormat, "Delete", "ServiceEntry", objName, clusterId, err)
+	} else {
+		log.Infof(LogFormat, "Delete", "ServiceEntry", objName, clusterId, "Success")
+	}
+
+}
+
+func deleteVirtualServicePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState) (e error){
+	if(*admiralState).ReadOnly {
+		log.Infof(LogFormat, "Delete", "VirtualService", objName, clusterId, "Skipped deleting as Admiral pod is in read only")
+		return nil
+	}
+	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(objName, &v12.DeleteOptions{})
+	if err != nil {
+		log.Infof(LogErrFormat, "Delete", "VirtualService", objName, clusterId, err)
+		return err
+	} else {
+		log.Infof(LogFormat, "Delete", "VirtualService", objName, clusterId, "Success")
+	}
+	return nil
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
@@ -473,15 +484,9 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
 
 				if event == common.Delete {
-					admiralState := r.AdmiralState
-					if (*admiralState).ReadOnly {
-						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
-					}else {
-						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-						err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-						if err != nil {
-							return err
-						}
+					err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
+					if nil!= err {
+						return err
 					}
 				} else {
 
@@ -520,17 +525,9 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				admiralState := r.AdmiralState
-				if(*admiralState).ReadOnly {
-					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Skipped as Admiral pod is in read only mode")
-				}else {
-					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
-						return err
-					} else {
-						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-					}
+				err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
+				if nil!= err {
+					return err
 				}
 			} else {
 				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
