@@ -1414,7 +1414,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc)
+			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc,&AdmiralState{READ_WRITE_ENABLED})
 			if c.skipDestructive {
 				//verify the update did not go through
 				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(c.oldSe.Name, v12.GetOptions{})

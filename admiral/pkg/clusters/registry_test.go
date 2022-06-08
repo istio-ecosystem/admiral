@@ -153,7 +153,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des)
+	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des,&AdmiralState{READ_WRITE_ENABLED})
 
 }
 
@@ -175,7 +175,7 @@ func TestCreateDestinationRuleForLocal(t *testing.T) {
 		},
 	}
 
-	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des)
+	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des,&AdmiralState{READ_WRITE_ENABLED})
 
 }
 

@@ -30,6 +30,8 @@ func startAdmiralStateChecker (admiralStateCheckerName string,as *AdmiralState){
 		admiralStateChecker = NoOPStateChecker{}
 	case "dynamodbbasedstatechecker":
 		admiralStateChecker = DynamoDBBasedStateChecker{}
+	default:
+		admiralStateChecker = NoOPStateChecker{}
 	}
 	RunAdmiralStateCheck(admiralStateChecker,as)
 }
