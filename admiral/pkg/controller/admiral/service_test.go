@@ -1,15 +1,20 @@
 package admiral
 
 import (
-	"github.com/google/go-cmp/cmp"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/clientcmd"
+	"context"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func TestNewServiceController(t *testing.T) {
@@ -247,4 +252,50 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConcurrentGetAndPut(t *testing.T) {
+	serviceCache := serviceCache{}
+	serviceCache.cache = make(map[string]*ServiceClusterEntry)
+	serviceCache.mutex = &sync.Mutex{}
+
+	serviceCache.Put(&v1.Service{
+		ObjectMeta: metaV1.ObjectMeta{Name: "testname", Namespace: "testns"},
+	})
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Producer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				serviceCache.Put(&v1.Service{
+					ObjectMeta: metaV1.ObjectMeta{Name: "testname", Namespace: string(uuid.NewUUID())},
+				})
+			}
+		}
+	}(ctx)
+
+	// Consumer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				assert.NotNil(t, serviceCache.Get("testns"))
+			}
+		}
+	}(ctx)
+
+	wg.Wait()
+
 }

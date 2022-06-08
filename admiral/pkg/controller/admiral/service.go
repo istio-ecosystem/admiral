@@ -2,17 +2,19 @@ package admiral
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
-	"time"
+
+	"sync"
 
 	k8sV1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"sync"
 )
 
 // Handler interface contains the methods that are required
@@ -69,6 +71,8 @@ func (s *serviceCache) getKey(service *k8sV1.Service) string {
 }
 
 func (s *serviceCache) Get(key string) *ServiceClusterEntry {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	return s.cache[key]
 }
 
@@ -146,7 +150,7 @@ func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
 	)
 
-	NewController("service-ctrl-" + config.Host , stopCh, &serviceController, serviceController.informer)
+	NewController("service-ctrl-"+config.Host, stopCh, &serviceController, serviceController.informer)
 
 	return &serviceController, nil
 }
