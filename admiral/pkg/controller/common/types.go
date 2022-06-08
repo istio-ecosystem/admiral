@@ -180,6 +180,8 @@ func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string, c
 }
 
 func (s *SidecarEgressMap) Get(key string) map[string]SidecarEgress {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
 	return s.cache[key]
 }
 
@@ -189,6 +191,18 @@ func (s *SidecarEgressMap) Delete(key string) {
 	delete(s.cache, key)
 }
 
+// Map func returns a map of identity to namespace:SidecarEgress map
+// Iterating through the returned map is not implicitly thread safe,
+// use (s *SidecarEgressMap) Range() func instead.
 func (s *SidecarEgressMap) Map() map[string]map[string]SidecarEgress {
 	return s.cache
+}
+
+// Range is a thread safe iterator to iterate through the SidecarEgress map
+func (s *SidecarEgressMap) Range(fn func(k string, v map[string]SidecarEgress)) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	for k, v := range s.cache {
+		fn(k, v)
+	}
 }
