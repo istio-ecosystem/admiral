@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -249,17 +250,18 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 }
 
 // HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
-func HandleEventForGlobalTrafficPolicy(event admiral.EventType, gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) {
+func HandleEventForGlobalTrafficPolicy(event admiral.EventType, gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) error {
 
 	globalIdentifier := common.GetGtpIdentity(gtp)
 
 	if len(globalIdentifier) == 0 {
 		log.Infof(LogFormat, "Event", "globaltrafficpolicy", gtp.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+gtp.Namespace)
-		return
+		return fmt.Errorf("missing %s on gtp named %s on cluster %s", common.GetWorkloadIdentifier(), gtp.Name, clusterName)
 	}
 
 	env := common.GetGtpEnv(gtp)
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+	return nil
 }
