@@ -23,13 +23,13 @@ const (
 )
 
 
-func startAdmiralStateChecker (admiralStateCheckerName string,as *AdmiralState){
+func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState){
 	var  admiralStateChecker AdmiralStateChecker
-	switch  strings.ToLower(admiralStateCheckerName) {
+	switch  strings.ToLower(params.AdmiralStateCheckerName) {
 	case "noopstatechecker":
 		admiralStateChecker = NoOPStateChecker{}
 	case "dynamodbbasedstatechecker":
-		admiralStateChecker = DynamoDBBasedStateChecker{}
+		admiralStateChecker = DynamoDBBasedStateChecker{params.DRConfigFileLocation}
 	default:
 		admiralStateChecker = NoOPStateChecker{}
 	}
@@ -43,7 +43,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	common.InitializeConfig(params)
 
     as:= AdmiralState{READ_ONLY_ENABLED}
-    startAdmiralStateChecker(params.AdmiralStateCheckerName,&as)
+    startAdmiralStateChecker(params,&as)
 
 	w := RemoteRegistry{
 		ctx: ctx,

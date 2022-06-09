@@ -75,6 +75,19 @@ func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState){
 	}
 }
 
+type DynamoDBConfigWrapper struct {
+	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
+}
+
+type DynamoDBConfig struct {
+	LeaseName               string `yaml:"leaseName,omitempty"`
+	PodIdentifierPrefix     string `yaml:"podIdentifierPrefix,omitempty"`
+	WaitTimeInSeconds       int `yaml:"waitTimeInSeconds,omitempty"`
+	FailureThreshold        int `yaml:"failureThreshold,omitempty"`
+	TableName               string `yaml:"tableName,omitempty"`
+	Role                    string `yaml:"role,omitempty"`
+	Region                  string `yaml:"region,omitempty"`
+}
 
 
 type RemoteRegistry struct {

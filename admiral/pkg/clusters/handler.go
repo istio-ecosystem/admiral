@@ -609,7 +609,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 	seIsNew:= (exist == nil || exist.Spec.Hosts == nil)
-	log.Info("Memory location of admiral state is = " ,&admiralState)
+
 	// If current Admiral pod is in read-only mode, do not create/update/delete service entry objects
 	if (*admiralState).ReadOnly {
 		if seIsNew {
