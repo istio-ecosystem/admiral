@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -8,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"strconv"
 	"time"
 )
@@ -41,16 +44,15 @@ type DynamoClient struct {
 	svc dynamodbiface.DynamoDBAPI
 }
 
-func NewDynamoClient() *DynamoClient {
+func NewDynamoClient(dynamoDBConfig DynamoDBConfig) *DynamoClient {
 	return &DynamoClient{
-		svc: GetDynamoSvc(),
+		svc: GetDynamoSvc(dynamoDBConfig.Role,dynamoDBConfig.Region),
 	}
 }
 
 
-func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease) error {
+func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease, tableName string) error {
 	svc := client.svc
-	tableName := "admiral-lease"
 	av, err := dynamodbattribute.MarshalMap(lease)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -113,14 +115,12 @@ func (client *DynamoClient) getReadWriteLease() ([]ReadWriteLease, error) {
 	return readWriteLeases, nil
 }
 
-func GetDynamoSvc() *dynamodb.DynamoDB {
-	dynamoArn :="arn:aws:iam::930875703956:role/IKSDynamoAccess"
+func GetDynamoSvc(dynamoArn string,region string) *dynamodb.DynamoDB {
 	log.Info("dynamoArn: "+dynamoArn)
 	sess := session.Must(session.NewSession())
 	// Create the credentials from AssumeRoleProvider to assume the role
 	// referenced by the "myRoleARN" ARN.
 	creds := stscreds.NewCredentials(sess, dynamoArn)
-	region := "us-west-2"
 	// Create a Session with a custom region
 	dynamoSession := session.Must(session.NewSession(&aws.Config{
 		Credentials: creds,
@@ -130,4 +130,22 @@ func GetDynamoSvc() *dynamodb.DynamoDB {
 	// from assumed role.
 	svc := dynamodb.New(dynamoSession)
 	return svc
+}
+
+func BuildDynamoDBConfig(configFile string) (DynamoDBConfig, error) {
+
+	data, err := ioutil.ReadFile(configFile)
+	dynamoDBConfigWrapper := &DynamoDBConfigWrapper{}
+
+	if err != nil {
+		return DynamoDBConfig{}, fmt.Errorf("error reading config file to build Dynamo DB config: %v", err)
+	}
+
+	err = yaml.Unmarshal(data, &dynamoDBConfigWrapper)
+
+	if err != nil {
+		return DynamoDBConfig{}, fmt.Errorf("error unmarshaling config file err: %v", err)
+	}
+
+	return dynamoDBConfigWrapper.DynamoDBConfig,nil
 }

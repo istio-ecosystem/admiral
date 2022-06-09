@@ -36,7 +36,6 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 		}else {
 			w.WriteHeader(200)
 		}
-
 	}else {
 		w.WriteHeader(200)
 	}
