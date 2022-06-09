@@ -28,7 +28,19 @@ type IdentityServiceEntry struct {
 }
 
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
+	if strings.Contains(r.RequestURI,"checkifreadonly=true"){
+		admiralState := opts.RemoteRegistry.AdmiralState
+		if(*admiralState).ReadOnly{
+			//Force fail health check if Admiral is in Readonly mode
+			w.WriteHeader(502)
+		}else {
+			w.WriteHeader(200)
+		}
+
+	}else {
+		w.WriteHeader(200)
+	}
+
 	response := fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
 
 	_, writeErr := w.Write([]byte(response))

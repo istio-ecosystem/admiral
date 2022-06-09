@@ -32,7 +32,6 @@ func (DynamoDBBasedStateChecker) runStateCheck(as *AdmiralState){
 	const SKIP_LEASE_CHECK_POD_NAME = "SKIP-LEASE-POD"
 	for {
 		fmt.Println("Retrieving latest  value of read write value for leaseName :" , leaseName )
-		log.Info("Memory location  from state checker of admiral state is = " ,&as.ReadOnly)
 		readWriteLeases, err := DynamodbClient.getReadWriteLease()
 		if nil!=err{
 			log.WithFields(log.Fields{
