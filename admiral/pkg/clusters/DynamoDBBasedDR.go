@@ -34,7 +34,7 @@ type ReadWriteLease struct {
 	LeaseName string `json:"leaseName"`
 	LeaseOwner string `json:"leaseOwner"`
 	UpdatedTime int64 `json:"updatedTime"`
-	Notes string `json:notes`
+	Notes string `json:"notes"`
 }
 
 type DynamoClient struct {
