@@ -184,7 +184,7 @@ func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	err := HandleEventForGlobalTrafficPolicy(admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
-		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as "+err.Error()+", namespace = "+obj.Namespace)
 	}
 }
 
@@ -192,7 +192,7 @@ func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	err := HandleEventForGlobalTrafficPolicy(admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
-		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as "+err.Error()+", namespace = "+obj.Namespace)
 	}
 }
 
@@ -200,7 +200,7 @@ func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	err := HandleEventForGlobalTrafficPolicy(admiral.Delete, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
-		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		log.Infof(LogFormat, "Event", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "Skipped as "+err.Error()+", namespace="+obj.Namespace)
 	}
 }
 
@@ -264,7 +264,7 @@ func HandleEventForGlobalTrafficPolicy(event admiral.EventType, gtp *v1.GlobalTr
 	globalIdentifier := common.GetGtpIdentity(gtp)
 
 	if len(globalIdentifier) == 0 {
-		return fmt.Errorf("missing %s on gtp named %s on cluster %s", common.GetWorkloadIdentifier(), gtp.Name, clusterName)
+		return fmt.Errorf(common.GetWorkloadIdentifier() + " was not found")
 	}
 
 	env := common.GetGtpEnv(gtp)
