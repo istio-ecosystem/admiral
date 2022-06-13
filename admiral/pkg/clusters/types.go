@@ -3,8 +3,12 @@ package clusters
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
@@ -13,8 +17,6 @@ import (
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
-	"sync"
-	"time"
 )
 
 type RemoteController struct {
@@ -344,14 +346,26 @@ func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
 
 func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(admiral.Delete, obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
 }
 
 func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
@@ -406,4 +420,20 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+}
+
+// HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
+func HandleEventForGlobalTrafficPolicy(event admiral.EventType, gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) error {
+
+	globalIdentifier := common.GetGtpIdentity(gtp)
+
+	if len(globalIdentifier) == 0 {
+		return fmt.Errorf(LogFormat, "Event", "globaltrafficpolicy", gtp.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+gtp.Namespace)
+	}
+
+	env := common.GetGtpEnv(gtp)
+
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+	return nil
 }
