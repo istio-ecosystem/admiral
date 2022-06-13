@@ -19,7 +19,7 @@ func TestNewVirtualServiceController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockVirtualServiceHandler{}
 
-	virtualServiceController, err := NewVirtualServiceController(stop, &handler, config, time.Duration(1000))
+	virtualServiceController, err := NewVirtualServiceController("", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

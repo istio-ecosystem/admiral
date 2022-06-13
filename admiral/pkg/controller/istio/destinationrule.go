@@ -31,7 +31,7 @@ type DestinationRuleController struct {
 	informer               cache.SharedIndexInformer
 }
 
-func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRuleHandler, config *rest.Config, resyncPeriod time.Duration) (*DestinationRuleController, error) {
+func NewDestinationRuleController(clusterID string, stopCh <-chan struct{}, handler DestinationRuleHandler, config *rest.Config, resyncPeriod time.Duration) (*DestinationRuleController, error) {
 
 	drController := DestinationRuleController{}
 	drController.DestinationRuleHandler = handler
@@ -47,7 +47,8 @@ func NewDestinationRuleController(stopCh <-chan struct{}, handler DestinationRul
 
 	drController.informer = informers.NewDestinationRuleInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController("destinationrule-ctrl-" + config.Host, stopCh, &drController, drController.informer)
+	mcd := admiral.NewMonitoredDelegator(&drController, clusterID, "destinationrule")
+	admiral.NewController("destinationrule-ctrl-"+config.Host, stopCh, mcd, drController.informer)
 
 	return &drController, nil
 }

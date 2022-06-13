@@ -144,19 +144,19 @@ func TestDeploymentController_Deleted(t *testing.T) {
 	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 
 	testCases := []struct {
-		name                  string
-		deployment            *k8sAppsV1.Deployment
-		expectedDeployment    *k8sAppsV1.Deployment
+		name               string
+		deployment         *k8sAppsV1.Deployment
+		expectedDeployment *k8sAppsV1.Deployment
 	}{
 		{
-			name:                  "Expects deployment to be deleted from the cache when the correct label is present",
-			deployment:            &deployment,
-			expectedDeployment:    nil,
+			name:               "Expects deployment to be deleted from the cache when the correct label is present",
+			deployment:         &deployment,
+			expectedDeployment: nil,
 		},
 		{
-			name:                  "Expects no error thrown if calling delete on an deployment not exist in cache",
-			deployment:            &deployment,
-			expectedDeployment:    nil,
+			name:               "Expects no error thrown if calling delete on an deployment not exist in cache",
+			deployment:         &deployment,
+			expectedDeployment: nil,
 		},
 	}
 
@@ -248,7 +248,7 @@ func TestNewDeploymentController(t *testing.T) {
 	stop := make(chan struct{})
 	depHandler := test.MockDeploymentHandler{}
 
-	depCon, err := NewDeploymentController(stop, &depHandler, config, time.Duration(1000))
+	depCon, err := NewDeploymentController("", stop, &depHandler, config, time.Duration(1000))
 
 	if depCon == nil {
 		t.Errorf("Deployment controller should not be nil")

@@ -31,7 +31,7 @@ type SidecarController struct {
 	informer       cache.SharedIndexInformer
 }
 
-func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration) (*SidecarController, error) {
+func NewSidecarController(clusterID string, stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration) (*SidecarController, error) {
 
 	sidecarController := SidecarController{}
 	sidecarController.SidecarHandler = handler
@@ -47,7 +47,8 @@ func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config
 
 	sidecarController.informer = informers.NewSidecarInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController("sidecar-ctrl-" + config.Host, stopCh, &sidecarController, sidecarController.informer)
+	mcd := admiral.NewMonitoredDelegator(&sidecarController, clusterID, "sidecar")
+	admiral.NewController("sidecar-ctrl-"+config.Host, stopCh, mcd, sidecarController.informer)
 
 	return &sidecarController, nil
 }
