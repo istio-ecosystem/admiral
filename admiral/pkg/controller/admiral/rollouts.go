@@ -129,6 +129,7 @@ func NewRolloutsController(clusterID string, stopCh <-chan struct{}, handler Rol
 
 	roController := RolloutController{}
 	roController.RolloutHandler = handler
+	roController.labelSet = common.GetLabelSet()
 
 	rolloutCache := rolloutCache{}
 	rolloutCache.cache = make(map[string]*RolloutClusterEntry)
