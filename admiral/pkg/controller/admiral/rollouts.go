@@ -2,6 +2,9 @@ package admiral
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	argoclientset "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
@@ -13,8 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"sync"
-	"time"
 )
 
 // Handler interface contains the methods that are required
@@ -157,7 +158,7 @@ func NewRolloutsController(clusterID string, stopCh <-chan struct{}, handler Rol
 	roController.informer = argoRolloutsInformerFactory.Argoproj().V1alpha1().Rollouts().Informer()
 
 	mcd := NewMonitoredDelegator(&roController, clusterID, "rollout")
-	NewController("rollouts-ctrl-"+config.Host, stopCh, mcd, roController.informer)
+	NewController("rollouts-ctrl-"+clusterID, stopCh, mcd, roController.informer)
 	return &roController, nil
 }
 

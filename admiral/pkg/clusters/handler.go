@@ -327,13 +327,13 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				if err != nil {
 					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
 				} else {
-					log.Error(LogFormat, err)
+					log.Errorf(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
 				}
 				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
 				if err != nil {
 					log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
 				} else {
-					log.Error(LogFormat, err)
+					log.Errorf(LogErrFormat, "Delete", "ServiceEntry", seName, clusterId, err)
 				}
 				for _, subset := range destinationRule.Subsets {
 					sseName := seName + common.Dash + subset.Name
@@ -341,14 +341,14 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 					if err != nil {
 						log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
 					} else {
-						log.Error(LogFormat, err)
+						log.Errorf(LogErrFormat, "Delete", "ServiceEntry", sseName, clusterId, err)
 					}
 				}
 				err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
 				if err != nil {
 					log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
 				} else {
-					log.Error(LogFormat, err)
+					log.Errorf(LogErrFormat, "Delete", "DestinationRule", localDrName, clusterId, err)
 				}
 
 			} else {
