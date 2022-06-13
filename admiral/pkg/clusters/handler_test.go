@@ -670,8 +670,8 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	}
 	stop := make(chan struct{})
 
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
 
@@ -1057,10 +1057,10 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 	}
 	stop := make(chan struct{})
 
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
-	emptyCacheService, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	emptyCacheService, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fatalf("Inititalization failed")

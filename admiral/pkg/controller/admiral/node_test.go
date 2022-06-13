@@ -17,7 +17,7 @@ func TestNewNodeController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config)
+	nodeController, err := NewNodeController("", stop, &handler, config)
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -36,7 +36,7 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config)
+	nodeController, err := NewNodeController("", stop, &handler, config)
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

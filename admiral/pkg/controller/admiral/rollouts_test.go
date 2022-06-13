@@ -25,7 +25,7 @@ func TestNewRolloutController(t *testing.T) {
 	stop := make(chan struct{})
 	rolHandler := test.MockRolloutHandler{}
 
-	depCon, err := NewRolloutsController(stop, &rolHandler, config, time.Duration(1000))
+	depCon, err := NewRolloutsController("test", stop, &rolHandler, config, time.Duration(1000))
 
 	if depCon == nil {
 		t.Errorf("Rollout controller should not be nil")
@@ -155,19 +155,19 @@ func TestRolloutController_Deleted(t *testing.T) {
 	rollout.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 
 	testCases := []struct {
-		name                  string
-		rollout               *argo.Rollout
-		expectedRollout       *argo.Rollout
+		name            string
+		rollout         *argo.Rollout
+		expectedRollout *argo.Rollout
 	}{
 		{
-			name:                  "Expects rollout to be deleted from the cache when the correct label is present",
-			rollout:               &rollout,
-			expectedRollout:       nil,
+			name:            "Expects rollout to be deleted from the cache when the correct label is present",
+			rollout:         &rollout,
+			expectedRollout: nil,
 		},
 		{
-			name:                  "Expects no error thrown if calling delete on an rollout not exist in cache",
-			rollout:               &rollout,
-			expectedRollout:       nil,
+			name:            "Expects no error thrown if calling delete on an rollout not exist in cache",
+			rollout:         &rollout,
+			expectedRollout: nil,
 		},
 	}
 

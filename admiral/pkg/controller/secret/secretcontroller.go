@@ -45,8 +45,6 @@ const (
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
-var remoteClustersMetric common.Gauge
-
 // addSecretCallback prototype for the add secret callback function.
 type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
 
@@ -163,8 +161,6 @@ func NewController(
 			}
 		},
 	})
-
-	remoteClustersMetric = common.NewGaugeFrom(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
@@ -337,7 +333,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 		}
 
 	}
-	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -352,6 +348,6 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
-	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }

@@ -117,7 +117,7 @@ func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error)
 	return res, nil
 }
 
-func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
+func NewDeploymentController(clusterID string, stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
 
 	deploymentController := DeploymentController{}
 	deploymentController.DeploymentHandler = handler
@@ -142,14 +142,15 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 		cache.Indexers{},
 	)
 
-	NewController("deployment-ctrl-" + config.Host, stopCh, &deploymentController, deploymentController.informer)
+	wc := NewMonitoredDelegator(&deploymentController, clusterID, "deployment")
+	NewController("deployment-ctrl-"+config.Host, stopCh, wc, deploymentController.informer)
 
 	return &deploymentController, nil
 }
 
 func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
 
-	dc, err := NewDeploymentController(stopCh, handler, config, resyncPeriod)
+	dc, err := NewDeploymentController("", stopCh, handler, config, resyncPeriod)
 	dc.labelSet = labelSet
 	return dc, err
 }

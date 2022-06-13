@@ -19,7 +19,7 @@ func TestNewDestinationRuleController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockDestinationRuleHandler{}
 
-	destinationRuleController, err := NewDestinationRuleController(stop, &handler, config, time.Duration(1000))
+	destinationRuleController, err := NewDestinationRuleController("", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)

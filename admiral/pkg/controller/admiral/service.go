@@ -121,7 +121,7 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 	return lb, lbPort
 }
 
-func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
+func NewServiceController(clusterID string, stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
 
 	serviceController := ServiceController{}
 	serviceController.ServiceHandler = handler
@@ -150,7 +150,8 @@ func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
 	)
 
-	NewController("service-ctrl-"+config.Host, stopCh, &serviceController, serviceController.informer)
+	mcd := NewMonitoredDelegator(&serviceController, clusterID, "service")
+	NewController("service-ctrl-"+config.Host, stopCh, mcd, serviceController.informer)
 
 	return &serviceController, nil
 }
