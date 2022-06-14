@@ -79,6 +79,10 @@ func GetGlobalTrafficDeploymentLabel() string {
 	return admiralParams.LabelSet.GlobalTrafficDeploymentLabel
 }
 
+func GetRoutingPolicyLabel() string {
+	return admiralParams.LabelSet.WorkloadIdentityKey
+}
+
 func GetWorkloadSidecarUpdate() string {
 	return admiralParams.WorkloadSidecarUpdate
 }

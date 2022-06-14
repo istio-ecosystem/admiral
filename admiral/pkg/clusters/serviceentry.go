@@ -72,10 +72,12 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var weightedServices map[string]*WeightedService
 	var rollout *admiral.RolloutClusterEntry
 	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
+	//var routingpolicies = make(map[string][]*v1.RoutingPolicy)
 
 	var namespace string
 
 	var gtpKey = common.ConstructGtpKey(env, sourceIdentity)
+	//var rpKey = common.ConstructRoutingPolicyKey(env, sourceIdentity)
 
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
@@ -132,6 +134,17 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		} else {
 			log.Debugf("No GTPs found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
 		}
+
+
+		//routingPoliciesInNamespace := rc.RoutingPolicyController.Cache.Get(rpKey, namespace)
+		//if len(routingPoliciesInNamespace) > 0 {
+		//	if log.IsLevelEnabled(log.DebugLevel) {
+		//		log.Debugf("Routing policies found for identity=%s in env=%s namespace=%s gtp=%v", sourceIdentity, env, namespace, routingPoliciesInNamespace)
+		//	}
+		//	routingpolicies[rc.ClusterID] = routingPoliciesInNamespace
+		//} else {
+		//	log.Debugf("No Routing policies found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
+		//}
 
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)

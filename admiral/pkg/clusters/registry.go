@@ -46,6 +46,16 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
 
+	rpCache := &routingPolicyCache{}
+	rpCache.identityCache = make(map[string]*v1.RoutingPolicy)
+	rpCache.mutex = &sync.Mutex{}
+
+	rpFilterCache := &routingPolicyFilterCache{}
+	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
+	rpFilterCache.mutex = &sync.Mutex{}
+
+
+
 	w.AdmiralCache = &AdmiralCache{
 		IdentityClusterCache:            common.NewMapOfMaps(),
 		CnameClusterCache:               common.NewMapOfMaps(),
@@ -58,7 +68,8 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
 		SeClusterCache:                  common.NewMapOfMaps(),
-
+		RoutingPolicyCache: 			 rpCache,
+		RoutingPolicyFilterCache:		 rpFilterCache,
 		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}
 
@@ -148,7 +159,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 
 	log.Infof("starting Routing Policies controller for custerID: %v", clusterID)
-	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1 * time.Minute)
 
 	if err != nil {
 		return fmt.Errorf(" Error with VirtualServiceController init: %v", err)

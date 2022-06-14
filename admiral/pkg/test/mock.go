@@ -179,3 +179,19 @@ func (m *MockSidecarHandler) Updated(obj *v1alpha32.Sidecar) {
 func (m *MockSidecarHandler) Deleted(obj *v1alpha32.Sidecar) {
 	m.Obj = nil
 }
+
+type MockRoutingPolicyHandler struct {
+	Obj *v1.RoutingPolicy
+}
+
+func (m *MockRoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
+	m.Obj = obj
+}
+
+func (m *MockRoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
+	m.Obj = nil
+}
+
+func (m *MockRoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
+	m.Obj = obj
+}

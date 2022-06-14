@@ -40,6 +40,7 @@ func init() {
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
 
 	common.InitializeConfig(p)
 }
@@ -188,6 +189,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
 	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	rpc, e := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		return nil, e
@@ -230,6 +232,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		NodeController:       n,
 		ClusterID:            "test.cluster",
 		RolloutController:    r,
+		RoutingPolicyController: rpc,
 	}
 	return &rc, nil
 }

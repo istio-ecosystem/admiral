@@ -2,6 +2,11 @@ package clusters
 
 import (
 	"context"
+	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"github.com/stretchr/testify/assert"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +39,7 @@ func init() {
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
 	common.InitializeConfig(p)
@@ -203,4 +209,182 @@ func TestRolloutHandler(t *testing.T) {
 			handler.Updated(c.addedRolout)
 		})
 	}
+}
+
+func TestRoutingPolicyHandler(t *testing.T)  {
+	p := common.AdmiralParams{
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &common.LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+	}
+
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+
+	registry, _ := InitAdmiral(context.Background(), p)
+
+	handler := RoutingPolicyHandler{}
+
+	rpFilterCache := &routingPolicyFilterCache{}
+	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
+	rpFilterCache.mutex = &sync.Mutex{}
+
+
+	routingPolicyController := &admiral.RoutingPolicyController{IstioClient: istiofake.NewSimpleClientset()}
+	remoteController, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	remoteController.RoutingPolicyController = routingPolicyController
+
+	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
+
+	// foo is dependent upon bar and bar has a deployment in the same cluster.
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar", remoteController.ClusterID, remoteController.ClusterID)
+
+
+	// foo is also dependent upon bar2 but bar2 is in a different cluster, so this cluster should not have the envoyfilter created
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar2", "bar2")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar2", "differentCluster", "differentCluster")
+
+	// foo1 is dependent upon bar 1 but bar1 does not have a deployment so it is missing from identityClusterCache
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo1", "bar1", "bar1")
+
+
+	handler.RemoteRegistry = registry
+
+	routingPolicyFoo := &v1.RoutingPolicy{
+		TypeMeta:   time2.TypeMeta{},
+		ObjectMeta: time2.ObjectMeta{
+			Labels: map[string]string{
+				"identity": "foo",
+				"admiral.io/env": "stage",
+			},
+		},
+		Spec:       model.RoutingPolicy{
+			Plugin:               "test",
+			Hosts:                []string{"e2e.testservice.mesh"},
+			Config: map[string]string{
+				"cachePrefix": "cache-v1",
+				"cachettlSec": "86400",
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+				"pathPrefix": "/sayhello,/v1/company/{id}/",
+			},
+		},
+		Status:     v1.RoutingPolicyStatus{},
+	}
+
+	routingPolicyFoo1 := routingPolicyFoo.DeepCopy()
+	routingPolicyFoo1.Labels[common.GetWorkloadIdentifier()] = "foo1"
+
+
+	testCases := []struct {
+		name 						string
+		routingPolicy				*v1.RoutingPolicy
+		expectedFilterCacheKey		string
+		valueExpected				bool
+
+	} {
+		{
+			name:                     "should have the right envoyFilter in filter cache",
+			routingPolicy:             routingPolicyFoo,
+			expectedFilterCacheKey:	  "barstage",
+			valueExpected:			  true,
+		},
+		{
+			name:                     "If dependent deployment does not exist, the filter should not be created",
+			routingPolicy:             routingPolicyFoo1,
+			expectedFilterCacheKey:	  "bar1stage",
+			valueExpected:			  false,
+		},
+		{
+			name:                     "If dependent deployment exists in a different cluster, the filter should not be created",
+			routingPolicy:             routingPolicyFoo,
+			expectedFilterCacheKey:	  "bar2stage",
+			valueExpected:			  false,
+		},
+
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			handler.Added(c.routingPolicy)
+			if c.valueExpected {
+				filterCacheValue := registry.AdmiralCache.RoutingPolicyFilterCache.Get(c.expectedFilterCacheKey)
+				assert.NotNil(t, filterCacheValue)
+				selectorLabelsSha, err := common.GetSha1("bar"+common.GetRoutingPolicyEnv(c.routingPolicy))
+				if err != nil {
+					t.Error("Error ocurred while computing workload Labels sha1")
+				}
+				envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(c.routingPolicy.Spec.Plugin), selectorLabelsSha, "1.10")
+				filterMap := filterCacheValue[remoteController.ClusterID]
+				assert.NotNil(t, filterMap)
+				assert.NotNil(t, filterMap[envoyFilterName])
+
+				// once the routing policy is deleted, the corresponding filter should also be deleted
+				handler.Deleted(c.routingPolicy)
+				assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get(c.expectedFilterCacheKey))
+			} else {
+				assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get(c.expectedFilterCacheKey))
+			}
+
+		})
+	}
+
+	// Test for multiple filters
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar3", "bar3")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar3", remoteController.ClusterID, remoteController.ClusterID)
+
+	handler.Added(routingPolicyFoo)
+
+	selectorLabelsShaBar3, err := common.GetSha1("bar3"+common.GetRoutingPolicyEnv(routingPolicyFoo))
+	if err != nil {
+		t.Error("Error ocurred while computing workload Labels sha1")
+	}
+	envoyFilterNameBar3 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar3, "1.10")
+
+	filterCacheValue := registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage")
+	assert.NotNil(t, filterCacheValue)
+	filterMap := filterCacheValue[remoteController.ClusterID]
+	assert.NotNil(t, filterMap)
+	assert.NotNil(t, filterMap[envoyFilterNameBar3])
+
+
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar4", "bar4")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar4", remoteController.ClusterID, remoteController.ClusterID)
+	handler.Updated(routingPolicyFoo)
+
+	selectorLabelsShaBar4, err := common.GetSha1("bar4"+common.GetRoutingPolicyEnv(routingPolicyFoo))
+	if err != nil {
+		t.Error("Error ocurred while computing workload Labels sha1")
+	}
+	envoyFilterNameBar4 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar4, "1.10")
+
+	filterCacheValue = registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage")
+	assert.NotNil(t, filterCacheValue)
+	filterMap = filterCacheValue[remoteController.ClusterID]
+	assert.NotNil(t, filterMap)
+	assert.NotNil(t, filterMap[envoyFilterNameBar4])
+
+	// ignore the routing policy
+	annotations := routingPolicyFoo.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[common.AdmiralIgnoreAnnotation] = "true"
+	routingPolicyFoo.SetAnnotations(annotations)
+
+	handler.Updated(routingPolicyFoo)
+	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage"))
+	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
+
 }

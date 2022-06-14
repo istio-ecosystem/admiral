@@ -2,6 +2,10 @@ apiVersion: admiral.io/v1alpha1
 kind: RoutingPolicy
 metadata:
   name: qbo-routing-policy
+  annotations:
+    admiral.io/env: stage
+  labels:
+    identity: greeting
 spec:
   plugin: QBO
   hosts:
@@ -12,3 +16,4 @@ spec:
     dispatcherUrl: qal.Intuit.sbe.salsa.platform.dispatcher.mesh
     algo: QBODispatcher
     pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"
+

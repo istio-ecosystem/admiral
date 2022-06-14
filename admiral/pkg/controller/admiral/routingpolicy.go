@@ -6,6 +6,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
+	"istio.io/client-go/pkg/clientset/versioned"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -33,9 +34,11 @@ type RoutingPolicyClusterEntry struct {
 type RoutingPolicyController struct {
 	K8sClient			 kubernetes.Interface
 	CrdClient            clientset.Interface
+	IstioClient			 versioned.Interface
 	RoutingPolicyHandler RoutingPolicyHandler
 	informer             cache.SharedIndexInformer
 }
+
 
 func (r *RoutingPolicyController) Added(obj interface{}) {
 	routingPolicy := obj.(*v1.RoutingPolicy)
@@ -69,6 +72,11 @@ func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyH
 		return nil, fmt.Errorf("failed to create routing policy controller crd client: %v", err)
 	}
 
+	rpController.IstioClient, err = versioned.NewForConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create destination rule controller k8s client: %v", err)
+	}
+
 	rpController.informer = informerV1.NewRoutingPolicyInformer(
 		rpController.CrdClient,
 		meta_v1.NamespaceAll,
@@ -76,8 +84,8 @@ func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyH
 		cache.Indexers{},
 	)
 
-	NewController(stopCh, &rpController, rpController.informer)
-
+	//NewController(stopCh, &rpController, rpController.informer)
+	NewController("rp-ctrl-" + configPath.Host, stopCh, &rpController, rpController.informer)
 	return &rpController, nil
 
 }

@@ -52,7 +52,7 @@ type WeightedService struct {
 }
 
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *v1.Dependency) {
-	for _, dIdentity := range dr.Spec.Destinations {
+ 	for _, dIdentity := range dr.Spec.Destinations {
 		identityDependencyCache.Put(dIdentity, sourceIdentity, sourceIdentity)
 	}
 	log.Infof(LogFormat, "Update", "dependency-cache", dr.Name, "", "Updated=true namespace="+dr.Namespace)
