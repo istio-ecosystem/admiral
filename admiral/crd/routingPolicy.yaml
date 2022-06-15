@@ -1,0 +1,14 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: routingpolicies.admiral.io
+spec:
+  group: admiral.io
+  version: v1alpha1
+  names:
+    kind: RoutingPolicy
+    plural: routingpolicies
+    shortNames:
+      - rp
+      - rps
+  scope: Namespaced
