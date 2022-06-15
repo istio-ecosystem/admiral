@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sync"
 	"time"
 
@@ -132,6 +133,23 @@ func (g *globalTrafficCache) Delete(identity string, environment string) {
 	}
 }
 
+type RoutingPolicyHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID	   string
+}
+
+type routingPolicyCache struct {
+	//map of routing policies key=environment.identity, value: RoutingPolicy object
+	// only one routing policy per identity + env is allowed
+	identityCache map[string]*v1.RoutingPolicy
+
+	//// map of dependent identity + env -> [] routingPolicy. There can be potentially multiple routingPolicies that can apply to a client.
+	//dependentRpCache map[string][]*v1.RoutingPolicy
+
+	mutex *sync.Mutex
+}
+
+
 func (r *routingPolicyCache) Delete(identity string, environment string) {
 	key := common.ConstructRoutingPolicyKey(environment, identity)
 	if _, ok := r.identityCache[key]; ok {
@@ -139,6 +157,28 @@ func (r *routingPolicyCache) Delete(identity string, environment string) {
 		delete(r.identityCache, key)
 	}
 }
+
+func (r *routingPolicyCache ) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
+	return r.identityCache[common.ConstructRoutingPolicyKey(environment, identity)]
+}
+
+func (r *routingPolicyCache) Put(rp *v1.RoutingPolicy) error {
+	if rp.Name == "" {
+		//no RoutingPolicy, throw error
+		return errors.New("cannot add an empty RoutingPolicy to the cache")
+	}
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
+	var rpIdentity = rp.Labels[common.GetRoutingPolicyLabel()]
+	var rpEnv = common.GetRoutingPolicyEnv(rp)
+
+	log.Infof("Adding RoutingPolicy with name %v to RoutingPolicy cache. LabelMatch=%v env=%v", rp.Name, rpIdentity, rpEnv)
+	key := common.ConstructRoutingPolicyKey(rpEnv, rpIdentity)
+	r.identityCache[key] = rp
+
+	return nil
+}
+
 
 type routingPolicyFilterCache struct {
 	// map of envoyFilters key=environment+identity of the routingPolicy, value is a map [clusterId -> map [filterName -> filterName]]

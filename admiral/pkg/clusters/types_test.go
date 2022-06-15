@@ -2,6 +2,10 @@ package clusters
 
 import (
 	"context"
+	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	"strings"
 	"sync"
 	"testing"
 	"time"
