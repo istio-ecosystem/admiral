@@ -137,7 +137,7 @@ func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
@@ -185,10 +185,10 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	n, e := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config)
-	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	n, e := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
+	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 	rpc, e := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
@@ -447,7 +447,7 @@ func TestUpdateCacheController(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			rr.RemoteControllers[c.clusterId].ApiServer = c.oldConfig.Host
-			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
+			d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
 			if err != nil {
 				t.Fatalf("Unexpected error creating controller %v", err)
 			}
