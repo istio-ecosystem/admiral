@@ -15,7 +15,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 )
 
@@ -91,6 +90,11 @@ type GlobalTrafficHandler struct {
 	ClusterID      string
 }
 
+type RolloutHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
+
 type globalTrafficCache struct {
 	//map of global traffic policies key=environment.identity, value: GlobalTrafficPolicy object
 	identityCache map[string]*v1.GlobalTrafficPolicy
@@ -126,49 +130,6 @@ func (g *globalTrafficCache) Delete(identity string, environment string) {
 		log.Infof("Deleting gtp with key=%s from global GTP cache", key)
 		delete(g.identityCache, key)
 	}
-}
-
-type RolloutHandler struct {
-	RemoteRegistry *RemoteRegistry
-	ClusterID      string
-}
-
-type RoutingPolicyHandler struct {
-	RemoteRegistry *RemoteRegistry
-	ClusterID	   string
-}
-
-type routingPolicyCache struct {
-	//map of routing policies key=environment.identity, value: RoutingPolicy object
-	// only one routing policy per identity + env is allowed
-	identityCache map[string]*v1.RoutingPolicy
-
-	//// map of dependent identity + env -> [] routingPolicy. There can be potentially multiple routingPolicies that can apply to a client.
-	//dependentRpCache map[string][]*v1.RoutingPolicy
-
-	mutex *sync.Mutex
-}
-
-
-func (r *routingPolicyCache ) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
-	return r.identityCache[common.ConstructRoutingPolicyKey(environment, identity)]
-}
-
-func (r *routingPolicyCache) Put(rp *v1.RoutingPolicy) error {
-	if rp.Name == "" {
-		//no RoutingPolicy, throw error
-		return errors.New("cannot add an empty RoutingPolicy to the cache")
-	}
-	defer r.mutex.Unlock()
-	r.mutex.Lock()
-	var rpIdentity = rp.Labels[common.GetRoutingPolicyLabel()]
-	var rpEnv = common.GetRoutingPolicyEnv(rp)
-
-	log.Infof("Adding RoutingPolicy with name %v to RoutingPolicy cache. LabelMatch=%v env=%v", rp.Name, rpIdentity, rpEnv)
-	key := common.ConstructRoutingPolicyKey(rpEnv, rpIdentity)
-	r.identityCache[key] = rp
-
-	return nil
 }
 
 func (r *routingPolicyCache) Delete(identity string, environment string) {
@@ -271,7 +232,7 @@ func (r RoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
 	log.Info("Deleted routing policy")
 	dependents, missingIdentityLabel := getDependents(obj, r)
 	if !missingIdentityLabel {
-		 r.deleteEnvoyFilters(dependents, obj, admiral.Delete)
+		r.deleteEnvoyFilters(dependents, obj, admiral.Delete)
 	}
 }
 

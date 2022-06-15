@@ -45,10 +45,6 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
 
-	rpCache := &routingPolicyCache{}
-	rpCache.identityCache = make(map[string]*v1.RoutingPolicy)
-	rpCache.mutex = &sync.Mutex{}
-
 	rpFilterCache := &routingPolicyFilterCache{}
 	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
 	rpFilterCache.mutex = &sync.Mutex{}
@@ -67,7 +63,6 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
 		SeClusterCache:                  common.NewMapOfMaps(),
-		RoutingPolicyCache: 			 rpCache,
 		RoutingPolicyFilterCache:		 rpFilterCache,
 		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}
