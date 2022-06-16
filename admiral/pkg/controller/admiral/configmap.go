@@ -15,18 +15,21 @@ const configmapName = "se-address-configmap"
 type ConfigMapControllerInterface interface {
 	GetConfigMap() (*v1.ConfigMap, error)
 	PutConfigMap(newMap *v1.ConfigMap) error
+	GetIPPrefixForServiceEntries()(seIPPrefix string)
 }
 
 type ConfigMapController struct {
 	K8sClient          kubernetes.Interface
 	ConfigmapNamespace string
+	ServiceEntryIPPrefix string
 }
 
 //todo this is a temp state, eventually changes will have to be made to give each cluster it's own configmap
 
-func NewConfigMapController() (*ConfigMapController, error) {
+func NewConfigMapController(seIPPrefix string) (*ConfigMapController, error) {
 	kubeconfigPath := common.GetKubeconfigPath()
 	namespaceToUse := common.GetSyncNamespace()
+
 	if kubeconfigPath == "" {
 		config, err := rest.InClusterConfig()
 		if err != nil {
@@ -39,6 +42,7 @@ func NewConfigMapController() (*ConfigMapController, error) {
 		controller := ConfigMapController{
 			K8sClient:          client,
 			ConfigmapNamespace: namespaceToUse,
+			ServiceEntryIPPrefix: seIPPrefix,
 		}
 		return &controller, nil
 	} else {
@@ -56,6 +60,7 @@ func NewConfigMapController() (*ConfigMapController, error) {
 		controller := ConfigMapController{
 			K8sClient:          client,
 			ConfigmapNamespace: namespaceToUse,
+			ServiceEntryIPPrefix: seIPPrefix,
 		}
 		return &controller, nil
 	}
@@ -84,4 +89,8 @@ func (c *ConfigMapController) GetConfigMap() (*v1.ConfigMap, error) {
 func (c *ConfigMapController) PutConfigMap(newMap *v1.ConfigMap) error {
 	_, err := c.K8sClient.CoreV1().ConfigMaps(c.ConfigmapNamespace).Update(newMap)
 	return err
+}
+
+func (c *ConfigMapController)GetIPPrefixForServiceEntries() (string)  {
+	return c.ServiceEntryIPPrefix
 }

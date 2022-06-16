@@ -548,6 +548,9 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			AdmiralState: &AdmiralState{
+				ReadOnly: READ_ONLY_ENABLED,
+			},
 		},
 	}
 
@@ -646,7 +649,9 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-
+            c.handler.RemoteRegistry.AdmiralState =&AdmiralState{
+            	ReadOnly: READ_ONLY_ENABLED,
+			}
 			err := handleVirtualServiceEvent(c.vs, c.handler, c.event, common.VirtualService)
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
