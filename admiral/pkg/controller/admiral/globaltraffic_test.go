@@ -1,6 +1,11 @@
 package admiral
 
 import (
+	"reflect"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -8,10 +13,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"reflect"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestNewGlobalTrafficController(t *testing.T) {
@@ -187,17 +188,8 @@ func TestGlobalTrafficController_Deleted(t *testing.T) {
 }
 
 func TestGlobalTrafficController_Added(t *testing.T) {
-
 	var (
-		gth   = test.MockGlobalTrafficHandler{}
-		cache = gtpCache{
-			cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
-			mutex: &sync.Mutex{},
-		}
-		gtpController = GlobalTrafficController{
-			GlobalTrafficHandler: &gth,
-			Cache:                &cache,
-		}
+		gth                 = test.MockGlobalTrafficHandler{}
 		gtp                 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}}
 		gtpWithIgnoreLabels = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtpWithIgnoreLabels", Namespace: "namespace2", Labels: map[string]string{"identity": "id2", "admiral.io/env": "stage"}, Annotations: map[string]string{"admiral.io/ignore": "true"}}}
 
@@ -208,35 +200,53 @@ func TestGlobalTrafficController_Added(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		gtp          *v1.GlobalTrafficPolicy
+		gtpKey       string
+		namespace    string
+		gtp          []*v1.GlobalTrafficPolicy
 		expectedGtps []*v1.GlobalTrafficPolicy
 	}{
 		{
 			name:         "Gtp should be added to the cache",
-			gtp:          &gtp,
+			gtpKey:       "stage.id",
+			namespace:    "namespace1",
+			gtp:          []*v1.GlobalTrafficPolicy{&gtp},
 			expectedGtps: []*v1.GlobalTrafficPolicy{&gtp},
 		},
 		{
 			name:         "Gtp with ignore annotation should not be added to the cache",
-			gtp:          &gtpWithIgnoreLabels,
+			gtpKey:       "stage.id2",
+			namespace:    "namespace2",
+			gtp:          []*v1.GlobalTrafficPolicy{&gtpWithIgnoreLabels},
 			expectedGtps: []*v1.GlobalTrafficPolicy{},
 		},
 		{
 			name:         "Should cache multiple gtps in a namespace",
-			gtp:          &gtp2,
+			gtpKey:       "stage.id",
+			namespace:    "namespace1",
+			gtp:          []*v1.GlobalTrafficPolicy{&gtp, &gtp2},
 			expectedGtps: []*v1.GlobalTrafficPolicy{&gtp, &gtp2},
 		},
 		{
 			name:         "Should cache gtps in from multiple namespaces",
-			gtp:          &gtp3,
+			gtpKey:       "stage.id",
+			namespace:    "namespace3",
+			gtp:          []*v1.GlobalTrafficPolicy{&gtp, &gtp3},
 			expectedGtps: []*v1.GlobalTrafficPolicy{&gtp3},
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			gtpController.Added(c.gtp)
-			gtpKey := common.GetGtpKey(c.gtp)
-			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
+			gtpController := GlobalTrafficController{
+				GlobalTrafficHandler: &gth,
+				Cache: &gtpCache{
+					cache: make(map[string]map[string]map[string]*v1.GlobalTrafficPolicy),
+					mutex: &sync.Mutex{},
+				},
+			}
+			for _, g := range c.gtp {
+				gtpController.Added(g)
+			}
+			matchedGtps := gtpController.Cache.Get(c.gtpKey, c.namespace)
 			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
 				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
 			}
