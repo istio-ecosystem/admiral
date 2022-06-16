@@ -245,7 +245,7 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 	}
 	if len(gtpsOrdered) == 0 {
 		log.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
-		cache.GlobalTrafficCache.Delete(env, identity)
+		cache.GlobalTrafficCache.Delete(identity, env)
 		return
 	} else if len(gtpsOrdered) > 1 {
 		log.Debugf("More than one GTP found for identity=%s in env=%s.", identity, env)
