@@ -86,7 +86,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		log.Info("argo rollouts disabled")
 	}
 
-	configMapController, err := admiral.NewConfigMapController()
+	configMapController, err := admiral.NewConfigMapController(params.ServiceEntryIPPrefix)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
 	}

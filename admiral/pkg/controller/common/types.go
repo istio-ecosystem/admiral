@@ -47,7 +47,7 @@ type AdmiralParams struct {
 	WorkloadSidecarName        string
 	AdmiralStateCheckerName    string
 	DRConfigFileLocation       string
-
+	ServiceEntryIPPrefix       string
 }
 
 func (b AdmiralParams) String() string {
@@ -60,7 +60,8 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
 		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)+
 	    fmt.Sprintf("AdmiralStateCheckername=%v ", b.AdmiralStateCheckerName)+
-	    fmt.Sprintf("DRConfigFileLocation=%v ", b.DRConfigFileLocation)
+	    fmt.Sprintf("DRConfigFileLocation=%v ", b.DRConfigFileLocation)+
+	    fmt.Sprintf("ServiceEntryIPPrefix=%v ", b.ServiceEntryIPPrefix)
 }
 
 type LabelSet struct {

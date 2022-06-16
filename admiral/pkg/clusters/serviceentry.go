@@ -619,7 +619,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 
 	secondIndex := (len(newAddressState.Addresses) / 255) + 10
 	firstIndex := (len(newAddressState.Addresses) % 255) + 1
-	address := common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
+	address := configMapController.GetIPPrefixForServiceEntries() + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 
 	for util.Contains(newAddressState.Addresses, address) {
 		if firstIndex < 255 {
@@ -628,7 +628,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 			secondIndex++
 			firstIndex = 0
 		}
-		address = common.LocalAddressPrefix + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
+		address = configMapController.GetIPPrefixForServiceEntries() + common.Sep + strconv.Itoa(secondIndex) + common.Sep + strconv.Itoa(firstIndex)
 	}
 	newAddressState.Addresses = append(newAddressState.Addresses, address)
 	newAddressState.EntryAddresses[seName] = address
