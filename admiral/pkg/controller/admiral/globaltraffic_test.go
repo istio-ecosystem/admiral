@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -247,6 +248,9 @@ func TestGlobalTrafficController_Added(t *testing.T) {
 				gtpController.Added(g)
 			}
 			matchedGtps := gtpController.Cache.Get(c.gtpKey, c.namespace)
+			sort.Slice(matchedGtps, func(i, j int) bool {
+				return matchedGtps[i].Name < matchedGtps[j].Name
+			})
 			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
 				t.Errorf("Test %s failed; expected %v, got %v", c.name, c.expectedGtps, matchedGtps)
 			}
