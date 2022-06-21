@@ -54,7 +54,7 @@ Include below program arguments
 ```
 --admiralStateCheckerName dynamodbbasedstatechecker
 --drConfigFileLocation <some file location inside Admiral pod>
---seIPPrefix=242.0 
+--seIPPrefix 242.0 
 ```
 Please use different values for ```seIPPrefix ``` per Admiral deployments. This is needed to ensure that the same IP address is not used in diferent service entries which causes 404 issues with Istio.
 
