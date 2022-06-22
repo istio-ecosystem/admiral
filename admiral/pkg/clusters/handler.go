@@ -561,6 +561,11 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	return nil
 }
 
+/*
+Add/Update Virtual service after checking if the current pod is in ReadOnly mode.
+Virtual Service object is not added/updated if the current pod is in ReadOnly mode.
+*/
+
 func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	var err error
 	var op string
@@ -600,7 +605,10 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 		log.Infof(LogFormat, op, "VirtualService", obj.Name, rc.ClusterID, "Success")
 	}
 }
-
+/*
+Add/Update Service Entry after checking if the current pod is in ReadOnly mode.
+Service Entry object is not added/updated if the current pod is in ReadOnly mode.
+*/
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController, admiralState *AdmiralState) {
 	var err error
 	var op string
@@ -703,7 +711,10 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	diff = buffer.String()
 	return destructive, diff
 }
-
+/*
+Delete Service Entry after checking if the current pod is in ReadOnly mode.
+Service Entry is not deleted if the current pod is in ReadOnly mode.
+*/
 func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	if exist != nil {
 		if (*admiralState).ReadOnly {
@@ -718,7 +729,10 @@ func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *Remo
 		}
 	}
 }
-
+/*
+Add/Update Destination rule after checking if the current pod is in ReadOnly mode.
+Destination rule object is not added/updated if the current pod is in ReadOnly mode.
+*/
 func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController, admiralState *AdmiralState) {
 	var err error
 	var op string
@@ -757,7 +771,10 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 		log.Infof(LogFormat, op, "DestinationRule", obj.Name, rc.ClusterID, "Success")
 	}
 }
-
+/*
+Deleted destination rule after checking if the current pod is in ReadOnly mode.
+Destination rule is not deleted if the current pod is in ReadOnly mode.
+*/
 func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController,admiralState *AdmiralState) {
 	if exist != nil {
 		if (*admiralState).ReadOnly {

@@ -4,6 +4,11 @@ import (
 	log "github.com/sirupsen/logrus"
 	"time"
 )
+
+/*
+The skip lease pod can be used for testing DynamoDB based DR.
+Update the podname field to "SKIP-LEASE-POD" to test Admiral pods in passive mode.
+*/
 const SKIP_LEASE_CHECK_POD_NAME = "SKIP-LEASE-POD"
 
 type DynamoDBBasedStateChecker struct {
@@ -14,14 +19,25 @@ func (DynamoDBBasedStateChecker) shouldRunOnIndependentGoRoutine() bool{
 	return true;
 }
 
-func (DynamoDBBasedStateChecker) stateCheckBasedDREnabled() bool {
-	return true;
-}
+/*
+This method has the logic to update the ReadOnly field within the AdmiralState object based on the lease obtained on the shared lock object
+The AdmiralState object is referenced everywhere in the code before trying to create/update/delete Istio custom objects
 
-func (DynamoDBBasedStateChecker) getStateCheckerName() string{
-	return "dynamodbbasedstatechecker"
-}
+Below is the logic for Admiral instance in Active state
+1. Get the latest lease information from DynamoDB table
+2. If the current pod owns the lease, update the last updated field with current timestamp
+3. Update ReadOnly field to false.
+4. Sleep for configured duration
+5. Admiral instance which is constantly monitoring all the clusters for changes and is responsible to creating , updating and deleting the Istio custom objects
+like Service Entry, Destination rule, Virtual Service , Sidecar and others.
 
+Below is the logic for Admiral instance in Passive state
+1. Get the latest lease information from DynamoDB table
+2. If the current pod does not own the lease, check if the last updated time field is within the configured wait threshold.
+3. If the last updated time field is older than the computed threshold, update self as the owner of the lease with current timestamp as last updated time
+4. If the last updated time field is within the computed threshold,mark current pod as read only
+5. Sleep for configured duration
+*/
 func (dr DynamoDBBasedStateChecker) runStateCheck(as *AdmiralState){
 	as.ReadOnly = READ_ONLY_ENABLED
 	var DynamodbClient *DynamoClient

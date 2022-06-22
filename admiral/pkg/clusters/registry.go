@@ -22,7 +22,9 @@ const (
 	LogFormatForReadOnlyMode = "type=%v name=%v cluster=%s message=%s"
 )
 
-
+/*
+utility function to identify the Admiral DR implementation based on the program parameters
+*/
 func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
