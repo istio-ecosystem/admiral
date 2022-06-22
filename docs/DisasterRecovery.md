@@ -64,7 +64,7 @@ Below is a sample config file that be used to configure Dynamo DB connection set
 ```
 dynamoDB:
 leaseName: mylease
-podIdentifierPrefix: myname
+podIdentifier: myname
 waitTimeInSeconds: 15
 failureThreshold: 3
 tableName: admiral-lease
@@ -90,7 +90,7 @@ shouldRunOnIndependentGoRoutine should return true if you want the DR logic in r
 
 ```
 type AdmiralStateChecker interface {
-	runStateCheck(as *AdmiralState)
+	runStateCheck(as *AdmiralState,ctx context.Context)
 	shouldRunOnIndependentGoRoutine() bool
 }
 ```
