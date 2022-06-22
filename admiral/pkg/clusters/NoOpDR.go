@@ -1,6 +1,9 @@
 package clusters
 
-import "fmt"
+import (
+	"context"
+	 "fmt"
+)
 
 /*
 Default implementation of the interface defined for DR
@@ -12,7 +15,7 @@ func (NoOPStateChecker) shouldRunOnIndependentGoRoutine() bool{
 	return false;
 }
 
-func (NoOPStateChecker) runStateCheck(as *AdmiralState){
+func (NoOPStateChecker) runStateCheck(as *AdmiralState,ctx context.Context){
 	fmt.Print("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
 	as.ReadOnly = READ_WRITE_ENABLED
 }

@@ -25,7 +25,7 @@ const (
 /*
 utility function to identify the Admiral DR implementation based on the program parameters
 */
-func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState){
+func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState,ctx context.Context){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
 	case "noopstatechecker":
@@ -35,7 +35,7 @@ func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState){
 	default:
 		admiralStateChecker = NoOPStateChecker{}
 	}
-	RunAdmiralStateCheck(admiralStateChecker,as)
+	RunAdmiralStateCheck(admiralStateChecker,as,ctx)
 }
 
 func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
@@ -45,7 +45,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	common.InitializeConfig(params)
 
     as:= AdmiralState{READ_ONLY_ENABLED}
-    startAdmiralStateChecker(params,&as)
+    startAdmiralStateChecker(params,&as,ctx)
 
 	w := RemoteRegistry{
 		ctx: ctx,

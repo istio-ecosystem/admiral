@@ -27,7 +27,7 @@ func sleep(sleepDuration time.Duration, sleepSeconds int){
 Utility function to filter lease from all the leases returned from DynamoDB
 The DynamoDB table maybe used for multiple environments
 */
-func getLease(allLeases []ReadWriteLease, leaseName string) ReadWriteLease {
+func filterOrCreateLeaseIfNotFound(allLeases []ReadWriteLease, leaseName string) ReadWriteLease {
 	for _, readWriteLease := range  allLeases {
 		if readWriteLease.LeaseName == leaseName {
 			return  readWriteLease
