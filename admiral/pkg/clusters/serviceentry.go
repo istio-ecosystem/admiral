@@ -409,7 +409,7 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 		}
 	}
 
-	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
+	newSidecarConfig := createSidecarSkeletion(&newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
 
 	//insert into cluster
 	if newSidecarConfig != nil {
@@ -489,7 +489,7 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 					deleteDestinationRule(ctx, oldDestinationRule, syncNamespace, rc)
 				} else {
-					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
+					newServiceEntry := createServiceEntrySkeletion(seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
@@ -497,7 +497,7 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 
-					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
+					newDestinationRule := createDestinationRuleSkeletion(seDr.DestinationRule, seDr.DrName, syncNamespace)
 					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
 					addUpdateDestinationRule(ctx, newDestinationRule, oldDestinationRule, syncNamespace, rc)
 				}
