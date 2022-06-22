@@ -15,11 +15,18 @@ import (
 	"time"
 )
 
+/*
+Utility function to block the go-routine for duration specified
+*/
 func sleep(sleepDuration time.Duration, sleepSeconds int){
 	log.Info("Sleeping for ", sleepSeconds, " seconds")
 	time.Sleep(sleepDuration)
 }
 
+/*
+Utility function to filter lease from all the leases returned from DynamoDB
+The DynamoDB table maybe used for multiple environments
+*/
 func getLease(allLeases []ReadWriteLease, leaseName string) ReadWriteLease {
 	for _, readWriteLease := range  allLeases {
 		if readWriteLease.LeaseName == leaseName {
@@ -50,7 +57,11 @@ func NewDynamoClient(dynamoDBConfig DynamoDBConfig) *DynamoClient {
 	}
 }
 
-
+/*
+Utility function to update lease duration .
+This will be called in configured interval by Active instance
+Passive instance calls this when it finds the existing Active instance has not udpated the lease within the duration specified.
+*/
 func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease, tableName string) error {
 	svc := client.svc
 	av, err := dynamodbattribute.MarshalMap(lease)
@@ -82,7 +93,9 @@ func (client *DynamoClient) updatedReadWriteLease(lease ReadWriteLease, tableNam
 	return err
 }
 
-
+/*
+Utility function to get all the entries from the Dynamo DB table
+*/
 func (client *DynamoClient) getReadWriteLease() ([]ReadWriteLease, error) {
 	var readWriteLeases []ReadWriteLease
 	svc := client.svc
@@ -115,6 +128,9 @@ func (client *DynamoClient) getReadWriteLease() ([]ReadWriteLease, error) {
 	return readWriteLeases, nil
 }
 
+/*
+Utility function to initialize AWS seassion for DynamoDB connection
+*/
 func GetDynamoSvc(dynamoArn string,region string) *dynamodb.DynamoDB {
 	log.Info("dynamoArn: "+dynamoArn)
 	sess := session.Must(session.NewSession())
@@ -131,7 +147,10 @@ func GetDynamoSvc(dynamoArn string,region string) *dynamodb.DynamoDB {
 	svc := dynamodb.New(dynamoSession)
 	return svc
 }
-
+/*
+utility function to read the yaml file containing the DynamoDB configuration.
+The file will be present inside the pod. File name should be provided as a program argument.
+*/
 func BuildDynamoDBConfig(configFile string) (DynamoDBConfig, error) {
 
 	data, err := ioutil.ReadFile(configFile)

@@ -60,10 +60,11 @@ type AdmiralState struct {
 type AdmiralStateChecker interface {
 	runStateCheck(as *AdmiralState)
 	shouldRunOnIndependentGoRoutine() bool
-	stateCheckBasedDREnabled() bool
-	getStateCheckerName() string
 }
-
+/*
+Utility function to start Admiral DR checks.
+DR checks can be run either on the main go routine or a new go routine
+*/
 func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState){
 	log.Infof("Starting DR checks")
 	if asc.shouldRunOnIndependentGoRoutine() {
@@ -78,7 +79,9 @@ func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState){
 type DynamoDBConfigWrapper struct {
 	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
 }
-
+/*
+Reference struct used to unmarshall the DynamoDB config present in the yaml config file
+*/
 type DynamoDBConfig struct {
 	LeaseName               string `yaml:"leaseName,omitempty"`
 	PodIdentifierPrefix     string `yaml:"podIdentifierPrefix,omitempty"`

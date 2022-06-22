@@ -27,6 +27,13 @@ type IdentityServiceEntry struct {
 	ClusterNames []string `json:"Clusters,omitempty"`
 }
 
+
+/*The Query param checkifreadonly is added to support Admiral DR.
+This method is invoked by both the readiness probes as well as any health check probers like Route53.
+We expect the  Route53 health check probe to include the query param checkifreadonly with value set to true.
+The query param is used to check if the current Admiral instance is running in Active Mode or Passive Mode (also called read only mode).
+If Running in passive  mode, the health check returns 502 which forces Route 53 DNS lookup to always return reference to Admiral in Active state.*/
+
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.RequestURI,"checkifreadonly=true"){
 		admiralState := opts.RemoteRegistry.AdmiralState
