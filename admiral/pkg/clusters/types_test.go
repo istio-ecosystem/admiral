@@ -50,6 +50,8 @@ func init() {
 
 func TestDeploymentHandler(t *testing.T) {
 
+	ctx := context.Background()
+
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -122,13 +124,15 @@ func TestDeploymentHandler(t *testing.T) {
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 
-			handler.Added(&deployment)
-			handler.Deleted(&deployment)
+			handler.Added(ctx, &deployment)
+			handler.Deleted(ctx, &deployment)
 		})
 	}
 }
 
 func TestRolloutHandler(t *testing.T) {
+
+	ctx := context.Background()
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -206,14 +210,16 @@ func TestRolloutHandler(t *testing.T) {
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
-			handler.Added(c.addedRolout)
-			handler.Deleted(c.addedRolout)
-			handler.Updated(c.addedRolout)
+			handler.Added(ctx, c.addedRolout)
+			handler.Deleted(ctx, c.addedRolout)
+			handler.Updated(ctx, c.addedRolout)
 		})
 	}
 }
 
 func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
+	ctx := context.Background()
+	event := admiral.EventType("Add")
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -260,7 +266,7 @@ func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
 
 	for _, c := range testcases {
 		t.Run(c.name, func(t *testing.T) {
-			err := HandleEventForGlobalTrafficPolicy(c.gtp, registry, "testcluster")
+			err := HandleEventForGlobalTrafficPolicy(ctx, event, c.gtp, registry, "testcluster")
 			assert.Equal(t, err != nil, c.doesError)
 		})
 	}

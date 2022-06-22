@@ -74,7 +74,10 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-var _ clientset.Interface = &Clientset{}
+var (
+	_ clientset.Interface = &Clientset{}
+	_ testing.FakeClient  = &Clientset{}
+)
 
 // AdmiralV1 retrieves the AdmiralV1Client
 func (c *Clientset) AdmiralV1() admiralv1.AdmiralV1Interface {

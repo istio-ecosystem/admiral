@@ -1,15 +1,17 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"sync"
+	"time"
+
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"sync"
-	"time"
 
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
@@ -17,9 +19,9 @@ import (
 
 // Handler interface contains the methods that are required
 type GlobalTrafficHandler interface {
-	Added(obj *v1.GlobalTrafficPolicy)
-	Updated(obj *v1.GlobalTrafficPolicy)
-	Deleted(obj *v1.GlobalTrafficPolicy)
+	Added(ctx context.Context, obj *v1.GlobalTrafficPolicy)
+	Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy)
+	Deleted(ctx context.Context, obj *v1.GlobalTrafficPolicy)
 }
 
 type GlobalTrafficController struct {
@@ -127,20 +129,20 @@ func NewGlobalTrafficController(clusterID string, stopCh <-chan struct{}, handle
 	return &globalTrafficController, nil
 }
 
-func (d *GlobalTrafficController) Added(ojb interface{}) {
+func (d *GlobalTrafficController) Added(ctx context.Context, ojb interface{}) {
 	gtp := ojb.(*v1.GlobalTrafficPolicy)
 	d.Cache.Put(gtp)
-	d.GlobalTrafficHandler.Added(gtp)
+	d.GlobalTrafficHandler.Added(ctx, gtp)
 }
 
-func (d *GlobalTrafficController) Updated(ojb interface{}, oldObj interface{}) {
+func (d *GlobalTrafficController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
 	gtp := ojb.(*v1.GlobalTrafficPolicy)
 	d.Cache.Put(gtp)
-	d.GlobalTrafficHandler.Updated(gtp)
+	d.GlobalTrafficHandler.Updated(ctx, gtp)
 }
 
-func (d *GlobalTrafficController) Deleted(ojb interface{}) {
+func (d *GlobalTrafficController) Deleted(ctx context.Context, ojb interface{}) {
 	gtp := ojb.(*v1.GlobalTrafficPolicy)
 	d.Cache.Delete(gtp)
-	d.GlobalTrafficHandler.Deleted(gtp)
+	d.GlobalTrafficHandler.Deleted(ctx, gtp)
 }

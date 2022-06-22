@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -15,9 +16,9 @@ import (
 
 // Handler interface contains the methods that are required
 type DestinationRuleHandler interface {
-	Added(obj *networking.DestinationRule)
-	Updated(obj *networking.DestinationRule)
-	Deleted(obj *networking.DestinationRule)
+	Added(ctx context.Context, obj *networking.DestinationRule)
+	Updated(ctx context.Context, obj *networking.DestinationRule)
+	Deleted(ctx context.Context, obj *networking.DestinationRule)
 }
 
 type DestinationRuleEntry struct {
@@ -53,18 +54,18 @@ func NewDestinationRuleController(clusterID string, stopCh <-chan struct{}, hand
 	return &drController, nil
 }
 
-func (sec *DestinationRuleController) Added(ojb interface{}) {
+func (sec *DestinationRuleController) Added(ctx context.Context, ojb interface{}) {
 	dr := ojb.(*networking.DestinationRule)
-	sec.DestinationRuleHandler.Added(dr)
+	sec.DestinationRuleHandler.Added(ctx, dr)
 }
 
-func (sec *DestinationRuleController) Updated(ojb interface{}, oldObj interface{}) {
+func (sec *DestinationRuleController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
 	dr := ojb.(*networking.DestinationRule)
-	sec.DestinationRuleHandler.Updated(dr)
+	sec.DestinationRuleHandler.Updated(ctx, dr)
 }
 
-func (sec *DestinationRuleController) Deleted(ojb interface{}) {
+func (sec *DestinationRuleController) Deleted(ctx context.Context, ojb interface{}) {
 	dr := ojb.(*networking.DestinationRule)
-	sec.DestinationRuleHandler.Deleted(dr)
+	sec.DestinationRuleHandler.Deleted(ctx, dr)
 
 }

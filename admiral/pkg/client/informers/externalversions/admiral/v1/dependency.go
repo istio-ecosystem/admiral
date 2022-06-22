@@ -19,6 +19,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	time "time"
 
 	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -61,13 +62,13 @@ func NewFilteredDependencyInformer(client versioned.Interface, namespace string,
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AdmiralV1().Dependencies(namespace).List(options)
+				return client.AdmiralV1().Dependencies(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AdmiralV1().Dependencies(namespace).Watch(options)
+				return client.AdmiralV1().Dependencies(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&admiralv1.Dependency{},

@@ -18,11 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -95,15 +96,16 @@ func NewController(
 	removeCallback removeSecretCallback,
 	secretResolverType string) *Controller {
 
+	ctx := context.Background()
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
 				opts.LabelSelector = filterLabel + "=true"
-				return kubeclientset.CoreV1().Secrets(namespace).List(opts)
+				return kubeclientset.CoreV1().Secrets(namespace).List(ctx, opts)
 			},
 			WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
 				opts.LabelSelector = filterLabel + "=true"
-				return kubeclientset.CoreV1().Secrets(namespace).Watch(opts)
+				return kubeclientset.CoreV1().Secrets(namespace).Watch(ctx, opts)
 			},
 		},
 		&corev1.Secret{}, 0, cache.Indexers{},
@@ -186,12 +188,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 // StartSecretController creates the secret controller.
 func StartSecretController(
+	ctx context.Context,
 	k8s kubernetes.Interface,
 	addCallback addSecretCallback,
 	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
 	namespace string,
-	ctx context.Context,
 	secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()

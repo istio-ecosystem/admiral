@@ -1,13 +1,15 @@
 package clusters
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -15,6 +17,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/testing/protocmp"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
@@ -175,14 +178,14 @@ func TestIgnoreIstioResource(t *testing.T) {
 func TestGetDestinationRule(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:         &types.Duration{Seconds: 300},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
-		Interval:                 &types.Duration{Seconds: 60},
+		BaseEjectionTime:         &duration.Duration{Seconds: 300},
+		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+		Interval:                 &duration.Duration{Seconds: 60},
 		MaxEjectionPercent:       100,
 	}
-	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
+	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
 
-	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
 	}}
 	noGtpDr := v1alpha3.DestinationRule{
@@ -193,7 +196,7 @@ func TestGetDestinationRule(t *testing.T) {
 	basicGtpDr := v1alpha3.DestinationRule{
 		Host: "qa.myservice.global",
 		TrafficPolicy: &v1alpha3.TrafficPolicy{
-			Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL},
+			Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL},
 			LoadBalancer: &v1alpha3.LoadBalancerSettings{
 				LbPolicy:          &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{},
@@ -205,7 +208,7 @@ func TestGetDestinationRule(t *testing.T) {
 	failoverGtpDr := v1alpha3.DestinationRule{
 		Host: "qa.myservice.global",
 		TrafficPolicy: &v1alpha3.TrafficPolicy{
-			Tls: &v1alpha3.TLSSettings{Mode: v1alpha3.TLSSettings_ISTIO_MUTUAL},
+			Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL},
 			LoadBalancer: &v1alpha3.LoadBalancerSettings{
 				LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{
@@ -287,7 +290,7 @@ func TestGetDestinationRule(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			result := getDestinationRule(c.se, c.locality, c.gtpPolicy)
-			if !cmp.Equal(result, c.destinationRule) {
+			if !cmp.Equal(result, c.destinationRule, protocmp.Transform()) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.destinationRule))
 			}
 		})
@@ -297,16 +300,16 @@ func TestGetDestinationRule(t *testing.T) {
 func TestGetOutlierDetection(t *testing.T) {
 	//Do setup here
 	outlierDetection := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
-		Interval:                 &types.Duration{Seconds: DefaultInterval},
+		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &duration.Duration{Seconds: DefaultInterval},
 		MaxEjectionPercent:       100,
 	}
 
 	outlierDetectionOneHostRemote := &v1alpha3.OutlierDetection{
-		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
-		Interval:                 &types.Duration{Seconds: DefaultInterval},
+		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &duration.Duration{Seconds: DefaultInterval},
 		MaxEjectionPercent:       34,
 	}
 
@@ -320,19 +323,19 @@ func TestGetOutlierDetection(t *testing.T) {
 		},
 	}
 
-	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
 	}}
 
-	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "east.com", Locality: "us-east-2"},
 	}}
 
-	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "hello.ns.svc.cluster.local", Locality: "us-east-2"},
 	}}
 
-	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "95.45.25.34", Locality: "us-east-2"},
 	}}
 
@@ -405,9 +408,9 @@ func TestGetOutlierDetection(t *testing.T) {
 				},
 			},
 			outlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
-				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 10},
-				Interval:                 &types.Duration{Seconds: 60},
+				BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 10},
+				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
 		},
@@ -429,9 +432,9 @@ func TestGetOutlierDetection(t *testing.T) {
 				},
 			},
 			outlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:         &types.Duration{Seconds: 600},
-				ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
-				Interval:                 &types.Duration{Seconds: 60},
+				BaseEjectionTime:         &duration.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
 		},
@@ -453,9 +456,9 @@ func TestGetOutlierDetection(t *testing.T) {
 				},
 			},
 			outlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:         &types.Duration{Seconds: 600},
-				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 50},
-				Interval:                 &types.Duration{Seconds: DefaultInterval},
+				BaseEjectionTime:         &duration.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+				Interval:                 &duration.Duration{Seconds: DefaultInterval},
 				MaxEjectionPercent:       100,
 			},
 		},
@@ -478,9 +481,9 @@ func TestGetOutlierDetection(t *testing.T) {
 				},
 			},
 			outlierDetection: &v1alpha3.OutlierDetection{
-				BaseEjectionTime:         &types.Duration{Seconds: 600},
-				ConsecutiveGatewayErrors: &types.UInt32Value{Value: 10},
-				Interval:                 &types.Duration{Seconds: 60},
+				BaseEjectionTime:         &duration.Duration{Seconds: 600},
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 10},
+				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
 		},
@@ -490,7 +493,7 @@ func TestGetOutlierDetection(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			result := getOutlierDetection(c.se, c.locality, c.gtpPolicy)
-			if !cmp.Equal(result, c.outlierDetection) {
+			if !cmp.Equal(result, c.outlierDetection, protocmp.Transform()) {
 				t.Fatalf("OutlierDetection Mismatch. Diff: %v", cmp.Diff(result, c.outlierDetection))
 			}
 		})
@@ -547,9 +550,9 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	handlerEmptyClient := VirtualServiceHandler{
 		RemoteRegistry: rr1,
 	}
-
+	ctx := context.Background()
 	fullFakeIstioClient := istiofake.NewSimpleClientset()
-	fullFakeIstioClient.NetworkingV1alpha3().VirtualServices("ns").Create(&v1alpha32.VirtualService{
+	fullFakeIstioClient.NetworkingV1alpha3().VirtualServices("ns").Create(ctx, &v1alpha32.VirtualService{
 		ObjectMeta: v12.ObjectMeta{
 			Name: "vs-name",
 		},
@@ -642,7 +645,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 
-			err := handleVirtualServiceEvent(c.vs, c.handler, c.event, common.VirtualService)
+			err := handleVirtualServiceEvent(ctx, c.vs, c.handler, c.event, common.VirtualService)
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
 			}
@@ -880,7 +883,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_1},
+					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_1},
 				},
 			},
 		},
@@ -899,7 +902,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{VS_ROUTE_PRIMARY}},
+					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{VS_ROUTE_PRIMARY}},
 				},
 			},
 		},
@@ -918,7 +921,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
+					<<<<<<< HEAD
 					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{"random"}},
+					====== =
+					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string{"random"}},
+					>>>>>>> d45832e (made fixes to work with go1.17)
 				},
 			},
 		},
@@ -937,7 +944,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_4},
+					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_4},
 				},
 			},
 		},
@@ -970,7 +977,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: "random"},
+					VirtualService: &argo.IstioVirtualService{Name: "random"},
 				},
 			},
 		},
@@ -1067,7 +1074,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getServiceForRollout(c.rc, c.rollout)
+			result := getServiceForRollout(ctx, c.rc, c.rollout)
 			if len(c.result) == 0 {
 				if result != nil && len(result) != 0 {
 					t.Fatalf("Service expected to be nil")
@@ -1329,10 +1336,12 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getServiceForRollout(c.rc, c.rollout)
+			result := getServiceForRollout(ctx, c.rc, c.rollout)
 			if len(c.result) == 0 {
 				if result != nil && len(result) > 0 {
 					t.Fatalf("Service expected to be nil")
@@ -1362,7 +1371,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*v1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
@@ -1376,7 +1385,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*v1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 90}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
@@ -1390,7 +1399,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*v1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -1507,6 +1516,8 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 
 func TestAddUpdateServiceEntry(t *testing.T) {
 
+	ctx := context.Background()
+
 	fakeIstioClient := istiofake.NewSimpleClientset()
 
 	seCtrl := &istio.ServiceEntryController{
@@ -1521,7 +1532,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*v1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
@@ -1535,7 +1546,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*v1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*v1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -1550,7 +1561,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Spec:       twoEndpointSe,
 	}
 
-	seCtrl.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Create(oldSeTwoEndpoints)
+	seCtrl.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Create(ctx, oldSeTwoEndpoints, v12.CreateOptions{})
 
 	rcWarmupPhase := &RemoteController{
 		ServiceEntryController: seCtrl,
@@ -1596,10 +1607,10 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc)
+			addUpdateServiceEntry(ctx, c.newSe, c.oldSe, "namespace", c.rc)
 			if c.skipDestructive {
 				//verify the update did not go through
-				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(c.oldSe.Name, v12.GetOptions{})
+				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(ctx, c.oldSe.Name, v12.GetOptions{})
 				_, diff := getServiceEntryDiff(c.oldSe, se)
 				if diff != "" {
 					t.Errorf("Failed. Got %v, expected %v", se.Spec.String(), c.oldSe.Spec.String())

@@ -3,10 +3,11 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"k8s.io/client-go/rest"
 	"os"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"k8s.io/client-go/rest"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -50,7 +51,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		return nil, fmt.Errorf("error with configmap controller init: %v", err)
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
-	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
+	loadServiceEntryCacheData(ctx, w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
 	err = createSecretController(ctx, w)
 	if err != nil {
@@ -90,12 +91,12 @@ func createSecretController(ctx context.Context, w *RemoteRegistry) error {
 		return fmt.Errorf("could not create K8s client: %v", err)
 	}
 
-	controller, err = secret.StartSecretController(w.secretClient,
+	controller, err = secret.StartSecretController(ctx, w.secretClient,
 		w.createCacheController,
 		w.updateCacheController,
 		w.deleteCacheController,
 		common.GetClusterRegistriesNamespace(),
-		ctx, common.GetSecretResolver())
+		common.GetSecretResolver())
 
 	if err != nil {
 		return fmt.Errorf("could not start secret controller: %v", err)
@@ -185,9 +186,9 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with Rollout controller init: %v", err)
 		}
 	}
-	
+
 	log.Infof("starting Routing Policies controller for custerID: %v", clusterID)
-	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1 * time.Minute)
+	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1*time.Minute)
 
 	if err != nil {
 		return fmt.Errorf("error with virtualServiceController init: %v", err)

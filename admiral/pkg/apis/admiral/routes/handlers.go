@@ -103,11 +103,13 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 	params := mux.Vars(r)
 	clusterName := strings.Trim(params["clustername"], " ")
 
-	var response []v1alpha3.ServiceEntry
+	var response []*v1alpha3.ServiceEntry
+
+	ctx := r.Context()
 
 	if clusterName != "" {
 
-		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(clusterName, opts.RemoteRegistry)
+		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(ctx, clusterName, opts.RemoteRegistry)
 
 		if err != nil {
 			log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, err.Error())

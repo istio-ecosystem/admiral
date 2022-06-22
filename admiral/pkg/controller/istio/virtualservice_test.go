@@ -1,14 +1,17 @@
 package istio
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"testing"
-	"time"
 )
 
 func TestNewVirtualServiceController(t *testing.T) {
@@ -31,21 +34,23 @@ func TestNewVirtualServiceController(t *testing.T) {
 
 	vs := &v1alpha3.VirtualService{Spec: v1alpha32.VirtualService{}, ObjectMeta: v1.ObjectMeta{Name: "vs1", Namespace: "namespace1"}}
 
-	virtualServiceController.Added(vs)
+	ctx := context.Background()
 
-	if !cmp.Equal(vs.Spec, handler.Obj.Spec) {
+	virtualServiceController.Added(ctx, vs)
+
+	if !cmp.Equal(vs.Spec, handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
 	updatedVs := &v1alpha3.VirtualService{Spec: v1alpha32.VirtualService{Hosts: []string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "vs1", Namespace: "namespace1"}}
 
-	virtualServiceController.Updated(updatedVs, vs)
+	virtualServiceController.Updated(ctx, updatedVs, vs)
 
-	if !cmp.Equal(updatedVs.Spec, handler.Obj.Spec) {
+	if !cmp.Equal(updatedVs.Spec, handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 
-	virtualServiceController.Deleted(vs)
+	virtualServiceController.Deleted(ctx, vs)
 
 	if handler.Obj != nil {
 		t.Errorf("Handler should have no obj")

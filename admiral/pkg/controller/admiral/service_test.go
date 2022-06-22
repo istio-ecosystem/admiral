@@ -130,11 +130,11 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	externalIPService.Spec.ExternalIPs = []string{"1.2.3.4"}
 	externalIPService.Spec.Ports = []v1.ServicePort{
 		{
-			"http",
-			v1.ProtocolTCP,
-			common.DefaultMtlsPort,
-			intstr.FromInt(80),
-			30800,
+			Name:       "http",
+			Protocol:   v1.ProtocolTCP,
+			Port:       common.DefaultMtlsPort,
+			TargetPort: intstr.FromInt(80),
+			NodePort:   30800,
 		},
 	}
 	externalIPService.Labels = map[string]string{"app": "test-service-externalip"}

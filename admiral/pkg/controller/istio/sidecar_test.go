@@ -1,14 +1,17 @@
 package istio
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"testing"
-	"time"
 )
 
 func TestNewSidecarController(t *testing.T) {
@@ -31,20 +34,22 @@ func TestNewSidecarController(t *testing.T) {
 
 	sc := &v1alpha3.Sidecar{Spec: v1alpha32.Sidecar{}, ObjectMeta: v1.ObjectMeta{Name: "sc1", Namespace: "namespace1"}}
 
-	sidecarController.Added(sc)
+	ctx := context.Background()
 
-	if !cmp.Equal(sc.Spec, handler.Obj.Spec) {
+	sidecarController.Added(ctx, sc)
+
+	if !cmp.Equal(sc.Spec, handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
 	updatedSc := &v1alpha3.Sidecar{Spec: v1alpha32.Sidecar{WorkloadSelector: &v1alpha32.WorkloadSelector{Labels: map[string]string{"this": "that"}}}, ObjectMeta: v1.ObjectMeta{Name: "sc1", Namespace: "namespace1"}}
-	sidecarController.Updated(updatedSc, sc)
+	sidecarController.Updated(ctx, updatedSc, sc)
 
-	if !cmp.Equal(updatedSc.Spec, handler.Obj.Spec) {
+	if !cmp.Equal(updatedSc.Spec, handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 
-	sidecarController.Deleted(sc)
+	sidecarController.Deleted(ctx, sc)
 
 	if handler.Obj != nil {
 		t.Errorf("Handler should have no obj")

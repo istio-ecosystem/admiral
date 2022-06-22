@@ -17,16 +17,17 @@ package secret
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/prometheus/client_golang/prometheus"
-	io_prometheus_client "github.com/prometheus/client_model/go"
-	"k8s.io/client-go/rest"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/prometheus/client_golang/prometheus"
+	io_prometheus_client "github.com/prometheus/client_model/go"
+	"k8s.io/client-go/rest"
+
 	. "github.com/onsi/gomega"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -114,15 +115,17 @@ func createMultiClusterSecret(k8s *fake.Clientset) error {
 
 	data["testRemoteCluster"] = []byte("Test")
 	secret.Data = data
-	_, err := k8s.CoreV1().Secrets(secretNameSpace).Create(&secret)
+	ctx := context.Background()
+	_, err := k8s.CoreV1().Secrets(secretNameSpace).Create(ctx, &secret, metav1.CreateOptions{})
 	return err
 }
 
 func deleteMultiClusterSecret(k8s *fake.Clientset) error {
 	var immediate int64
 
-	return k8s.CoreV1().Secrets(secretNameSpace).Delete(
-		secretName, &metav1.DeleteOptions{GracePeriodSeconds: &immediate})
+	ctx := context.Background()
+	return k8s.CoreV1().Secrets(secretNameSpace).Delete(ctx,
+		secretName, metav1.DeleteOptions{GracePeriodSeconds: &immediate})
 }
 
 func mockLoadKubeConfig(kubeconfig []byte) (*clientcmdapi.Config, error) {
@@ -234,9 +237,10 @@ func Test_SecretController(t *testing.T) {
 	// The assertion ShouldNot(BeNil()) make sure that start secret controller return a not nil controller and nil error
 	registry := prometheus.DefaultGatherer
 	g.Expect(
-		StartSecretController(clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, context.TODO(), "")).
+		StartSecretController(context.TODO(), clientset, addCallback, updateCallback, deleteCallback, secretNameSpace, "")).
 		ShouldNot(BeNil())
 
+	ctx := context.Background()
 	for i, step := range steps {
 		resetCallbackData()
 
@@ -245,13 +249,13 @@ func Test_SecretController(t *testing.T) {
 
 			switch {
 			case step.add != nil:
-				_, err := clientset.CoreV1().Secrets(secretNameSpace).Create(step.add)
+				_, err := clientset.CoreV1().Secrets(secretNameSpace).Create(ctx, step.add, metav1.CreateOptions{})
 				g.Expect(err).Should(BeNil())
 			case step.update != nil:
-				_, err := clientset.CoreV1().Secrets(secretNameSpace).Update(step.update)
+				_, err := clientset.CoreV1().Secrets(secretNameSpace).Update(ctx, step.update, metav1.UpdateOptions{})
 				g.Expect(err).Should(BeNil())
 			case step.delete != nil:
-				g.Expect(clientset.CoreV1().Secrets(secretNameSpace).Delete(step.delete.Name, &metav1.DeleteOptions{})).
+				g.Expect(clientset.CoreV1().Secrets(secretNameSpace).Delete(ctx, step.delete.Name, metav1.DeleteOptions{})).
 					Should(Succeed())
 			}
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sync"
 	"time"
+
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -43,7 +44,7 @@ type AdmiralCache struct {
 	CnameDependentClusterCache      *common.MapOfMaps
 	CnameIdentityCache              *sync.Map
 	IdentityClusterCache            *common.MapOfMaps
-	WorkloadSelectorCache    		*common.MapOfMaps
+	WorkloadSelectorCache           *common.MapOfMaps
 	ClusterLocalityCache            *common.MapOfMaps
 	IdentityDependencyCache         *common.MapOfMaps
 	SubsetServiceEntryIdentityCache *sync.Map
@@ -52,9 +53,9 @@ type AdmiralCache struct {
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
 	SeClusterCache                  *common.MapOfMaps
-	RoutingPolicyFilterCache		*routingPolicyFilterCache
+	RoutingPolicyFilterCache        *routingPolicyFilterCache
 	RoutingPolicyCache              *routingPolicyCache
-	argoRolloutsEnabled bool
+	argoRolloutsEnabled             bool
 }
 
 type RemoteRegistry struct {
@@ -209,16 +210,15 @@ func (g *globalTrafficCache) Delete(identity string, environment string) {
 
 type RoutingPolicyHandler struct {
 	RemoteRegistry *RemoteRegistry
-	ClusterID	   string
+	ClusterID      string
 }
 
 type routingPolicyCache struct {
 	// map of routing policies key=environment.identity, value: RoutingPolicy object
 	// only one routing policy per identity + env is allowed
 	identityCache map[string]*v1.RoutingPolicy
-	mutex *sync.Mutex
+	mutex         *sync.Mutex
 }
-
 
 func (r *routingPolicyCache) Delete(identity string, environment string) {
 	defer r.mutex.Unlock()
@@ -230,7 +230,7 @@ func (r *routingPolicyCache) Delete(identity string, environment string) {
 	}
 }
 
-func (r *routingPolicyCache ) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
+func (r *routingPolicyCache) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
 	defer r.mutex.Unlock()
 	r.mutex.Lock()
 	return r.identityCache[common.ConstructRoutingPolicyKey(environment, identity)]
@@ -256,11 +256,10 @@ func (r *routingPolicyCache) Put(rp *v1.RoutingPolicy) error {
 	return nil
 }
 
-
 type routingPolicyFilterCache struct {
 	// map of envoyFilters key=environment+identity of the routingPolicy, value is a map [clusterId -> map [filterName -> filterName]]
 	filterCache map[string]map[string]map[string]string
-	mutex *sync.Mutex
+	mutex       *sync.Mutex
 }
 
 func (r *routingPolicyFilterCache) Get(identityEnvKey string) (filters map[string]map[string]string) {
@@ -288,7 +287,7 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 		r.mutex.Lock()
 		// delete all envoyFilters for a given identity+env key
 		delete(r.filterCache, identityEnvKey)
-	}else {
+	} else {
 		log.Infof(LogFormat, admiral.Delete, "routingpolicy", identityEnvKey, "", "routingpolicy disabled")
 	}
 }
@@ -306,18 +305,18 @@ func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
 		r.processroutingPolicy(dependents, obj, admiral.Add)
 
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "finished processing routing policy")
-	}else {
+	} else {
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
 	}
 }
 
-func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType ) {
+func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) {
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
-			for _, dependent := range dependents {
+		for _, dependent := range dependents {
 
 			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
-				selectors := r.RemoteRegistry.AdmiralCache.WorkloadSelectorCache.Get(dependent+remoteController.ClusterID).Copy()
+				selectors := r.RemoteRegistry.AdmiralCache.WorkloadSelectorCache.Get(dependent + remoteController.ClusterID).Copy()
 				if len(selectors) != 0 {
 
 					filter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache, selectors)
@@ -349,7 +348,7 @@ func (r RoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
 		r.processroutingPolicy(dependents, obj, admiral.Update)
 
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "updated routing policy")
-	}else {
+	} else {
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
 	}
 }
@@ -370,7 +369,7 @@ func getDependents(obj *v1.RoutingPolicy, r RoutingPolicyHandler) map[string]str
 
 func (r RoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
 	dependents := getDependents(obj, r)
-	if len(dependents) != 0  {
+	if len(dependents) != 0 {
 		r.deleteEnvoyFilters(dependents, obj, admiral.Delete)
 		log.Infof(LogFormat, admiral.Delete, "routingpolicy", obj.Name, obj.ClusterName, "deleted envoy filter for routing policy")
 	}
@@ -471,22 +470,22 @@ func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
-	HandleDependencyRecord(obj, dh.RemoteRegistry)
+	HandleDependencyRecord(ctx, obj, dh.RemoteRegistry)
 
 }
 
-func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
+func (dh *DependencyHandler) Updated(ctx context.Context, obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
 	// need clean up before handle it as added, I need to handle update that delete the dependency, find diff first
 	// this is more complex cos want to make sure no other service depend on the same service (which we just removed the dependancy).
 	// need to make sure nothing depend on that before cleaning up the SE for that service
-	HandleDependencyRecord(obj, dh.RemoteRegistry)
+	HandleDependencyRecord(ctx, obj, dh.RemoteRegistry)
 
 }
 
-func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
+func HandleDependencyRecord(ctx context.Context, obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	sourceIdentity := obj.Spec.Source
 
 	if len(sourceIdentity) == 0 {
@@ -496,58 +495,58 @@ func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
 }
 
-func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
+func (dh *DependencyHandler) Deleted(ctx context.Context, obj *v1.Dependency) {
 	// special case of update, delete the dependency crd file for one service, need to loop through all ones we plan to update
 	// and make sure nobody else is relying on the same SE in same cluster
 	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, "", "Skipping, not implemented")
 }
 
-func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
+func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
-	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
 		log.Infof(err.Error())
 	}
 }
 
-func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
-	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
 		log.Infof(err.Error())
 	}
 }
 
-func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
+func (gtp *GlobalTrafficHandler) Deleted(ctx context.Context, obj *v1.GlobalTrafficPolicy) {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
-	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Delete, obj, gtp.RemoteRegistry, gtp.ClusterID)
 	if err != nil {
 		log.Infof(err.Error())
 	}
 }
 
-func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
-	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry, pc.ClusterID)
+func (pc *DeploymentHandler) Added(ctx context.Context, obj *k8sAppsV1.Deployment) {
+	HandleEventForDeployment(ctx, admiral.Add, obj, pc.RemoteRegistry, pc.ClusterID)
 }
 
-func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
-	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
+func (pc *DeploymentHandler) Deleted(ctx context.Context, obj *k8sAppsV1.Deployment) {
+	HandleEventForDeployment(ctx, admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
 }
 
-func (rh *RolloutHandler) Added(obj *argo.Rollout) {
-	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry, rh.ClusterID)
+func (rh *RolloutHandler) Added(ctx context.Context, obj *argo.Rollout) {
+	HandleEventForRollout(ctx, admiral.Add, obj, rh.RemoteRegistry, rh.ClusterID)
 }
 
-func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
+func (rh *RolloutHandler) Updated(ctx context.Context, obj *argo.Rollout) {
 	log.Infof(LogFormat, "Updated", "rollout", obj.Name, rh.ClusterID, "received")
 }
 
-func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
-	HandleEventForRollout(admiral.Delete, obj, rh.RemoteRegistry, rh.ClusterID)
+func (rh *RolloutHandler) Deleted(ctx context.Context, obj *argo.Rollout) {
+	HandleEventForRollout(ctx, admiral.Delete, obj, rh.RemoteRegistry, rh.ClusterID)
 }
 
-// helper function to handle add and delete for RolloutHandler
-func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
+// HandleEventForRollout helper function to handle add and delete for RolloutHandler
+func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
 
 	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
@@ -560,7 +559,7 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 	env := common.GetEnvForRollout(obj)
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
 }
 
 // helper function to handle add and delete for DeploymentHandler
@@ -576,11 +575,12 @@ func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment
 	env := common.GetEnv(obj)
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
 }
 
 // HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
-func HandleEventForGlobalTrafficPolicy(gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) error {
+func HandleEventForGlobalTrafficPolicy(ctx context.Context, event admiral.EventType, gtp *v1.GlobalTrafficPolicy,
+	remoteRegistry *RemoteRegistry, clusterName string) error {
 
 	globalIdentifier := common.GetGtpIdentity(gtp)
 
@@ -594,6 +594,6 @@ func HandleEventForGlobalTrafficPolicy(gtp *v1.GlobalTrafficPolicy, remoteRegist
 	// the endpoints from being deleted.
 	// TODO: Need to come up with a way to prevent deleting default endpoints so that this hack can be removed.
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
-	modifyServiceEntryForNewServiceOrPod(admiral.Update, env, globalIdentifier, remoteRegistry)
+	modifyServiceEntryForNewServiceOrPod(ctx, admiral.Update, env, globalIdentifier, remoteRegistry)
 	return nil
 }

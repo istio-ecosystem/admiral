@@ -2,9 +2,12 @@ package clusters
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
@@ -17,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"strings"
-	"testing"
-	"time"
 )
 
 func init() {
@@ -102,7 +102,7 @@ func TestCopyServiceEntry(t *testing.T) {
 
 func TestCopyEndpoint(t *testing.T) {
 
-	se := networking.ServiceEntry_Endpoint{
+	se := networking.WorkloadEntry{
 		Address: "127.0.0.1",
 	}
 
@@ -172,7 +172,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 			},
 		},
 	}
-	d.Added(&deployment)
+	d.Added(ctx, &deployment)
 	service := k8sCoreV1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
@@ -185,14 +185,14 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 			},
 		},
 	}
-	s.Added(&service)
+	s.Added(ctx, &service)
 
 	rc := RemoteController{
-		DeploymentController: d,
-		ServiceController:    s,
-		NodeController:       n,
-		ClusterID:            "test.cluster",
-		RolloutController:    r,
+		DeploymentController:    d,
+		ServiceController:       s,
+		NodeController:          n,
+		ClusterID:               "test.cluster",
+		RolloutController:       r,
 		RoutingPolicyController: rpc,
 	}
 	return &rc, nil
@@ -200,242 +200,243 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 
 func TestCreateSecretController(t *testing.T) {
 
-	err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
+err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
-	if err != nil {
-		t.Fail()
-	}
+if err != nil {
+t.Fail()
+}
 
-	common.SetKubeconfigPath("fail")
+common.SetKubeconfigPath("fail")
 
-	err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
+err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
-	common.SetKubeconfigPath("testdata/fake.config")
+common.SetKubeconfigPath("testdata/fake.config")
 
-	if err == nil {
-		t.Fail()
-	}
+if err == nil {
+t.Fail()
+}
 }
 
 func TestInitAdmiral(t *testing.T) {
 
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-		LabelSet:       &common.LabelSet{},
-	}
+p := common.AdmiralParams{
+KubeconfigPath: "testdata/fake.config",
+LabelSet:       &common.LabelSet{},
+}
 
-	p.LabelSet.WorkloadIdentityKey = "overridden-key"
+p.LabelSet.WorkloadIdentityKey = "overridden-key"
 
-	rr, err := InitAdmiral(context.Background(), p)
+rr, err := InitAdmiral(context.Background(), p)
 
-	if err != nil {
-		t.Fail()
-	}
-	if len(rr.GetClusterIds()) != 0 {
-		t.Fail()
-	}
+if err != nil {
+t.Fail()
+}
+if len(rr.GetClusterIds()) != 0 {
+t.Fail()
+}
 
-	if common.GetWorkloadIdentifier() != "identity" {
-		t.Errorf("Workload identity label override failed. Expected \"identity\", got %v", common.GetWorkloadIdentifier())
-	}
+if common.GetWorkloadIdentifier() != "identity" {
+t.Errorf("Workload identity label override failed. Expected \"identity\", got %v", common.GetWorkloadIdentifier())
+}
 }
 
 func TestAdded(t *testing.T) {
+ctx := context.Background()
+p := common.AdmiralParams{
+KubeconfigPath: "testdata/fake.config",
+}
+rr, _ := InitAdmiral(context.Background(), p)
 
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-	rr, _ := InitAdmiral(context.Background(), p)
+rc, _ := createMockRemoteController(func (i interface{}) {
+	t.Fail()
+})
+rr.PutRemoteController("test.cluster", rc)
+d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
 
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		t.Fail()
-	})
-	rr.PutRemoteController("test.cluster", rc)
-	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
+if e != nil {
+t.Fail()
+}
 
-	if e != nil {
-		t.Fail()
-	}
+dh := DependencyHandler{
+RemoteRegistry: rr,
+DepController:  d,
+}
 
-	dh := DependencyHandler{
-		RemoteRegistry: rr,
-		DepController:  d,
-	}
+depData := v1.Dependency{
+Spec: depModel.Dependency{
+IdentityLabel: "idenity",
+Destinations:  []string{"one", "two"},
+Source:        "bar",
+},
+}
 
-	depData := v1.Dependency{
-		Spec: depModel.Dependency{
-			IdentityLabel: "idenity",
-			Destinations:  []string{"one", "two"},
-			Source:        "bar",
-		},
-	}
-
-	dh.Added(&depData)
-	dh.Deleted(&depData)
+dh.Added(ctx, &depData)
+dh.Deleted(ctx, &depData)
 
 }
 
 func TestGetServiceForDeployment(t *testing.T) {
-	baseRc, _ := createMockRemoteController(func(i interface{}) {
-		//res := i.(istio.Config)
-		//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
-		//if ok {
-		//	if se.Hosts[0] != "dev.bar.global" {
-		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-		//	}
-		//}
-	})
+baseRc, _ := createMockRemoteController(func (i interface{}) {
+	//res := i.(istio.Config)
+	//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
+	//if ok {
+	//	if se.Hosts[0] != "dev.bar.global" {
+	//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+	//	}
+	//}
+})
 
-	rcWithService, _ := createMockRemoteController(func(i interface{}) {
-		//res := i.(istio.Config)
-		//se, ok := res.Spec.(*networking.ServiceEntry)
-		//if ok {
-		//	if se.Hosts[0] != "dev.bar.global" {
-		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-		//	}
-		//}
-	})
+rcWithService, _ := createMockRemoteController(func (i interface{}) {
+	//res := i.(istio.Config)
+	//se, ok := res.Spec.(*networking.ServiceEntry)
+	//if ok {
+	//	if se.Hosts[0] != "dev.bar.global" {
+	//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
+	//	}
+	//}
+})
 
-	service := k8sCoreV1.Service{}
-	service.Namespace = "under-test"
-	service.Spec.Ports = []k8sCoreV1.ServicePort{
-		{
-			Name: "port1",
-			Port: 8090,
-		},
-	}
-	service.Spec.Selector = map[string]string{"under-test": "true"}
-	rcWithService.ServiceController.Cache.Put(&service)
+service := k8sCoreV1.Service{}
+service.Namespace = "under-test"
+service.Spec.Ports = []k8sCoreV1.ServicePort{
+{
+Name: "port1",
+Port: 8090,
+},
+}
+service.Spec.Selector = map[string]string{"under-test": "true"}
+rcWithService.ServiceController.Cache.Put(&service)
 
-	deploymentWithNoSelector := k8sAppsV1.Deployment{}
-	deploymentWithNoSelector.Name = "dep1"
-	deploymentWithNoSelector.Namespace = "under-test"
-	deploymentWithNoSelector.Spec.Selector = &metav1.LabelSelector{}
+deploymentWithNoSelector := k8sAppsV1.Deployment{}
+deploymentWithNoSelector.Name = "dep1"
+deploymentWithNoSelector.Namespace = "under-test"
+deploymentWithNoSelector.Spec.Selector = &metav1.LabelSelector{}
 
-	deploymentWithSelector := k8sAppsV1.Deployment{}
-	deploymentWithSelector.Name = "dep2"
-	deploymentWithSelector.Namespace = "under-test"
-	deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"under-test": "true"}}
+deploymentWithSelector := k8sAppsV1.Deployment{}
+deploymentWithSelector.Name = "dep2"
+deploymentWithSelector.Namespace = "under-test"
+deploymentWithSelector.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"under-test": "true"}}
 
-	//Struct of test case info. Name is required.
-	testCases := []struct {
-		name            string
-		controller      *RemoteController
-		deployment      *k8sAppsV1.Deployment
-		expectedService *k8sCoreV1.Service
-	}{
-		{
-			name:            "Should return nil with nothing in the cache",
-			controller:      baseRc,
-			deployment:      nil,
-			expectedService: nil,
-		},
-		{
-			name:            "Should not match if selectors don't match",
-			controller:      rcWithService,
-			deployment:      &deploymentWithNoSelector,
-			expectedService: nil,
-		},
-		{
-			name:            "Should return proper service",
-			controller:      rcWithService,
-			deployment:      &deploymentWithSelector,
-			expectedService: &service,
-		},
-	}
+//Struct of test case info. Name is required.
+testCases := []struct {
+name            string
+controller      *RemoteController
+deployment      *k8sAppsV1.Deployment
+expectedService *k8sCoreV1.Service
+}{
+{
+name:            "Should return nil with nothing in the cache",
+controller:      baseRc,
+deployment:      nil,
+expectedService: nil,
+},
+{
+name:            "Should not match if selectors don't match",
+controller:      rcWithService,
+deployment:      &deploymentWithNoSelector,
+expectedService: nil,
+},
+{
+name:            "Should return proper service",
+controller:      rcWithService,
+deployment:      &deploymentWithSelector,
+expectedService: &service,
+},
+}
 
-	//Run the test for every provided case
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			resultingService := getServiceForDeployment(c.controller, c.deployment)
-			if resultingService == nil && c.expectedService == nil {
-				//perfect
-			} else {
-				if !cmp.Equal(resultingService, c.expectedService) {
-					logrus.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
-					t.Errorf("Service mismatch. Got %v, expected %v", resultingService, c.expectedService)
-				}
-			}
-		})
-	}
+//Run the test for every provided case
+for _, c := range testCases {
+t.Run(c.name, func (t *testing.T) {
+resultingService := getServiceForDeployment(c.controller, c.deployment)
+if resultingService == nil && c.expectedService == nil {
+//perfect
+} else {
+if !cmp.Equal(resultingService, c.expectedService) {
+logrus.Infof("Service diff: %v", cmp.Diff(resultingService, c.expectedService))
+t.Errorf("Service mismatch. Got %v, expected %v", resultingService, c.expectedService)
+}
+}
+})
+}
 }
 
 func TestUpdateCacheController(t *testing.T) {
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-	originalConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake.config")
-	changedConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake_2.config")
-	if err != nil {
-		t.Fatalf("Unexpected error getting client %v", err)
-	}
-
-	rr, _ := InitAdmiral(context.Background(), p)
-
-	rc, _ := createMockRemoteController(func(i interface{}) {
-		t.Fail()
-	})
-	rc.stop = make(chan struct{})
-	rr.PutRemoteController("test.cluster", rc)
-
-	//Struct of test case info. Name is required.
-	testCases := []struct {
-		name          string
-		oldConfig     *rest.Config
-		newConfig     *rest.Config
-		clusterId     string
-		shouldRefresh bool
-	}{
-		{
-			name:          "Should update controller when kubeconfig changes",
-			oldConfig:     originalConfig,
-			newConfig:     changedConfig,
-			clusterId:     "test.cluster",
-			shouldRefresh: true,
-		},
-		{
-			name:          "Should not update controller when kubeconfig doesn't change",
-			oldConfig:     originalConfig,
-			newConfig:     originalConfig,
-			clusterId:     "test.cluster",
-			shouldRefresh: false,
-		},
-	}
-
-	//Run the test for every provided case
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			hook := logTest.NewGlobal()
-			rr.GetRemoteController(c.clusterId).ApiServer = c.oldConfig.Host
-			d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
-			if err != nil {
-				t.Fatalf("Unexpected error creating controller %v", err)
-			}
-			rc.DeploymentController = d
-
-			err = rr.updateCacheController(c.newConfig, c.clusterId, time.Second*time.Duration(300))
-			if err != nil {
-				t.Fatalf("Unexpected error doing update %v", err)
-			}
-
-			if rr.GetRemoteController(c.clusterId).ApiServer != c.newConfig.Host {
-				t.Fatalf("Client mismatch. Updated controller has the wrong client. Expected %v got %v", c.newConfig.Host, rr.GetRemoteController(c.clusterId).ApiServer)
-			}
-
-			refreshed := checkIfLogged(hook.AllEntries(), "Client mismatch, recreating cache controllers for cluster")
-
-			if refreshed != c.shouldRefresh {
-				t.Fatalf("Refresh mismatch. Expected %v got %v", c.shouldRefresh, refreshed)
-			}
-		})
-	}
+p := common.AdmiralParams{
+KubeconfigPath: "testdata/fake.config",
+}
+originalConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake.config")
+changedConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake_2.config")
+if err != nil {
+t.Fatalf("Unexpected error getting client %v", err)
 }
 
-func checkIfLogged(entries []*logrus.Entry, phrase string) bool {
-	for _, entry := range entries {
-		if strings.Contains(entry.Message, phrase) {
-			return true
-		}
-	}
-	return false
+rr, _ := InitAdmiral(context.Background(), p)
+
+rc, _ := createMockRemoteController(func (i interface{}) {
+	t.Fail()
+})
+rc.stop = make(chan struct{})
+rr.PutRemoteController("test.cluster", rc)
+
+//Struct of test case info. Name is required.
+testCases := []struct {
+name          string
+oldConfig     *rest.Config
+newConfig     *rest.Config
+clusterId     string
+shouldRefresh bool
+}{
+{
+name:          "Should update controller when kubeconfig changes",
+oldConfig:     originalConfig,
+newConfig:     changedConfig,
+clusterId:     "test.cluster",
+shouldRefresh: true,
+},
+{
+name:          "Should not update controller when kubeconfig doesn't change",
+oldConfig:     originalConfig,
+newConfig:     originalConfig,
+clusterId:     "test.cluster",
+shouldRefresh: false,
+},
+}
+
+//Run the test for every provided case
+for _, c := range testCases {
+t.Run(c.name, func (t *testing.T) {
+hook := logTest.NewGlobal()
+rr.GetRemoteController(c.clusterId).ApiServer = c.oldConfig.Host
+d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
+if err != nil {
+t.Fatalf("Unexpected error creating controller %v", err)
+}
+rc.DeploymentController = d
+
+err = rr.updateCacheController(c.newConfig, c.clusterId, time.Second*time.Duration(300))
+if err != nil {
+t.Fatalf("Unexpected error doing update %v", err)
+}
+
+if rr.GetRemoteController(c.clusterId).ApiServer != c.newConfig.Host {
+t.Fatalf("Client mismatch. Updated controller has the wrong client. Expected %v got %v", c.newConfig.Host, rr.GetRemoteController(c.clusterId).ApiServer)
+}
+
+refreshed := checkIfLogged(hook.AllEntries(), "Client mismatch, recreating cache controllers for cluster")
+
+if refreshed != c.shouldRefresh {
+t.Fatalf("Refresh mismatch. Expected %v got %v", c.shouldRefresh, refreshed)
+}
+})
+}
+}
+
+func checkIfLogged(entries []*logrus.Entry, phrase
+string) bool{
+for _, entry := range entries{
+if strings.Contains(entry.Message, phrase){
+return true
+}
+}
+return false
 }

@@ -1,6 +1,7 @@
 package admiral
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"sync"
@@ -53,10 +54,12 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 		t.Errorf("GlobalTraffic controller should never be nil without an error thrown")
 	}
 
+	ctx := context.Background()
+
 	gtpName := "gtp1"
 	gtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "e2e"}, Policy: []*model.TrafficPolicy{}}
 	gtpObj := makeK8sGtpObj(gtpName, "namespace1", gtp)
-	globalTrafficController.Added(gtpObj)
+	globalTrafficController.Added(ctx, gtpObj)
 
 	if !cmp.Equal(handler.Obj.Spec, gtpObj.Spec) {
 		t.Errorf("Add should call the handler with the object")
@@ -65,13 +68,13 @@ func TestGlobalTrafficAddUpdateDelete(t *testing.T) {
 	updatedGtp := model.GlobalTrafficPolicy{Selector: map[string]string{"identity": "payments", "env": "qa"}, Policy: []*model.TrafficPolicy{}}
 	updatedGtpObj := makeK8sGtpObj(gtpName, "namespace1", updatedGtp)
 
-	globalTrafficController.Updated(updatedGtpObj, gtpObj)
+	globalTrafficController.Updated(ctx, updatedGtpObj, gtpObj)
 
 	if !cmp.Equal(handler.Obj.Spec, updatedGtpObj.Spec) {
 		t.Errorf("Update should call the handler with the updated object")
 	}
 
-	globalTrafficController.Deleted(updatedGtpObj)
+	globalTrafficController.Deleted(ctx, updatedGtpObj)
 
 	if handler.Obj != nil {
 		t.Errorf("Delete should delete the gtp")
@@ -100,8 +103,10 @@ func TestGlobalTrafficController_Updated(t *testing.T) {
 		gtpUpdatedToIgnore = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}, Annotations: map[string]string{"admiral.io/ignore": "true"}}}
 	)
 
+	ctx := context.Background()
+
 	//add the base object to cache
-	gtpController.Added(&gtp)
+	gtpController.Added(ctx, &gtp)
 
 	testCases := []struct {
 		name         string
@@ -121,7 +126,7 @@ func TestGlobalTrafficController_Updated(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			gtpController.Updated(c.gtp, gtp)
+			gtpController.Updated(ctx, c.gtp, gtp)
 			gtpKey := common.GetGtpKey(c.gtp)
 			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
 			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
@@ -156,9 +161,11 @@ func TestGlobalTrafficController_Deleted(t *testing.T) {
 		}}
 	)
 
+	ctx := context.Background()
+
 	//add the base object to cache
-	gtpController.Added(&gtp)
-	gtpController.Added(&gtp2)
+	gtpController.Added(ctx, &gtp)
+	gtpController.Added(ctx, &gtp2)
 
 	testCases := []struct {
 		name         string
@@ -178,7 +185,7 @@ func TestGlobalTrafficController_Deleted(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			gtpController.Deleted(c.gtp)
+			gtpController.Deleted(ctx, c.gtp)
 			gtpKey := common.GetGtpKey(c.gtp)
 			matchedGtps := gtpController.Cache.Get(gtpKey, c.gtp.Namespace)
 			if !reflect.DeepEqual(c.expectedGtps, matchedGtps) {
@@ -198,6 +205,8 @@ func TestGlobalTrafficController_Added(t *testing.T) {
 
 		gtp3 = v1.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace3", Labels: map[string]string{"identity": "id", "admiral.io/env": "stage"}}}
 	)
+
+	ctx := context.Background()
 
 	testCases := []struct {
 		name         string
@@ -245,7 +254,7 @@ func TestGlobalTrafficController_Added(t *testing.T) {
 				},
 			}
 			for _, g := range c.gtp {
-				gtpController.Added(g)
+				gtpController.Added(ctx, g)
 			}
 			matchedGtps := gtpController.Cache.Get(c.gtpKey, c.namespace)
 			sort.Slice(matchedGtps, func(i, j int) bool {

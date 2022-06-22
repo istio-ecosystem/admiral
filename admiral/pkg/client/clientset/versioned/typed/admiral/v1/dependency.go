@@ -19,6 +19,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"time"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -37,15 +38,15 @@ type DependenciesGetter interface {
 
 // DependencyInterface has methods to work with Dependency resources.
 type DependencyInterface interface {
-	Create(*v1.Dependency) (*v1.Dependency, error)
-	Update(*v1.Dependency) (*v1.Dependency, error)
-	UpdateStatus(*v1.Dependency) (*v1.Dependency, error)
-	Delete(name string, options *metav1.DeleteOptions) error
-	DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error
-	Get(name string, options metav1.GetOptions) (*v1.Dependency, error)
-	List(opts metav1.ListOptions) (*v1.DependencyList, error)
-	Watch(opts metav1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Dependency, err error)
+	Create(ctx context.Context, dependency *v1.Dependency, opts metav1.CreateOptions) (*v1.Dependency, error)
+	Update(ctx context.Context, dependency *v1.Dependency, opts metav1.UpdateOptions) (*v1.Dependency, error)
+	UpdateStatus(ctx context.Context, dependency *v1.Dependency, opts metav1.UpdateOptions) (*v1.Dependency, error)
+	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1.Dependency, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*v1.DependencyList, error)
+	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.Dependency, err error)
 	DependencyExpansion
 }
 
@@ -64,20 +65,20 @@ func newDependencies(c *AdmiralV1Client, namespace string) *dependencies {
 }
 
 // Get takes name of the dependency, and returns the corresponding dependency object, and an error if there is any.
-func (c *dependencies) Get(name string, options metav1.GetOptions) (result *v1.Dependency, err error) {
+func (c *dependencies) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.Dependency, err error) {
 	result = &v1.Dependency{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("dependencies").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of Dependencies that match those selectors.
-func (c *dependencies) List(opts metav1.ListOptions) (result *v1.DependencyList, err error) {
+func (c *dependencies) List(ctx context.Context, opts metav1.ListOptions) (result *v1.DependencyList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -88,13 +89,13 @@ func (c *dependencies) List(opts metav1.ListOptions) (result *v1.DependencyList,
 		Resource("dependencies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Watch returns a watch.Interface that watches the requested dependencies.
-func (c *dependencies) Watch(opts metav1.ListOptions) (watch.Interface, error) {
+func (c *dependencies) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -105,87 +106,90 @@ func (c *dependencies) Watch(opts metav1.ListOptions) (watch.Interface, error) {
 		Resource("dependencies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a dependency and creates it.  Returns the server's representation of the dependency, and an error, if there is any.
-func (c *dependencies) Create(dependency *v1.Dependency) (result *v1.Dependency, err error) {
+func (c *dependencies) Create(ctx context.Context, dependency *v1.Dependency, opts metav1.CreateOptions) (result *v1.Dependency, err error) {
 	result = &v1.Dependency{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("dependencies").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(dependency).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Update takes the representation of a dependency and updates it. Returns the server's representation of the dependency, and an error, if there is any.
-func (c *dependencies) Update(dependency *v1.Dependency) (result *v1.Dependency, err error) {
+func (c *dependencies) Update(ctx context.Context, dependency *v1.Dependency, opts metav1.UpdateOptions) (result *v1.Dependency, err error) {
 	result = &v1.Dependency{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("dependencies").
 		Name(dependency.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(dependency).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *dependencies) UpdateStatus(dependency *v1.Dependency) (result *v1.Dependency, err error) {
+func (c *dependencies) UpdateStatus(ctx context.Context, dependency *v1.Dependency, opts metav1.UpdateOptions) (result *v1.Dependency, err error) {
 	result = &v1.Dependency{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("dependencies").
 		Name(dependency.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(dependency).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the dependency and deletes it. Returns an error if one occurs.
-func (c *dependencies) Delete(name string, options *metav1.DeleteOptions) error {
+func (c *dependencies) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("dependencies").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *dependencies) DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
+func (c *dependencies) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("dependencies").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched dependency.
-func (c *dependencies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.Dependency, err error) {
+func (c *dependencies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.Dependency, err error) {
 	result = &v1.Dependency{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("dependencies").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }

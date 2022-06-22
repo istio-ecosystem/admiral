@@ -1,25 +1,28 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
-	"time"
 
+	"sync"
+
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"sync"
 )
 
-// Handler interface contains the methods that are required
+// DeploymentHandler interface contains the methods that are required
 type DeploymentHandler interface {
-	Added(obj *k8sAppsV1.Deployment)
-	Deleted(obj *k8sAppsV1.Deployment)
+	Added(ctx context.Context, obj *k8sAppsV1.Deployment)
+	Deleted(ctx context.Context, obj *k8sAppsV1.Deployment)
 }
 
 type DeploymentClusterEntry struct {
@@ -122,17 +125,17 @@ func (d *DeploymentController) Added(obj interface{}) {
 	HandleAddUpdateDeployment(obj, d)
 }
 
-func (d *DeploymentController) Updated(obj interface{}, oldObj interface{}) {
-	HandleAddUpdateDeployment(obj, d)
+func (d *DeploymentController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
+	HandleAddUpdateDeployment(ctx, obj, d)
 }
 
-func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
+func HandleAddUpdateDeployment(ctx context.Context, ojb interface{}, d *DeploymentController) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
 	if len(key) > 0 {
-		if !d.shouldIgnoreBasedOnLabels(deployment) {
+		if !d.shouldIgnoreBasedOnLabels(ctx, deployment) {
 			d.Cache.UpdateDeploymentToClusterCache(key, deployment)
-			d.DeploymentHandler.Added(deployment)
+			d.DeploymentHandler.Added(ctx, deployment)
 		} else {
 			d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
@@ -140,16 +143,16 @@ func HandleAddUpdateDeployment(ojb interface{}, d *DeploymentController) {
 	}
 }
 
-func (d *DeploymentController) Deleted(ojb interface{}) {
+func (d *DeploymentController) Deleted(ctx context.Context, ojb interface{}) {
 	deployment := ojb.(*k8sAppsV1.Deployment)
 	key := d.Cache.getKey(deployment)
-	d.DeploymentHandler.Deleted(deployment)
+	d.DeploymentHandler.Deleted(ctx, deployment)
 	if len(key) > 0 {
 		d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
 	}
 }
 
-func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.Deployment) bool {
+func (d *DeploymentController) shouldIgnoreBasedOnLabels(ctx context.Context, deployment *k8sAppsV1.Deployment) bool {
 	if deployment.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
@@ -162,7 +165,7 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 		return true
 	}
 
-	ns, err := d.K8sClient.CoreV1().Namespaces().Get(deployment.Namespace, meta_v1.GetOptions{})
+	ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, deployment.Namespace, meta_v1.GetOptions{})
 	if err != nil {
 		log.Warnf("Failed to get namespace object for deployment with namespace %v, err: %v", deployment.Namespace, err)
 		return false
