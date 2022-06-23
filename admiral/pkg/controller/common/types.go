@@ -36,18 +36,18 @@ type AdmiralParams struct {
 	DependenciesNamespace      string
 	SyncNamespace              string
 	EnableSAN                  bool
-	SANPrefix                  string
-	SecretResolver             string
-	LabelSet                   *LabelSet
-	LogLevel                   int
-	HostnameSuffix             string
-	PreviewHostnamePrefix      string
-	MetricsEnabled             bool
-	WorkloadSidecarUpdate      string
-	WorkloadSidecarName        string
-	AdmiralStateCheckerName    string
-	DRConfigFileLocation       string
-	ServiceEntryIPPrefix       string
+	SANPrefix               string
+	SecretResolver          string
+	LabelSet                *LabelSet
+	LogLevel                int
+	HostnameSuffix          string
+	PreviewHostnamePrefix   string
+	MetricsEnabled          bool
+	WorkloadSidecarUpdate   string
+	WorkloadSidecarName     string
+	AdmiralStateCheckerName string
+	DRStateStoreConfigPath  string
+	ServiceEntryIPPrefix    string
 }
 
 func (b AdmiralParams) String() string {
@@ -60,7 +60,7 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
 		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)+
 	    fmt.Sprintf("AdmiralStateCheckername=%v ", b.AdmiralStateCheckerName)+
-	    fmt.Sprintf("DRConfigFileLocation=%v ", b.DRConfigFileLocation)+
+	    fmt.Sprintf("DRStateStoreConfigPath=%v ", b.DRStateStoreConfigPath)+
 	    fmt.Sprintf("ServiceEntryIPPrefix=%v ", b.ServiceEntryIPPrefix)
 }
 

@@ -130,9 +130,9 @@ func GetRootCmd(args []string) *cobra.Command {
 			"The order would be to use annotation specified as `env_key`, followed by label specified as `env_key` and then fallback to the label `env`")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GatewayApp, "gateway_app", "istio-ingressgateway",
 		"The the value of the `app` label to use to match and find the service that represents the ingress for cross cluster traffic (AUTO_PASSTHROUGH mode)")
-	rootCmd.PersistentFlags().StringVar(&params.AdmiralStateCheckerName,"admiralStateCheckerName","NoOPStateChecker","The value of the `admiralStateCheckerName` label used to configure the DR Stratergy")
-	rootCmd.PersistentFlags().StringVar(&params.DRConfigFileLocation,"drConfigFileLocation","","Location of config file which has details for DR configs. Ex:- Dynamo DB connection details")
-	rootCmd.PersistentFlags().StringVar(&params.ServiceEntryIPPrefix,"seIPPrefix","240.0","IP prefix of service entry. Please enter only first two parts eg- 240.0")
+	rootCmd.PersistentFlags().StringVar(&params.AdmiralStateCheckerName,"admiral_state_checker_name","NoOPStateChecker","The value of the admiral_state_checker_name label to configure the DR Strategy for Admiral")
+	rootCmd.PersistentFlags().StringVar(&params.DRStateStoreConfigPath,"dr_state_store_config_path","","Location of config file which has details for data store. Ex:- Dynamo DB connection details")
+	rootCmd.PersistentFlags().StringVar(&params.ServiceEntryIPPrefix,"se_ip_prefix","240.0","IP prefix for the auto generated IPs for service entries. Only the first two octets:  Eg- 240.0")
 	rootCmd.PersistentFlags().BoolVar(&params.MetricsEnabled, "metrics", true, "Enable prometheus metrics collections")
 
 

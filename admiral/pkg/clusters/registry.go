@@ -6,7 +6,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"k8s.io/client-go/rest"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,22 +20,6 @@ const (
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
 	LogFormatForReadOnlyMode = "type=%v name=%v cluster=%s message=%s"
 )
-
-/*
-utility function to identify the Admiral DR implementation based on the program parameters
-*/
-func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState,ctx context.Context){
-	var  admiralStateChecker AdmiralStateChecker
-	switch  strings.ToLower(params.AdmiralStateCheckerName) {
-	case "noopstatechecker":
-		admiralStateChecker = NoOPStateChecker{}
-	case "dynamodbbasedstatechecker":
-		admiralStateChecker = DynamoDBBasedStateChecker{params.DRConfigFileLocation}
-	default:
-		admiralStateChecker = NoOPStateChecker{}
-	}
-	RunAdmiralStateCheck(admiralStateChecker,as,ctx)
-}
 
 func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
 

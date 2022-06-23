@@ -16,9 +16,6 @@ import (
 	"time"
 )
 
-const  READ_WRITE_ENABLED = false
-const READ_ONLY_ENABLED = true;
-
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
@@ -52,46 +49,6 @@ type AdmiralCache struct {
 
 	argoRolloutsEnabled bool
 }
-
-type AdmiralState struct {
-	ReadOnly  bool
-}
-
-type AdmiralStateChecker interface {
-	runStateCheck(as *AdmiralState,ctx context.Context)
-	shouldRunOnIndependentGoRoutine() bool
-}
-/*
-Utility function to start Admiral DR checks.
-DR checks can be run either on the main go routine or a new go routine
-*/
-func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState,ctx context.Context){
-	log.Infof("Starting DR checks")
-	if asc.shouldRunOnIndependentGoRoutine() {
-		log.Info("Starting Admiral State Checker  on a new Go Routine")
-		go asc.runStateCheck(as,ctx)
-	}else {
-		log.Infof("Starting Admiral State Checker on existing Go Routine")
-		asc.runStateCheck(as,ctx)
-	}
-}
-
-type DynamoDBConfigWrapper struct {
-	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
-}
-/*
-Reference struct used to unmarshall the DynamoDB config present in the yaml config file
-*/
-type DynamoDBConfig struct {
-	LeaseName               string `yaml:"leaseName,omitempty"`
-	PodIdentifier           string `yaml:"podIdentifier,omitempty"`
-	WaitTimeInSeconds       int `yaml:"waitTimeInSeconds,omitempty"`
-	FailureThreshold        int `yaml:"failureThreshold,omitempty"`
-	TableName               string `yaml:"tableName,omitempty"`
-	Role                    string `yaml:"role,omitempty"`
-	Region                  string `yaml:"region,omitempty"`
-}
-
 
 type RemoteRegistry struct {
 	sync.Mutex
