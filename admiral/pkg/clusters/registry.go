@@ -18,7 +18,6 @@ import (
 const (
 	LogFormat    = "op=%s type=%v name=%v cluster=%s message=%s"
 	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
-	LogFormatForReadOnlyMode = "type=%v name=%v cluster=%s message=%s"
 )
 
 func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
