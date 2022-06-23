@@ -7,6 +7,12 @@ Writes are supported on multiple regions.
 
 ![](Admiral-dynamoDB-DR.png)
 
+## Admiral state changes
+* An Admiral instance gets promoted to Active state when it obtains a lease on the lock object.
+* Once lease is obtained, the Active state Admiral keeps renewing the lease every x seconds.
+* An Admiral instance in passive state keeps checking if the lease is updated every x seconds. If the lease is not updated for y*x seconds, where y is the failure threshold, the passive Admiral takes over as the Active state Admiral.
+
+![](Admiral-state-changes.png)
 
 ## Sample Code
 
