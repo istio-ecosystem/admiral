@@ -1167,7 +1167,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	const ACTIVE_MESH_HOST = "qal.example.mesh"
 	const PREVIEW_MESH_HOST = "preview.qal.example.mesh"
 
-	rollout := argo.Rollout{}
+	rollout := &argo.Rollout{}
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		BlueGreen: &argo.BlueGreenStrategy{
 			ActiveService:  ACTIVE_SERVICE,
@@ -1177,7 +1177,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	rollout.Spec.Template.Annotations = map[string]string{}
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
 
-	endpoint := istionetworkingv1alpha3.WorkloadEntry{
+	endpoint := &istionetworkingv1alpha3.WorkloadEntry{
 		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
 	}
 
@@ -1188,23 +1188,23 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
 	}
 
-	activeWantedEndpoints := istionetworkingv1alpha3.WorkloadEntry{
+	activeWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
 		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
-	previewWantedEndpoints := istionetworkingv1alpha3.WorkloadEntry{
+	previewWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
 		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
 	testCases := []struct {
 		name             string
-		rollout          argo.Rollout
-		inputEndpoint    istionetworkingv1alpha3.WorkloadEntry
+		rollout          *argo.Rollout
+		inputEndpoint    *istionetworkingv1alpha3.WorkloadEntry
 		weightedServices map[string]*WeightedService
 		clusterIngress   string
 		meshPorts        map[string]uint32
 		meshHost         string
-		wantedEndpoints  istionetworkingv1alpha3.WorkloadEntry
+		wantedEndpoints  *istionetworkingv1alpha3.WorkloadEntry
 	}{
 		{
 			name:             "should return endpoint with active service address",
@@ -1228,7 +1228,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			updateEndpointsForBlueGreen(&c.rollout, c.weightedServices, map[string]string{}, &c.inputEndpoint, "test", c.meshHost)
+			updateEndpointsForBlueGreen(c.rollout, c.weightedServices, map[string]string{}, c.inputEndpoint, "test", c.meshHost)
 			if c.inputEndpoint.Address != c.wantedEndpoints.Address {
 				t.Errorf("Wanted %s endpoint, got: %s", c.wantedEndpoints.Address, c.inputEndpoint.Address)
 			}

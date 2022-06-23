@@ -38,7 +38,7 @@ func TestNewVirtualServiceController(t *testing.T) {
 
 	virtualServiceController.Added(ctx, vs)
 
-	if !cmp.Equal(vs.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&vs.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
@@ -46,7 +46,7 @@ func TestNewVirtualServiceController(t *testing.T) {
 
 	virtualServiceController.Updated(ctx, updatedVs, vs)
 
-	if !cmp.Equal(updatedVs.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&updatedVs.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 

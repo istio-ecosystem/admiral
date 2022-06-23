@@ -37,15 +37,14 @@ func TestNewDestinationRuleController(t *testing.T) {
 	ctx := context.Background()
 
 	destinationRuleController.Added(ctx, dstRule)
-
-	if !cmp.Equal(dstRule.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&dstRule.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
 	updatedDstRule := &v1alpha3.DestinationRule{Spec: v1alpha32.DestinationRule{Host: "hello.global"}, ObjectMeta: v1.ObjectMeta{Name: "dr1", Namespace: "namespace1"}}
 	destinationRuleController.Updated(ctx, updatedDstRule, dstRule)
 
-	if !cmp.Equal(updatedDstRule.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&updatedDstRule.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 

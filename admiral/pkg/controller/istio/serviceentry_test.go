@@ -38,14 +38,14 @@ func TestNewServiceEntryController(t *testing.T) {
 
 	serviceEntryController.Added(ctx, serviceEntry)
 
-	if !cmp.Equal(serviceEntry.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&serviceEntry.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
 	updatedServiceEntry := &v1alpha32.ServiceEntry{Spec: v1alpha3.ServiceEntry{Hosts: []string{"hello.global"}}, ObjectMeta: v1.ObjectMeta{Name: "se1", Namespace: "namespace1"}}
 	serviceEntryController.Updated(ctx, updatedServiceEntry, serviceEntry)
 
-	if !cmp.Equal(updatedServiceEntry.Spec, handler.Obj.Spec, protocmp.Transform()) {
+	if !cmp.Equal(&updatedServiceEntry.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 
