@@ -1,8 +1,0 @@
-dynamoDB:
-  leaseName: somelease
-  podIdentifier: somename
-  waitTimeInSeconds: 15
-  failureThreshold: 3
-  tableName: sometable
-  role: arn:aws:iam::someaccount:role/somerole
-  region: us-west-2
