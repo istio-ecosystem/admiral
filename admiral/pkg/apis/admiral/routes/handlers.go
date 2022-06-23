@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -35,7 +36,13 @@ If Running in passive  mode, the health check returns 502 which forces DNS looku
 */
 
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.RequestURI,"checkifreadonly=true"){
+	allQueryParams:= r.URL.Query()
+	checkIfReadOnlyStringVal := allQueryParams.Get("checkifreadonly")
+	//Remove all spaces
+	checkIfReadOnlyStringVal = strings.ReplaceAll(checkIfReadOnlyStringVal," ","")
+	// checkIfReadOnlyStringVal will be empty in case ""checkifreadonly" query param is not sent in the request. checkIfReadOnlyBoolVal will be false
+	checkIfReadOnlyBoolVal, _ := strconv.ParseBool(checkIfReadOnlyStringVal)
+	if checkIfReadOnlyBoolVal{
 		admiralState := opts.RemoteRegistry.AdmiralState
 		if(*admiralState).ReadOnly{
 			//Force fail health check if Admiral is in Readonly mode
