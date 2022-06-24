@@ -40,6 +40,11 @@ func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams,a
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
 	case "noopstatechecker":
 		admiralStateChecker = NoOPStateChecker{}
+/*
+     Add entries for your custom DR checkers below
+     case "keywordforsomecustomchecker":
+		admiralStateChecker  = customChecker{}
+*/
 	default:
 		admiralStateChecker = NoOPStateChecker{}
 	}
