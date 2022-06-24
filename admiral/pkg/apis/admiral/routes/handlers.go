@@ -41,21 +41,25 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 	//Remove all spaces
 	checkIfReadOnlyStringVal = strings.ReplaceAll(checkIfReadOnlyStringVal," ","")
 	// checkIfReadOnlyStringVal will be empty in case ""checkifreadonly" query param is not sent in the request. checkIfReadOnlyBoolVal will be false
-	checkIfReadOnlyBoolVal, _ := strconv.ParseBool(checkIfReadOnlyStringVal)
-	if checkIfReadOnlyBoolVal{
-		admiralState := opts.RemoteRegistry.AdmiralState
-		if(*admiralState).ReadOnly{
-			//Force fail health check if Admiral is in Readonly mode
-			w.WriteHeader(502)
+	checkIfReadOnlyBoolVal, err := strconv.ParseBool(checkIfReadOnlyStringVal)
+	var response string
+	if nil==err {
+		if checkIfReadOnlyBoolVal{
+			admiralState := opts.RemoteRegistry.AdmiralState
+			if(*admiralState).ReadOnly{
+				//Force fail health check if Admiral is in Readonly mode
+				w.WriteHeader(503)
+			}else {
+				w.WriteHeader(200)
+			}
 		}else {
 			w.WriteHeader(200)
 		}
+		response = fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
 	}else {
-		w.WriteHeader(200)
+		w.WriteHeader(400)
+		response = fmt.Sprintf("Health check method called with bad query param value %v for checkifreadonly",checkIfReadOnlyStringVal)
 	}
-
-	response := fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
-
 	_, writeErr := w.Write([]byte(response))
 	if writeErr != nil {
 		log.Printf("Error writing body: %v", writeErr)

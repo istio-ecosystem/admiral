@@ -6,36 +6,36 @@ import (
 	log "github.com/sirupsen/logrus"
 	"strings"
 )
-const  READ_WRITE_ENABLED = false
-const READ_ONLY_ENABLED = true;
+const  ReadWriteEnabled = false
+const ReadOnlyEnabled = true;
 
 type AdmiralState struct {
 	ReadOnly  bool
 }
 
 type AdmiralStateChecker interface {
-	runStateCheck(as *AdmiralState,ctx context.Context)
+	runStateCheck(ctx context.Context,as *AdmiralState)
 	shouldRunOnIndependentGoRoutine() bool
 }
 /*
 Utility function to start Admiral DR checks.
 DR checks can be run either on the main go routine or a new go routine
 */
-func RunAdmiralStateCheck(asc AdmiralStateChecker, as *AdmiralState,ctx context.Context){
+func RunAdmiralStateCheck(ctx context.Context,asc AdmiralStateChecker, as *AdmiralState){
 	log.Infof("Starting DR checks")
 	if asc.shouldRunOnIndependentGoRoutine() {
 		log.Info("Starting Admiral State Checker  on a new Go Routine")
-		go asc.runStateCheck(as,ctx)
+		go asc.runStateCheck(ctx,as)
 	}else {
 		log.Infof("Starting Admiral State Checker on existing Go Routine")
-		asc.runStateCheck(as,ctx)
+		asc.runStateCheck(ctx,as)
 	}
 }
 
 /*
 utility function to identify the Admiral DR implementation based on the program parameters
 */
-func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState,ctx context.Context){
+func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams,as *AdmiralState,){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
 	case "noopstatechecker":
@@ -43,5 +43,5 @@ func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState,ctx 
 	default:
 		admiralStateChecker = NoOPStateChecker{}
 	}
-	RunAdmiralStateCheck(admiralStateChecker,as,ctx)
+	RunAdmiralStateCheck(ctx,admiralStateChecker,as)
 }
