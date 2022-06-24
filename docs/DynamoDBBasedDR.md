@@ -132,7 +132,7 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		log.Info("DynamoDR: Lease held by skip lease check pod. Setting Admiral to read only mode")
 		as.ReadOnly = READ_ONLY_ENABLED;
 	}else if podIdentifier == readWriteLease.LeaseOwner {
-		as.ReadOnly = READ_WRITE_ENABLED
+		as.ReadOnly = ReadWriteEnabled
 		log.Infof("DynamoDR: Lease with name=%v is owned by the current pod. Extending lease ownership till %v. Admiral will write",leaseName, currentTime)
 		readWriteLease.UpdatedTime = currentTime
 		dynamodbClient.updatedReadWriteLease(readWriteLease,dynamoDBConfig.TableName)

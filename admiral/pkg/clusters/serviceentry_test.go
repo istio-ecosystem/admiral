@@ -125,8 +125,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 
-	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se},&AdmiralState{READ_WRITE_ENABLED})
-	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe},&AdmiralState{READ_WRITE_ENABLED})
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se},&AdmiralState{ReadWriteEnabled})
+	AddServiceEntriesWithDr(&admiralCache, map[string]string{"cl1": "cl1"}, map[string]*RemoteController{"cl1": rc}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe},&AdmiralState{ReadWriteEnabled})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -505,7 +505,7 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	sidecarEgressMap := make(map[string]common.SidecarEgress)
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
 
-	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController,&AdmiralState{READ_WRITE_ENABLED})
+	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController,&AdmiralState{ReadWriteEnabled})
 
 	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
 
@@ -540,7 +540,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
-		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController,&AdmiralState{READ_WRITE_ENABLED})
+		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController,&AdmiralState{ReadWriteEnabled})
 
 		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
 
