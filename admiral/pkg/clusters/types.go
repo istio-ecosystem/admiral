@@ -269,6 +269,11 @@ func HandleEventForGlobalTrafficPolicy(event admiral.EventType, gtp *v1.GlobalTr
 
 	env := common.GetGtpEnv(gtp)
 
+	// For now we're going to force all the events to update only in order to prevent
+	// the endpoints from being deleted.
+	// TODO: Need to come up with a way to prevent deleting default endpoints so that this hack can be removed.
+	event = admiral.Update
+
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
 	return nil
