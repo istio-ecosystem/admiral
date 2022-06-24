@@ -206,7 +206,6 @@ func TestRolloutHandler(t *testing.T) {
 }
 
 func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
-	event := admiral.EventType("Add")
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -253,7 +252,7 @@ func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
 
 	for _, c := range testcases {
 		t.Run(c.name, func(t *testing.T) {
-			err := HandleEventForGlobalTrafficPolicy(event, c.gtp, registry, "testcluster")
+			err := HandleEventForGlobalTrafficPolicy(c.gtp, registry, "testcluster")
 			assert.Equal(t, err != nil, c.doesError)
 		})
 	}
