@@ -38,8 +38,6 @@ utility function to identify the Admiral DR implementation based on the program 
 func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams,as *AdmiralState,){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
-	case "noopstatechecker":
-		admiralStateChecker = NoOPStateChecker{}
 /*
      Add entries for your custom DR checkers below
      case "keywordforsomecustomchecker":
