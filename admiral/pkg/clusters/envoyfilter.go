@@ -23,7 +23,7 @@ func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingP
 
 	selectorLabelsSha, err := common.GetSha1(workloadIdentityKey+common.GetRoutingPolicyEnv(routingPolicy))
 	if err != nil {
-		log.Error("Error ocurred while computing workload Labels sha1")
+		log.Error("error ocurred while computing workload labels sha1")
 		return nil, err
 	}
 	envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), selectorLabelsSha, "1.10")
@@ -34,7 +34,7 @@ func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingP
 		},
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      envoyFilterName,
-			Namespace: "istio-system",
+			Namespace: common.NamespaceIstioSystem,
 		},
 		Spec: *envoyfilterSpec,
 	}
@@ -43,17 +43,18 @@ func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingP
 	var filter *networking.EnvoyFilter
 	//get the envoyfilter if it exists. If it exists, update it. Otherwise create it.
 	if eventType == admiral.Add || eventType == admiral.Update {
-		filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(envoyFilterName, metaV1.GetOptions{})
+		// We query the API server instead of getting it from cache because there could be potential condition where the filter exists in the cache but not on the cluster.
+		filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem,).Get(envoyFilterName, metaV1.GetOptions{})
 		if err != nil {
 			log.Infof("msg=%s filtername=%s clustername=%s", "creating the envoy filter", envoyFilterName, rc.ClusterID)
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Create(envoyfilter)
+			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem,).Create(envoyfilter)
 			if err != nil {
-				log.Infof("Error creating filter: %v", filter)
+				log.Infof("error creating filter: %v", filter)
 			}
 		} else {
 			log.Infof("msg=%s filtername=%s clustername=%s", "updating existing envoy filter", envoyFilterName, rc.ClusterID)
 			envoyfilter.ResourceVersion = filter.ResourceVersion
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Update(envoyfilter)
+			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem,).Update(envoyfilter)
 		}
 	}
 
