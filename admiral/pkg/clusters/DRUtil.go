@@ -22,7 +22,7 @@ Utility function to start Admiral DR checks.
 DR checks can be run either on the main go routine or a new go routine
 */
 func RunAdmiralStateCheck(ctx context.Context,asc AdmiralStateChecker, as *AdmiralState){
-	log.Infof("Starting DR checks")
+	log.Infof("Starting Disaster Recovery state checks")
 	if asc.shouldRunOnIndependentGoRoutine() {
 		log.Info("Starting Admiral State Checker  on a new Go Routine")
 		go asc.runStateCheck(ctx,as)
@@ -39,7 +39,7 @@ func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams,a
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
 /*
-     Add entries for your custom DR checkers below
+     Add entries for your custom Disaster Recovery state checkers below
      case "keywordforsomecustomchecker":
 		admiralStateChecker  = customChecker{}
 */
