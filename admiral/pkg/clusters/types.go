@@ -191,6 +191,8 @@ type routingPolicyFilterCache struct {
 }
 
 func (r *routingPolicyFilterCache) Get(identityEnvKey string) (filters map[string]map[string]string) {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
 	return r.filterCache[identityEnvKey]
 }
 
