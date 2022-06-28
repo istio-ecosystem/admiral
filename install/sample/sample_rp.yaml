@@ -1,19 +1,19 @@
 apiVersion: admiral.io/v1alpha1
 kind: RoutingPolicy
 metadata:
-  name: qbo-routing-policy
+  name: greeting-routing-policy
   annotations:
     admiral.io/env: stage
   labels:
     identity: greeting
 spec:
-  plugin: QBO
+  plugin: greeting
   hosts:
-    - qal.qbo.Intuit.sbe.salsa.platform.mesh
+    - qal.greeting.mesh
   config:
     cachePrefix: cache-v1
     cachettlSec: "86400"
-    dispatcherUrl: qal.Intuit.sbe.salsa.platform.dispatcher.mesh
-    algo: QBODispatcher
+    dispatcherUrl: qal.greeting.dispatcher.mesh
+    algo: greetingDispatcher
     pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"
 
