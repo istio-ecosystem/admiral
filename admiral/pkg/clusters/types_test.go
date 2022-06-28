@@ -442,3 +442,4 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
 
 }
+

@@ -151,6 +151,8 @@ type routingPolicyCache struct {
 
 
 func (r *routingPolicyCache) Delete(identity string, environment string) {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
 	key := common.ConstructRoutingPolicyKey(environment, identity)
 	if _, ok := r.identityCache[key]; ok {
 		log.Infof("Deleting RoutingPolicy with key=%s from global RoutingPolicy cache", key)
@@ -159,6 +161,8 @@ func (r *routingPolicyCache) Delete(identity string, environment string) {
 }
 
 func (r *routingPolicyCache ) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
 	return r.identityCache[common.ConstructRoutingPolicyKey(environment, identity)]
 }
 
