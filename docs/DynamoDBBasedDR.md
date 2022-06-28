@@ -375,4 +375,4 @@ Include below program arguments during Admiral startup
 --dr_state_store_config_path <some file location inside Admiral pod>
 --se_ip_prefix 242.0 
 ```
-Please use different values for ```se_ip_prefix ``` per Admiral deployments. This is needed to ensure that the same IP address is not used in diferent service entries which causes 404 issues with Istio.
+Please use different values for ```se_ip_prefix ``` per Admiral deployments. This is needed to ensure that the same IP address is not used in different service entries which causes collisions in envoy clusters and resulting in failed config pushes from istiod
