@@ -20,7 +20,6 @@ package versioned
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
@@ -104,12 +103,12 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 // NewForConfigOrDie creates a new Clientset for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *Clientset {
+func NewForConfigOrDie(c *rest.Config) (*Clientset, error) {
 	cs, err := NewForConfig(c)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return cs
+	return cs, nil
 }
 
 // New creates a new Clientset for the given RESTClient.

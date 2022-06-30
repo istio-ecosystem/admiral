@@ -1561,7 +1561,10 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Spec:       twoEndpointSe,
 	}
 
-	seCtrl.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Create(ctx, oldSeTwoEndpoints, v12.CreateOptions{})
+	_, err := seCtrl.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Create(ctx, oldSeTwoEndpoints, v12.CreateOptions{})
+	if err != nil {
+		t.Error(err)
+	}
 
 	rcWarmupPhase := &RemoteController{
 		ServiceEntryController: seCtrl,
@@ -1610,7 +1613,10 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 			addUpdateServiceEntry(ctx, c.newSe, c.oldSe, "namespace", c.rc)
 			if c.skipDestructive {
 				//verify the update did not go through
-				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(ctx, c.oldSe.Name, v12.GetOptions{})
+				se, err := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(ctx, c.oldSe.Name, v12.GetOptions{})
+				if err != nil {
+					t.Error(err)
+				}
 				_, diff := getServiceEntryDiff(c.oldSe, se)
 				if diff != "" {
 					t.Errorf("Failed. Got %v, expected %v", se.Spec.String(), c.oldSe.Spec.String())

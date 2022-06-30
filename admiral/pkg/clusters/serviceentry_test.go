@@ -489,7 +489,10 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 
 	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
 
-	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	if err == nil {
+		t.Errorf("expected 404 not found error but got nil")
+	}
 
 	if sidecarObj != nil {
 		t.Fatalf("Modify non existing resource failed, as no new resource should be created.")
@@ -517,8 +520,10 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
-
+	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
+	if err != nil {
+		t.Error(err)
+	}
 	if createdSidecar != nil {
 
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
