@@ -191,6 +191,9 @@ func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelecto
 	var filteredDeployments = make([]k8sAppsV1.Deployment, 0)
 
 	for _, deployment := range matchedDeployments.Items {
+		if deployment.Spec.Selector == nil || deployment.Spec.Selector.MatchLabels == nil {
+			continue
+		}
 		if reflect.DeepEqual(deployment.Spec.Selector.MatchLabels, serviceSelector) {
 			filteredDeployments = append(filteredDeployments, deployment)
 		}

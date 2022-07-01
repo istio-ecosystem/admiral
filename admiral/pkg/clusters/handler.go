@@ -884,7 +884,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		for lkey, lvalue := range service.Spec.Selector {
 			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
 			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if lkey == common.ROLLOUT_POD_HASH_LABEL {
+			if lkey == common.RolloutPodHashLabel {
 				continue
 			}
 			value, ok := rollout.Spec.Selector.MatchLabels[lkey]

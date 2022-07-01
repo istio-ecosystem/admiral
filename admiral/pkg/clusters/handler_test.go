@@ -693,12 +693,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	selectorMap["app"] = "test"
 
 	service := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: SERVICENAME, Namespace: NAMESPACE, CreationTimestamp: v12.NewTime(time.Now())},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 		},
 	}
-	service.Name = SERVICENAME
-	service.Namespace = NAMESPACE
 	port1 := coreV1.ServicePort{
 		Port: 8080,
 	}
@@ -711,7 +710,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	service.Spec.Ports = ports
 
 	stableService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name: STABLESERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: STABLESERVICENAME, Namespace: NAMESPACE, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 			Ports:    ports,
@@ -719,7 +718,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	}
 
 	canaryService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name: CANARYSERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: CANARYSERVICENAME, Namespace: NAMESPACE, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 			Ports:    ports,

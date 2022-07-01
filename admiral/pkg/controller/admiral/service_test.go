@@ -76,7 +76,7 @@ func TestServiceCache_Put(t *testing.T) {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
 	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
 
 	length := len(serviceCache.Get("ns"))
@@ -87,7 +87,7 @@ func TestServiceCache_Put(t *testing.T) {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
 	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
 	if (length) != len(serviceCache.Get("ns")) {
 		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns")))

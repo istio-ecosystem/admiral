@@ -150,7 +150,7 @@ func (sh *ServiceHandler) Added(obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Added", "service", obj.Name, sh.ClusterID, "received")
 	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		log.Infof(err.Error())
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
@@ -158,7 +158,7 @@ func (sh *ServiceHandler) Updated(obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Updated", "service", obj.Name, sh.ClusterID, "received")
 	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		log.Infof(err.Error())
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
@@ -166,20 +166,25 @@ func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Deleted", "service", obj.Name, sh.ClusterID, "received")
 	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		log.Infof(err.Error())
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
 func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
+	if svc.Spec.Selector == nil {
+		return errors.New("selector missing on service");
+	}
 	matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
-	for _, deployment := range matchingDeployements {
-		HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+	if len(matchingDeployements) > 0 {
+		for _, deployment := range matchingDeployements {
+			HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+		}
 	}
 	if common.GetAdmiralParams().ArgoRolloutsEnabled {
-		rollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
 
-		if len(rollouts) > 0 {
-			for _, rollout := range rollouts {
+		if len(matchingRollouts) > 0 {
+			for _, rollout := range matchingRollouts {
 				HandleEventForRollout(admiral.Update, &rollout, remoteRegistry, clusterName)
 			}
 		}
