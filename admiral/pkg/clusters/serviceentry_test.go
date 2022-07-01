@@ -80,6 +80,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	seConfig := v1alpha3.ServiceEntry{
+		//nolint
 		Spec: se,
 	}
 	seConfig.Name = "se1"

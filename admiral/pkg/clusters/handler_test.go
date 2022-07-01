@@ -1406,27 +1406,32 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 
 	newSeTwoEndpoints := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
-		Spec:       twoEndpointSe,
+		//nolint
+		Spec: twoEndpointSe,
 	}
 
 	newSeTwoEndpointsUpdated := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
-		Spec:       twoEndpointSeUpdated,
+		//nolint
+		Spec: twoEndpointSeUpdated,
 	}
 
 	newSeOneEndpoint := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
-		Spec:       oneEndpointSe,
+		//nolint
+		Spec: oneEndpointSe,
 	}
 
 	oldSeTwoEndpoints := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
-		Spec:       twoEndpointSe,
+		//nolint
+		Spec: twoEndpointSe,
 	}
 
 	oldSeOneEndpoint := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "random"},
-		Spec:       oneEndpointSe,
+		//nolint
+		Spec: oneEndpointSe,
 	}
 
 	rcWarmupPhase := &RemoteController{
@@ -1553,12 +1558,14 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 
 	newSeOneEndpoint := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se1", Namespace: "namespace"},
-		Spec:       oneEndpointSe,
+		//nolint
+		Spec: oneEndpointSe,
 	}
 
 	oldSeTwoEndpoints := &v1alpha32.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{Name: "se2", Namespace: "namespace"},
-		Spec:       twoEndpointSe,
+		//nolint
+		Spec: twoEndpointSe,
 	}
 
 	_, err := seCtrl.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Create(ctx, oldSeTwoEndpoints, v12.CreateOptions{})

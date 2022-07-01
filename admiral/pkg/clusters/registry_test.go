@@ -121,6 +121,7 @@ func TestCopySidecar(t *testing.T) {
 		},
 	}
 
+	//nolint
 	sidecar := v1alpha3.Sidecar{Spec: spec}
 
 	newSidecar := copySidecar(&sidecar)

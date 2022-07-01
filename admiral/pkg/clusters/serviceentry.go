@@ -419,10 +419,7 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 
 func addUpdateSidecar(ctx context.Context, obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
 	var err error
-	exist.Labels = obj.Labels
-	exist.Annotations = obj.Annotations
-	exist.Spec = obj.Spec
-	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, exist, v12.UpdateOptions{})
+	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, obj, v12.UpdateOptions{})
 
 	if err != nil {
 		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
