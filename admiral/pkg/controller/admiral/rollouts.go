@@ -194,10 +194,8 @@ func (roc *RolloutController) Deleted(ojb interface{}) {
 	roc.RolloutHandler.Deleted(rollout)
 }
 
-func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace string) []argo.Rollout {
-	matchLabel := common.GetGlobalTrafficDeploymentLabel()
+func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
 	labelOptions := meta_v1.ListOptions{}
-	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
 	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
 
 	if err != nil {
@@ -205,9 +203,30 @@ func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace strin
 		return nil
 	}
 
+	var filteredRollouts = make([]argo.Rollout,0)
+
 	if matchedRollouts.Items == nil {
-		return []argo.Rollout{}
+		return filteredRollouts
 	}
 
-	return matchedRollouts.Items
+	for _, rollout := range matchedRollouts.Items {
+		match := true
+		for lkey, lvalue := range serviceSelector {
+			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
+			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
+			if lkey == common.ROLLOUT_POD_HASH_LABEL {
+				continue
+			}
+			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
+			if !ok || value != lvalue {
+				match = false
+				break
+			}
+		}
+		if match {
+			filteredRollouts = append(filteredRollouts, rollout)
+		}
+	}
+
+	return filteredRollouts
 }
