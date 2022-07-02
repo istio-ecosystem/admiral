@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 )
 
 const (
-	ROLLOUT_POD_HASH_LABEL          string = "rollouts-pod-template-hash"
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
 	DefaultInterval                 int64  = 60
@@ -730,13 +728,13 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 		return nil
 	}
 
-	cachedService := rc.ServiceController.Cache.Get(deployment.Namespace)
+	cachedServices := rc.ServiceController.Cache.Get(deployment.Namespace)
 
-	if cachedService == nil {
+	if cachedServices == nil {
 		return nil
 	}
 	var matchedService *k8sV1.Service
-	for _, service := range cachedService.Service[deployment.Namespace] {
+	for _, service := range cachedServices {
 		var match = true
 		for lkey, lvalue := range service.Spec.Selector {
 			value, ok := deployment.Spec.Selector.MatchLabels[lkey]
@@ -795,9 +793,9 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 	if rollout == nil {
 		return nil
 	}
-	cachedService := rc.ServiceController.Cache.Get(rollout.Namespace)
+	cachedServices := rc.ServiceController.Cache.Get(rollout.Namespace)
 
-	if cachedService == nil {
+	if cachedServices == nil {
 		return nil
 	}
 	rolloutStrategy := rollout.Spec.Strategy
@@ -875,18 +873,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 
 	var matchedServices = make(map[string]*WeightedService)
 
-	//if we have more than one matching service we will pick the first one, for this to be deterministic we sort services
-	var servicesInNamespace = cachedService.Service[rollout.Namespace]
-
-	servicesOrdered := make([]string, 0, len(servicesInNamespace))
-	for k := range servicesInNamespace {
-		servicesOrdered = append(servicesOrdered, k)
-	}
-
-	sort.Strings(servicesOrdered)
-
-	for _, s := range servicesOrdered {
-		var service = servicesInNamespace[s]
+	for _, service := range cachedServices {
 		var match = true
 		//skip services that are not referenced in the rollout
 		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
@@ -897,7 +884,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		for lkey, lvalue := range service.Spec.Selector {
 			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
 			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if lkey == ROLLOUT_POD_HASH_LABEL {
+			if lkey == common.RolloutPodHashLabel {
 				continue
 			}
 			value, ok := rollout.Spec.Selector.MatchLabels[lkey]

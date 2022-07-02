@@ -35,6 +35,7 @@ const (
 	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
+	RolloutPodHashLabel           = "rollouts-pod-template-hash"
 )
 
 type Event int

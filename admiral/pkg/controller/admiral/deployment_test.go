@@ -4,7 +4,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -183,63 +182,6 @@ func TestDeploymentController_Deleted(t *testing.T) {
 	}
 }
 
-func TestDeploymentController_GetDeployments(t *testing.T) {
-
-	depController := DeploymentController{
-		labelSet: &common.LabelSet{
-			DeploymentAnnotation:                "sidecar.istio.io/inject",
-			NamespaceSidecarInjectionLabel:      "istio-injection",
-			NamespaceSidecarInjectionLabelValue: "enabled",
-			AdmiralIgnoreLabel:                  "admiral-ignore",
-		},
-	}
-
-	client := fake.NewSimpleClientset()
-
-	ns := coreV1.Namespace{}
-	ns.Labels = map[string]string{"istio-injection": "enabled"}
-	ns.Name = "test-ns"
-
-	_, err := client.CoreV1().Namespaces().Create(&ns)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-
-	deployment := k8sAppsV1.Deployment{}
-	deployment.Namespace = "test-ns"
-	deployment.Name = "deployment"
-	deployment.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
-	deployment.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
-	deploymentWithBadLabels := k8sAppsV1.Deployment{}
-	deploymentWithBadLabels.Namespace = "test-ns"
-	deploymentWithBadLabels.Name = "deploymentWithBadLabels"
-	deploymentWithBadLabels.Spec.Template.Labels = map[string]string{"identity": "id", "random-label": "true"}
-	deploymentWithBadLabels.Spec.Template.Annotations = map[string]string{"woo": "yay"}
-	deploymentWithIgnoreLabels := k8sAppsV1.Deployment{}
-	deploymentWithIgnoreLabels.Namespace = "test-ns"
-	deploymentWithIgnoreLabels.Name = "deploymentWithIgnoreLabels"
-	deploymentWithIgnoreLabels.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true", "admiral-ignore": "true"}
-	deploymentWithIgnoreLabels.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
-	_, err = client.AppsV1().Deployments("test-ns").Create(&deployment)
-	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithBadLabels)
-	_, err = client.AppsV1().Deployments("test-ns").Create(&deploymentWithIgnoreLabels)
-
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-
-	depController.K8sClient = client
-	resultingDeps, _ := depController.GetDeployments()
-
-	if len(resultingDeps) != 1 {
-		t.Errorf("Get Deployments returned too many values. Expected 1, got %v", len(resultingDeps))
-	}
-	if !cmp.Equal(resultingDeps[0], &deployment) {
-		log.Info("Object Diff: " + cmp.Diff(resultingDeps[0], &deployment))
-		t.Errorf("Get Deployments returned the incorrect value. Got %v, expected %v", resultingDeps[0], deployment)
-	}
-}
-
 func TestNewDeploymentController(t *testing.T) {
 	config, err := clientcmd.BuildConfigFromFlags("", "../../test/resources/admins@fake-cluster.k8s.local")
 	if err != nil {
@@ -255,11 +197,12 @@ func TestNewDeploymentController(t *testing.T) {
 	}
 }
 
-func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
+func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	deployment := k8sAppsV1.Deployment{}
 	deployment.Namespace = "namespace"
 	deployment.Name = "fake-app-deployment-qal"
 	deployment.Spec = k8sAppsV1.DeploymentSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "qal"},
@@ -272,6 +215,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment2.Namespace = "namespace"
 	deployment2.Name = "fake-app-deployment-e2e"
 	deployment2.Spec = k8sAppsV1.DeploymentSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "e2e"},
@@ -285,6 +229,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment3.Name = "fake-app-deployment-prf-1"
 	deployment3.CreationTimestamp = v1.Now()
 	deployment3.Spec = k8sAppsV1.DeploymentSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "prf"},
@@ -298,6 +243,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	deployment4.Name = "fake-app-deployment-prf-2"
 	deployment4.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
 	deployment4.Spec = k8sAppsV1.DeploymentSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app2"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app2", "env": "prf"},
@@ -319,37 +265,37 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 		name                string
 		expectedDeployments []k8sAppsV1.Deployment
 		fakeClient          *fake.Clientset
-		labelValue          string
+		selector            map[string]string
 	}{
 		{
 			name:                "Get one",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment},
 			fakeClient:          oneDeploymentClient,
-			labelValue:          "app1",
+			selector:            map[string]string{"identity": "app1"},
 		},
 		{
 			name:                "Get one from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment4},
 			fakeClient:          allDeploymentsClient,
-			labelValue:          "app2",
+			selector:            map[string]string{"identity": "app2"},
 		},
 		{
 			name:                "Get many from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{deployment, deployment3, deployment2},
 			fakeClient:          allDeploymentsClient,
-			labelValue:          "app1",
+			selector:            map[string]string{"identity": "app1"},
 		},
 		{
 			name:                "Get none from long list",
 			expectedDeployments: []k8sAppsV1.Deployment{},
 			fakeClient:          allDeploymentsClient,
-			labelValue:          "app3",
+			selector:            map[string]string{"identity": "app3"},
 		},
 		{
 			name:                "Get none from empty list",
 			expectedDeployments: []k8sAppsV1.Deployment{},
 			fakeClient:          noDeploymentsClient,
-			labelValue:          "app1",
+			selector:            map[string]string{"identity": "app1"},
 		},
 	}
 
@@ -357,7 +303,7 @@ func TestDeploymentController_GetDeploymentByLabel(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			deploymentController.K8sClient = c.fakeClient
-			returnedDeployments := deploymentController.GetDeploymentByLabel(c.labelValue, "namespace")
+			returnedDeployments := deploymentController.GetDeploymentBySelectorInNamespace(c.selector, "namespace")
 
 			sort.Slice(returnedDeployments, func(i, j int) bool {
 				return returnedDeployments[i].Name > returnedDeployments[j].Name

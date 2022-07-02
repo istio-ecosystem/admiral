@@ -5,6 +5,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
 	"time"
@@ -76,45 +77,6 @@ func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deploymen
 		env := common.GetEnv(deployment)
 		delete(v.Deployments, env)
 	}
-}
-
-func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error) {
-
-	ns := d.K8sClient.CoreV1().Namespaces()
-
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel + "=" + d.labelSet.NamespaceSidecarInjectionLabelValue
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
-
-	if err != nil {
-		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-	}
-
-	var res []*k8sAppsV1.Deployment
-
-	for _, v := range istioEnabledNs.Items {
-
-		deployments := d.K8sClient.AppsV1().Deployments(v.Name)
-		deploymentsList, err := deployments.List(meta_v1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("error listing deployments: %v", err)
-		}
-		var admiralDeployments []k8sAppsV1.Deployment
-		for _, deployment := range deploymentsList.Items {
-			if !d.shouldIgnoreBasedOnLabels(&deployment) {
-				admiralDeployments = append(admiralDeployments, deployment)
-			}
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-		}
-
-		for _, pi := range admiralDeployments {
-			res = append(res, &pi)
-		}
-	}
-
-	return res, nil
 }
 
 func NewDeploymentController(clusterID string, stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
@@ -211,10 +173,12 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 	return false //labels are fine, we should not ignore
 }
 
-func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace string) []k8sAppsV1.Deployment {
-	matchLabel := common.GetGlobalTrafficDeploymentLabel()
-	labelOptions := meta_v1.ListOptions{}
-	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
+
+	labelOptions := meta_v1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
+	}
+
 	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
 
 	if err != nil {

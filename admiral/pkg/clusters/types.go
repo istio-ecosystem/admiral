@@ -15,6 +15,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	k8s "k8s.io/client-go/kubernetes"
 )
 
@@ -145,6 +146,52 @@ type ServiceHandler struct {
 	ClusterID      string
 }
 
+func (sh *ServiceHandler) Added(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Added", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func (sh *ServiceHandler) Updated(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Updated", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Deleted", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
+	}
+}
+
+func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
+	if svc.Spec.Selector == nil {
+		return errors.New("selector missing on service");
+	}
+	matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+	if len(matchingDeployements) > 0 {
+		for _, deployment := range matchingDeployements {
+			HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+		}
+	}
+	if common.GetAdmiralParams().ArgoRolloutsEnabled {
+		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+
+		if len(matchingRollouts) > 0 {
+			for _, rollout := range matchingRollouts {
+				HandleEventForRollout(admiral.Update, &rollout, remoteRegistry, clusterName)
+			}
+		}
+	}
+	return nil
+}
+
 func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
@@ -243,7 +290,6 @@ func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteReg
 
 // helper function to handle add and delete for DeploymentHandler
 func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
-	log.Infof(LogFormat, event, "deployment", obj.Name, clusterName, "Received")
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
