@@ -5,9 +5,9 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
-	"reflect"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -175,7 +175,9 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 
 func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
 
-	labelOptions := meta_v1.ListOptions{}
+	labelOptions := meta_v1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
+	}
 
 	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
 
@@ -188,16 +190,5 @@ func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelecto
 		return []k8sAppsV1.Deployment{}
 	}
 
-	var filteredDeployments = make([]k8sAppsV1.Deployment, 0)
-
-	for _, deployment := range matchedDeployments.Items {
-		if deployment.Spec.Selector == nil || deployment.Spec.Selector.MatchLabels == nil {
-			continue
-		}
-		if reflect.DeepEqual(deployment.Spec.Selector.MatchLabels, serviceSelector) {
-			filteredDeployments = append(filteredDeployments, deployment)
-		}
-	}
-
-	return filteredDeployments
+	return matchedDeployments.Items
 }

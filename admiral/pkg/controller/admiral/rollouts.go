@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/labels"
 	"sync"
 	"time"
 
@@ -195,7 +196,13 @@ func (roc *RolloutController) Deleted(ojb interface{}) {
 }
 
 func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
-	labelOptions := meta_v1.ListOptions{}
+
+	//Remove pod template hash from the service selector as that's not on the deployment
+	delete(serviceSelector, common.RolloutPodHashLabel)
+
+	labelOptions := meta_v1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
+	}
 	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
 
 	if err != nil {
@@ -203,34 +210,9 @@ func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[
 		return nil
 	}
 
-	var filteredRollouts = make([]argo.Rollout,0)
-
 	if matchedRollouts.Items == nil {
-		return filteredRollouts
+		return make([]argo.Rollout,0)
 	}
 
-	for _, rollout := range matchedRollouts.Items {
-
-		if rollout.Spec.Selector == nil || rollout.Spec.Selector.MatchLabels == nil {
-			continue
-		}
-		match := true
-		for lkey, lvalue := range serviceSelector {
-			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
-			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if lkey == common.RolloutPodHashLabel {
-				continue
-			}
-			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
-			if !ok || value != lvalue {
-				match = false
-				break
-			}
-		}
-		if match {
-			filteredRollouts = append(filteredRollouts, rollout)
-		}
-	}
-
-	return filteredRollouts
+	return matchedRollouts.Items
 }
