@@ -75,22 +75,22 @@ func TestServiceCache_Put(t *testing.T) {
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
+	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
 
-	length := len(serviceCache.Get("ns").Service["ns"])
+	length := len(serviceCache.Get("ns"))
 
 	serviceCache.Put(service)
 
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
+	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
-	if (length) != len(serviceCache.Get("ns").Service["ns"]) {
-		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns").Service["ns"]))
+	if (length) != len(serviceCache.Get("ns")) {
+		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns")))
 	}
 
 	serviceCache.Delete(service)
@@ -298,4 +298,51 @@ func TestConcurrentGetAndPut(t *testing.T) {
 
 	wg.Wait()
 
+}
+
+func TestGetOrderedServices(t *testing.T) {
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name           string
+		services       map[string]*v1.Service
+		expectedResult string
+	}{
+		{
+			name:           "Should return nil for nil input",
+			services:       nil,
+			expectedResult: "",
+		},
+		{
+			name:           "Should return the only service",
+			services:       map[string]*v1.Service {
+				"s1": {ObjectMeta: metaV1.ObjectMeta{Name: "s1", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now())}},
+			},
+			expectedResult: "s1",
+		},
+		{
+			name:           "Should return the latest service by creationTime",
+			services:       map[string]*v1.Service {
+				"s1": {ObjectMeta: metaV1.ObjectMeta{Name: "s1", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now().Add(time.Duration(-15)))}},
+				"s2": {ObjectMeta: metaV1.ObjectMeta{Name: "s2", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now())}},
+			},
+			expectedResult: "s2",
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getOrderedServices(c.services)
+			if c.expectedResult == "" && len(result) > 0 {
+				t.Errorf("Failed. Got %v, expected no service", result[0].Name)
+			} else if c.expectedResult != "" {
+				if len(result) > 0 && result[0].Name == c.expectedResult{
+					//perfect
+				} else {
+					t.Errorf("Failed. Got %v, expected %v", result[0].Name, c.expectedResult)
+				}
+			}
+		})
+	}
 }

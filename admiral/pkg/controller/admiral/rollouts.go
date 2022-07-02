@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/labels"
 	"sync"
 	"time"
 
@@ -194,10 +195,14 @@ func (roc *RolloutController) Deleted(ojb interface{}) {
 	roc.RolloutHandler.Deleted(rollout)
 }
 
-func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace string) []argo.Rollout {
-	matchLabel := common.GetGlobalTrafficDeploymentLabel()
-	labelOptions := meta_v1.ListOptions{}
-	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
+func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
+
+	//Remove pod template hash from the service selector as that's not on the deployment
+	delete(serviceSelector, common.RolloutPodHashLabel)
+
+	labelOptions := meta_v1.ListOptions{
+		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
+	}
 	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
 
 	if err != nil {
@@ -206,7 +211,7 @@ func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace strin
 	}
 
 	if matchedRollouts.Items == nil {
-		return []argo.Rollout{}
+		return make([]argo.Rollout,0)
 	}
 
 	return matchedRollouts.Items
