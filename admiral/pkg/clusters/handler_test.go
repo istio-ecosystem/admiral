@@ -529,6 +529,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: cnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 
@@ -548,6 +549,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 
@@ -574,6 +576,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 

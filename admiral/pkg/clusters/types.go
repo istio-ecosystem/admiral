@@ -60,6 +60,7 @@ type RemoteRegistry struct {
 	secretClient      k8s.Interface
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
+	StartTime         time.Time
 }
 
 func (r *RemoteRegistry) shutdown() {

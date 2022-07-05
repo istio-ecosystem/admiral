@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReturnSuccessGET(t *testing.T) {
@@ -48,6 +49,7 @@ func TestGetClusters(t *testing.T) {
 					RemoteClusters: map[string]*secret.RemoteCluster{},
 				},
 			},
+			StartTime: time.Now(),
 		},
 	}
 	testCases := []struct {

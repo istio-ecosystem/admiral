@@ -27,6 +27,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	common.InitializeConfig(params)
 	w := RemoteRegistry{
 		ctx: ctx,
+		StartTime: time.Now(),
 	}
 
 	wd := DependencyHandler{
