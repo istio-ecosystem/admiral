@@ -60,7 +60,6 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 			Service:  make(map[string]map[string]*k8sV1.Service),
 			Identity: s.getKey(service),
 		}
-		s.cache[identity] = existing
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
@@ -68,6 +67,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices
+	s.cache[identity] = existing
 
 }
 

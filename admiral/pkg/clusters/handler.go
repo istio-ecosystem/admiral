@@ -574,7 +574,8 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 
 func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
-	var op string
+	var op, diff string
+	var skipUpdate bool
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
@@ -589,7 +590,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		op = "Update"
-		skipUpdate, diff := skipDestructiveUpdate(rc, obj, exist)
+		skipUpdate, diff = skipDestructiveUpdate(rc, obj, exist)
 		if diff != "" {
 			log.Infof(LogFormat+" diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
 		}

@@ -54,10 +54,21 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 	return tmpSe
 }
 
+func IsCacheWarmupTime(remoteRegistry *RemoteRegistry) bool {
+	if time.Since(remoteRegistry.StartTime) < common.GetAdmiralParams().CacheRefreshDuration {
+		return true
+	}
+	return false
+}
+
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
+	if IsCacheWarmupTime(remoteRegistry) {
+		log.Debugf(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
+		return nil
+	}
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceWeightedServices := make(map[string]map[string]*WeightedService)
