@@ -735,14 +735,7 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 	}
 	var matchedService *k8sV1.Service
 	for _, service := range cachedServices {
-		var match = true
-		for lkey, lvalue := range service.Spec.Selector {
-			value, ok := deployment.Spec.Selector.MatchLabels[lkey]
-			if !ok || value != lvalue {
-				match = false
-				break
-			}
-		}
+		var match = common.IsServiceMatch(service.Spec.Selector, deployment.Spec.Selector)
 		//make sure the service matches the deployment Selector and also has a mesh port in the port spec
 		if match {
 			ports := GetMeshPorts(rc.ClusterID, service, deployment)
@@ -881,18 +874,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 			continue
 		}
 
-		for lkey, lvalue := range service.Spec.Selector {
-			// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
-			// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
-			if lkey == common.RolloutPodHashLabel {
-				continue
-			}
-			value, ok := rollout.Spec.Selector.MatchLabels[lkey]
-			if !ok || value != lvalue {
-				match = false
-				break
-			}
-		}
+		match = common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
 		//make sure the service matches the rollout Selector and also has a mesh port in the port spec
 		if match {
 			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
