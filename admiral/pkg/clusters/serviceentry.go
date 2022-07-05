@@ -54,13 +54,6 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 	return tmpSe
 }
 
-func IsCacheWarmupTime(remoteRegistry *RemoteRegistry) bool {
-	if time.Since(remoteRegistry.StartTime) < common.GetAdmiralParams().CacheRefreshDuration {
-		return true
-	}
-	return false
-}
-
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
