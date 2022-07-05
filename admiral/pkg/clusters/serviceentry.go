@@ -58,6 +58,10 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
+	if IsCacheWarmupTime(remoteRegistry) {
+		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
+		return nil
+	}
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceWeightedServices := make(map[string]map[string]*WeightedService)
