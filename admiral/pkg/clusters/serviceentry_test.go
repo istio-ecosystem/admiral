@@ -289,6 +289,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
+	rr.StartTime = time.Now().Add(-60*time.Second)
 
 	config := rest.Config{
 		Host: "localhost",
@@ -875,6 +876,8 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	rr, _ := InitAdmiral(context.Background(), p)
 
+	rr.StartTime = time.Now().Add(-60*time.Second)
+
 	config := rest.Config{
 		Host: "localhost",
 	}
@@ -1011,6 +1014,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	config := rest.Config{
 		Host: "localhost",
 	}
+	rr.StartTime = time.Now().Add(-60*time.Second)
 
 	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
