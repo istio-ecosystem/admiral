@@ -5,7 +5,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	k8sAppsinformers "k8s.io/client-go/informers/apps/v1"
 	"k8s.io/client-go/rest"
 	"time"
@@ -175,11 +174,7 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 
 func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
 
-	labelOptions := meta_v1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
-	}
-
-	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
+	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
@@ -190,5 +185,13 @@ func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelecto
 		return []k8sAppsV1.Deployment{}
 	}
 
-	return matchedDeployments.Items
+	filteredDeployments := make ([]k8sAppsV1.Deployment, 0)
+
+	for _, deployment := range matchedDeployments.Items {
+		if common.IsServiceMatch(serviceSelector, deployment.Spec.Selector) {
+			filteredDeployments = append(filteredDeployments, deployment)
+		}
+	}
+
+	return filteredDeployments
 }
