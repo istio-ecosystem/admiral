@@ -867,14 +867,13 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 	var matchedServices = make(map[string]*WeightedService)
 
 	for _, service := range cachedServices {
-		var match = true
 		//skip services that are not referenced in the rollout
 		if len(blueGreenActiveService) > 0 && service.ObjectMeta.Name != blueGreenActiveService && service.ObjectMeta.Name != blueGreenPreviewService {
 			log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 			continue
 		}
 
-		match = common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
+		match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
 		//make sure the service matches the rollout Selector and also has a mesh port in the port spec
 		if match {
 			ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)

@@ -216,6 +216,4 @@ func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[
 	}
 
 	return filteredRollouts
-
-	return matchedRollouts.Items
 }
