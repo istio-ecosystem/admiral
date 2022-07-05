@@ -2,7 +2,6 @@ package admiral
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/labels"
 	"sync"
 	"time"
 
@@ -197,13 +196,7 @@ func (roc *RolloutController) Deleted(ojb interface{}) {
 
 func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
 
-	//Remove pod template hash from the service selector as that's not on the deployment
-	delete(serviceSelector, common.RolloutPodHashLabel)
-
-	labelOptions := meta_v1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(serviceSelector).String(),
-	}
-	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
+	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)
@@ -214,5 +207,13 @@ func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[
 		return make([]argo.Rollout,0)
 	}
 
-	return matchedRollouts.Items
+	filteredRollouts := make ([]argo.Rollout, 0)
+
+	for _, rollout := range matchedRollouts.Items {
+		if common.IsServiceMatch(serviceSelector, rollout.Spec.Selector) {
+			filteredRollouts = append(filteredRollouts, rollout)
+		}
+	}
+
+	return filteredRollouts
 }

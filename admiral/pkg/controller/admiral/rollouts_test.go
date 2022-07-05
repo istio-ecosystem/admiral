@@ -207,7 +207,6 @@ func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	rollout.Labels = map[string]string{"identity": "app1"}
 
 	rollout2 := argo.Rollout{}
 	rollout2.Namespace = "namespace"
@@ -220,7 +219,6 @@ func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	rollout2.Labels = map[string]string{"identity": "app1"}
 
 	rollout3 := argo.Rollout{}
 	rollout3.Namespace = "namespace"
@@ -234,7 +232,6 @@ func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	rollout3.Labels = map[string]string{"identity": "app1"}
 
 	rollout4 := argo.Rollout{}
 	rollout4.Namespace = "namespace"
@@ -248,7 +245,6 @@ func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	rollout4.Labels = map[string]string{"identity": "app2"}
 
 	oneRolloutClient := argofake.NewSimpleClientset(&rollout).ArgoprojV1alpha1()
 

@@ -209,7 +209,6 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	deployment.Labels = map[string]string{"identity": "app1"}
 
 	deployment2 := k8sAppsV1.Deployment{}
 	deployment2.Namespace = "namespace"
@@ -222,7 +221,6 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	deployment2.Labels = map[string]string{"identity": "app1"}
 
 	deployment3 := k8sAppsV1.Deployment{}
 	deployment3.Namespace = "namespace"
@@ -236,7 +234,6 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	deployment3.Labels = map[string]string{"identity": "app1"}
 
 	deployment4 := k8sAppsV1.Deployment{}
 	deployment4.Namespace = "namespace"
@@ -250,7 +247,6 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 			},
 		},
 	}
-	deployment4.Labels = map[string]string{"identity": "app2"}
 
 	oneDeploymentClient := fake.NewSimpleClientset(&deployment)
 
