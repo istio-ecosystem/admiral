@@ -48,6 +48,7 @@ func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 	w := RemoteRegistry{
 		RemoteControllers: make(map[string]*RemoteController),
+		StartTime: time.Now(),
 	}
 
 	err := w.deleteCacheController("I don't exit")
@@ -61,6 +62,7 @@ func TestDeleteCacheController(t *testing.T) {
 
 	w := RemoteRegistry{
 		RemoteControllers: make(map[string]*RemoteController),
+		StartTime: time.Now(),
 	}
 
 	r := rest.Config{
