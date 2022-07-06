@@ -798,4 +798,8 @@ func GetServiceWithSuffixMatch(suffix string, services []*k8sV1.Service) string 
 		}
 	}
 	return ""
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> Best effort to pick stable/active services for Rollouts (#242)
