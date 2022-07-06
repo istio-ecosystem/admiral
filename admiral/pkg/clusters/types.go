@@ -173,15 +173,22 @@ func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
 
 func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
 	if svc.Spec.Selector == nil {
-		return errors.New("selector missing on service");
+		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName);
 	}
-	matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
-	if len(matchingDeployements) > 0 {
-		for _, deployment := range matchingDeployements {
-			HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+	if remoteRegistry.RemoteControllers[clusterName] == nil {
+		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName);
+	}
+	deploymentController := remoteRegistry.RemoteControllers[clusterName].DeploymentController
+	rolloutController := remoteRegistry.RemoteControllers[clusterName].RolloutController
+	if deploymentController != nil {
+		matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployements) > 0 {
+			for _, deployment := range matchingDeployements {
+				HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+			}
 		}
 	}
-	if common.GetAdmiralParams().ArgoRolloutsEnabled {
+	if common.GetAdmiralParams().ArgoRolloutsEnabled && rolloutController != nil {
 		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
 
 		if len(matchingRollouts) > 0 {
