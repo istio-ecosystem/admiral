@@ -173,10 +173,10 @@ func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
 
 func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
 	if svc.Spec.Selector == nil {
-		return errors.New(fmt.Sprintf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName));
+		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName);
 	}
 	if remoteRegistry.RemoteControllers[clusterName] == nil {
-		return errors.New(fmt.Sprintf("could not find the remote controller for cluster=%s", clusterName));
+		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName);
 	}
 	deploymentController := remoteRegistry.RemoteControllers[clusterName].DeploymentController
 	rolloutController := remoteRegistry.RemoteControllers[clusterName].RolloutController
