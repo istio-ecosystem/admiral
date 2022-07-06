@@ -809,58 +809,72 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		// If rollout uses blue green strategy
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
 		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
-	} else if rolloutStrategy.Canary != nil && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
+
+		if len(blueGreenActiveService) == 0 {
+			//pick a service that ends in RolloutActiveServiceSuffix if one is available
+			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices)
+		}
+	} else if rolloutStrategy.Canary != nil {
 		canaryService = rolloutStrategy.Canary.CanaryService
 		stableService = rolloutStrategy.Canary.StableService
-
-		virtualServiceName := rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name
-		virtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(rollout.Namespace).Get(virtualServiceName, v12.GetOptions{})
-
-		if err != nil {
-			log.Warnf("Error fetching VirtualService referenced in rollout canary for rollout with name=%s in namespace=%s and cluster=%s err=%v", rollout.Name, rollout.Namespace, rc.ClusterID, err)
-		}
-
-		if len(rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Routes) > 0 {
-			virtualServiceRouteName = rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Routes[0]
-		}
 
 		//pick stable service if specified
 		if len(stableService) > 0 {
 			istioCanaryWeights[stableService] = 1
+		} else {
+			//pick a service that ends in RolloutStableServiceSuffix if one is available
+			sName := GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices)
+			if len(sName) > 0 {
+				istioCanaryWeights[sName] = 1
+			}
 		}
 
-		if len(canaryService) > 0 && len(stableService) > 0 && virtualService != nil {
-			var vs = virtualService.Spec
-			if len(vs.Http) > 0 {
-				var httpRoute *v1alpha32.HTTPRoute
-				if len(virtualServiceRouteName) > 0 {
-					for _, route := range vs.Http {
-						if route.Name == virtualServiceRouteName {
-							httpRoute = route
-							log.Infof("VirtualService route referenced in rollout found, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, virtualServiceRouteName, rollout.Namespace, rc.ClusterID)
-							break
+		//calculate canary weights if canary strategy is using Istio traffic management
+		if len(stableService) > 0 && len(canaryService) > 0 && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
+			virtualServiceName := rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name
+			virtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(rollout.Namespace).Get(virtualServiceName, v12.GetOptions{})
+
+			if err != nil {
+				log.Warnf("Error fetching VirtualService referenced in rollout canary for rollout with name=%s in namespace=%s and cluster=%s err=%v", rollout.Name, rollout.Namespace, rc.ClusterID, err)
+			}
+
+			if len(rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Routes) > 0 {
+				virtualServiceRouteName = rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Routes[0]
+			}
+
+			if virtualService != nil {
+				var vs = virtualService.Spec
+				if len(vs.Http) > 0 {
+					var httpRoute *v1alpha32.HTTPRoute
+					if len(virtualServiceRouteName) > 0 {
+						for _, route := range vs.Http {
+							if route.Name == virtualServiceRouteName {
+								httpRoute = route
+								log.Infof("VirtualService route referenced in rollout found, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, virtualServiceRouteName, rollout.Namespace, rc.ClusterID)
+								break
+							} else {
+								log.Debugf("Argo rollout VirtualService route name didn't match with a route, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, route.Name, rollout.Namespace, rc.ClusterID)
+							}
+						}
+					} else {
+						if len(vs.Http) == 1 {
+							httpRoute = vs.Http[0]
+							log.Debugf("Using the default and the only route in Virtual Service, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, "", rollout.Namespace, rc.ClusterID)
 						} else {
-							log.Debugf("Argo rollout VirtualService route name didn't match with a route, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, route.Name, rollout.Namespace, rc.ClusterID)
+							log.Errorf("Skipping VirtualService referenced in rollout as it has MORE THAN ONE route but no name route selector in rollout, for rollout with name=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
+						}
+					}
+					if httpRoute != nil {
+						//find the weight associated with the destination (k8s service)
+						for _, destination := range httpRoute.Route {
+							if (destination.Destination.Host == canaryService || destination.Destination.Host == stableService) && destination.Weight > 0 {
+								istioCanaryWeights[destination.Destination.Host] = destination.Weight
+							}
 						}
 					}
 				} else {
-					if len(vs.Http) == 1 {
-						httpRoute = vs.Http[0]
-						log.Debugf("Using the default and the only route in Virtual Service, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, "", rollout.Namespace, rc.ClusterID)
-					} else {
-						log.Errorf("Skipping VirtualService referenced in rollout as it has MORE THAN ONE route but no name route selector in rollout, for rollout with name=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
-					}
+					log.Warnf("No VirtualService was specified in rollout or the specified VirtualService has NO routes, for rollout with name=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
 				}
-				if httpRoute != nil {
-					//find the weight associated with the destination (k8s service)
-					for _, destination := range httpRoute.Route {
-						if (destination.Destination.Host == canaryService || destination.Destination.Host == stableService) && destination.Weight > 0 {
-							istioCanaryWeights[destination.Destination.Host] = destination.Weight
-						}
-					}
-				}
-			} else {
-				log.Warnf("No VirtualService was specified in rollout or the specified VirtualService has NO routes, for rollout with name=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
 			}
 		}
 	}
@@ -894,4 +908,13 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		}
 	}
 	return matchedServices
+}
+
+func GetServiceWithSuffixMatch(suffix string, services []*k8sV1.Service) string {
+	for _, service := range services {
+		if strings.HasSuffix(service.Name, suffix) {
+			return service.Name
+		}
+	}
+	return ""
 }
