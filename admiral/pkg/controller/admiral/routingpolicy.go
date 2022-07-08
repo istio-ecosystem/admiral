@@ -84,7 +84,6 @@ func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyH
 		cache.Indexers{},
 	)
 
-	//NewController(stopCh, &rpController, rpController.informer)
 	NewController("rp-ctrl-" + configPath.Host, stopCh, &rpController, rpController.informer)
 	return &rpController, nil
 

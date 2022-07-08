@@ -238,7 +238,7 @@ func ConstructRoutingPolicyKey(env, identity string) string {
 	return fmt.Sprintf("%s.%s", env, identity)
 }
 
-func GetSha1 (key interface{}) (string, error){
+func GetSha1 (key interface{}) (string, error) {
 	bv, err := GetBytes(key)
 	if err != nil {
 		return "", err

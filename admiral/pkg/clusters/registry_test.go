@@ -134,11 +134,22 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	}
 	stop := make(chan struct{})
 	d, e := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if e != nil {
+		return nil, e
+	}
 	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if e != nil {
+		return nil, e
+	}
 	n, e := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
+	if e != nil {
+		return nil, e
+	}
 	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if e != nil {
+		return nil, e
+	}
 	rpc, e := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
-
 	if e != nil {
 		return nil, e
 	}

@@ -90,7 +90,7 @@ func (c *routingPolicies) List(opts metav1.ListOptions) (result *v1.RoutingPolic
 		Timeout(timeout).
 		Do().
 		Into(result)
-	return
+	return result, err
 }
 
 // Watch returns a watch.Interface that watches the requested routingPolicies.
@@ -117,7 +117,7 @@ func (c *routingPolicies) Create(routingPolicy *v1.RoutingPolicy) (result *v1.Ro
 		Body(routingPolicy).
 		Do().
 		Into(result)
-	return
+	return result, err
 }
 
 // Update takes the representation of a routingPolicy and updates it. Returns the server's representation of the routingPolicy, and an error, if there is any.
@@ -130,7 +130,7 @@ func (c *routingPolicies) Update(routingPolicy *v1.RoutingPolicy) (result *v1.Ro
 		Body(routingPolicy).
 		Do().
 		Into(result)
-	return
+	return result, err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
@@ -146,7 +146,7 @@ func (c *routingPolicies) UpdateStatus(routingPolicy *v1.RoutingPolicy) (result 
 		Body(routingPolicy).
 		Do().
 		Into(result)
-	return
+	return result, err
 }
 
 // Delete takes name of the routingPolicy and deletes it. Returns an error if one occurs.
@@ -187,5 +187,5 @@ func (c *routingPolicies) Patch(name string, pt types.PatchType, data []byte, su
 		Body(data).
 		Do().
 		Into(result)
-	return
+	return result, err
 }

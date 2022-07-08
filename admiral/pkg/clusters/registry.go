@@ -38,7 +38,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	var err error
 	wd.DepController, err = admiral.NewDependencyController(ctx.Done(), &wd, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
+		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
 	
 	if !params.ArgoRolloutsEnabled {
@@ -47,14 +47,14 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	configMapController, err := admiral.NewConfigMapController(params.ServiceEntryIPPrefix)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
+		return nil, fmt.Errorf("error with configmap controller init: %v", err)
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
 	err = createSecretController(ctx, w)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with secret control init: %v", err)
+		return nil, fmt.Errorf("error with secret control init: %v", err)
 	}
 
 	go w.shutdown()
@@ -190,48 +190,48 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1 * time.Minute)
 
 	if err != nil {
-		return fmt.Errorf(" Error with VirtualServiceController init: %v", err)
+		return fmt.Errorf("error with VirtualServiceController init: %v", err)
 	}
 
 	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
 
 	if err != nil {
-		return fmt.Errorf(" Error with NodeController controller init: %v", err)
+		return fmt.Errorf("error with NodeController controller init: %v", err)
 	}
 
 	log.Infof("starting service controller clusterID: %v", clusterID)
 	rc.ServiceController, err = admiral.NewServiceController(clusterID, stop, &ServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
-		return fmt.Errorf(" Error with ServiceController controller init: %v", err)
+		return fmt.Errorf("error with ServiceController controller init: %v", err)
 	}
 
 	log.Infof("starting service entry controller for custerID: %v", clusterID)
 	rc.ServiceEntryController, err = istio.NewServiceEntryController(clusterID, stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
-		return fmt.Errorf(" Error with ServiceEntryController init: %v", err)
+		return fmt.Errorf("error with ServiceEntryController init: %v", err)
 	}
 
 	log.Infof("starting destination rule controller for custerID: %v", clusterID)
 	rc.DestinationRuleController, err = istio.NewDestinationRuleController(clusterID, stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
-		return fmt.Errorf(" Error with DestinationRuleController init: %v", err)
+		return fmt.Errorf("error with DestinationRuleController init: %v", err)
 	}
 
 	log.Infof("starting virtual service controller for custerID: %v", clusterID)
 	rc.VirtualServiceController, err = istio.NewVirtualServiceController(clusterID, stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
-		return fmt.Errorf(" Error with VirtualServiceController init: %v", err)
+		return fmt.Errorf("error with VirtualServiceController init: %v", err)
 	}
 
 	rc.SidecarController, err = istio.NewSidecarController(clusterID, stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
 
 	if err != nil {
-		return fmt.Errorf(" Error with DestinationRuleController init: %v", err)
+		return fmt.Errorf("error with DestinationRuleController init: %v", err)
 	}
 
 	r.PutRemoteController(clusterID, &rc)

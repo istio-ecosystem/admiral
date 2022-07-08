@@ -349,7 +349,7 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 
 	} {
 		{
-			name:                     "should have the right envoyFilter in filter cache",
+			name:                     "If dependent deployment exists, should fetch filter from cache",
 			routingPolicy:             routingPolicyFoo,
 			expectedFilterCacheKey:	  "barstage",
 			valueExpected:			  true,
