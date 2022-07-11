@@ -81,8 +81,8 @@ Below is the logic for Admiral instance in Passive state
 4. If the last updated time field is within the computed threshold,mark current pod as read only
 5. Sleep for configured duration
 */
-func (dr DynamoDBBasedStateChecker) runStateCheck(as *AdmiralState,ctx context.Context){
-	as.ReadOnly = READ_ONLY_ENABLED
+func (dr DynamoDBBasedStateChecker) runStateCheck(ctx context.Context){
+	AdmiralCurrentState.ReadOnly = ReadOnlyEnabled
 	var dynamodbClient *DynamoClient
 	dynamoDBConfig,err := BuildDynamoDBConfig(dr.drConfigFileLocation)
 	if nil!= err {
@@ -101,12 +101,12 @@ func (dr DynamoDBBasedStateChecker) runStateCheck(as *AdmiralState,ctx context.C
 			ticker.Stop()
 
 		case <-tickChan:
-			ExecuteStateCheck(dynamoDBConfig, dynamodbClient, as)
+			ExecuteStateCheck(dynamoDBConfig, dynamodbClient)
 		}
 	}
 }
 
-func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClient ,as *AdmiralState){
+func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClient ){
 	leaseName := dynamoDBConfig.LeaseName
 	podIdentifier := dynamoDBConfig.PodIdentifier
 	waitTimeInSeconds :=dynamoDBConfig.WaitTimeInSeconds
@@ -130,9 +130,9 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		//Not updating read-write mode until we confirm this pod has the lease
 	}else if SKIP_LEASE_CHECK_POD_NAME == readWriteLease.LeaseOwner {
 		log.Info("DynamoDR: Lease held by skip lease check pod. Setting Admiral to read only mode")
-		as.ReadOnly = READ_ONLY_ENABLED;
+		AdmiralCurrentState.ReadOnly =ReadOnlyEnabled
 	}else if podIdentifier == readWriteLease.LeaseOwner {
-		as.ReadOnly = ReadWriteEnabled
+		AdmiralCurrentState.ReadOnly = ReadWriteEnabled
 		log.Infof("DynamoDR: Lease with name=%v is owned by the current pod. Extending lease ownership till %v. Admiral will write",leaseName, currentTime)
 		readWriteLease.UpdatedTime = currentTime
 		dynamodbClient.updatedReadWriteLease(readWriteLease,dynamoDBConfig.TableName)
@@ -145,10 +145,11 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		//Not updating read-write mode until we confirm this pod has the lease
 	}else {
 		log.Infof("DynamoDR: Lease held by %v till %v . Admiral will not write ", readWriteLease.LeaseOwner, readWriteLease.UpdatedTime)
-		as.ReadOnly = READ_ONLY_ENABLED;
+		AdmiralCurrentState.ReadOnly = ReadOnlyEnabled;
 	}
 
 }
+
 
 ```
 Utility methods needed to communicate with DynamoDB
@@ -331,17 +332,20 @@ Add DynamoDBBasedStateChecker as an option in startAdmiralStateChecker function
 /*
 utility function to identify the Admiral DR implementation based on the program parameters
 */
-func startAdmiralStateChecker (params common.AdmiralParams,as *AdmiralState,ctx context.Context){
+func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams){
 	var  admiralStateChecker AdmiralStateChecker
 	switch  strings.ToLower(params.AdmiralStateCheckerName) {
-	case "noopstatechecker":
-		admiralStateChecker = NoOPStateChecker{}	
+	/*
+	     Add entries for your custom Disaster Recovery state checkers below
+	     case "keywordforsomecustomchecker":
+			admiralStateChecker  = customChecker{}
+	*/
 	case "dynamodbbasedstatechecker":
 		admiralStateChecker = DynamoDBBasedStateChecker{params.DRStateStoreConfigPath}
 	default:
 		admiralStateChecker = NoOPStateChecker{}
 	}
-	RunAdmiralStateCheck(admiralStateChecker,as,ctx)
+	RunAdmiralStateCheck(ctx,admiralStateChecker)
 }
 ```
 ## Configuration changes
