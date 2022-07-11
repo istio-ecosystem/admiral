@@ -26,12 +26,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 
-    as:= AdmiralState{ReadOnlyEnabled}
-    startAdmiralStateChecker(ctx,params,&as)
+    AdmiralCurrentState = AdmiralState{ReadOnlyEnabled}
+    startAdmiralStateChecker(ctx,params)
 
 	w := RemoteRegistry{
 		ctx: ctx,
-		AdmiralState: &as,
 	}
 
 	wd := DependencyHandler{

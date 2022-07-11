@@ -43,10 +43,11 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 	// checkIfReadOnlyStringVal will be empty in case ""checkifreadonly" query param is not sent in the request. checkIfReadOnlyBoolVal will be false
 	checkIfReadOnlyBoolVal, err := strconv.ParseBool(checkIfReadOnlyStringVal)
 	var response string
+
 	if len(checkIfReadOnlyStringVal) ==0 || nil==err {
 		if checkIfReadOnlyBoolVal{
-			admiralState := opts.RemoteRegistry.AdmiralState
-			if(*admiralState).ReadOnly{
+
+			if clusters.AdmiralCurrentState.ReadOnly{
 				//Force fail health check if Admiral is in Readonly mode
 				w.WriteHeader(503)
 			}else {

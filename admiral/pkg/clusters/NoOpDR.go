@@ -1,8 +1,8 @@
 package clusters
 
 import (
+	"context"
 	"fmt"
-    "context"
 )
 
 /*
@@ -15,8 +15,8 @@ func (NoOPStateChecker) shouldRunOnIndependentGoRoutine() bool{
 	return false;
 }
 
-func (NoOPStateChecker) runStateCheck(ctx context.Context, as *AdmiralState){
+func (NoOPStateChecker) runStateCheck(ctx context.Context){
 	fmt.Print("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
-	as.ReadOnly = ReadWriteEnabled
+	AdmiralCurrentState = AdmiralState{ReadWriteEnabled}
 }
 

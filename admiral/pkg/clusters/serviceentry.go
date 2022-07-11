@@ -167,7 +167,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
 				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-					map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
+					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
@@ -179,7 +179,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
+							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -189,13 +189,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: se},remoteRegistry.AdmiralState)
+							map[string]*networking.ServiceEntry{key: se})
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
 						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
-							map[string]*networking.ServiceEntry{key: serviceEntry},remoteRegistry.AdmiralState)
+							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -205,7 +205,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc,remoteRegistry.AdmiralState)
+			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
 		}
 
 		for _, val := range dependents {
@@ -227,7 +227,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries,remoteRegistry.AdmiralState)
+	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -322,7 +322,7 @@ func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, w
 	serviceEntry.Endpoints = endpoints
 }
 
-func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController, admiralState *AdmiralState) {
+func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
 
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
@@ -362,16 +362,16 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 
 	//insert into cluster
 	if newSidecarConfig != nil {
-		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc,admiralState)
+		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc)
 	}
 }
 
-func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController, admiralState *AdmiralState) {
+func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
 	var err error
 	exist.Labels = obj.Labels
 	exist.Annotations = obj.Annotations
 	exist.Spec = obj.Spec
-	if(*admiralState).ReadOnly {
+	if AdmiralCurrentState.ReadOnly {
 		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
 		return
 	}
@@ -436,7 +436,7 @@ func createSeWithDrLabels(remoteController *RemoteController, localCluster bool,
 }
 
 //This will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry, admiralState *AdmiralState) {
+func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
@@ -477,22 +477,22 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 				}
 
 				if len(seDr.ServiceEntry.Endpoints) == 0 {
-					deleteServiceEntry(oldServiceEntry, syncNamespace, rc,admiralState)
+					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
 					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-					deleteDestinationRule(oldDestinationRule, syncNamespace, rc,admiralState)
+					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
 				} else {
 					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc,admiralState)
+						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
 						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 
 					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
 					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc,admiralState)
+					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
 				}
 			}
 		}
