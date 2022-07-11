@@ -322,15 +322,15 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 			}
 
 			if event == common.Delete {
-				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name, clusterId,r.AdmiralState)
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name, clusterId)
 
-				deleteServiceEntriesPostStateCheck(rc,syncNamespace,seName,clusterId,r.AdmiralState)
+				deleteServiceEntriesPostStateCheck(rc,syncNamespace,seName,clusterId)
 
 				for _, subset := range destinationRule.Subsets {
 					sseName := seName + common.Dash + subset.Name
-					deleteServiceEntriesPostStateCheck(rc,syncNamespace,sseName,clusterId,r.AdmiralState)
+					deleteServiceEntriesPostStateCheck(rc,syncNamespace,sseName,clusterId)
 				}
-				deleteDestinationRulePostStateCheck(rc,syncNamespace,localDrName,clusterId,r.AdmiralState)
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,localDrName,clusterId)
 
 			} else {
 
@@ -338,7 +338,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 				//copy destination rule only to other clusters
 				if dependentCluster != clusterId {
-					addUpdateDestinationRule(obj, exist, syncNamespace, rc,r.AdmiralState)
+					addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 				}
 
 				for _seName, se := range drServiceEntries {
@@ -348,7 +348,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
 					}
 					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc,r.AdmiralState)
+						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
 						r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 					//cache the subset service entries for updating them later for pod events
@@ -359,7 +359,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 				if dependentCluster == clusterId {
 					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule,r.AdmiralState)
+					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
 				}
 
 			}
@@ -373,17 +373,17 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
+				deleteDestinationRulePostStateCheck(rc,syncNamespace,obj.Name,clusterId)
 			} else {
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateDestinationRule(obj, exist, syncNamespace, rc,r.AdmiralState)
+				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
 		}
 	}
 }
 
-func deleteDestinationRulePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState){
-	if(*admiralState).ReadOnly {
+func deleteDestinationRulePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string){
+	if AdmiralCurrentState.ReadOnly {
 		log.Infof(LogFormat, "Delete", "DestinationRule", objName, clusterId, "Skipped deleting as Admiral pod is in read only ")
 		return
 	}
@@ -396,8 +396,8 @@ func deleteDestinationRulePostStateCheck(rc *RemoteController,syncNamespace stri
 	}
 }
 
-func deleteServiceEntriesPostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState){
-	if(*admiralState).ReadOnly {
+func deleteServiceEntriesPostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string){
+	if AdmiralCurrentState.ReadOnly {
 		log.Infof(LogFormat, "Delete", "ServiceEntry", objName, clusterId, "Skipped deleting as Admiral pod is in read only")
 		return
 	}
@@ -410,8 +410,8 @@ func deleteServiceEntriesPostStateCheck(rc *RemoteController,syncNamespace strin
 
 }
 
-func deleteVirtualServicePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string, admiralState *AdmiralState) (e error){
-	if(*admiralState).ReadOnly {
+func deleteVirtualServicePostStateCheck(rc *RemoteController,syncNamespace string, objName string, clusterId string) (e error){
+	if AdmiralCurrentState.ReadOnly {
 		log.Infof(LogFormat, "Delete", "VirtualService", objName, clusterId, "Skipped deleting as Admiral pod is in read only")
 		return nil
 	}
@@ -426,7 +426,7 @@ func deleteVirtualServicePostStateCheck(rc *RemoteController,syncNamespace strin
 }
 
 func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *v1alpha32.DestinationRule, admiralState *AdmiralState ) {
+	destinationRule *v1alpha32.DestinationRule) {
 
 	deployment := remoteController.DeploymentController.Cache.Get(identityId)
 
@@ -455,7 +455,7 @@ func createDestinationRuleForLocal(remoteController *RemoteController, localDrNa
 		newDestinationRule := createDestinationRuleSkeletion(*destinationRule, localDrName, syncNamespace)
 
 		if newDestinationRule != nil {
-			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController,admiralState)
+			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
 		}
 	}
 }
@@ -507,7 +507,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
 
 				if event == common.Delete {
-					err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
+					err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId)
 					if nil!= err {
 						return err
 					}
@@ -534,7 +534,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 						}
 					}
 
-					addUpdateVirtualService(obj, exist, syncNamespace, rc,r.AdmiralState)
+					addUpdateVirtualService(obj, exist, syncNamespace, rc)
 				}
 			}
 		}
@@ -548,13 +548,13 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 	for _, rc := range r.RemoteControllers {
 		if rc.ClusterID != clusterId {
 			if event == common.Delete {
-				err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId,r.AdmiralState)
+				err:= deleteVirtualServicePostStateCheck(rc,syncNamespace,obj.Name,clusterId)
 				if nil!= err {
 					return err
 				}
 			} else {
 				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateVirtualService(obj, exist, syncNamespace, rc,r.AdmiralState)
+				addUpdateVirtualService(obj, exist, syncNamespace, rc)
 			}
 		}
 	}
@@ -566,7 +566,7 @@ Add/Update Virtual service after checking if the current pod is in ReadOnly mode
 Virtual Service object is not added/updated if the current pod is in ReadOnly mode.
 */
 
-func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController,admiralState *AdmiralState) {
+func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
@@ -576,7 +576,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	vsIsNew:= (exist == nil || len(exist.Spec.Hosts) == 0)
 
 	// If current Admiral pod is in read-only mode, do not create/update/delete virtual service objects
-	if (*admiralState).ReadOnly {
+	if AdmiralCurrentState.ReadOnly {
 		if vsIsNew {
 			op = "Add"
 		}else {
@@ -609,7 +609,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 Add/Update Service Entry after checking if the current pod is in ReadOnly mode.
 Service Entry object is not added/updated if the current pod is in ReadOnly mode.
 */
-func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController, admiralState *AdmiralState) {
+func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
@@ -619,7 +619,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	seIsNew:= (exist == nil || exist.Spec.Hosts == nil)
 
 	// If current Admiral pod is in read-only mode, do not create/update/delete service entry objects
-	if (*admiralState).ReadOnly {
+	if AdmiralCurrentState.ReadOnly {
 		if seIsNew {
 			op = "Add"
 		}else {
@@ -715,9 +715,9 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 Delete Service Entry after checking if the current pod is in ReadOnly mode.
 Service Entry is not deleted if the current pod is in ReadOnly mode.
 */
-func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController,admiralState *AdmiralState) {
+func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	if exist != nil {
-		if (*admiralState).ReadOnly {
+		if AdmiralCurrentState.ReadOnly {
 			log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
 			return
 		}
@@ -733,7 +733,7 @@ func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *Remo
 Add/Update Destination rule after checking if the current pod is in ReadOnly mode.
 Destination rule object is not added/updated if the current pod is in ReadOnly mode.
 */
-func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController, admiralState *AdmiralState) {
+func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
@@ -742,7 +742,7 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 	// If current Admiral pod is in read-only mode, do not create/update/delete destination rule objects
 	drIsNew:=(exist == nil || exist.Name == "" || exist.Spec.Host == "")
-	if (*admiralState).ReadOnly {
+	if AdmiralCurrentState.ReadOnly {
 		if drIsNew {
 			op = "Add"
 		}else {
@@ -775,9 +775,9 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 Deleted destination rule after checking if the current pod is in ReadOnly mode.
 Destination rule is not deleted if the current pod is in ReadOnly mode.
 */
-func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController,admiralState *AdmiralState) {
+func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	if exist != nil {
-		if (*admiralState).ReadOnly {
+		if AdmiralCurrentState.ReadOnly {
 			log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
 			return
 		}

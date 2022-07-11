@@ -41,7 +41,7 @@ To create your own implementation of DR, please create struct which implements b
 
 ```
 type AdmiralStateChecker interface {
-	runStateCheck(as *AdmiralState,ctx context.Context)
+	runStateCheck(ctx context.Context)
 	shouldRunOnIndependentGoRoutine() bool
 }
 ```

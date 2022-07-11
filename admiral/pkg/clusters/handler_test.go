@@ -548,9 +548,6 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
-			AdmiralState: &AdmiralState{
-				ReadOnly: ReadOnlyEnabled,
-			},
 		},
 	}
 
@@ -649,9 +646,6 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-            c.handler.RemoteRegistry.AdmiralState =&AdmiralState{
-            	ReadOnly: ReadOnlyEnabled,
-			}
 			err := handleVirtualServiceEvent(c.vs, c.handler, c.event, common.VirtualService)
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
@@ -1530,7 +1524,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc,&AdmiralState{ReadWriteEnabled})
+			addUpdateServiceEntry(c.newSe, c.oldSe, "namespace", c.rc)
 			if c.skipDestructive {
 				//verify the update did not go through
 				se, _ := c.rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries("namespace").Get(c.oldSe.Name, v12.GetOptions{})
