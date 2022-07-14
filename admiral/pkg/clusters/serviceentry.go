@@ -57,6 +57,10 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
+    if AdmiralCurrentState.ReadOnly {
+		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
+    	return nil
+	}
 
 	if IsCacheWarmupTime(remoteRegistry) {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
@@ -375,10 +379,6 @@ func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace 
 	exist.Labels = obj.Labels
 	exist.Annotations = obj.Annotations
 	exist.Spec = obj.Spec
-	if AdmiralCurrentState.ReadOnly {
-		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
-		return
-	}
 	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
 
 	if err != nil {
