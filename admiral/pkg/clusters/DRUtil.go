@@ -12,7 +12,7 @@ const ReadOnlyEnabled = true;
 type AdmiralState struct {
 	ReadOnly  bool
 }
-var AdmiralCurrentState AdmiralState
+var CurrentAdmiralState AdmiralState
 
 type AdmiralStateChecker interface {
 	runStateCheck(ctx context.Context)

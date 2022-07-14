@@ -57,7 +57,7 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
-    if AdmiralCurrentState.ReadOnly {
+    if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
     	return nil
 	}
