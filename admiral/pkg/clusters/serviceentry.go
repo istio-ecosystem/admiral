@@ -74,7 +74,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	cnames := make(map[string]string)
 	var serviceInstance *k8sV1.Service
 	var weightedServices map[string]*WeightedService
-	var rollout *admiral.RolloutClusterEntry
+	var rollout *argo.Rollout
 	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
 
 	var namespace string
@@ -84,29 +84,27 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
 
-		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
+		deployment := rc.DeploymentController.Cache.Get(sourceIdentity, env)
 
 		if rc.RolloutController != nil {
-			rollout = rc.RolloutController.Cache.Get(sourceIdentity)
+			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
 
-		if deployment != nil && deployment.Deployments[env] != nil {
-			deploymentInstance := deployment.Deployments[env]
+		if deployment != nil {
 
-			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
+			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
 				continue
 			}
-			namespace = deploymentInstance.Namespace
-			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deploymentInstance)
+			namespace = deployment.Namespace
+			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
 
-			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceDeployments[rc.ClusterID] = deploymentInstance
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deploymentInstance, serviceEntries)
-		} else if rollout != nil && rollout.Rollouts[env] != nil {
-			rolloutInstance := rollout.Rollouts[env]
+			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceDeployments[rc.ClusterID] = deployment
+			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+		} else if rollout != nil {
 
-			weightedServices = getServiceForRollout(rc, rolloutInstance)
+			weightedServices = getServiceForRollout(rc, rollout)
 			if len(weightedServices) == 0 {
 				continue
 			}
@@ -116,13 +114,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				serviceInstance = sInstance.Service
 				break
 			}
-			namespace = rolloutInstance.Namespace
-			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rolloutInstance)
+			namespace = rollout.Namespace
+			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
 
-			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
-			sourceRollouts[rc.ClusterID] = rolloutInstance
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rolloutInstance, serviceEntries)
+			sourceRollouts[rc.ClusterID] = rollout
+			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
 		} else {
 			continue
 		}

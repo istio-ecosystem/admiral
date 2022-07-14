@@ -45,6 +45,8 @@ func (d *depCache) getKey(dep *v1.Dependency) string {
 }
 
 func (d *depCache) Get(identity string) *v1.Dependency {
+	defer d.mutex.Unlock()
+	d.mutex.Lock()
 	return d.cache[identity]
 }
 

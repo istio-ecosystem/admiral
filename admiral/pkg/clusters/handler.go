@@ -258,10 +258,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 	clusterId := dh.ClusterID
 
-	localDrName := obj.Name + "-local"
-
-	var localIdentityId string
-
 	syncNamespace := common.GetSyncNamespace()
 
 	r := dh.RemoteRegistry
@@ -271,13 +267,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 	if len(dependentClusters) > 0 {
 
 		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
-
-		//Create label based service entry in source and dependent clusters for subset routing to work
-		host := destinationRule.Host
-
-		basicSEName := getIstioResourceName(host, "-se")
-
-		seName := getIstioResourceName(host, "-se")
 
 		allDependentClusters := make(map[string]string)
 
@@ -289,36 +278,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 			rc := r.RemoteControllers[dependentCluster]
 
-			var newServiceEntry *v1alpha3.ServiceEntry
-
-			var existsServiceEntry *v1alpha3.ServiceEntry
-
-			var drServiceEntries = make(map[string]*v1alpha32.ServiceEntry)
-
-			exist, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(basicSEName, v12.GetOptions{})
-
-			var identityId = ""
-
-			if exist == nil || err != nil {
-
-				log.Warnf(LogFormat, "Find", "ServiceEntry", basicSEName, dependentCluster, "Failed")
-
-			} else {
-
-				serviceEntry := exist.Spec
-
-				identityRaw, ok := r.AdmiralCache.CnameIdentityCache.Load(serviceEntry.Hosts[0])
-
-				if ok {
-					identityId = fmt.Sprintf("%v", identityRaw)
-					if dependentCluster == clusterId {
-						localIdentityId = identityId
-					}
-					drServiceEntries = createSeWithDrLabels(rc, dependentCluster == clusterId, identityId, seName, &serviceEntry, &destinationRule, r.AdmiralCache.ServiceEntryAddressStore, r.AdmiralCache.ConfigMapController)
-				}
-
-			}
-
 			if event == common.Delete {
 
 				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
@@ -326,27 +285,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
 				} else {
 					log.Errorf(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
-				}
-				err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(seName, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogFormat, "Delete", "ServiceEntry", seName, clusterId, "success")
-				} else {
-					log.Errorf(LogErrFormat, "Delete", "ServiceEntry", seName, clusterId, err)
-				}
-				for _, subset := range destinationRule.Subsets {
-					sseName := seName + common.Dash + subset.Name
-					err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Delete(sseName, &v12.DeleteOptions{})
-					if err != nil {
-						log.Infof(LogFormat, "Delete", "ServiceEntry", sseName, clusterId, "success")
-					} else {
-						log.Errorf(LogErrFormat, "Delete", "ServiceEntry", sseName, clusterId, err)
-					}
-				}
-				err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(localDrName, &v12.DeleteOptions{})
-				if err != nil {
-					log.Infof(LogFormat, "Delete", "DestinationRule", localDrName, clusterId, "success")
-				} else {
-					log.Errorf(LogErrFormat, "Delete", "DestinationRule", localDrName, clusterId, err)
 				}
 
 			} else {
@@ -357,28 +295,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				if dependentCluster != clusterId {
 					addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 				}
-
-				for _seName, se := range drServiceEntries {
-					existsServiceEntry, _ = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(_seName, v12.GetOptions{})
-					newServiceEntry = createServiceEntrySkeletion(*se, _seName, syncNamespace)
-					if err != nil {
-						log.Warnf(LogErrFormat, "Create", "ServiceEntry", seName, clusterId, err)
-					}
-					if newServiceEntry != nil {
-						addUpdateServiceEntry(newServiceEntry, existsServiceEntry, syncNamespace, rc)
-						r.AdmiralCache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
-					}
-					//cache the subset service entries for updating them later for pod events
-					if dependentCluster == clusterId && se.Resolution == v1alpha32.ServiceEntry_STATIC {
-						r.AdmiralCache.SubsetServiceEntryIdentityCache.Store(identityId, map[string]string{_seName: clusterId})
-					}
-				}
-
-				if dependentCluster == clusterId {
-					//we need a destination rule with local fqdn for destination rules created with cnames to work in local cluster
-					createDestinationRuleForLocal(rc, localDrName, localIdentityId, clusterId, &destinationRule)
-				}
-
 			}
 		}
 		return
@@ -400,41 +316,6 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
 				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
 			}
-		}
-	}
-}
-
-func createDestinationRuleForLocal(remoteController *RemoteController, localDrName string, identityId string, clusterId string,
-	destinationRule *v1alpha32.DestinationRule) {
-
-	deployment := remoteController.DeploymentController.Cache.Get(identityId)
-
-	if deployment == nil || len(deployment.Deployments) == 0 {
-		log.Errorf(LogFormat, "Find", "deployment", identityId, remoteController.ClusterID, "Couldn't find deployment with identity")
-		return
-	}
-
-	//TODO this will pull a random deployment from some cluster which might not be the right deployment
-	var deploymentInstance *k8sAppsV1.Deployment
-	for _, value := range deployment.Deployments {
-		deploymentInstance = value
-		break
-	}
-
-	syncNamespace := common.GetSyncNamespace()
-	serviceInstance := getServiceForDeployment(remoteController, deploymentInstance)
-
-	cname := common.GetCname(deploymentInstance, common.GetHostnameSuffix(), common.GetWorkloadIdentifier())
-	if cname == destinationRule.Host {
-		destinationRule.Host = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		existsDestinationRule, err := remoteController.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(localDrName, v12.GetOptions{})
-		if err != nil {
-			log.Warnf(LogErrFormat, "Find", "DestinationRule", localDrName, clusterId, err)
-		}
-		newDestinationRule := createDestinationRuleSkeletion(*destinationRule, localDrName, syncNamespace)
-
-		if newDestinationRule != nil {
-			addUpdateDestinationRule(newDestinationRule, existsDestinationRule, syncNamespace, remoteController)
 		}
 	}
 }

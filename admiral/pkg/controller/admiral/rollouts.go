@@ -61,8 +61,15 @@ func (p *rolloutCache) getKey(rollout *argo.Rollout) string {
 	return common.GetRolloutGlobalIdentifier(rollout)
 }
 
-func (p *rolloutCache) Get(key string) *RolloutClusterEntry {
-	return p.cache[key]
+func (p *rolloutCache) Get(key string, env string) *argo.Rollout {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+	rce := p.cache[key]
+	if rce == nil {
+		return nil
+	} else {
+		return rce.Rollouts[env]
+	}
 }
 
 func (p *rolloutCache) Delete(pod *RolloutClusterEntry) {
@@ -75,28 +82,30 @@ func (p *rolloutCache) UpdateRolloutToClusterCache(key string, rollout *argo.Rol
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	v := p.Get(key)
+	env := common.GetEnvForRollout(rollout)
 
-	if v == nil {
-		v = &RolloutClusterEntry{
+	rce := p.cache[key]
+
+	if rce == nil {
+		rce = &RolloutClusterEntry{
 			Identity: key,
 			Rollouts: make(map[string]*argo.Rollout),
 		}
-		p.cache[v.Identity] = v
 	}
-	env := common.GetEnvForRollout(rollout)
-	v.Rollouts[env] = rollout
+	rce.Rollouts[env] = rollout
+	p.cache[rce.Identity] = rce
 }
 
 func (p *rolloutCache) DeleteFromRolloutToClusterCache(key string, rollout *argo.Rollout) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	v := p.Get(key)
+	env := common.GetEnvForRollout(rollout)
 
-	if v != nil {
-		env := common.GetEnvForRollout(rollout)
-		delete(v.Rollouts, env)
+	rce := p.cache[key]
+
+	if rce != nil {
+		delete(rce.Rollouts, env)
 	}
 }
 
@@ -204,10 +213,10 @@ func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[
 	}
 
 	if matchedRollouts.Items == nil {
-		return make([]argo.Rollout,0)
+		return make([]argo.Rollout, 0)
 	}
 
-	filteredRollouts := make ([]argo.Rollout, 0)
+	filteredRollouts := make([]argo.Rollout, 0)
 
 	for _, rollout := range matchedRollouts.Items {
 		if common.IsServiceMatch(serviceSelector, rollout.Spec.Selector) {
