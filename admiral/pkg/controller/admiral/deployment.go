@@ -45,36 +45,45 @@ func (p *deploymentCache) getKey(deployment *k8sAppsV1.Deployment) string {
 	return common.GetDeploymentGlobalIdentifier(deployment)
 }
 
-func (p *deploymentCache) Get(key string) *DeploymentClusterEntry {
-	return p.cache[key]
+func (p *deploymentCache) Get(key string, env string) *k8sAppsV1.Deployment {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+	dce := p.cache[key]
+	if dce != nil {
+		return dce.Deployments[env]
+	} else {
+		return nil
+	}
 }
 
 func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	v := p.Get(key)
+	env := common.GetEnv(deployment)
 
-	if v == nil {
-		v = &DeploymentClusterEntry{
+	dce := p.cache[key]
+
+	if dce == nil {
+		dce = &DeploymentClusterEntry{
 			Identity:    key,
 			Deployments: make(map[string]*k8sAppsV1.Deployment),
 		}
-		p.cache[v.Identity] = v
 	}
-	env := common.GetEnv(deployment)
-	v.Deployments[env] = deployment
+	dce.Deployments[env] = deployment
+	p.cache[dce.Identity] = dce
 }
 
 func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	v := p.Get(key)
+	env := common.GetEnv(deployment)
 
-	if v != nil {
-		env := common.GetEnv(deployment)
-		delete(v.Deployments, env)
+	dce := p.cache[key]
+
+	if dce != nil {
+		delete(dce.Deployments, env)
 	}
 }
 
@@ -107,13 +116,6 @@ func NewDeploymentController(clusterID string, stopCh <-chan struct{}, handler D
 	NewController("deployment-ctrl-"+config.Host, stopCh, wc, deploymentController.informer)
 
 	return &deploymentController, nil
-}
-
-func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
-
-	dc, err := NewDeploymentController("", stopCh, handler, config, resyncPeriod)
-	dc.labelSet = labelSet
-	return dc, err
 }
 
 func (d *DeploymentController) Added(obj interface{}) {
@@ -185,7 +187,7 @@ func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelecto
 		return []k8sAppsV1.Deployment{}
 	}
 
-	filteredDeployments := make ([]k8sAppsV1.Deployment, 0)
+	filteredDeployments := make([]k8sAppsV1.Deployment, 0)
 
 	for _, deployment := range matchedDeployments.Items {
 		if common.IsServiceMatch(serviceSelector, deployment.Spec.Selector) {

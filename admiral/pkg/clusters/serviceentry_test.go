@@ -31,52 +31,6 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func TestCreateSeWithDrLabels(t *testing.T) {
-
-	se := istionetworkingv1alpha3.ServiceEntry{
-		Hosts: []string{"test.com"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
-		},
-	}
-
-	des := istionetworkingv1alpha3.DestinationRule{
-		Host: "test.com",
-		Subsets: []*istionetworkingv1alpha3.Subset{
-			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
-		},
-	}
-
-	cacheWithNoEntry := ServiceEntryAddressStore{
-		EntryAddresses: map[string]string{"test-se": "1.2.3.4"},
-		Addresses:      []string{"1.2.3.4"},
-	}
-
-	emptyCacheController := test.FakeConfigMapController{
-		GetError:          nil,
-		PutError:          nil,
-		ConfigmapToReturn: buildFakeConfigMapFromAddressStore(&cacheWithNoEntry, "123"),
-	}
-
-	res := createSeWithDrLabels(nil, false, "", "test-se", &se, &des, &cacheWithNoEntry, &emptyCacheController)
-
-	if res == nil {
-		t.Fail()
-	}
-
-	newSe := res["test-se"] // Test for Rollout
-
-	value := newSe.Endpoints[0].Labels["foo"]
-
-	if value != "bar" {
-		t.Fail()
-	}
-
-	if newSe.Addresses[0] != "1.2.3.4" {
-		t.Errorf("Address set incorrectly from cache, expected 1.2.3.4, got %v", newSe.Addresses[0])
-	}
-}
-
 func TestAddServiceEntriesWithDr(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
@@ -289,7 +243,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
-	rr.StartTime = time.Now().Add(-60*time.Second)
+	rr.StartTime = time.Now().Add(-60 * time.Second)
 
 	config := rest.Config{
 		Host: "localhost",
@@ -876,7 +830,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	rr, _ := InitAdmiral(context.Background(), p)
 
-	rr.StartTime = time.Now().Add(-60*time.Second)
+	rr.StartTime = time.Now().Add(-60 * time.Second)
 
 	config := rest.Config{
 		Host: "localhost",
@@ -1014,7 +968,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	config := rest.Config{
 		Host: "localhost",
 	}
-	rr.StartTime = time.Now().Add(-60*time.Second)
+	rr.StartTime = time.Now().Add(-60 * time.Second)
 
 	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 

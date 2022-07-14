@@ -74,7 +74,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	cnames := make(map[string]string)
 	var serviceInstance *k8sV1.Service
 	var weightedServices map[string]*WeightedService
-	var rollout *admiral.RolloutClusterEntry
+	var rollout *argo.Rollout
 	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
 
 	var namespace string
@@ -84,29 +84,27 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	start := time.Now()
 	for _, rc := range remoteRegistry.RemoteControllers {
 
-		deployment := rc.DeploymentController.Cache.Get(sourceIdentity)
+		deployment := rc.DeploymentController.Cache.Get(sourceIdentity, env)
 
 		if rc.RolloutController != nil {
-			rollout = rc.RolloutController.Cache.Get(sourceIdentity)
+			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
 
-		if deployment != nil && deployment.Deployments[env] != nil {
-			deploymentInstance := deployment.Deployments[env]
+		if deployment != nil {
 
-			serviceInstance = getServiceForDeployment(rc, deploymentInstance)
+			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
 				continue
 			}
-			namespace = deploymentInstance.Namespace
-			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deploymentInstance)
+			namespace = deployment.Namespace
+			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
 
-			cname = common.GetCname(deploymentInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			sourceDeployments[rc.ClusterID] = deploymentInstance
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deploymentInstance, serviceEntries)
-		} else if rollout != nil && rollout.Rollouts[env] != nil {
-			rolloutInstance := rollout.Rollouts[env]
+			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceDeployments[rc.ClusterID] = deployment
+			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+		} else if rollout != nil {
 
-			weightedServices = getServiceForRollout(rc, rolloutInstance)
+			weightedServices = getServiceForRollout(rc, rollout)
 			if len(weightedServices) == 0 {
 				continue
 			}
@@ -116,13 +114,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 				serviceInstance = sInstance.Service
 				break
 			}
-			namespace = rolloutInstance.Namespace
-			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rolloutInstance)
+			namespace = rollout.Namespace
+			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
 
-			cname = common.GetCnameForRollout(rolloutInstance, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
-			sourceRollouts[rc.ClusterID] = rolloutInstance
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rolloutInstance, serviceEntries)
+			sourceRollouts[rc.ClusterID] = rollout
+			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
 		} else {
 			continue
 		}
@@ -389,49 +387,6 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	newSidecarObj.Spec.Ingress = sidecar.Spec.Ingress
 	newSidecarObj.Spec.Egress = sidecar.Spec.Egress
 	return newSidecarObj
-}
-
-func createSeWithDrLabels(remoteController *RemoteController, localCluster bool, identityId string, seName string, se *networking.ServiceEntry,
-	dr *networking.DestinationRule, seAddressCache *ServiceEntryAddressStore, configmapController admiral.ConfigMapControllerInterface) map[string]*networking.ServiceEntry {
-	var allSes = make(map[string]*networking.ServiceEntry)
-	var newSe = copyServiceEntry(se)
-
-	address, _, err := GetLocalAddressForSe(seName, seAddressCache, configmapController)
-	if err != nil {
-		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v", err)
-		return nil
-	}
-	newSe.Addresses = []string{address}
-
-	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
-
-	for _, endpoint := range se.Endpoints {
-		for _, subset := range dr.Subsets {
-			newEndpoint := copyEndpoint(endpoint)
-			newEndpoint.Labels = subset.Labels
-
-			////create a service entry with name subsetSeName
-			//if localCluster {
-			//	subsetSeName := seName + common.Dash + subset.Name
-			//	subsetSeAddress := strings.Split(se.Hosts[0], common.DotMesh)[0] + common.Sep + subset.Name + common.DotMesh BROKEN MUST FIX //todo fix the cname format here
-			//
-			//	//TODO uncomment the line below when subset routing across clusters is fixed
-			//	//newEndpoint.Address = subsetSeAddress
-			//
-			//	subSetSe := createSeWithPodIps(remoteController, identityId, subsetSeName, subsetSeAddress, newSe, newEndpoint, subset, seAddressMap)
-			//	if subSetSe != nil {
-			//		allSes[subsetSeName] = subSetSe
-			//		//TODO create default DestinationRules for these subset SEs
-			//	}
-			//}
-
-			endpoints = append(endpoints, newEndpoint)
-
-		}
-	}
-	newSe.Endpoints = endpoints
-	allSes[seName] = newSe
-	return allSes
 }
 
 //This will create the default service entries and also additional ones specified in GTP

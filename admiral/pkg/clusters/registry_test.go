@@ -48,7 +48,7 @@ func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 	w := RemoteRegistry{
 		RemoteControllers: make(map[string]*RemoteController),
-		StartTime: time.Now(),
+		StartTime:         time.Now(),
 	}
 
 	err := w.deleteCacheController("I don't exit")
@@ -62,7 +62,7 @@ func TestDeleteCacheController(t *testing.T) {
 
 	w := RemoteRegistry{
 		RemoteControllers: make(map[string]*RemoteController),
-		StartTime: time.Now(),
+		StartTime:         time.Now(),
 	}
 
 	r := rest.Config{
@@ -130,55 +130,6 @@ func TestCopySidecar(t *testing.T) {
 	if newSidecar.Spec.WorkloadSelector != spec.WorkloadSelector {
 		t.Fail()
 	}
-}
-
-func TestCreateDestinationRuleForLocalNoDeployLabel(t *testing.T) {
-
-	config := rest.Config{
-		Host: "localhost",
-	}
-
-	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-
-	if e != nil {
-		t.Fail()
-	}
-
-	rc := RemoteController{
-		DeploymentController: d,
-	}
-
-	des := networking.DestinationRule{
-		Host: "test.com",
-		Subsets: []*networking.Subset{
-			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
-		},
-	}
-
-	createDestinationRuleForLocal(&rc, "local.name", "identity", "cluster1", &des)
-
-}
-
-func TestCreateDestinationRuleForLocal(t *testing.T) {
-
-	rc, err := createMockRemoteController(
-		func(i interface{}) {
-
-		},
-	)
-
-	if err != nil {
-		t.Fail()
-	}
-	des := networking.DestinationRule{
-		Host: "dev.bar.global",
-		Subsets: []*networking.Subset{
-			{Name: "subset1", Labels: map[string]string{"foo": "bar"}, TrafficPolicy: nil},
-		},
-	}
-
-	createDestinationRuleForLocal(rc, "local.name", "bar", "cluster1", &des)
-
 }
 
 func createMockRemoteController(f func(interface{})) (*RemoteController, error) {
