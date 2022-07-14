@@ -58,6 +58,10 @@ func (m *MockServiceHandler) Added(obj *k8sCoreV1.Service) {
 
 }
 
+func (m *MockServiceHandler) Updated(obj *k8sCoreV1.Service) {
+
+}
+
 func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
 
 }

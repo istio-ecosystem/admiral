@@ -529,6 +529,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: cnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 
@@ -548,6 +549,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 
@@ -574,6 +576,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 				CnameDependentClusterCache: goodCnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
 			},
+			StartTime: time.Now(),
 		},
 	}
 
@@ -656,10 +659,12 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 
 func TestGetServiceForRolloutCanary(t *testing.T) {
 	//Struct of test case info. Name is required.
-	const NAMESPACE = "namespace"
-	const SERVICENAME = "serviceName"
-	const STABLESERVICENAME = "stableserviceName"
-	const CANARYSERVICENAME = "canaryserviceName"
+	const Namespace = "namespace"
+	const ServiceName = "serviceName"
+	const StableServiceName = "stableserviceName"
+	const CanaryServiceName = "canaryserviceName"
+	const GeneratedStableServiceName = "hello-" + common.RolloutStableServiceSuffix
+	const LatestMatchingService = "hello-root-service"
 	const VS_NAME_1 = "virtualservice1"
 	const VS_NAME_2 = "virtualservice2"
 	const VS_NAME_3 = "virtualservice3"
@@ -670,8 +675,8 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	}
 	stop := make(chan struct{})
 
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
 
@@ -692,12 +697,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	selectorMap["app"] = "test"
 
 	service := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: ServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now())},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 		},
 	}
-	service.Name = SERVICENAME
-	service.Namespace = NAMESPACE
 	port1 := coreV1.ServicePort{
 		Port: 8080,
 	}
@@ -710,7 +714,15 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	service.Spec.Ports = ports
 
 	stableService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name: STABLESERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: StableServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+			Ports:    ports,
+		},
+	}
+
+	generatedStableService := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: GeneratedStableServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 			Ports:    ports,
@@ -718,7 +730,15 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	}
 
 	canaryService := &coreV1.Service{
-		ObjectMeta: v12.ObjectMeta{Name: CANARYSERVICENAME, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: CanaryServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+			Ports:    ports,
+		},
+	}
+
+	latestMatchingService := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: LatestMatchingService, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now())},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 			Ports:    ports,
@@ -773,41 +793,43 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	rcTemp.ServiceController.Cache.Put(service1)
 	rcTemp.ServiceController.Cache.Put(service4)
 	rcTemp.ServiceController.Cache.Put(stableService)
+	rcTemp.ServiceController.Cache.Put(generatedStableService)
 	rcTemp.ServiceController.Cache.Put(canaryService)
+	rcTemp.ServiceController.Cache.Put(latestMatchingService)
 
 	virtualService := &v1alpha32.VirtualService{
-		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_1, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_1, Namespace: Namespace},
 		Spec: v1alpha3.VirtualService{
 			Http: []*v1alpha3.HTTPRoute{{Route: []*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 80},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 20},
+				{Destination: &v1alpha3.Destination{Host: StableServiceName}, Weight: 80},
+				{Destination: &v1alpha3.Destination{Host: CanaryServiceName}, Weight: 20},
 			}}},
 		},
 	}
 
 	vsMutipleRoutesWithMatch := &v1alpha32.VirtualService{
-		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_2, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_2, Namespace: Namespace},
 		Spec: v1alpha3.VirtualService{
 			Http: []*v1alpha3.HTTPRoute{{Name: VS_ROUTE_PRIMARY, Route: []*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 80},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 20},
+				{Destination: &v1alpha3.Destination{Host: StableServiceName}, Weight: 80},
+				{Destination: &v1alpha3.Destination{Host: CanaryServiceName}, Weight: 20},
 			}}},
 		},
 	}
 
 	vsMutipleRoutesWithZeroWeight := &v1alpha32.VirtualService{
-		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_4, Namespace: NAMESPACE},
+		ObjectMeta: v12.ObjectMeta{Name: VS_NAME_4, Namespace: Namespace},
 		Spec: v1alpha3.VirtualService{
 			Http: []*v1alpha3.HTTPRoute{{Name: "random", Route: []*v1alpha3.HTTPRouteDestination{
-				{Destination: &v1alpha3.Destination{Host: STABLESERVICENAME}, Weight: 100},
-				{Destination: &v1alpha3.Destination{Host: CANARYSERVICENAME}, Weight: 0},
+				{Destination: &v1alpha3.Destination{Host: StableServiceName}, Weight: 100},
+				{Destination: &v1alpha3.Destination{Host: CanaryServiceName}, Weight: 0},
 			}}},
 		},
 	}
 
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(NAMESPACE).Create(virtualService)
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(NAMESPACE).Create(vsMutipleRoutesWithMatch)
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(NAMESPACE).Create(vsMutipleRoutesWithZeroWeight)
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(virtualService)
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(vsMutipleRoutesWithMatch)
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(vsMutipleRoutesWithZeroWeight)
 
 	canaryRollout := argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
@@ -821,9 +843,10 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 	}
 	canaryRollout.Spec.Selector = &labelSelector
 
-	canaryRollout.Namespace = NAMESPACE
+	canaryRollout.Namespace = Namespace
 	canaryRollout.Spec.Strategy = argo.RolloutStrategy{
-		Canary: &argo.CanaryStrategy{},
+		Canary: &argo.CanaryStrategy{
+		},
 	}
 
 	canaryRolloutNS1 := argo.Rollout{
@@ -871,11 +894,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		}}}
 	canaryRolloutIstioVs.Spec.Selector = &labelSelector
 
-	canaryRolloutIstioVs.Namespace = NAMESPACE
+	canaryRolloutIstioVs.Namespace = Namespace
 	canaryRolloutIstioVs.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{
-			StableService: STABLESERVICENAME,
-			CanaryService: CANARYSERVICENAME,
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
 					VirtualService: argo.IstioVirtualService{Name: VS_NAME_1},
@@ -890,11 +913,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		}}}
 	canaryRolloutIstioVsRouteMatch.Spec.Selector = &labelSelector
 
-	canaryRolloutIstioVsRouteMatch.Namespace = NAMESPACE
+	canaryRolloutIstioVsRouteMatch.Namespace = Namespace
 	canaryRolloutIstioVsRouteMatch.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{
-			StableService: STABLESERVICENAME,
-			CanaryService: CANARYSERVICENAME,
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
 					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{VS_ROUTE_PRIMARY}},
@@ -909,11 +932,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		}}}
 	canaryRolloutIstioVsRouteMisMatch.Spec.Selector = &labelSelector
 
-	canaryRolloutIstioVsRouteMisMatch.Namespace = NAMESPACE
+	canaryRolloutIstioVsRouteMisMatch.Namespace = Namespace
 	canaryRolloutIstioVsRouteMisMatch.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{
-			StableService: STABLESERVICENAME,
-			CanaryService: CANARYSERVICENAME,
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
 					VirtualService: argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string{"random"}},
@@ -928,16 +951,30 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		}}}
 	canaryRolloutIstioVsZeroWeight.Spec.Selector = &labelSelector
 
-	canaryRolloutIstioVsZeroWeight.Namespace = NAMESPACE
+	canaryRolloutIstioVsZeroWeight.Namespace = Namespace
 	canaryRolloutIstioVsZeroWeight.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{
-			StableService: STABLESERVICENAME,
-			CanaryService: CANARYSERVICENAME,
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
 					VirtualService: argo.IstioVirtualService{Name: VS_NAME_4},
 				},
 			},
+		},
+	}
+
+	canaryRolloutWithStableService := argo.Rollout{
+		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations: map[string]string{}},
+		}}}
+	canaryRolloutWithStableService.Spec.Selector = &labelSelector
+
+	canaryRolloutWithStableService.Namespace = Namespace
+	canaryRolloutWithStableService.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 		},
 	}
 
@@ -947,11 +984,11 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		}}}
 	canaryRolloutIstioVsMimatch.Spec.Selector = &labelSelector
 
-	canaryRolloutIstioVsMimatch.Namespace = NAMESPACE
+	canaryRolloutIstioVsMimatch.Namespace = Namespace
 	canaryRolloutIstioVsMimatch.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{
-			StableService: STABLESERVICENAME,
-			CanaryService: CANARYSERVICENAME,
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
 					VirtualService: argo.IstioVirtualService{Name: "random"},
@@ -962,14 +999,14 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	resultForDummy := map[string]*WeightedService{"dummy": {Weight: 1, Service: service1}}
 
-	resultForRandomMatch := map[string]*WeightedService{CANARYSERVICENAME: {Weight: 1, Service: canaryService}}
+	resultForStableServiceOnly := map[string]*WeightedService{StableServiceName: {Weight: 1, Service: stableService}}
 
-	resultForStableServiceOnly := map[string]*WeightedService{STABLESERVICENAME: {Weight: 1, Service: stableService}}
+	resultForEmptyStableServiceOnRollout := map[string]*WeightedService{GeneratedStableServiceName: {Weight: 1, Service: generatedStableService}}
 
-	resultForCanaryWithIstio := map[string]*WeightedService{STABLESERVICENAME: {Weight: 80, Service: stableService},
-		CANARYSERVICENAME: {Weight: 20, Service: canaryService}}
+	resultForCanaryWithIstio := map[string]*WeightedService{StableServiceName: {Weight: 80, Service: stableService},
+		CanaryServiceName: {Weight: 20, Service: canaryService}}
 
-	resultForCanaryWithStableService := map[string]*WeightedService{STABLESERVICENAME: {Weight: 100, Service: stableService}}
+	resultForCanaryWithStableService := map[string]*WeightedService{StableServiceName: {Weight: 100, Service: stableService}}
 
 	testCases := []struct {
 		name    string
@@ -991,7 +1028,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			name:    "canaryRolloutHappyCase",
 			rollout: &canaryRollout,
 			rc:      rcTemp,
-			result:  resultForRandomMatch,
+			result:  resultForEmptyStableServiceOnRollout,
 		}, {
 			name:    "canaryRolloutWithStableService",
 			rollout: &canaryRolloutIstioVsMimatch,
@@ -1017,12 +1054,20 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			rollout: &canaryRolloutIstioVsRouteMisMatch,
 			rc:      rcTemp,
 			result:  resultForStableServiceOnly,
+		}, {
+			name:    "canaryRolloutWithStableServiceName",
+			rollout: &canaryRolloutWithStableService,
+			rc:      rcTemp,
+			result:  resultForStableServiceOnly,
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
+			if c.name != "canaryRolloutHappyCase" {
+				return
+			}
 			result := getServiceForRollout(c.rc, c.rollout)
 			if len(c.result) == 0 {
 				if result != nil && len(result) != 0 {
@@ -1050,6 +1095,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 	//Struct of test case info. Name is required.
 	const NAMESPACE = "namespace"
 	const SERVICENAME = "serviceNameActive"
+	const GeneratedActiveServiceName = "hello-" + common.RolloutActiveServiceSuffix
 	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
 
 	config := rest.Config{
@@ -1057,10 +1103,10 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 	}
 	stop := make(chan struct{})
 
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	r, e := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
-	emptyCacheService, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	emptyCacheService, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fatalf("Inititalization failed")
@@ -1091,6 +1137,18 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 			PreviewService: "previewService",
 		},
 	}
+	bgRolloutNoActiveService := argo.Rollout{
+		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations: map[string]string{}},
+		}}}
+
+	bgRolloutNoActiveService.Spec.Selector = &labelSelector
+
+	bgRolloutNoActiveService.Namespace = NAMESPACE
+	bgRolloutNoActiveService.Spec.Strategy = argo.RolloutStrategy{
+		BlueGreen: &argo.BlueGreenStrategy{
+		},
+	}
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
@@ -1115,6 +1173,15 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 
 	ports := []coreV1.ServicePort{port1, port2}
 	activeService.Spec.Ports = ports
+
+	generatedActiveService := &coreV1.Service{
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+		},
+	}
+	generatedActiveService.Name = GeneratedActiveServiceName
+	generatedActiveService.Namespace = NAMESPACE
+	generatedActiveService.Spec.Ports = ports
 
 	selectorMap1 := make(map[string]string)
 	selectorMap1["app"] = "test1"
@@ -1187,6 +1254,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 	rc.ServiceController.Cache.Put(previewService)
 	rc.ServiceController.Cache.Put(activeService)
 	rc.ServiceController.Cache.Put(serviceNS1)
+	rc.ServiceController.Cache.Put(generatedActiveService)
 
 	noStratergyRollout := argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
@@ -1218,6 +1286,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 	}
 
 	resultForBlueGreen := map[string]*WeightedService{SERVICENAME: {Weight: 1, Service: activeService}}
+	resultForNoActiveService := map[string]*WeightedService{GeneratedActiveServiceName: {Weight: 1, Service: generatedActiveService}}
 
 	testCases := []struct {
 		name    string
@@ -1240,6 +1309,11 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 			rollout: &bgRollout,
 			rc:      rc,
 			result:  resultForBlueGreen,
+		}, {
+			name:    "rolloutWithNoActiveService",
+			rollout: &bgRolloutNoActiveService,
+			rc:      rc,
+			result:  resultForNoActiveService,
 		},
 		{
 			name:    "canaryRolloutNilRollout",

@@ -10,6 +10,7 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func GetMeshPorts(clusterName string, destService *k8sV1.Service,
@@ -126,4 +127,8 @@ func ValidateConfigmapBeforePutting(cm *k8sV1.ConfigMap) error {
 		return errors.New("address cache length mismatch") //should be impossible. We're in a state where the list of addresses doesn't match the map of se:address. Something's been missed and must be fixed
 	}
 	return nil
+}
+
+func IsCacheWarmupTime(remoteRegistry *RemoteRegistry) bool {
+	return time.Since(remoteRegistry.StartTime) < common.GetAdmiralParams().CacheRefreshDuration
 }

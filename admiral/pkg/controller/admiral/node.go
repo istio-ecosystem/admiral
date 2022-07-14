@@ -26,7 +26,7 @@ type Locality struct {
 	Region string
 }
 
-func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest.Config) (*NodeController, error) {
+func NewNodeController(clusterID string, stopCh <-chan struct{}, handler NodeHandler, config *rest.Config) (*NodeController, error) {
 
 	nodeController := NodeController{}
 	nodeController.NodeHandler = handler
@@ -44,7 +44,8 @@ func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest
 		cache.Indexers{},
 	)
 
-	NewController("node-ctrl-" + config.Host, stopCh, &nodeController, nodeController.informer)
+	mcd := NewMonitoredDelegator(&nodeController, clusterID, "node")
+	NewController("node-ctrl-"+config.Host, stopCh, mcd, nodeController.informer)
 
 	return &nodeController, nil
 }

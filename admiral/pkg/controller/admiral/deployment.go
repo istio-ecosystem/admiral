@@ -78,46 +78,7 @@ func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deploymen
 	}
 }
 
-func (d *DeploymentController) GetDeployments() ([]*k8sAppsV1.Deployment, error) {
-
-	ns := d.K8sClient.CoreV1().Namespaces()
-
-	namespaceSidecarInjectionLabelFilter := d.labelSet.NamespaceSidecarInjectionLabel + "=" + d.labelSet.NamespaceSidecarInjectionLabelValue
-	istioEnabledNs, err := ns.List(meta_v1.ListOptions{LabelSelector: namespaceSidecarInjectionLabelFilter})
-
-	if err != nil {
-		return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-	}
-
-	var res []*k8sAppsV1.Deployment
-
-	for _, v := range istioEnabledNs.Items {
-
-		deployments := d.K8sClient.AppsV1().Deployments(v.Name)
-		deploymentsList, err := deployments.List(meta_v1.ListOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("error listing deployments: %v", err)
-		}
-		var admiralDeployments []k8sAppsV1.Deployment
-		for _, deployment := range deploymentsList.Items {
-			if !d.shouldIgnoreBasedOnLabels(&deployment) {
-				admiralDeployments = append(admiralDeployments, deployment)
-			}
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("error getting istio labled namespaces: %v", err)
-		}
-
-		for _, pi := range admiralDeployments {
-			res = append(res, &pi)
-		}
-	}
-
-	return res, nil
-}
-
-func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
+func NewDeploymentController(clusterID string, stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration) (*DeploymentController, error) {
 
 	deploymentController := DeploymentController{}
 	deploymentController.DeploymentHandler = handler
@@ -142,14 +103,15 @@ func NewDeploymentController(stopCh <-chan struct{}, handler DeploymentHandler, 
 		cache.Indexers{},
 	)
 
-	NewController("deployment-ctrl-" + config.Host, stopCh, &deploymentController, deploymentController.informer)
+	wc := NewMonitoredDelegator(&deploymentController, clusterID, "deployment")
+	NewController("deployment-ctrl-"+config.Host, stopCh, wc, deploymentController.informer)
 
 	return &deploymentController, nil
 }
 
 func NewDeploymentControllerWithLabelOverride(stopCh <-chan struct{}, handler DeploymentHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*DeploymentController, error) {
 
-	dc, err := NewDeploymentController(stopCh, handler, config, resyncPeriod)
+	dc, err := NewDeploymentController("", stopCh, handler, config, resyncPeriod)
 	dc.labelSet = labelSet
 	return dc, err
 }
@@ -210,11 +172,9 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(deployment *k8sAppsV1.D
 	return false //labels are fine, we should not ignore
 }
 
-func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace string) []k8sAppsV1.Deployment {
-	matchLabel := common.GetGlobalTrafficDeploymentLabel()
-	labelOptions := meta_v1.ListOptions{}
-	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
-	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(labelOptions)
+func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
+
+	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)
@@ -225,5 +185,13 @@ func (d *DeploymentController) GetDeploymentByLabel(labelValue string, namespace
 		return []k8sAppsV1.Deployment{}
 	}
 
-	return matchedDeployments.Items
+	filteredDeployments := make ([]k8sAppsV1.Deployment, 0)
+
+	for _, deployment := range matchedDeployments.Items {
+		if common.IsServiceMatch(serviceSelector, deployment.Spec.Selector) {
+			filteredDeployments = append(filteredDeployments, deployment)
+		}
+	}
+
+	return filteredDeployments
 }

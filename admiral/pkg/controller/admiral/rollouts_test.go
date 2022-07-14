@@ -25,7 +25,7 @@ func TestNewRolloutController(t *testing.T) {
 	stop := make(chan struct{})
 	rolHandler := test.MockRolloutHandler{}
 
-	depCon, err := NewRolloutsController(stop, &rolHandler, config, time.Duration(1000))
+	depCon, err := NewRolloutsController("test", stop, &rolHandler, config, time.Duration(1000))
 
 	if depCon == nil {
 		t.Errorf("Rollout controller should not be nil")
@@ -155,19 +155,19 @@ func TestRolloutController_Deleted(t *testing.T) {
 	rollout.Spec.Template.Annotations = map[string]string{"sidecar.istio.io/inject": "true"}
 
 	testCases := []struct {
-		name                  string
-		rollout               *argo.Rollout
-		expectedRollout       *argo.Rollout
+		name            string
+		rollout         *argo.Rollout
+		expectedRollout *argo.Rollout
 	}{
 		{
-			name:                  "Expects rollout to be deleted from the cache when the correct label is present",
-			rollout:               &rollout,
-			expectedRollout:       nil,
+			name:            "Expects rollout to be deleted from the cache when the correct label is present",
+			rollout:         &rollout,
+			expectedRollout: nil,
 		},
 		{
-			name:                  "Expects no error thrown if calling delete on an rollout not exist in cache",
-			rollout:               &rollout,
-			expectedRollout:       nil,
+			name:            "Expects no error thrown if calling delete on an rollout not exist in cache",
+			rollout:         &rollout,
+			expectedRollout: nil,
 		},
 	}
 
@@ -195,56 +195,56 @@ func TestRolloutController_Deleted(t *testing.T) {
 
 }
 
-func TestRolloutController_GetRolloutByLabel(t *testing.T) {
+func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 	rollout := argo.Rollout{}
 	rollout.Namespace = "namespace"
 	rollout.Name = "fake-app-rollout-qal"
 	rollout.Spec = argo.RolloutSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "qal"},
 			},
 		},
 	}
-	rollout.Labels = map[string]string{"identity": "app1"}
 
 	rollout2 := argo.Rollout{}
 	rollout2.Namespace = "namespace"
 	rollout2.Name = "fake-app-rollout-e2e"
 	rollout2.Spec = argo.RolloutSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "e2e"},
 			},
 		},
 	}
-	rollout2.Labels = map[string]string{"identity": "app1"}
 
 	rollout3 := argo.Rollout{}
 	rollout3.Namespace = "namespace"
 	rollout3.Name = "fake-app-rollout-prf-1"
 	rollout3.CreationTimestamp = v1.Now()
 	rollout3.Spec = argo.RolloutSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "prf"},
 			},
 		},
 	}
-	rollout3.Labels = map[string]string{"identity": "app1"}
 
 	rollout4 := argo.Rollout{}
 	rollout4.Namespace = "namespace"
 	rollout4.Name = "fake-app-rollout-prf-2"
 	rollout4.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
 	rollout4.Spec = argo.RolloutSpec{
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app2"},},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app2", "env": "prf"},
 			},
 		},
 	}
-	rollout4.Labels = map[string]string{"identity": "app2"}
 
 	oneRolloutClient := argofake.NewSimpleClientset(&rollout).ArgoprojV1alpha1()
 
@@ -259,37 +259,37 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 		name             string
 		expectedRollouts []argo.Rollout
 		fakeClient       argoprojv1alpha1.ArgoprojV1alpha1Interface
-		labelValue       string
+		selector         map[string]string
 	}{
 		{
 			name:             "Get one",
 			expectedRollouts: []argo.Rollout{rollout},
 			fakeClient:       oneRolloutClient,
-			labelValue:       "app1",
+			selector:         map[string]string {"identity": "app1", common.RolloutPodHashLabel: "random-hash"},
 		},
 		{
 			name:             "Get one from long list",
 			expectedRollouts: []argo.Rollout{rollout4},
 			fakeClient:       allRolloutsClient,
-			labelValue:       "app2",
+			selector:         map[string]string {"identity": "app2", common.RolloutPodHashLabel: "random-hash"},
 		},
 		{
 			name:             "Get many from long list",
 			expectedRollouts: []argo.Rollout{rollout, rollout3, rollout2},
 			fakeClient:       allRolloutsClient,
-			labelValue:       "app1",
+			selector:         map[string]string {"identity": "app1", common.RolloutPodHashLabel: "random-hash"},
 		},
 		{
 			name:             "Get none from long list",
 			expectedRollouts: []argo.Rollout{},
 			fakeClient:       allRolloutsClient,
-			labelValue:       "app3",
+			selector:         map[string]string {"identity": "app3", common.RolloutPodHashLabel: "random-hash"},
 		},
 		{
 			name:             "Get none from empty list",
 			expectedRollouts: []argo.Rollout{},
 			fakeClient:       noRolloutsClient,
-			labelValue:       "app1",
+			selector:         map[string]string {"identity": "app1"},
 		},
 	}
 
@@ -297,7 +297,7 @@ func TestRolloutController_GetRolloutByLabel(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			rolloutController.RolloutClient = c.fakeClient
-			returnedRollouts := rolloutController.GetRolloutByLabel(c.labelValue, "namespace")
+			returnedRollouts := rolloutController.GetRolloutBySelectorInNamespace(c.selector, "namespace")
 
 			sort.Slice(returnedRollouts, func(i, j int) bool {
 				return returnedRollouts[i].Name > returnedRollouts[j].Name

@@ -289,14 +289,15 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 		KubeconfigPath: "testdata/fake.config",
 	}
 	rr, _ := InitAdmiral(context.Background(), p)
+	rr.StartTime = time.Now().Add(-60*time.Second)
 
 	config := rest.Config{
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
-	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
@@ -594,7 +595,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	s, e := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fatalf("%v", e)
@@ -875,21 +876,23 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	rr, _ := InitAdmiral(context.Background(), p)
 
+	rr.StartTime = time.Now().Add(-60*time.Second)
+
 	config := rest.Config{
 		Host: "localhost",
 	}
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
-	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	v, e := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	v, e := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
 	}
-	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 
-	gtpc, e := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
+	gtpc, e := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"test.test.mesh-se": common.LocalAddressPrefix + ".10.1"},
@@ -913,7 +916,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		RolloutController:        r,
 		ServiceController:        s,
 		VirtualServiceController: v,
-		GlobalTraffic: gtpc,
+		GlobalTraffic:            gtpc,
 	}
 	rc.ClusterID = "test.cluster"
 	rr.RemoteControllers["test.cluster"] = rc
@@ -1011,17 +1014,18 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	config := rest.Config{
 		Host: "localhost",
 	}
+	rr.StartTime = time.Now().Add(-60*time.Second)
 
-	d, e := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 
-	r, e := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	v, e := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+	r, e := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	v, e := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
 
 	if e != nil {
 		t.Fail()
 	}
-	s, e := admiral.NewServiceController(make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	gtpc, e := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
+	s, e := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	gtpc, e := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
 
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{
@@ -1048,7 +1052,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		RolloutController:        r,
 		ServiceController:        s,
 		VirtualServiceController: v,
-		GlobalTraffic: 			  gtpc,
+		GlobalTraffic:            gtpc,
 	}
 	rc.ClusterID = "test.cluster"
 	rr.RemoteControllers["test.cluster"] = rc
@@ -1345,17 +1349,16 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 		env_stage = "stage"
 
 		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy {{DnsPrefix: "hello"}},
-		},}
+			Policy: []*model.TrafficPolicy{{DnsPrefix: "hello"}},
+		}}
 
 		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp2"}},
-		},}
+			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp2"}},
+		}}
 
-		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp:  v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy {{DnsPrefix: "hellogtp3"}},
-		},}
-
+		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp3"}},
+		}}
 	)
 
 	testCases := []struct {
@@ -1364,33 +1367,33 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 		env         string
 		gtps        map[string][]*v13.GlobalTrafficPolicy
 		expectedGtp *v13.GlobalTrafficPolicy
-	}{	{
-			name:        "Should return nil when no GTP present",
-			gtps:         map[string][]*v13.GlobalTrafficPolicy{},
-			identity:     identity1,
-			env: 		  env_stage,
-			expectedGtp:  nil,
-		},
+	}{{
+		name:        "Should return nil when no GTP present",
+		gtps:        map[string][]*v13.GlobalTrafficPolicy{},
+		identity:    identity1,
+		env:         env_stage,
+		expectedGtp: nil,
+	},
 		{
 			name:        "Should return the only existing gtp",
-			gtps:         map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp}},
-			identity:     identity1,
-			env: 		  env_stage,
-			expectedGtp:  gtp,
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp}},
+			identity:    identity1,
+			env:         env_stage,
+			expectedGtp: gtp,
 		},
 		{
 			name:        "Should return the gtp recently created within the cluster",
-			gtps:         map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}},
-			identity:     identity1,
-			env: 		  env_stage,
-			expectedGtp:  gtp2,
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}},
+			identity:    identity1,
+			env:         env_stage,
+			expectedGtp: gtp2,
 		},
 		{
 			name:        "Should return the gtp recently created from another cluster",
-			gtps:         map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}, "c2": {gtp3}},
-			identity:     identity1,
-			env: 		  env_stage,
-			expectedGtp:  gtp3,
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}, "c2": {gtp3}},
+			identity:    identity1,
+			env:         env_stage,
+			expectedGtp: gtp3,
 		},
 	}
 

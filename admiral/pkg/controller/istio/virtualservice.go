@@ -26,7 +26,7 @@ type VirtualServiceController struct {
 	informer              cache.SharedIndexInformer
 }
 
-func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*VirtualServiceController, error) {
+func NewVirtualServiceController(clusterID string, stopCh <-chan struct{}, handler VirtualServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*VirtualServiceController, error) {
 
 	drController := VirtualServiceController{}
 	drController.VirtualServiceHandler = handler
@@ -42,7 +42,8 @@ func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceH
 
 	drController.informer = informers.NewVirtualServiceInformer(ic, k8sV1.NamespaceAll, resyncPeriod, cache.Indexers{})
 
-	admiral.NewController("virtualservice-ctrl-" + config.Host, stopCh, &drController, drController.informer)
+	mcd := admiral.NewMonitoredDelegator(&drController, clusterID, "virtualservice")
+	admiral.NewController("virtualservice-ctrl-"+config.Host, stopCh, mcd, drController.informer)
 
 	return &drController, nil
 }

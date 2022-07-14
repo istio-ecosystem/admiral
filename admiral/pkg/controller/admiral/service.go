@@ -2,21 +2,28 @@ package admiral
 
 import (
 	"fmt"
+	"github.com/prometheus/common/log"
+	"sort"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
-	"time"
+
+	"sync"
 
 	k8sV1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"sync"
 )
 
 // Handler interface contains the methods that are required
 type ServiceHandler interface {
+	Added(obj *k8sV1.Service)
+	Updated(obj *k8sV1.Service)
+	Deleted(obj *k8sV1.Service)
 }
 
 type ServiceClusterEntry struct {
@@ -53,7 +60,6 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 			Service:  make(map[string]map[string]*k8sV1.Service),
 			Identity: s.getKey(service),
 		}
-		s.cache[identity] = existing
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
@@ -61,6 +67,7 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	namespaceServices[service.Name] = service
 	existing.Service[service.Namespace] = namespaceServices
+	s.cache[identity] = existing
 
 }
 
@@ -68,8 +75,31 @@ func (s *serviceCache) getKey(service *k8sV1.Service) string {
 	return service.Namespace
 }
 
-func (s *serviceCache) Get(key string) *ServiceClusterEntry {
-	return s.cache[key]
+func (s *serviceCache) Get(key string) []*k8sV1.Service {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	serviceClusterEntry := s.cache[key]
+	if serviceClusterEntry != nil {
+		return getOrderedServices (serviceClusterEntry.Service[key])
+	} else {
+		return nil
+	}
+}
+
+func getOrderedServices(serviceMap map[string]*k8sV1.Service) []*k8sV1.Service {
+	orderedServices := make([]*k8sV1.Service, 0, len(serviceMap))
+	for  _, value := range serviceMap {
+		orderedServices = append(orderedServices, value)
+	}
+	if len(orderedServices) > 1 {
+		sort.Slice(orderedServices, func(i, j int) bool {
+			iTime := orderedServices[i].CreationTimestamp
+			jTime := orderedServices[j].CreationTimestamp
+			log.Debugf("Service sorting name1=%s creationTime1=%v name2=%s creationTime2=%v", orderedServices[i].Name, iTime, orderedServices[j].Name, jTime)
+			return iTime.After(jTime.Time)
+		})
+	}
+	return orderedServices
 }
 
 func (s *serviceCache) Delete(service *k8sV1.Service) {
@@ -90,11 +120,11 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 		lb     = "dummy.admiral.global"
 		lbPort = common.DefaultMtlsPort
 	)
-	service := s.Get(namespace)
-	if service == nil || service.Service[namespace] == nil {
+	services := s.Get(namespace)
+	if len(services) == 0 {
 		return lb, 0
 	}
-	for _, service := range service.Service[namespace] {
+	for _, service := range services {
 		if service.Labels["app"] == key {
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
@@ -117,7 +147,7 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 	return lb, lbPort
 }
 
-func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
+func NewServiceController(clusterID string, stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
 
 	serviceController := ServiceController{}
 	serviceController.ServiceHandler = handler
@@ -146,27 +176,28 @@ func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
 	)
 
-	NewController("service-ctrl-" + config.Host , stopCh, &serviceController, serviceController.informer)
+	mcd := NewMonitoredDelegator(&serviceController, clusterID, "service")
+	NewController("service-ctrl-"+config.Host, stopCh, mcd, serviceController.informer)
 
 	return &serviceController, nil
 }
 
 func (s *ServiceController) Added(obj interface{}) {
-	HandleAddUpdateService(obj, s)
+	service := obj.(*k8sV1.Service)
+	s.Cache.Put(service)
+	s.ServiceHandler.Added(service)
 }
 
 func (s *ServiceController) Updated(obj interface{}, oldObj interface{}) {
-	HandleAddUpdateService(obj, s)
-}
-
-func HandleAddUpdateService(obj interface{}, s *ServiceController) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
+	s.ServiceHandler.Updated(service)
 }
 
 func (s *ServiceController) Deleted(obj interface{}) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Delete(service)
+	s.ServiceHandler.Deleted(service)
 }
 
 func (s *serviceCache) shouldIgnoreBasedOnLabels(service *k8sV1.Service) bool {

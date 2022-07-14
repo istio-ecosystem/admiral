@@ -12,6 +12,7 @@ import (
 	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/stretchr/testify/assert"
 	v12 "k8s.io/api/apps/v1"
 	v13 "k8s.io/api/core/v1"
 	time2 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -197,10 +198,63 @@ func TestRolloutHandler(t *testing.T) {
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
-
 			handler.Added(c.addedRolout)
 			handler.Deleted(c.addedRolout)
 			handler.Updated(c.addedRolout)
 		})
 	}
+}
+
+func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+	}
+	registry, _ := InitAdmiral(context.Background(), p)
+
+	testcases := []struct {
+		name      string
+		gtp       *v1.GlobalTrafficPolicy
+		doesError bool
+	}{
+		{
+			name: "missing identity label in GTP should result in error being returned by the handler",
+			gtp: &v1.GlobalTrafficPolicy{
+				ObjectMeta: time2.ObjectMeta{
+					Name:        "testgtp",
+					Annotations: map[string]string{"admiral.io/env": "testenv"},
+				},
+			},
+			doesError: true,
+		},
+		{
+			name: "empty identity label in GTP should result in error being returned by the handler",
+			gtp: &v1.GlobalTrafficPolicy{
+				ObjectMeta: time2.ObjectMeta{
+					Name:        "testgtp",
+					Labels:      map[string]string{"identity": ""},
+					Annotations: map[string]string{"admiral.io/env": "testenv"},
+				},
+			},
+			doesError: true,
+		},
+		{
+			name: "valid GTP config which is expected to pass",
+			gtp: &v1.GlobalTrafficPolicy{
+				ObjectMeta: time2.ObjectMeta{
+					Name:        "testgtp",
+					Labels:      map[string]string{"identity": "testapp"},
+					Annotations: map[string]string{"admiral.io/env": "testenv"},
+				},
+			},
+			doesError: false,
+		},
+	}
+
+	for _, c := range testcases {
+		t.Run(c.name, func(t *testing.T) {
+			err := HandleEventForGlobalTrafficPolicy(c.gtp, registry, "testcluster")
+			assert.Equal(t, err != nil, c.doesError)
+		})
+	}
+
 }

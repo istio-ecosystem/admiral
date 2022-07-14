@@ -1,15 +1,20 @@
 package admiral
 
 import (
-	"github.com/google/go-cmp/cmp"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/clientcmd"
+	"context"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func TestNewServiceController(t *testing.T) {
@@ -20,7 +25,7 @@ func TestNewServiceController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockServiceHandler{}
 
-	serviceController, err := NewServiceController(stop, &handler, config, time.Duration(1000))
+	serviceController, err := NewServiceController("test", stop, &handler, config, time.Duration(1000))
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -70,22 +75,22 @@ func TestServiceCache_Put(t *testing.T) {
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
+	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
 
-	length := len(serviceCache.Get("ns").Service["ns"])
+	length := len(serviceCache.Get("ns"))
 
 	serviceCache.Put(service)
 
 	if serviceCache.getKey(service) != "ns" {
 		t.Errorf("Incorrect key. Got %v, expected ns", serviceCache.getKey(service))
 	}
-	if !cmp.Equal(serviceCache.Get("ns").Service["ns"][service.Name], service) {
-		t.Errorf("Incorrect service fount. Diff: %v", cmp.Diff(serviceCache.Get("ns").Service["ns"], service))
+	if !cmp.Equal(serviceCache.Get("ns")[0], service) {
+		t.Errorf("Incorrect service found. Diff: %v", cmp.Diff(serviceCache.Get("ns")[0], service))
 	}
-	if (length) != len(serviceCache.Get("ns").Service["ns"]) {
-		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns").Service["ns"]))
+	if (length) != len(serviceCache.Get("ns")) {
+		t.Errorf("Re-added the same service. Cache length expected %v, got %v", length, len(serviceCache.Get("ns")))
 	}
 
 	serviceCache.Delete(service)
@@ -244,6 +249,99 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			loadBalancer, port := c.cache.GetLoadBalancer(c.key, c.ns)
 			if loadBalancer != c.expectedReturn || port != c.expectedPort {
 				t.Errorf("Unexpected load balancer returned. Got %v:%v, expected %v:%v", loadBalancer, port, c.expectedReturn, c.expectedPort)
+			}
+		})
+	}
+}
+
+func TestConcurrentGetAndPut(t *testing.T) {
+	serviceCache := serviceCache{}
+	serviceCache.cache = make(map[string]*ServiceClusterEntry)
+	serviceCache.mutex = &sync.Mutex{}
+
+	serviceCache.Put(&v1.Service{
+		ObjectMeta: metaV1.ObjectMeta{Name: "testname", Namespace: "testns"},
+	})
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Producer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				serviceCache.Put(&v1.Service{
+					ObjectMeta: metaV1.ObjectMeta{Name: "testname", Namespace: string(uuid.NewUUID())},
+				})
+			}
+		}
+	}(ctx)
+
+	// Consumer go routine
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				assert.NotNil(t, serviceCache.Get("testns"))
+			}
+		}
+	}(ctx)
+
+	wg.Wait()
+
+}
+
+func TestGetOrderedServices(t *testing.T) {
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name           string
+		services       map[string]*v1.Service
+		expectedResult string
+	}{
+		{
+			name:           "Should return nil for nil input",
+			services:       nil,
+			expectedResult: "",
+		},
+		{
+			name:           "Should return the only service",
+			services:       map[string]*v1.Service {
+				"s1": {ObjectMeta: metaV1.ObjectMeta{Name: "s1", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now())}},
+			},
+			expectedResult: "s1",
+		},
+		{
+			name:           "Should return the latest service by creationTime",
+			services:       map[string]*v1.Service {
+				"s1": {ObjectMeta: metaV1.ObjectMeta{Name: "s1", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now().Add(time.Duration(-15)))}},
+				"s2": {ObjectMeta: metaV1.ObjectMeta{Name: "s2", Namespace: "ns1", CreationTimestamp: metaV1.NewTime(time.Now())}},
+			},
+			expectedResult: "s2",
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getOrderedServices(c.services)
+			if c.expectedResult == "" && len(result) > 0 {
+				t.Errorf("Failed. Got %v, expected no service", result[0].Name)
+			} else if c.expectedResult != "" {
+				if len(result) > 0 && result[0].Name == c.expectedResult{
+					//perfect
+				} else {
+					t.Errorf("Failed. Got %v, expected %v", result[0].Name, c.expectedResult)
+				}
 			}
 		})
 	}

@@ -58,6 +58,10 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
+	if IsCacheWarmupTime(remoteRegistry) {
+		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
+		return nil
+	}
 	//create a service entry, destination rule and virtual service in the local cluster
 	sourceServices := make(map[string]*k8sV1.Service)
 	sourceWeightedServices := make(map[string]map[string]*WeightedService)
@@ -245,7 +249,7 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 	}
 	if len(gtpsOrdered) == 0 {
 		log.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
-		cache.GlobalTrafficCache.Delete(env, identity)
+		cache.GlobalTrafficCache.Delete(identity, env)
 		return
 	} else if len(gtpsOrdered) > 1 {
 		log.Debugf("More than one GTP found for identity=%s in env=%s.", identity, env)

@@ -2,6 +2,9 @@ package admiral
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	argoclientset "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
@@ -13,8 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"sync"
-	"time"
 )
 
 // Handler interface contains the methods that are required
@@ -124,7 +125,7 @@ func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Ro
 	return false //labels are fine, we should not ignore
 }
 
-func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration) (*RolloutController, error) {
+func NewRolloutsController(clusterID string, stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration) (*RolloutController, error) {
 
 	roController := RolloutController{}
 	roController.RolloutHandler = handler
@@ -157,14 +158,9 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	//Initialize informer
 	roController.informer = argoRolloutsInformerFactory.Argoproj().V1alpha1().Rollouts().Informer()
 
-	NewController("rollouts-ctrl-" + config.Host , stopCh, &roController, roController.informer)
+	mcd := NewMonitoredDelegator(&roController, clusterID, "rollout")
+	NewController("rollouts-ctrl-"+clusterID, stopCh, mcd, roController.informer)
 	return &roController, nil
-}
-
-func NewRolloutsControllerWithLabelOverride(stopCh <-chan struct{}, handler RolloutHandler, config *rest.Config, resyncPeriod time.Duration, labelSet *common.LabelSet) (*RolloutController, error) {
-	rc, err := NewRolloutsController(stopCh, handler, config, resyncPeriod)
-	rc.labelSet = labelSet
-	return rc, err
 }
 
 func (roc *RolloutController) Added(ojb interface{}) {
@@ -198,11 +194,9 @@ func (roc *RolloutController) Deleted(ojb interface{}) {
 	roc.RolloutHandler.Deleted(rollout)
 }
 
-func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace string) []argo.Rollout {
-	matchLabel := common.GetGlobalTrafficDeploymentLabel()
-	labelOptions := meta_v1.ListOptions{}
-	labelOptions.LabelSelector = fmt.Sprintf("%s=%s", matchLabel, labelValue)
-	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(labelOptions)
+func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
+
+	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)
@@ -210,8 +204,16 @@ func (d *RolloutController) GetRolloutByLabel(labelValue string, namespace strin
 	}
 
 	if matchedRollouts.Items == nil {
-		return []argo.Rollout{}
+		return make([]argo.Rollout,0)
 	}
 
-	return matchedRollouts.Items
+	filteredRollouts := make ([]argo.Rollout, 0)
+
+	for _, rollout := range matchedRollouts.Items {
+		if common.IsServiceMatch(serviceSelector, rollout.Spec.Selector) {
+			filteredRollouts = append(filteredRollouts, rollout)
+		}
+	}
+
+	return filteredRollouts
 }

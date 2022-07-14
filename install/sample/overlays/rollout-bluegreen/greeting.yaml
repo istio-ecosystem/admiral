@@ -21,6 +21,7 @@ spec:
     spec:
       containers:
         - image: nginx
+          imagePullPolicy: IfNotPresent
           name: greeting
           ports:
             - containerPort: 80

@@ -35,6 +35,9 @@ const (
 	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
+	RolloutPodHashLabel           = "rollouts-pod-template-hash"
+	RolloutActiveServiceSuffix	  = "active-service"
+	RolloutStableServiceSuffix	  = "stable-service"
 )
 
 type Event int
@@ -183,4 +186,24 @@ func ConstructGtpKey(env, identity string) string {
 
 func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
 	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
+}
+
+func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelector) bool {
+	if selector == nil || len(selector.MatchLabels) == 0 || len(serviceSelector) == 0 {
+		return false
+	}
+	var match = true
+	for lkey, lvalue := range serviceSelector {
+		// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
+		// This dynamic label is not available on the rollout template. Hence ignoring the label with name rollouts-pod-template-hash
+		if lkey == RolloutPodHashLabel {
+			continue
+		}
+		value, ok := selector.MatchLabels[lkey]
+		if !ok || value != lvalue {
+			match = false
+			break
+		}
+	}
+	return match
 }
