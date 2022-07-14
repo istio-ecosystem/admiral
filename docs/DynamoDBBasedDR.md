@@ -82,7 +82,7 @@ Below is the logic for Admiral instance in Passive state
 5. Sleep for configured duration
 */
 func (dr DynamoDBBasedStateChecker) runStateCheck(ctx context.Context){
-	AdmiralCurrentState.ReadOnly = ReadOnlyEnabled
+	CurrentAdmiralState.ReadOnly = ReadOnlyEnabled
 	var dynamodbClient *DynamoClient
 	dynamoDBConfig,err := BuildDynamoDBConfig(dr.drConfigFileLocation)
 	if nil!= err {
@@ -130,9 +130,9 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		//Not updating read-write mode until we confirm this pod has the lease
 	}else if SKIP_LEASE_CHECK_POD_NAME == readWriteLease.LeaseOwner {
 		log.Info("DynamoDR: Lease held by skip lease check pod. Setting Admiral to read only mode")
-		AdmiralCurrentState.ReadOnly =ReadOnlyEnabled
+		CurrentAdmiralState.ReadOnly =ReadOnlyEnabled
 	}else if podIdentifier == readWriteLease.LeaseOwner {
-		AdmiralCurrentState.ReadOnly = ReadWriteEnabled
+		CurrentAdmiralState.ReadOnly = ReadWriteEnabled
 		log.Infof("DynamoDR: Lease with name=%v is owned by the current pod. Extending lease ownership till %v. Admiral will write",leaseName, currentTime)
 		readWriteLease.UpdatedTime = currentTime
 		dynamodbClient.updatedReadWriteLease(readWriteLease,dynamoDBConfig.TableName)
@@ -145,7 +145,7 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		//Not updating read-write mode until we confirm this pod has the lease
 	}else {
 		log.Infof("DynamoDR: Lease held by %v till %v . Admiral will not write ", readWriteLease.LeaseOwner, readWriteLease.UpdatedTime)
-		AdmiralCurrentState.ReadOnly = ReadOnlyEnabled;
+		CurrentAdmiralState.ReadOnly = ReadOnlyEnabled;
 	}
 
 }

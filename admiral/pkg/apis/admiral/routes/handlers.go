@@ -47,7 +47,7 @@ func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) 
 	if len(checkIfReadOnlyStringVal) ==0 || nil==err {
 		if checkIfReadOnlyBoolVal{
 
-			if clusters.AdmiralCurrentState.ReadOnly{
+			if clusters.CurrentAdmiralState.ReadOnly{
 				//Force fail health check if Admiral is in Readonly mode
 				w.WriteHeader(503)
 			}else {

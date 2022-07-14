@@ -17,6 +17,6 @@ func (NoOPStateChecker) shouldRunOnIndependentGoRoutine() bool{
 
 func (NoOPStateChecker) runStateCheck(ctx context.Context){
 	fmt.Print("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
-	AdmiralCurrentState = AdmiralState{ReadWriteEnabled}
+	CurrentAdmiralState = AdmiralState{ReadWriteEnabled}
 }
 

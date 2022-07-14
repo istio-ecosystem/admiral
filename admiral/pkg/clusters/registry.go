@@ -25,6 +25,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	log.Infof("Initializing Admiral with params: %v", params)
 
 	common.InitializeConfig(params)
+<<<<<<< HEAD
+=======
+    CurrentAdmiralState = AdmiralState{ReadOnlyEnabled}
+    startAdmiralStateChecker(ctx,params)
+>>>>>>> Rename Admiral state variable name
 	w := RemoteRegistry{
 		ctx: ctx,
 		StartTime: time.Now(),
