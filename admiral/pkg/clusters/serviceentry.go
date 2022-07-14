@@ -389,49 +389,6 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	return newSidecarObj
 }
 
-func createSeWithDrLabels(remoteController *RemoteController, localCluster bool, identityId string, seName string, se *networking.ServiceEntry,
-	dr *networking.DestinationRule, seAddressCache *ServiceEntryAddressStore, configmapController admiral.ConfigMapControllerInterface) map[string]*networking.ServiceEntry {
-	var allSes = make(map[string]*networking.ServiceEntry)
-	var newSe = copyServiceEntry(se)
-
-	address, _, err := GetLocalAddressForSe(seName, seAddressCache, configmapController)
-	if err != nil {
-		log.Warnf("Failed to get address for dr service entry. Not creating it. err:%v", err)
-		return nil
-	}
-	newSe.Addresses = []string{address}
-
-	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
-
-	for _, endpoint := range se.Endpoints {
-		for _, subset := range dr.Subsets {
-			newEndpoint := copyEndpoint(endpoint)
-			newEndpoint.Labels = subset.Labels
-
-			////create a service entry with name subsetSeName
-			//if localCluster {
-			//	subsetSeName := seName + common.Dash + subset.Name
-			//	subsetSeAddress := strings.Split(se.Hosts[0], common.DotMesh)[0] + common.Sep + subset.Name + common.DotMesh BROKEN MUST FIX //todo fix the cname format here
-			//
-			//	//TODO uncomment the line below when subset routing across clusters is fixed
-			//	//newEndpoint.Address = subsetSeAddress
-			//
-			//	subSetSe := createSeWithPodIps(remoteController, identityId, subsetSeName, subsetSeAddress, newSe, newEndpoint, subset, seAddressMap)
-			//	if subSetSe != nil {
-			//		allSes[subsetSeName] = subSetSe
-			//		//TODO create default DestinationRules for these subset SEs
-			//	}
-			//}
-
-			endpoints = append(endpoints, newEndpoint)
-
-		}
-	}
-	newSe.Endpoints = endpoints
-	allSes[seName] = newSe
-	return allSes
-}
-
 //This will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
 	syncNamespace := common.GetSyncNamespace()
