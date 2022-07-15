@@ -6,6 +6,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"k8s.io/client-go/rest"
+	"os"
 	"sync"
 	"time"
 
@@ -26,10 +27,17 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     CurrentAdmiralState = AdmiralState{ReadOnlyEnabled}
     startAdmiralStateChecker(ctx,params)
 >>>>>>> Rename Admiral state variable name
+=======
+    CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled,IsStateInitialized: StateNotInitialized}
+    startAdmiralStateChecker(ctx,params)
+    pauseForAdmiralToInitializeState()
+
+>>>>>>> Pause till Admiral syncs state during startup
 	w := RemoteRegistry{
 		ctx: ctx,
 		StartTime: time.Now(),
@@ -86,6 +94,24 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	go w.shutdown()
 
 	return &w, nil
+}
+
+func pauseForAdmiralToInitializeState(){
+	// Sleep until Admiral determines state. This is done to make sure events are not skipped during startup while determining READ-WRITE state
+	start := time.Now()
+	log.Info("Pausing thread to let Admiral determine it's READ-WRITE state. This is to let Admiral determine it's state during startup")
+	for {
+		if CurrentAdmiralState.IsStateInitialized {
+			log.Infof("Time taken for Admiral to complete state initialization =%v ms", time.Since(start).Milliseconds())
+			break
+		}
+		if time.Since(start).Milliseconds() > 60000 {
+			log.Error("Admiral not initialized after 60 seconds. Exiting now!!")
+			os.Exit(-1)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
 }
 
 func createSecretController(ctx context.Context, w *RemoteRegistry) error {

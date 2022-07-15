@@ -93,7 +93,8 @@ func (dr DynamoDBBasedStateChecker) runStateCheck(ctx context.Context){
 	waitDuration := time.Duration(dynamoDBConfig.WaitTimeInSeconds) * time.Second
 	ticker := time.NewTicker(waitDuration)
 	tickChan := ticker.C
-
+	// Call Execute State Check explicitly to speed up initialization. Without this the initialization will be delayed by waitDuration
+	ExecuteStateCheck(dynamoDBConfig, dynamodbClient)
 	for {
 		select {
 		case <-ctx.Done():
@@ -120,6 +121,10 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Error("DynamoDR: Error retrieving the latest lease")
+		//Transition Admiral to Read-only mode in case of issue connecting to Dynamo DB
+		CurrentAdmiralState.ReadOnly =ReadOnlyEnabled
+		log.Error("DynamoDR: Error retrieving the latest lease. Admiral will not write")
+		return
 	}
 	readWriteLease := filterOrCreateLeaseIfNotFound(readWriteLeases,leaseName)
 	if "" == readWriteLease.LeaseOwner {
@@ -131,8 +136,10 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 	}else if SKIP_LEASE_CHECK_POD_NAME == readWriteLease.LeaseOwner {
 		log.Info("DynamoDR: Lease held by skip lease check pod. Setting Admiral to read only mode")
 		CurrentAdmiralState.ReadOnly =ReadOnlyEnabled
+		CurrentAdmiralState.IsStateInitialized = StateInitialized
 	}else if podIdentifier == readWriteLease.LeaseOwner {
 		CurrentAdmiralState.ReadOnly = ReadWriteEnabled
+		CurrentAdmiralState.IsStateInitialized = StateInitialized
 		log.Infof("DynamoDR: Lease with name=%v is owned by the current pod. Extending lease ownership till %v. Admiral will write",leaseName, currentTime)
 		readWriteLease.UpdatedTime = currentTime
 		dynamodbClient.updatedReadWriteLease(readWriteLease,dynamoDBConfig.TableName)
@@ -146,9 +153,11 @@ func ExecuteStateCheck(dynamoDBConfig DynamoDBConfig, dynamodbClient *DynamoClie
 	}else {
 		log.Infof("DynamoDR: Lease held by %v till %v . Admiral will not write ", readWriteLease.LeaseOwner, readWriteLease.UpdatedTime)
 		CurrentAdmiralState.ReadOnly = ReadOnlyEnabled;
+		CurrentAdmiralState.IsStateInitialized = StateInitialized
 	}
 
 }
+
 
 
 ```
