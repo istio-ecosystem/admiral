@@ -8,9 +8,12 @@ import (
 )
 const  ReadWriteEnabled = false
 const ReadOnlyEnabled = true;
+const StateNotInitialized = false;
+const StateInitialized =true;
 
 type AdmiralState struct {
 	ReadOnly  bool
+	IsStateInitialized bool
 }
 var CurrentAdmiralState AdmiralState
 

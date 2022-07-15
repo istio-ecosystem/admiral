@@ -2,7 +2,7 @@ package clusters
 
 import (
 	"context"
-	"fmt"
+	log "github.com/sirupsen/logrus"
 )
 
 /*
@@ -16,7 +16,8 @@ func (NoOPStateChecker) shouldRunOnIndependentGoRoutine() bool{
 }
 
 func (NoOPStateChecker) runStateCheck(ctx context.Context){
-	fmt.Print("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
-	CurrentAdmiralState = AdmiralState{ReadWriteEnabled}
+	log.Info("NoOP State Checker called. Marking Admiral state as Read/Write enabled")
+	CurrentAdmiralState.ReadOnly = ReadWriteEnabled
+	CurrentAdmiralState.IsStateInitialized = StateInitialized
 }
 
