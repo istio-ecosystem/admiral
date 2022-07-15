@@ -148,6 +148,10 @@ func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTraffic
 }
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -155,6 +159,10 @@ func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) {
 }
 
 func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -162,6 +170,10 @@ func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) {
 }
 
 func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -169,6 +181,10 @@ func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
 }
 
 func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -177,6 +193,10 @@ func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
 }
 
 func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -185,6 +205,10 @@ func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
 }
 
 func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -193,6 +217,10 @@ func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
 }
 
 func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -204,6 +232,10 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
+	if CurrentAdmiralState.ReadOnly{
+		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
@@ -215,6 +247,10 @@ func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 }
 
 func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
+	if CurrentAdmiralState.ReadOnly {
+		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
+		return
+	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
