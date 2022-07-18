@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
+	"strings"
 )
 const  ReadWriteEnabled = false
 const ReadOnlyEnabled = true;
@@ -40,7 +41,7 @@ utility function to identify the Admiral DR implementation based on the program 
 */
 func startAdmiralStateChecker (ctx context.Context,params common.AdmiralParams){
 	var  admiralStateChecker AdmiralStateChecker
-	admiralStateCheckerName :=  params.AdmiralStateCheckerName
+	admiralStateCheckerName :=  strings.ToLower(params.AdmiralStateCheckerName)
 	switch  admiralStateCheckerName {
 /*
      Add entries for your custom Disaster Recovery state checkers below
