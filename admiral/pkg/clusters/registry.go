@@ -101,6 +101,7 @@ func pauseForAdmiralToInitializeState(){
 			log.Error("Admiral not initialized after 60 seconds. Exiting now!!")
 			os.Exit(-1)
 		}
+		log.Debug("Admiral is waiting to determine state before proceeding with boot up")
 		time.Sleep(100 * time.Millisecond)
 	}
 
