@@ -26,18 +26,10 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	log.Infof("Initializing Admiral with params: %v", params)
 
 	common.InitializeConfig(params)
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-    CurrentAdmiralState = AdmiralState{ReadOnlyEnabled}
-    startAdmiralStateChecker(ctx,params)
->>>>>>> Rename Admiral state variable name
-=======
-    CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled,IsStateInitialized: StateNotInitialized}
-    startAdmiralStateChecker(ctx,params)
-    pauseForAdmiralToInitializeState()
+	CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled,IsStateInitialized: StateNotInitialized}
+	startAdmiralStateChecker(ctx,params)
+	pauseForAdmiralToInitializeState()
 
->>>>>>> Pause till Admiral syncs state during startup
 	w := RemoteRegistry{
 		ctx: ctx,
 		StartTime: time.Now(),
@@ -79,7 +71,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		log.Info("argo rollouts disabled")
 	}
 
-	configMapController, err := admiral.NewConfigMapController()
+	configMapController, err := admiral.NewConfigMapController(params.ServiceEntryIPPrefix)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
 	}

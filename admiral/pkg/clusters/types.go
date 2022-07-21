@@ -2,232 +2,331 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	"k8s.io/client-go/rest"
 	"sync"
 	"time"
 
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	log "github.com/sirupsen/logrus"
+	k8sAppsV1 "k8s.io/api/apps/v1"
+	k8sV1 "k8s.io/api/core/v1"
+	k8s "k8s.io/client-go/kubernetes"
 )
 
-const (
-	LogFormat    = "op=%s type=%v name=%v cluster=%s message=%s"
-	LogErrFormat = "op=%s type=%v name=%v cluster=%s, e=%v"
-)
-
-func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
-
-	log.Infof("Initializing Admiral with params: %v", params)
-
-	common.InitializeConfig(params)
-	w := RemoteRegistry{
-		ctx: ctx,
-		StartTime: time.Now(),
-	}
-
-	wd := DependencyHandler{
-		RemoteRegistry: &w,
-	}
-
-	var err error
-	wd.DepController, err = admiral.NewDependencyController(ctx.Done(), &wd, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
-	if err != nil {
-		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
-	}
-
-	w.RemoteControllers = make(map[string]*RemoteController)
-
-	gtpCache := &globalTrafficCache{}
-	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.mutex = &sync.Mutex{}
-
-	w.AdmiralCache = &AdmiralCache{
-		IdentityClusterCache:            common.NewMapOfMaps(),
-		CnameClusterCache:               common.NewMapOfMaps(),
-		CnameDependentClusterCache:      common.NewMapOfMaps(),
-		ClusterLocalityCache:            common.NewMapOfMaps(),
-		IdentityDependencyCache:         common.NewMapOfMaps(),
-		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
-		CnameIdentityCache:              &sync.Map{},
-		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
-		GlobalTrafficCache:              gtpCache,
-		SeClusterCache:                  common.NewMapOfMaps(),
-
-		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
-	}
-
-	if !params.ArgoRolloutsEnabled {
-		log.Info("argo rollouts disabled")
-	}
-
-	configMapController, err := admiral.NewConfigMapController()
-	if err != nil {
-		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
-	}
-	w.AdmiralCache.ConfigMapController = configMapController
-	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
-
-	err = createSecretController(ctx, &w)
-	if err != nil {
-		return nil, fmt.Errorf(" Error with secret control init: %v", err)
-	}
-
-	go w.shutdown()
-
-	return &w, nil
+type RemoteController struct {
+	ClusterID                 string
+	ApiServer                 string
+	StartTime                 time.Time
+	GlobalTraffic             *admiral.GlobalTrafficController
+	DeploymentController      *admiral.DeploymentController
+	ServiceController         *admiral.ServiceController
+	NodeController            *admiral.NodeController
+	ServiceEntryController    *istio.ServiceEntryController
+	DestinationRuleController *istio.DestinationRuleController
+	VirtualServiceController  *istio.VirtualServiceController
+	SidecarController         *istio.SidecarController
+	RolloutController         *admiral.RolloutController
+	stop                      chan struct{}
+	//listener for normal types
 }
 
-func createSecretController(ctx context.Context, w *RemoteRegistry) error {
-	var err error
-	var controller *secret.Controller
+type AdmiralCache struct {
+	CnameClusterCache               *common.MapOfMaps
+	CnameDependentClusterCache      *common.MapOfMaps
+	CnameIdentityCache              *sync.Map
+	IdentityClusterCache            *common.MapOfMaps
+	ClusterLocalityCache            *common.MapOfMaps
+	IdentityDependencyCache         *common.MapOfMaps
+	SubsetServiceEntryIdentityCache *sync.Map
+	ServiceEntryAddressStore        *ServiceEntryAddressStore
+	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
+	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
+	DependencyNamespaceCache        *common.SidecarEgressMap
+	SeClusterCache                  *common.MapOfMaps
 
-	w.secretClient, err = admiral.K8sClientFromPath(common.GetKubeconfigPath())
-	if err != nil {
-		return fmt.Errorf("could not create K8s client: %v", err)
+	argoRolloutsEnabled bool
+}
+
+type RemoteRegistry struct {
+	sync.Mutex
+	RemoteControllers map[string]*RemoteController
+	SecretController  *secret.Controller
+	secretClient      k8s.Interface
+	ctx               context.Context
+	AdmiralCache      *AdmiralCache
+	StartTime         time.Time
+}
+
+func (r *RemoteRegistry) shutdown() {
+
+	done := r.ctx.Done()
+	//wait for the context to close
+	<-done
+
+	//close the remote controllers stop channel
+	for _, v := range r.RemoteControllers {
+		close(v.stop)
 	}
+}
 
-	controller, err = secret.StartSecretController(w.secretClient,
-		w.createCacheController,
-		w.updateCacheController,
-		w.deleteCacheController,
-		common.GetClusterRegistriesNamespace(),
-		ctx, common.GetSecretResolver())
+type ServiceEntryAddressStore struct {
+	EntryAddresses map[string]string `yaml:"entry-addresses,omitempty"`
+	Addresses      []string          `yaml:"addresses,omitempty"` //trading space for efficiency - this will give a quick way to validate that the address is unique
+}
 
-	if err != nil {
-		return fmt.Errorf("could not start secret controller: %v", err)
+type DependencyHandler struct {
+	RemoteRegistry *RemoteRegistry
+	DepController  *admiral.DependencyController
+}
+
+type GlobalTrafficHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
+
+type RolloutHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
+
+type globalTrafficCache struct {
+	//map of global traffic policies key=environment.identity, value: GlobalTrafficPolicy object
+	identityCache map[string]*v1.GlobalTrafficPolicy
+
+	mutex *sync.Mutex
+}
+
+func (g *globalTrafficCache) GetFromIdentity(identity string, environment string) *v1.GlobalTrafficPolicy {
+	return g.identityCache[common.ConstructGtpKey(environment, identity)]
+}
+
+func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy) error {
+	if gtp.Name == "" {
+		//no GTP, throw error
+		return errors.New("cannot add an empty globaltrafficpolicy to the cache")
 	}
+	defer g.mutex.Unlock()
+	g.mutex.Lock()
+	var gtpIdentity = gtp.Labels[common.GetGlobalTrafficDeploymentLabel()]
+	var gtpEnv = common.GetGtpEnv(gtp)
 
-	w.SecretController = controller
+	log.Infof("Adding GTP with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtpIdentity, gtpEnv)
+	identity := gtp.Labels[common.GetGlobalTrafficDeploymentLabel()]
+	key := common.ConstructGtpKey(gtpEnv, identity)
+	g.identityCache[key] = gtp
 
 	return nil
 }
 
-func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
-
-	stop := make(chan struct{})
-
-	rc := RemoteController{
-		stop:      stop,
-		ClusterID: clusterID,
-		ApiServer: clientConfig.Host,
-		StartTime: time.Now(),
+func (g *globalTrafficCache) Delete(identity string, environment string) {
+	key := common.ConstructGtpKey(environment, identity)
+	if _, ok := g.identityCache[key]; ok {
+		log.Infof("Deleting gtp with key=%s from global GTP cache", key)
+		delete(g.identityCache, key)
 	}
+}
 
-	var err error
+type DeploymentHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
 
-	log.Infof("starting service controller clusterID: %v", clusterID)
-	rc.ServiceController, err = admiral.NewServiceController(clusterID, stop, &ServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
+type NodeHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
 
+type ServiceHandler struct {
+	RemoteRegistry *RemoteRegistry
+	ClusterID      string
+}
+
+func (sh *ServiceHandler) Added(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Added", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		return fmt.Errorf("error with ServiceController controller init: %v", err)
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
+}
 
-	log.Infof("starting global traffic policy controller custerID: %v", clusterID)
-
-	rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(clusterID, stop, &GlobalTrafficHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
-
+func (sh *ServiceHandler) Updated(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Updated", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		return fmt.Errorf("error with GlobalTrafficController controller init: %v", err)
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
+}
 
-
-	log.Infof("starting node controller clusterID: %v", clusterID)
-	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
-
+func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
+	log.Infof(LogFormat, "Deleted", "service", obj.Name, sh.ClusterID, "received")
+	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
-		return fmt.Errorf("error with NodeController controller init: %v", err)
+		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
+}
 
-	log.Infof("starting service entry controller for custerID: %v", clusterID)
-	rc.ServiceEntryController, err = istio.NewServiceEntryController(clusterID, stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
-
-	if err != nil {
-		return fmt.Errorf("error with ServiceEntryController init: %v", err)
+func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
+	if svc.Spec.Selector == nil {
+		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName);
 	}
-
-	log.Infof("starting destination rule controller for custerID: %v", clusterID)
-	rc.DestinationRuleController, err = istio.NewDestinationRuleController(clusterID, stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
-
-	if err != nil {
-		return fmt.Errorf("error with DestinationRuleController init: %v", err)
+	if remoteRegistry.RemoteControllers[clusterName] == nil {
+		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName);
 	}
-
-	log.Infof("starting virtual service controller for custerID: %v", clusterID)
-	rc.VirtualServiceController, err = istio.NewVirtualServiceController(clusterID, stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
-
-	if err != nil {
-		return fmt.Errorf("error with VirtualServiceController init: %v", err)
-	}
-
-	rc.SidecarController, err = istio.NewSidecarController(clusterID, stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0)
-
-	if err != nil {
-		return fmt.Errorf("error with DestinationRuleController init: %v", err)
-	}
-
-	log.Infof("starting deployment controller clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(clusterID, stop, &DeploymentHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with DeploymentController controller init: %v", err)
-	}
-
-	if r.AdmiralCache == nil {
-		log.Warn("admiral cache was nil!")
-	} else if r.AdmiralCache.argoRolloutsEnabled {
-		log.Infof("starting rollout controller clusterID: %v", clusterID)
-		rc.RolloutController, err = admiral.NewRolloutsController(clusterID, stop, &RolloutHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-		if err != nil {
-			return fmt.Errorf("error with Rollout controller init: %v", err)
+	deploymentController := remoteRegistry.RemoteControllers[clusterName].DeploymentController
+	rolloutController := remoteRegistry.RemoteControllers[clusterName].RolloutController
+	if deploymentController != nil {
+		matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployements) > 0 {
+			for _, deployment := range matchingDeployements {
+				HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+			}
 		}
 	}
+	if common.GetAdmiralParams().ArgoRolloutsEnabled && rolloutController != nil {
+		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
 
-	r.Lock()
-	defer r.Unlock()
-	r.RemoteControllers[clusterID] = &rc
-
-	log.Infof("Create Controller %s", clusterID)
-
-	return nil
-}
-
-func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod time.Duration) error {
-	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
-	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
-	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
-	controller := r.RemoteControllers[clusterID]
-
-	if clientConfig.Host != controller.ApiServer {
-		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
-
-		if err := r.deleteCacheController(clusterID); err != nil {
-			return err
+		if len(matchingRollouts) > 0 {
+			for _, rollout := range matchingRollouts {
+				HandleEventForRollout(admiral.Update, &rollout, remoteRegistry, clusterName)
+			}
 		}
-		return r.createCacheController(clientConfig, clusterID, resyncPeriod)
-
 	}
 	return nil
 }
 
-func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
+func (dh *DependencyHandler) Added(obj *v1.Dependency) {
 
-	controller, ok := r.RemoteControllers[clusterID]
+	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
-	if ok {
-		close(controller.stop)
+	HandleDependencyRecord(obj, dh.RemoteRegistry)
+
+}
+
+func (dh *DependencyHandler) Updated(obj *v1.Dependency) {
+
+	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
+
+	// need clean up before handle it as added, I need to handle update that delete the dependency, find diff first
+	// this is more complex cos want to make sure no other service depend on the same service (which we just removed the dependancy).
+	// need to make sure nothing depend on that before cleaning up the SE for that service
+	HandleDependencyRecord(obj, dh.RemoteRegistry)
+
+}
+
+func HandleDependencyRecord(obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
+	sourceIdentity := obj.Spec.Source
+
+	if len(sourceIdentity) == 0 {
+		log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
 	}
 
-	r.Lock()
-	defer r.Unlock()
-	delete(r.RemoteControllers, clusterID)
+	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
+}
 
-	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
+func (dh *DependencyHandler) Deleted(obj *v1.Dependency) {
+	// special case of update, delete the dependency crd file for one service, need to loop through all ones we plan to update
+	// and make sure nobody else is relying on the same SE in same cluster
+	log.Infof(LogFormat, "Deleted", "dependency", obj.Name, "", "Skipping, not implemented")
+}
+
+func (gtp *GlobalTrafficHandler) Added(obj *v1.GlobalTrafficPolicy) {
+	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
+}
+
+func (gtp *GlobalTrafficHandler) Updated(obj *v1.GlobalTrafficPolicy) {
+	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
+}
+
+func (gtp *GlobalTrafficHandler) Deleted(obj *v1.GlobalTrafficPolicy) {
+	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	err := HandleEventForGlobalTrafficPolicy(obj, gtp.RemoteRegistry, gtp.ClusterID)
+	if err != nil {
+		log.Infof(err.Error())
+	}
+}
+
+func (pc *DeploymentHandler) Added(obj *k8sAppsV1.Deployment) {
+	HandleEventForDeployment(admiral.Add, obj, pc.RemoteRegistry, pc.ClusterID)
+}
+
+func (pc *DeploymentHandler) Deleted(obj *k8sAppsV1.Deployment) {
+	HandleEventForDeployment(admiral.Delete, obj, pc.RemoteRegistry, pc.ClusterID)
+}
+
+func (rh *RolloutHandler) Added(obj *argo.Rollout) {
+	HandleEventForRollout(admiral.Add, obj, rh.RemoteRegistry, rh.ClusterID)
+}
+
+func (rh *RolloutHandler) Updated(obj *argo.Rollout) {
+	log.Infof(LogFormat, "Updated", "rollout", obj.Name, rh.ClusterID, "received")
+}
+
+func (rh *RolloutHandler) Deleted(obj *argo.Rollout) {
+	HandleEventForRollout(admiral.Delete, obj, rh.RemoteRegistry, rh.ClusterID)
+}
+
+// helper function to handle add and delete for RolloutHandler
+func HandleEventForRollout(event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
+
+	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Received")
+	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "rollout", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	env := common.GetEnvForRollout(obj)
+
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+}
+
+// helper function to handle add and delete for DeploymentHandler
+func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
+
+	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
+
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, "Event", "deployment", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return
+	}
+
+	env := common.GetEnv(obj)
+
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	modifyServiceEntryForNewServiceOrPod(event, env, globalIdentifier, remoteRegistry)
+}
+
+// HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
+func HandleEventForGlobalTrafficPolicy(gtp *v1.GlobalTrafficPolicy, remoteRegistry *RemoteRegistry, clusterName string) error {
+
+	globalIdentifier := common.GetGtpIdentity(gtp)
+
+	if len(globalIdentifier) == 0 {
+		return fmt.Errorf(LogFormat, "Event", "globaltrafficpolicy", gtp.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+gtp.Namespace)
+	}
+
+	env := common.GetGtpEnv(gtp)
+
+	// For now we're going to force all the events to update only in order to prevent
+	// the endpoints from being deleted.
+	// TODO: Need to come up with a way to prevent deleting default endpoints so that this hack can be removed.
+	// Use the same function as added deployment function to update and put new service entry in place to replace old one
+	modifyServiceEntryForNewServiceOrPod(admiral.Update, env, globalIdentifier, remoteRegistry)
 	return nil
 }
