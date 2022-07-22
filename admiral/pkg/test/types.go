@@ -17,3 +17,6 @@ func (c *FakeConfigMapController) GetConfigMap() (*k8sCoreV1.ConfigMap, error) {
 func (c *FakeConfigMapController) PutConfigMap(newMap *k8sCoreV1.ConfigMap) error {
 	return c.PutError
 }
+func (c *FakeConfigMapController)GetIPPrefixForServiceEntries() (seIpPrefix string)  {
+	return "240.0"
+}
