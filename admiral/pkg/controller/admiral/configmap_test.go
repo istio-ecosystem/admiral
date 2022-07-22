@@ -122,7 +122,7 @@ func TestNewConfigMapController(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			common.SetKubeconfigPath(c.kubeconfigPath)
-			controller, err := NewConfigMapController()
+			controller, err := NewConfigMapController("240.0")
 			if err == nil && c.expectedError == nil {
 				//only do these in an error-less context
 				if c.namespace != controller.ConfigmapNamespace {

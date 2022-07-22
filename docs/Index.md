@@ -5,3 +5,5 @@
 ### [Examples](Examples.md)
 
 ### [Compatibility](Compatibility.md)
+
+### [Disaster recovery support](DisasterRecovery.md)

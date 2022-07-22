@@ -131,6 +131,10 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.GatewayApp, "gateway_app", "istio-ingressgateway",
 		"The the value of the `app` label to use to match and find the service that represents the ingress for cross cluster traffic (AUTO_PASSTHROUGH mode)")
 	rootCmd.PersistentFlags().BoolVar(&params.MetricsEnabled, "metrics", true, "Enable prometheus metrics collections")
+	rootCmd.PersistentFlags().StringVar(&params.AdmiralStateCheckerName,"admiral_state_checker_name","NoOPStateChecker","The value of the admiral_state_checker_name label to configure the DR Strategy for Admiral")
+	rootCmd.PersistentFlags().StringVar(&params.DRStateStoreConfigPath,"dr_state_store_config_path","","Location of config file which has details for data store. Ex:- Dynamo DB connection details")
+	rootCmd.PersistentFlags().StringVar(&params.ServiceEntryIPPrefix,"se_ip_prefix","240.0","IP prefix for the auto generated IPs for service entries. Only the first two octets:  Eg- 240.0")
+
 
 	return rootCmd
 }
