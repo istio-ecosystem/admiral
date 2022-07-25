@@ -36,18 +36,18 @@ type AdmiralParams struct {
 	DependenciesNamespace      string
 	SyncNamespace              string
 	EnableSAN                  bool
-	SANPrefix               string
-	SecretResolver          string
-	LabelSet                *LabelSet
-	LogLevel                int
-	HostnameSuffix          string
-	PreviewHostnamePrefix   string
-	MetricsEnabled          bool
-	WorkloadSidecarUpdate   string
-	WorkloadSidecarName     string
-	AdmiralStateCheckerName string
-	DRStateStoreConfigPath  string
-	ServiceEntryIPPrefix    string
+	SANPrefix                  string
+	SecretResolver             string
+	LabelSet                   *LabelSet
+	LogLevel                   int
+	HostnameSuffix             string
+	PreviewHostnamePrefix      string
+	MetricsEnabled             bool
+	WorkloadSidecarUpdate      string
+	WorkloadSidecarName        string
+	AdmiralStateCheckerName    string
+	DRStateStoreConfigPath     string
+	ServiceEntryIPPrefix       string
 }
 
 func (b AdmiralParams) String() string {
@@ -58,9 +58,9 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
 		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
 		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
-		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)+
-		fmt.Sprintf("AdmiralStateCheckername=%v ", b.AdmiralStateCheckerName)+
-		fmt.Sprintf("DRStateStoreConfigPath=%v ", b.DRStateStoreConfigPath)+
+		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver) +
+		fmt.Sprintf("AdmiralStateCheckername=%v ", b.AdmiralStateCheckerName) +
+		fmt.Sprintf("DRStateStoreConfigPath=%v ", b.DRStateStoreConfigPath) +
 		fmt.Sprintf("ServiceEntryIPPrefix=%v ", b.ServiceEntryIPPrefix)
 }
 
@@ -70,6 +70,7 @@ type LabelSet struct {
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
+	ResourcePriorityKey                 string
 	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
 	GlobalTrafficDeploymentLabel        string //label used to tie together deployments and globaltrafficpolicy objects. Configured separately from the identity key because this one _must_ be a label
 	EnvKey                              string //key used to group deployments by env. The order would be to use annotation `EnvKey` and then label `EnvKey` and then fallback to label `env` label

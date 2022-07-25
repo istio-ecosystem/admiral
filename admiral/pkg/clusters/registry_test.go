@@ -40,6 +40,7 @@ func init() {
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+	p.LabelSet.ResourcePriorityKey = "admiral.io/resource-priority"
 
 	common.InitializeConfig(p)
 }

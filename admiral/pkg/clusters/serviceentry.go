@@ -242,30 +242,44 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 }
 
 //Does two things;
-//i)  Picks the GTP that was created most recently from the passed in GTP list (GTPs from all clusters)
+//i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
 //ii) Updates the global GTP cache with the selected GTP in i)
 func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
 	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
+
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
+	priorityGtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
+
 	for _, gtpsInCluster := range gtps {
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
 	}
+
+	var mostRecentGtp *v1.GlobalTrafficPolicy
 	if len(gtpsOrdered) == 0 {
 		log.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
 		cache.GlobalTrafficCache.Delete(identity, env)
 		return
-	} else if len(gtpsOrdered) > 1 {
-		log.Debugf("More than one GTP found for identity=%s in env=%s.", identity, env)
-		//sort by creation time with most recent at the beginning
-		sort.Slice(gtpsOrdered, func(i, j int) bool {
-			iTime := gtpsOrdered[i].CreationTimestamp
-			jTime := gtpsOrdered[j].CreationTimestamp
-			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v name2=%s creationTime2=%v", identity, env, gtpsOrdered[i].Name, iTime, gtpsOrdered[j].Name, jTime)
-			return iTime.After(jTime.Time)
-		})
-	}
+	} else {
+		for _, matchedGtp := range gtpsOrdered {
+			if matchedGtp.ObjectMeta.Labels[common.GetAdmiralParams().LabelSet.ResourcePriorityKey] == "true" {
+				priorityGtpsOrdered = append(priorityGtpsOrdered, matchedGtp)
+			}
+		}
 
-	mostRecentGtp := gtpsOrdered[0]
+		if len(priorityGtpsOrdered) == 0 {
+			if len(gtpsOrdered) > 1 {
+				log.Infof("More than one GTP found for identity=%s in env=%s.", identity, env)
+				sortFetchedGtps(gtpsOrdered, identity, env)
+			}
+			mostRecentGtp = gtpsOrdered[0]
+		} else {
+			if len(priorityGtpsOrdered) > 1 {
+				log.Infof("More than one GTP with priority label found for identity=%s in env=%s.", identity, env)
+				sortFetchedGtps(priorityGtpsOrdered, identity, env)
+			}
+			mostRecentGtp = priorityGtpsOrdered[0]
+		}
+	}
 
 	err := cache.GlobalTrafficCache.Put(mostRecentGtp)
 
@@ -274,6 +288,15 @@ func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[st
 	} else {
 		log.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
 	}
+}
+
+func sortFetchedGtps(gtpsToOrder []*v1.GlobalTrafficPolicy, identity string, env string) {
+	sort.Slice(gtpsToOrder, func(i, j int) bool {
+		iTime := gtpsToOrder[i].CreationTimestamp
+		jTime := gtpsToOrder[j].CreationTimestamp
+		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v name2=%s creationTime2=%v", identity, env, gtpsToOrder[i].Name, iTime, gtpsToOrder[j].Name, jTime)
+		return iTime.After(jTime.Time)
+	})
 }
 
 func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,
