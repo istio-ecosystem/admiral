@@ -70,7 +70,7 @@ type LabelSet struct {
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
-	ResourcePriorityKey                 string
+	PriorityKey                         string
 	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
 	GlobalTrafficDeploymentLabel        string //label used to tie together deployments and globaltrafficpolicy objects. Configured separately from the identity key because this one _must_ be a label
 	EnvKey                              string //key used to group deployments by env. The order would be to use annotation `EnvKey` and then label `EnvKey` and then fallback to label `env` label
