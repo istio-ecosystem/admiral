@@ -432,8 +432,8 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 			rc := rcs[sourceCluster]
 
-			if rc == nil {
-				log.Warnf(LogFormat, "Find", "remote-controller", sourceCluster, sourceCluster, "doesn't exist")
+			if rc == nil || rc.NodeController == nil || rc.NodeController.Locality == nil {
+				log.Warnf(LogFormat, "Find", "remote-controller", sourceCluster, sourceCluster, "locality not available for the cluster")
 				continue
 			}
 
