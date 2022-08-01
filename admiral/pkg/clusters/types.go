@@ -121,7 +121,7 @@ func (r *RemoteRegistry) GetClusterIds() []string {
 	r.Mutex.Lock()
 	defer r.Mutex.Unlock()
 	var clusters = make([]string, 0, len(r.remoteControllers))
-	for k, _ := range r.remoteControllers {
+	for k := range r.remoteControllers {
 		clusters = append(clusters, k)
 	}
 	return clusters
