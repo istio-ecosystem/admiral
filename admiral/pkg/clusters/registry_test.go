@@ -47,10 +47,7 @@ func init() {
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
-	w := RemoteRegistry{
-		remoteControllers: make(map[string]*RemoteController),
-		StartTime:         time.Now(),
-	}
+	w := NewRemoteRegistry(nil, common.AdmiralParams{})
 
 	err := w.deleteCacheController("I don't exit")
 
@@ -61,10 +58,7 @@ func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 func TestDeleteCacheController(t *testing.T) {
 
-	w := RemoteRegistry{
-		remoteControllers: make(map[string]*RemoteController),
-		StartTime:         time.Now(),
-	}
+	w := NewRemoteRegistry(nil, common.AdmiralParams{})
 
 	r := rest.Config{
 		Host: "test.com",
@@ -189,8 +183,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-	rr := RemoteRegistry{}
-	err := createSecretController(context.Background(), &rr)
+
+	err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
 	if err != nil {
 		t.Fail()
@@ -198,8 +192,7 @@ func TestCreateSecretController(t *testing.T) {
 
 	common.SetKubeconfigPath("fail")
 
-	rr = RemoteRegistry{}
-	err = createSecretController(context.Background(), &rr)
+	err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
 	common.SetKubeconfigPath("testdata/fake.config")
 

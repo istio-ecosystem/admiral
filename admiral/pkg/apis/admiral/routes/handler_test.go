@@ -15,7 +15,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestReturnSuccessGET(t *testing.T) {
@@ -42,15 +41,14 @@ func TestReturnSuccessMetrics(t *testing.T) {
 
 func TestGetClusters(t *testing.T) {
 	url := "https://admiral.com/clusters"
-	opts := RouteOpts{
-		RemoteRegistry: &clusters.RemoteRegistry{
-			SecretController: &secret.Controller{
-				Cs: &secret.ClusterStore{
-					RemoteClusters: map[string]*secret.RemoteCluster{},
-				},
-			},
-			StartTime: time.Now(),
+	rr := clusters.NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.SecretController = &secret.Controller{
+		Cs: &secret.ClusterStore{
+			RemoteClusters: map[string]*secret.RemoteCluster{},
 		},
+	}
+	opts := RouteOpts{
+		RemoteRegistry: rr,
 	}
 	testCases := []struct {
 		name          string
@@ -97,7 +95,7 @@ func TestGetClusters(t *testing.T) {
 func TestGetServiceEntriesByCluster(t *testing.T) {
 	url := "https://admiral.com/cluster/cluster1/serviceentries"
 	opts := RouteOpts{
-		RemoteRegistry: &clusters.RemoteRegistry{},
+		RemoteRegistry: clusters.NewRemoteRegistry(nil, common.AdmiralParams{}),
 	}
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	testCases := []struct {
@@ -177,12 +175,12 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 
 func TestGetServiceEntriesByIdentity(t *testing.T) {
 	url := "https://admiral.com/identity/service1/serviceentries"
+	rr := clusters.NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.AdmiralCache = &clusters.AdmiralCache{
+		SeClusterCache: common.NewMapOfMaps(),
+	}
 	opts := RouteOpts{
-		RemoteRegistry: &clusters.RemoteRegistry{
-			AdmiralCache: &clusters.AdmiralCache{
-				SeClusterCache: common.NewMapOfMaps(),
-			},
-		},
+		RemoteRegistry: rr,
 	}
 	testCases := []struct {
 		name        string

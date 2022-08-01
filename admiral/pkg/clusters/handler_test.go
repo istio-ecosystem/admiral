@@ -534,21 +534,18 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	goodCnameCache := common.NewMapOfMaps()
 	goodCnameCache.Put("e2e.blah.global", "cluster.k8s.global", "cluster.k8s.global")
-	handlerEmptyClient := VirtualServiceHandler{
-		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{
-				"cluster.k8s.global": &RemoteController{
-					VirtualServiceController: &istio.VirtualServiceController{
-						IstioClient: fakeIstioClient,
-					},
-				},
-			},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: goodCnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
+	rr1 := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr1.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: goodCnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
+	rr1.PutRemoteController("cluster.k8s.global", &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClient,
 		},
+	})
+	handlerEmptyClient := VirtualServiceHandler{
+		RemoteRegistry: rr1,
 	}
 
 	fullFakeIstioClient := istiofake.NewSimpleClientset()
@@ -560,22 +557,19 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			Hosts: []string{"e2e.blah.global"},
 		},
 	})
-	handlerFullClient := VirtualServiceHandler{
-		ClusterID: "cluster2.k8s.global",
-		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{
-				"cluster.k8s.global": &RemoteController{
-					VirtualServiceController: &istio.VirtualServiceController{
-						IstioClient: fullFakeIstioClient,
-					},
-				},
-			},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: goodCnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
+	rr2 := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr2.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: goodCnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
+	rr2.PutRemoteController("cluster.k8s.global", &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fullFakeIstioClient,
 		},
+	})
+	handlerFullClient := VirtualServiceHandler{
+		ClusterID:      "cluster2.k8s.global",
+		RemoteRegistry: rr2,
 	}
 
 	//Struct of test case info. Name is required.
