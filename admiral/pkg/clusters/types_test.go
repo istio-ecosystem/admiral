@@ -63,7 +63,7 @@ func TestDeploymentHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry
@@ -143,7 +143,7 @@ func TestRolloutHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
 	registry.AdmiralCache.GlobalTrafficCache = gtpCache
 	handler.RemoteRegistry = registry

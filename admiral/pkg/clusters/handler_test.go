@@ -524,7 +524,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	cnameCache := common.NewMapOfMaps()
 	noDependencClustersHandler := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{},
+			remoteControllers: map[string]*RemoteController{},
 			AdmiralCache: &AdmiralCache{
 				CnameDependentClusterCache: cnameCache,
 				SeClusterCache:             common.NewMapOfMaps(),
@@ -538,7 +538,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	goodCnameCache.Put("e2e.blah.global", "cluster.k8s.global", "cluster.k8s.global")
 	handlerEmptyClient := VirtualServiceHandler{
 		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{
+			remoteControllers: map[string]*RemoteController{
 				"cluster.k8s.global": &RemoteController{
 					VirtualServiceController: &istio.VirtualServiceController{
 						IstioClient: fakeIstioClient,
@@ -565,7 +565,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	handlerFullClient := VirtualServiceHandler{
 		ClusterID: "cluster2.k8s.global",
 		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{
+			remoteControllers: map[string]*RemoteController{
 				"cluster.k8s.global": &RemoteController{
 					VirtualServiceController: &istio.VirtualServiceController{
 						IstioClient: fullFakeIstioClient,
@@ -846,8 +846,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	canaryRollout.Namespace = Namespace
 	canaryRollout.Spec.Strategy = argo.RolloutStrategy{
-		Canary: &argo.CanaryStrategy{
-		},
+		Canary: &argo.CanaryStrategy{},
 	}
 
 	canaryRolloutNS1 := argo.Rollout{
@@ -1147,8 +1146,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 
 	bgRolloutNoActiveService.Namespace = NAMESPACE
 	bgRolloutNoActiveService.Spec.Strategy = argo.RolloutStrategy{
-		BlueGreen: &argo.BlueGreenStrategy{
-		},
+		BlueGreen: &argo.BlueGreenStrategy{},
 	}
 
 	selectorMap := make(map[string]string)
