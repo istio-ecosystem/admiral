@@ -522,35 +522,30 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	vsNotGeneratedByAdmiral.Name = "vs-name-other-nss"
 
 	cnameCache := common.NewMapOfMaps()
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: cnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
 	noDependencClustersHandler := VirtualServiceHandler{
-		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: cnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
-		},
+		RemoteRegistry: rr,
 	}
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	goodCnameCache := common.NewMapOfMaps()
 	goodCnameCache.Put("e2e.blah.global", "cluster.k8s.global", "cluster.k8s.global")
-	handlerEmptyClient := VirtualServiceHandler{
-		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{
-				"cluster.k8s.global": &RemoteController{
-					VirtualServiceController: &istio.VirtualServiceController{
-						IstioClient: fakeIstioClient,
-					},
-				},
-			},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: goodCnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
+	rr1 := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr1.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: goodCnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
+	rr1.PutRemoteController("cluster.k8s.global", &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClient,
 		},
+	})
+	handlerEmptyClient := VirtualServiceHandler{
+		RemoteRegistry: rr1,
 	}
 
 	fullFakeIstioClient := istiofake.NewSimpleClientset()
@@ -562,22 +557,19 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			Hosts: []string{"e2e.blah.global"},
 		},
 	})
-	handlerFullClient := VirtualServiceHandler{
-		ClusterID: "cluster2.k8s.global",
-		RemoteRegistry: &RemoteRegistry{
-			RemoteControllers: map[string]*RemoteController{
-				"cluster.k8s.global": &RemoteController{
-					VirtualServiceController: &istio.VirtualServiceController{
-						IstioClient: fullFakeIstioClient,
-					},
-				},
-			},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: goodCnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
+	rr2 := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr2.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: goodCnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
+	rr2.PutRemoteController("cluster.k8s.global", &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fullFakeIstioClient,
 		},
+	})
+	handlerFullClient := VirtualServiceHandler{
+		ClusterID:      "cluster2.k8s.global",
+		RemoteRegistry: rr2,
 	}
 
 	//Struct of test case info. Name is required.
@@ -846,8 +838,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	canaryRollout.Namespace = Namespace
 	canaryRollout.Spec.Strategy = argo.RolloutStrategy{
-		Canary: &argo.CanaryStrategy{
-		},
+		Canary: &argo.CanaryStrategy{},
 	}
 
 	canaryRolloutNS1 := argo.Rollout{
@@ -1147,8 +1138,7 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 
 	bgRolloutNoActiveService.Namespace = NAMESPACE
 	bgRolloutNoActiveService.Spec.Strategy = argo.RolloutStrategy{
-		BlueGreen: &argo.BlueGreenStrategy{
-		},
+		BlueGreen: &argo.BlueGreenStrategy{},
 	}
 
 	selectorMap := make(map[string]string)

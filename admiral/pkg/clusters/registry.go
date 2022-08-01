@@ -3,11 +3,9 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"k8s.io/client-go/rest"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -27,45 +25,20 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	common.InitializeConfig(params)
 
-	CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled,IsStateInitialized: StateNotInitialized}
-	startAdmiralStateChecker(ctx,params)
+	CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled, IsStateInitialized: StateNotInitialized}
+	startAdmiralStateChecker(ctx, params)
 	pauseForAdmiralToInitializeState()
 
-	w := RemoteRegistry{
-		ctx: ctx,
-		StartTime: time.Now(),
-	}
+	w := NewRemoteRegistry(ctx, params)
 
 	wd := DependencyHandler{
-		RemoteRegistry: &w,
+		RemoteRegistry: w,
 	}
 
 	var err error
 	wd.DepController, err = admiral.NewDependencyController(ctx.Done(), &wd, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
-	}
-
-	w.RemoteControllers = make(map[string]*RemoteController)
-
-	gtpCache := &globalTrafficCache{}
-	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.mutex = &sync.Mutex{}
-
-	w.AdmiralCache = &AdmiralCache{
-		IdentityClusterCache:            common.NewMapOfMaps(),
-		CnameClusterCache:               common.NewMapOfMaps(),
-		CnameDependentClusterCache:      common.NewMapOfMaps(),
-		ClusterLocalityCache:            common.NewMapOfMaps(),
-		IdentityDependencyCache:         common.NewMapOfMaps(),
-		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
-		CnameIdentityCache:              &sync.Map{},
-		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
-		GlobalTrafficCache:              gtpCache,
-		SeClusterCache:                  common.NewMapOfMaps(),
-
-		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
 	}
 
 	if !params.ArgoRolloutsEnabled {
@@ -79,17 +52,17 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
-	err = createSecretController(ctx, &w)
+	err = createSecretController(ctx, w)
 	if err != nil {
 		return nil, fmt.Errorf(" Error with secret control init: %v", err)
 	}
 
 	go w.shutdown()
 
-	return &w, nil
+	return w, nil
 }
 
-func pauseForAdmiralToInitializeState(){
+func pauseForAdmiralToInitializeState() {
 	// Sleep until Admiral determines state. This is done to make sure events are not skipped during startup while determining READ-WRITE state
 	start := time.Now()
 	log.Info("Pausing thread to let Admiral determine it's READ-WRITE state. This is to let Admiral determine it's state during startup")
@@ -161,7 +134,6 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf("error with GlobalTrafficController controller init: %v", err)
 	}
 
-
 	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
 
@@ -214,9 +186,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		}
 	}
 
-	r.Lock()
-	defer r.Unlock()
-	r.RemoteControllers[clusterID] = &rc
+	r.PutRemoteController(clusterID, &rc)
 
 	log.Infof("Create Controller %s", clusterID)
 
@@ -227,7 +197,7 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
 	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
 	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
-	controller := r.RemoteControllers[clusterID]
+	controller := r.GetRemoteController(clusterID)
 
 	if clientConfig.Host != controller.ApiServer {
 		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
@@ -243,15 +213,13 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 
-	controller, ok := r.RemoteControllers[clusterID]
+	controller := r.GetRemoteController(clusterID)
 
-	if ok {
+	if controller != nil {
 		close(controller.stop)
 	}
 
-	r.Lock()
-	defer r.Unlock()
-	delete(r.RemoteControllers, clusterID)
+	r.DeleteRemoteController(clusterID)
 
 	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
 	return nil

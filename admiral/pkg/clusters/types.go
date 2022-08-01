@@ -55,12 +55,75 @@ type AdmiralCache struct {
 
 type RemoteRegistry struct {
 	sync.Mutex
-	RemoteControllers map[string]*RemoteController
+	remoteControllers map[string]*RemoteController
 	SecretController  *secret.Controller
 	secretClient      k8s.Interface
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
 	StartTime         time.Time
+}
+
+func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
+	gtpCache.mutex = &sync.Mutex{}
+
+	admiralCache := &AdmiralCache{
+		IdentityClusterCache:            common.NewMapOfMaps(),
+		CnameClusterCache:               common.NewMapOfMaps(),
+		CnameDependentClusterCache:      common.NewMapOfMaps(),
+		ClusterLocalityCache:            common.NewMapOfMaps(),
+		IdentityDependencyCache:         common.NewMapOfMaps(),
+		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
+		CnameIdentityCache:              &sync.Map{},
+		SubsetServiceEntryIdentityCache: &sync.Map{},
+		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
+		GlobalTrafficCache:              gtpCache,
+		SeClusterCache:                  common.NewMapOfMaps(),
+		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
+	}
+	return &RemoteRegistry{
+		ctx:               ctx,
+		StartTime:         time.Now(),
+		remoteControllers: make(map[string]*RemoteController),
+		AdmiralCache:      admiralCache,
+	}
+}
+
+func (r *RemoteRegistry) GetRemoteController(clusterId string) *RemoteController {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	return r.remoteControllers[clusterId]
+}
+
+func (r *RemoteRegistry) PutRemoteController(clusterId string, rc *RemoteController) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	r.remoteControllers[clusterId] = rc
+}
+
+func (r *RemoteRegistry) DeleteRemoteController(clusterId string) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	delete(r.remoteControllers, clusterId)
+}
+
+func (r *RemoteRegistry) RangeRemoteControllers(fn func(k string, v *RemoteController)) {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	for k, v := range r.remoteControllers {
+		fn(k, v)
+	}
+}
+
+func (r *RemoteRegistry) GetClusterIds() []string {
+	r.Mutex.Lock()
+	defer r.Mutex.Unlock()
+	var clusters = make([]string, 0, len(r.remoteControllers))
+	for k := range r.remoteControllers {
+		clusters = append(clusters, k)
+	}
+	return clusters
 }
 
 func (r *RemoteRegistry) shutdown() {
@@ -70,7 +133,7 @@ func (r *RemoteRegistry) shutdown() {
 	<-done
 
 	//close the remote controllers stop channel
-	for _, v := range r.RemoteControllers {
+	for _, v := range r.remoteControllers {
 		close(v.stop)
 	}
 }
@@ -173,15 +236,16 @@ func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
 
 func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
 	if svc.Spec.Selector == nil {
-		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName);
+		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName)
 	}
-	if remoteRegistry.RemoteControllers[clusterName] == nil {
-		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName);
+	rc := remoteRegistry.GetRemoteController(clusterName)
+	if rc == nil {
+		return fmt.Errorf("could not find the remote controller for cluster=%s", clusterName)
 	}
-	deploymentController := remoteRegistry.RemoteControllers[clusterName].DeploymentController
-	rolloutController := remoteRegistry.RemoteControllers[clusterName].RolloutController
+	deploymentController := rc.DeploymentController
+	rolloutController := rc.RolloutController
 	if deploymentController != nil {
-		matchingDeployements := remoteRegistry.RemoteControllers[clusterName].DeploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
 		if len(matchingDeployements) > 0 {
 			for _, deployment := range matchingDeployements {
 				HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
@@ -189,7 +253,7 @@ func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, c
 		}
 	}
 	if common.GetAdmiralParams().ArgoRolloutsEnabled && rolloutController != nil {
-		matchingRollouts := remoteRegistry.RemoteControllers[clusterName].RolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		matchingRollouts := rolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
 
 		if len(matchingRollouts) > 0 {
 			for _, rollout := range matchingRollouts {

@@ -87,7 +87,12 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var gtpKey = common.ConstructGtpKey(env, sourceIdentity)
 
 	start := time.Now()
-	for _, rc := range remoteRegistry.RemoteControllers {
+
+	clusters := remoteRegistry.GetClusterIds()
+
+	for _, clusterId := range clusters {
+
+		rc := remoteRegistry.GetRemoteController(clusterId)
 
 		deployment := rc.DeploymentController.Cache.Get(sourceIdentity, env)
 
@@ -161,7 +166,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 	for sourceCluster, serviceInstance := range sourceServices {
 		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		rc := remoteRegistry.RemoteControllers[sourceCluster]
+		rc := remoteRegistry.GetRemoteController(sourceCluster)
 		var meshPorts map[string]uint32
 		blueGreenStrategy := isBlueGreenStrategy(sourceRollouts[sourceCluster])
 
@@ -173,7 +178,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+				AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
@@ -185,7 +190,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						oldPorts := ep.Ports
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
-						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -195,13 +200,13 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
-						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: se})
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
-						AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, map[string]string{sourceCluster: sourceCluster}, remoteRegistry.RemoteControllers,
+						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -234,7 +239,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry.AdmiralCache, dependentClusters, remoteRegistry.RemoteControllers, serviceEntries)
+	AddServiceEntriesWithDr(remoteRegistry, dependentClusters, serviceEntries)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -414,7 +419,10 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 }
 
 //This will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]string, rcs map[string]*RemoteController, serviceEntries map[string]*networking.ServiceEntry) {
+func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
+
+	cache := rr.AdmiralCache
+
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
@@ -430,7 +438,7 @@ func AddServiceEntriesWithDr(cache *AdmiralCache, sourceClusters map[string]stri
 
 		for _, sourceCluster := range sourceClusters {
 
-			rc := rcs[sourceCluster]
+			rc := rr.GetRemoteController(sourceCluster)
 
 			if rc == nil || rc.NodeController == nil || rc.NodeController.Locality == nil {
 				log.Warnf(LogFormat, "Find", "remote-controller", sourceCluster, sourceCluster, "locality not available for the cluster")
@@ -561,7 +569,7 @@ func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStor
 }
 
 func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry) ([]v1alpha3.ServiceEntry, error) {
-	remoteController := remoteRegistry.RemoteControllers[clusterID]
+	remoteController := remoteRegistry.GetRemoteController(clusterID)
 	if remoteController != nil {
 		serviceEnteries, err := remoteController.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetSyncNamespace()).List(v12.ListOptions{})
 

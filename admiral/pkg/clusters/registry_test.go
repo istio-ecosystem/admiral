@@ -47,10 +47,7 @@ func init() {
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
-	w := RemoteRegistry{
-		RemoteControllers: make(map[string]*RemoteController),
-		StartTime:         time.Now(),
-	}
+	w := NewRemoteRegistry(nil, common.AdmiralParams{})
 
 	err := w.deleteCacheController("I don't exit")
 
@@ -61,10 +58,7 @@ func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 func TestDeleteCacheController(t *testing.T) {
 
-	w := RemoteRegistry{
-		RemoteControllers: make(map[string]*RemoteController),
-		StartTime:         time.Now(),
-	}
+	w := NewRemoteRegistry(nil, common.AdmiralParams{})
 
 	r := rest.Config{
 		Host: "test.com",
@@ -72,9 +66,9 @@ func TestDeleteCacheController(t *testing.T) {
 
 	cluster := "test.cluster"
 	w.createCacheController(&r, cluster, time.Second*time.Duration(300))
-	_, ok := w.RemoteControllers[cluster]
+	rc := w.GetRemoteController(cluster)
 
-	if !ok {
+	if rc == nil {
 		t.Fail()
 	}
 
@@ -83,9 +77,9 @@ func TestDeleteCacheController(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	_, ok = w.RemoteControllers[cluster]
+	rc = w.GetRemoteController(cluster)
 
-	if ok {
+	if rc != nil {
 		t.Fail()
 	}
 }
@@ -189,8 +183,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-	rr := RemoteRegistry{}
-	err := createSecretController(context.Background(), &rr)
+
+	err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
 	if err != nil {
 		t.Fail()
@@ -198,8 +192,7 @@ func TestCreateSecretController(t *testing.T) {
 
 	common.SetKubeconfigPath("fail")
 
-	rr = RemoteRegistry{}
-	err = createSecretController(context.Background(), &rr)
+	err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
 
 	common.SetKubeconfigPath("testdata/fake.config")
 
@@ -222,7 +215,7 @@ func TestInitAdmiral(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	if len(rr.RemoteControllers) != 0 {
+	if len(rr.GetClusterIds()) != 0 {
 		t.Fail()
 	}
 
@@ -241,7 +234,7 @@ func TestAdded(t *testing.T) {
 	rc, _ := createMockRemoteController(func(i interface{}) {
 		t.Fail()
 	})
-	rr.RemoteControllers["test.cluster"] = rc
+	rr.PutRemoteController("test.cluster", rc)
 	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
 
 	if e != nil {
@@ -367,7 +360,7 @@ func TestUpdateCacheController(t *testing.T) {
 		t.Fail()
 	})
 	rc.stop = make(chan struct{})
-	rr.RemoteControllers["test.cluster"] = rc
+	rr.PutRemoteController("test.cluster", rc)
 
 	//Struct of test case info. Name is required.
 	testCases := []struct {
@@ -397,7 +390,7 @@ func TestUpdateCacheController(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
-			rr.RemoteControllers[c.clusterId].ApiServer = c.oldConfig.Host
+			rr.GetRemoteController(c.clusterId).ApiServer = c.oldConfig.Host
 			d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
 			if err != nil {
 				t.Fatalf("Unexpected error creating controller %v", err)
@@ -409,8 +402,8 @@ func TestUpdateCacheController(t *testing.T) {
 				t.Fatalf("Unexpected error doing update %v", err)
 			}
 
-			if rr.RemoteControllers[c.clusterId].ApiServer != c.newConfig.Host {
-				t.Fatalf("Client mismatch. Updated controller has the wrong client. Expected %v got %v", c.newConfig.Host, rr.RemoteControllers[c.clusterId].ApiServer)
+			if rr.GetRemoteController(c.clusterId).ApiServer != c.newConfig.Host {
+				t.Fatalf("Client mismatch. Updated controller has the wrong client. Expected %v got %v", c.newConfig.Host, rr.GetRemoteController(c.clusterId).ApiServer)
 			}
 
 			refreshed := checkIfLogged(hook.AllEntries(), "Client mismatch, recreating cache controllers for cluster")
