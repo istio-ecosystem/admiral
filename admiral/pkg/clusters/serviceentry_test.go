@@ -99,9 +99,11 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			},
 		},
 	}
-
-	AddServiceEntriesWithDr(&RemoteRegistry{AdmiralCache: &admiralCache, remoteControllers: map[string]*RemoteController{"cl1": rc}}, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-	AddServiceEntriesWithDr(&RemoteRegistry{AdmiralCache: &admiralCache, remoteControllers: map[string]*RemoteController{"cl1": rc}}, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.PutRemoteController("c1", rc)
+	rr.AdmiralCache = &admiralCache
+	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {

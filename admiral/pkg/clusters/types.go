@@ -63,7 +63,7 @@ type RemoteRegistry struct {
 	StartTime         time.Time
 }
 
-func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) RemoteRegistry {
+func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
@@ -80,10 +80,9 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) RemoteR
 		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
 		GlobalTrafficCache:              gtpCache,
 		SeClusterCache:                  common.NewMapOfMaps(),
-
-		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
+		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
 	}
-	return RemoteRegistry{
+	return &RemoteRegistry{
 		ctx:               ctx,
 		StartTime:         time.Now(),
 		remoteControllers: make(map[string]*RemoteController),

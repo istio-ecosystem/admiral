@@ -158,7 +158,7 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 			for cId, rc := range c.remoteControllers {
 				rr.PutRemoteController(cId, rc)
 			}
-			opts.RemoteRegistry = &rr
+			opts.RemoteRegistry = rr
 			if c.name == "success with service entry for cluster" {
 				fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(&v1alpha3.ServiceEntry{})
 			}

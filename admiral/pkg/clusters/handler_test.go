@@ -522,15 +522,13 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	vsNotGeneratedByAdmiral.Name = "vs-name-other-nss"
 
 	cnameCache := common.NewMapOfMaps()
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.AdmiralCache = &AdmiralCache{
+		CnameDependentClusterCache: cnameCache,
+		SeClusterCache:             common.NewMapOfMaps(),
+	}
 	noDependencClustersHandler := VirtualServiceHandler{
-		RemoteRegistry: &RemoteRegistry{
-			remoteControllers: map[string]*RemoteController{},
-			AdmiralCache: &AdmiralCache{
-				CnameDependentClusterCache: cnameCache,
-				SeClusterCache:             common.NewMapOfMaps(),
-			},
-			StartTime: time.Now(),
-		},
+		RemoteRegistry: rr,
 	}
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
