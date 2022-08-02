@@ -80,6 +80,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 	var serviceInstance *k8sV1.Service
 	var weightedServices map[string]*WeightedService
 	var rollout *argo.Rollout
+	var deployment *k8sAppsV1.Deployment
 	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
 
 	var namespace string
@@ -94,14 +95,21 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		rc := remoteRegistry.GetRemoteController(clusterId)
 
-		deployment := rc.DeploymentController.Cache.Get(sourceIdentity, env)
+		if rc == nil {
+			log.Warnf(LogFormat, "Find", "remote-controller", clusterId, clusterId, "remote controller not available/initialized for the cluster")
+			continue
+		}
+
+		if rc.DeploymentController != nil {
+			deployment = rc.DeploymentController.Cache.Get(sourceIdentity, env)
+		}
 
 		if rc.RolloutController != nil {
 			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
 
 		if deployment != nil {
-
+			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
 				continue
@@ -113,7 +121,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
-
+			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			weightedServices = getServiceForRollout(rc, rollout)
 			if len(weightedServices) == 0 {
 				continue
@@ -145,7 +153,6 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			log.Debugf("No GTPs found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
 		}
 
-		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
 		sourceServices[rc.ClusterID] = serviceInstance
