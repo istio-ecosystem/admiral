@@ -140,4 +140,5 @@ gen-yaml:
 	cp ./install/sample/gtp_topology.yaml ./out/yaml/gtp_topology.yaml
 	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
 	cp ./install/prometheus/prometheus.yaml ./out/yaml/prometheus.yaml
+	cp ./install/sample/rp.yaml ./out/yaml/rp.yaml
 	cp ./install/scripts/*.sh ./out/scripts/

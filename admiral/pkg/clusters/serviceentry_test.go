@@ -908,6 +908,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		GlobalTrafficCache:         &globalTrafficCache{},
 		DependencyNamespaceCache:   common.NewSidecarEgressMap(),
 		SeClusterCache:             common.NewMapOfMaps(),
+		WorkloadSelectorCache:      common.NewMapOfMaps(),
 	}
 	rr.AdmiralCache = admiralCache
 
@@ -1044,6 +1045,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		GlobalTrafficCache:         &globalTrafficCache{},
 		DependencyNamespaceCache:   common.NewSidecarEgressMap(),
 		SeClusterCache:             common.NewMapOfMaps(),
+		WorkloadSelectorCache:      common.NewMapOfMaps(),
 	}
 	rr.AdmiralCache = admiralCache
 

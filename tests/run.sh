@@ -39,5 +39,7 @@ if [[ $IS_LOCAL == "false" ]]; then
 fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 ./test4.sh "webapp" "sample"
+# Testing routing policy
+./test6.sh "sample" $install_dir
 
 ./cleanup.sh $istio_version

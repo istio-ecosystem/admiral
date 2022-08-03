@@ -45,3 +45,18 @@ subjects:
   - kind: ServiceAccount
     name: admiral
     namespace: admiral
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admiral-cluster-binding
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admiral-sync-write-envoyfilters
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral-sync

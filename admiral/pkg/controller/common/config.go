@@ -88,6 +88,18 @@ func GetWorkloadSidecarUpdate() string {
 	return admiralParams.WorkloadSidecarUpdate
 }
 
+func GetEnvoyFilterVersion() string {
+	return admiralParams.EnvoyFilterVersion
+}
+
+func GetEnvoyFilterAdditionalConfig() string {
+	return admiralParams.EnvoyFilterAdditionalConfig
+}
+
+func GetEnableRoutingPolicy() bool {
+	return admiralParams.EnableRoutingPolicy
+}
+
 func GetWorkloadSidecarName() string {
 	return admiralParams.WorkloadSidecarName
 }

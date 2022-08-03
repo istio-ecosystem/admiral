@@ -36,6 +36,8 @@ func init() {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		SecretResolver:             "",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -277,6 +279,8 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		SecretResolver:             "",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -298,7 +302,7 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 	})
 	remoteController.RoutingPolicyController = routingPolicyController
 
-	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
 
 	// foo is dependent upon bar and bar has a deployment in the same cluster.
@@ -313,6 +317,10 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 	// foo1 is dependent upon bar 1 but bar1 does not have a deployment so it is missing from identityClusterCache
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo1", "bar1", "bar1")
 
+	var mp = common.NewMap()
+	mp.Put("k1","v1")
+	registry.AdmiralCache.WorkloadSelectorCache.PutMap("bar"+remoteController.ClusterID, mp)
+	registry.AdmiralCache.WorkloadSelectorCache.PutMap("bar2differentCluster", mp)
 
 	handler.RemoteRegistry = registry
 
@@ -336,6 +344,7 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 		},
 		Status:     v1.RoutingPolicyStatus{},
 	}
+
 
 	routingPolicyFoo1 := routingPolicyFoo.DeepCopy()
 	routingPolicyFoo1.Labels[common.GetWorkloadIdentifier()] = "foo1"
@@ -369,6 +378,7 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 
 	}
 
+	time.Sleep(time.Second*30)
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			handler.Added(c.routingPolicy)
@@ -379,7 +389,7 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 				if err != nil {
 					t.Error("Error ocurred while computing workload Labels sha1")
 				}
-				envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(c.routingPolicy.Spec.Plugin), selectorLabelsSha, "1.10")
+				envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(c.routingPolicy.Spec.Plugin), selectorLabelsSha, "1.13")
 				filterMap := filterCacheValue[remoteController.ClusterID]
 				assert.NotNil(t, filterMap)
 				assert.NotNil(t, filterMap[envoyFilterName])
@@ -394,17 +404,19 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 		})
 	}
 
+
+
 	// Test for multiple filters
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar3", "bar3")
 	registry.AdmiralCache.IdentityClusterCache.Put("bar3", remoteController.ClusterID, remoteController.ClusterID)
-
+	registry.AdmiralCache.WorkloadSelectorCache.PutMap("bar3"+remoteController.ClusterID, mp)
 	handler.Added(routingPolicyFoo)
 
 	selectorLabelsShaBar3, err := common.GetSha1("bar3"+common.GetRoutingPolicyEnv(routingPolicyFoo))
 	if err != nil {
 		t.Error("Error ocurred while computing workload Labels sha1")
 	}
-	envoyFilterNameBar3 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar3, "1.10")
+	envoyFilterNameBar3 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar3, "1.13")
 
 	filterCacheValue := registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage")
 	assert.NotNil(t, filterCacheValue)
@@ -415,13 +427,14 @@ func TestRoutingPolicyHandler(t *testing.T)  {
 
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar4", "bar4")
 	registry.AdmiralCache.IdentityClusterCache.Put("bar4", remoteController.ClusterID, remoteController.ClusterID)
+	registry.AdmiralCache.WorkloadSelectorCache.PutMap("bar4"+remoteController.ClusterID, mp)
 	handler.Updated(routingPolicyFoo)
 
 	selectorLabelsShaBar4, err := common.GetSha1("bar4"+common.GetRoutingPolicyEnv(routingPolicyFoo))
 	if err != nil {
 		t.Error("Error ocurred while computing workload Labels sha1")
 	}
-	envoyFilterNameBar4 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar4, "1.10")
+	envoyFilterNameBar4 := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicyFoo.Spec.Plugin), selectorLabelsShaBar4, "1.13")
 
 	filterCacheValue = registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage")
 	assert.NotNil(t, filterCacheValue)

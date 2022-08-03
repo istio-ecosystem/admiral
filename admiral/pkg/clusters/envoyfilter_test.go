@@ -30,6 +30,7 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		SecretResolver:             "",
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -51,7 +52,7 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 
 	remoteController.RoutingPolicyController = routingPolicyController
 
-	registry.RemoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
 
 	// foo is dependent upon bar and bar has a deployment in the same cluster.
@@ -82,21 +83,23 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 		Status:     v1.RoutingPolicyStatus{},
 	}
 
+	selectors := map[string]string{"one":"test1", "two":"test2"}
+
 	getSha1 = getSha1Error
 
-	envoyfilter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "barstage", registry.AdmiralCache)
+	envoyfilter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "barstage", registry.AdmiralCache, selectors)
 
 	assert.NotNil(t, err)
 	assert.Nil(t, envoyfilter)
 
 	getSha1 = common.GetSha1
 
-	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache)
-	assert.Equal(t, "bar", envoyfilter.Spec.WorkloadSelector.GetLabels()["identity"])
-	assert.Equal(t, "stage", envoyfilter.Spec.WorkloadSelector.GetLabels()["admiral.io/env"])
-	assert.Equal(t, "test-dynamicrouting-d0fdd-1.10", envoyfilter.Name)
+	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache, selectors)
+	assert.Equal(t, "test1", envoyfilter.Spec.WorkloadSelector.GetLabels()["one"])
+	assert.Equal(t, "test2", envoyfilter.Spec.WorkloadSelector.GetLabels()["two"])
+	assert.Equal(t, "test-dynamicrouting-d0fdd-1.13", envoyfilter.Name)
 
-	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Update, "bar", registry.AdmiralCache)
+	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Update, "bar", registry.AdmiralCache, selectors)
 	assert.Nil(t, err)
 
 
@@ -105,7 +108,7 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 			return true, nil, errors.New("error creating envoyfilter")
 		},
 	)
-	envoyfilter3, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar2", registry.AdmiralCache)
+	envoyfilter3, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar2", registry.AdmiralCache, selectors)
 	assert.NotNil(t, err)
 	assert.Nil(t, envoyfilter3)
 
@@ -114,4 +117,30 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 
 func getSha1Error (key interface{}) (string, error) {
 	return "", errors.New("error occured while computing the sha")
+}
+
+func TestGetHosts(t *testing.T) {
+	routingPolicyFoo := &v1.RoutingPolicy{
+		TypeMeta:   time2.TypeMeta{},
+		ObjectMeta: time2.ObjectMeta{
+			Labels: map[string]string{
+				"identity": "foo",
+				"admiral.io/env": "stage",
+			},
+		},
+		Spec:       model.RoutingPolicy{
+			Plugin:               "test",
+			Hosts:                []string{"e2e.testservice.mesh,e2e2.testservice.mesh"},
+			Config: map[string]string{
+				"cachePrefix": "cache-v1",
+				"cachettlSec": "86400",
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+				"pathPrefix": "/sayhello,/v1/company/{id}/",
+			},
+		},
+		Status:     v1.RoutingPolicyStatus{},
+	}
+
+	hosts := getHosts(routingPolicyFoo)
+	assert.Equal(t, "hosts: e2e.testservice.mesh,e2e2.testservice.mesh",hosts)
 }

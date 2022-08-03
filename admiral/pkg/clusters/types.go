@@ -43,6 +43,7 @@ type AdmiralCache struct {
 	CnameDependentClusterCache      *common.MapOfMaps
 	CnameIdentityCache              *sync.Map
 	IdentityClusterCache            *common.MapOfMaps
+	WorkloadSelectorCache    		*common.MapOfMaps
 	ClusterLocalityCache            *common.MapOfMaps
 	IdentityDependencyCache         *common.MapOfMaps
 	SubsetServiceEntryIdentityCache *sync.Map
@@ -77,6 +78,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		CnameDependentClusterCache:      common.NewMapOfMaps(),
 		ClusterLocalityCache:            common.NewMapOfMaps(),
 		IdentityDependencyCache:         common.NewMapOfMaps(),
+		WorkloadSelectorCache:           common.NewMapOfMaps(),
 		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
@@ -278,37 +280,50 @@ func (r *routingPolicyFilterCache) Put(identityEnvKey string, clusterId string, 
 }
 
 func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
-	defer r.mutex.Unlock()
-	r.mutex.Lock()
-	// delete all envoyFilters for a given identity+env key
-	delete(r.filterCache, identityEnvKey)
+	if common.GetEnableRoutingPolicy() {
+		defer r.mutex.Unlock()
+		r.mutex.Lock()
+		// delete all envoyFilters for a given identity+env key
+		delete(r.filterCache, identityEnvKey)
+	}else {
+		log.Infof(LogFormat, admiral.Delete, "routingpolicy", identityEnvKey, "", "routingpolicy disabled")
+	}
 }
 func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
-	if common.ShouldIgnoreResource(obj.ObjectMeta) {
-		log.Infof(LogErrFormat, "success", "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
-		return
+	if common.GetEnableRoutingPolicy() {
+		if common.ShouldIgnoreResource(obj.ObjectMeta) {
+			log.Infof(LogErrFormat, "success", "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
+			return
+		}
+		dependents := getDependents(obj, r)
+		if len(dependents) == 0 {
+			log.Info("No dependents found for Routing Policy - ", obj.Name)
+			return
+		}
+		r.processroutingPolicy(dependents, obj, admiral.Add)
+
+		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "finished processing routing policy")
+	}else {
+		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
 	}
-	dependents, done := getDependents(obj, r)
-	if done {
-		return
-	}
-	r.processroutingPolicy(dependents, obj, admiral.Add)
-	log.Info("finished processing routing policy")
 }
 
 func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType ) {
-	for _, remoteController := range r.RemoteRegistry.RemoteControllers {
-
-		for _, dependent := range dependents {
+	for _, remoteController := range r.RemoteRegistry.remoteControllers {
+			for _, dependent := range dependents {
 
 			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
+				selectors := r.RemoteRegistry.AdmiralCache.WorkloadSelectorCache.Get(dependent+remoteController.ClusterID).Copy()
+				if len(selectors) != 0 {
 
-				filter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache)
-				if err != nil {
-					log.Errorf(LogErrFormat, admiral.Add, "routingpolicy", routingPolicy.Name, remoteController.ClusterID, err)
-				} else {
-					log.Infof("msg=%s name=%s cluster=%s", "created envoyfilter", filter.Name, remoteController.ClusterID)
+					filter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache, selectors)
+					if err != nil {
+						// Best effort create
+						log.Errorf(LogErrFormat, eventType, "routingpolicy", routingPolicy.Name, remoteController.ClusterID, err)
+					} else {
+						log.Infof("msg=%s name=%s cluster=%s", "created envoyfilter", filter.Name, remoteController.ClusterID)
+					}
 				}
 			}
 		}
@@ -317,37 +332,44 @@ func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string,
 }
 
 func (r RoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
-	if common.ShouldIgnoreResource(obj.ObjectMeta) {
-		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
-		// We need to process this as a delete event.
-		r.Deleted(obj)
-		return
+	if common.GetEnableRoutingPolicy() {
+		if common.ShouldIgnoreResource(obj.ObjectMeta) {
+			log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
+			// We need to process this as a delete event.
+			r.Deleted(obj)
+			return
+		}
+		dependents := getDependents(obj, r)
+		if len(dependents) == 0 {
+			return
+		}
+		r.processroutingPolicy(dependents, obj, admiral.Update)
+
+		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "updated routing policy")
+	}else {
+		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
 	}
-	dependents, missingIdentityLabel := getDependents(obj, r)
-	if missingIdentityLabel {
-		return
-	}
-	r.processroutingPolicy(dependents, obj, admiral.Update)
-	log.Info("updated routing policy")
 }
 
-func getDependents(obj *v1.RoutingPolicy, r RoutingPolicyHandler) (map[string]string, bool) {
+// getDependents - Returns the client dependents for the destination service with routing policy
+// Returns a list of asset ID's of the client services or nil if no dependents are found
+func getDependents(obj *v1.RoutingPolicy, r RoutingPolicyHandler) map[string]string {
 	sourceIdentity := common.GetRoutingPolicyIdentity(obj)
 	if len(sourceIdentity) == 0 {
 		err := errors.New("identity label is missing")
 		log.Warnf(LogErrFormat, "add", "RoutingPolicy", obj.Name, r.ClusterID, err)
-		return nil, true
+		return nil
 	}
 
 	dependents := r.RemoteRegistry.AdmiralCache.IdentityDependencyCache.Get(sourceIdentity).Copy()
-	return dependents, false
+	return dependents
 }
 
 func (r RoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
-	log.Info("deleted envoy filter for routing policy - ",obj.Name)
-	dependents, missingIdentityLabel := getDependents(obj, r)
-	if !missingIdentityLabel {
+	dependents := getDependents(obj, r)
+	if len(dependents) != 0  {
 		r.deleteEnvoyFilters(dependents, obj, admiral.Delete)
+		log.Infof(LogFormat, admiral.Delete, "routingpolicy", obj.Name, obj.ClusterName, "deleted envoy filter for routing policy")
 	}
 }
 
@@ -355,12 +377,13 @@ func (r RoutingPolicyHandler) deleteEnvoyFilters(dependents map[string]string, o
 	for _, dependent := range dependents {
 		key := dependent + common.GetRoutingPolicyEnv(obj)
 		clusterIdFilterMap := r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Get(key)
-		for _, rc := range r.RemoteRegistry.RemoteControllers {
+		for _, rc := range r.RemoteRegistry.remoteControllers {
 			if filterMap, ok := clusterIdFilterMap[rc.ClusterID]; ok {
 				for _, filter := range filterMap {
 					log.Infof(LogFormat, eventType, "envoyfilter", filter, rc.ClusterID, "deleting")
 					err := rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Delete(filter, &metaV1.DeleteOptions{})
 					if err != nil {
+						// Best effort delete
 						log.Errorf(LogErrFormat, eventType, "envoyfilter", filter, rc.ClusterID, err)
 					} else {
 						log.Infof(LogFormat, eventType, "envoyfilter", filter, rc.ClusterID, "deleting from cache")

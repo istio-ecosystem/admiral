@@ -33,6 +33,8 @@ spec:
             - 20s
             - --gateway_app
             - istio-eastwestgateway
+            - --envoy_filter_version
+            - "1.13"
           image: docker.io/admiralproj/admiral:latest
           imagePullPolicy: Always
           livenessProbe:

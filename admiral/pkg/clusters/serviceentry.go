@@ -152,7 +152,12 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		} else {
 			log.Debugf("No GTPs found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
 		}
-
+		
+		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
+		workloadSelectors := GetServiceSelector(rc.ClusterID, serviceInstance)
+		if workloadSelectors != nil {
+			remoteRegistry.AdmiralCache.WorkloadSelectorCache.PutMap(sourceIdentity+rc.ClusterID, workloadSelectors)
+		}
 		remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, rc.ClusterID, rc.ClusterID)
 		remoteRegistry.AdmiralCache.CnameIdentityCache.Store(cname, sourceIdentity)
 		sourceServices[rc.ClusterID] = serviceInstance

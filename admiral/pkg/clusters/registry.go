@@ -40,7 +40,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	if err != nil {
 		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
-	
+
 	if !params.ArgoRolloutsEnabled {
 		log.Info("argo rollouts disabled")
 	}
@@ -190,7 +190,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1 * time.Minute)
 
 	if err != nil {
-		return fmt.Errorf("error with VirtualServiceController init: %v", err)
+		return fmt.Errorf("error with virtualServiceController init: %v", err)
 	}
 
 	log.Infof("starting node controller clusterID: %v", clusterID)

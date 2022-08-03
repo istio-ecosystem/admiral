@@ -27,6 +27,21 @@ func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	return ports
 }
 
+// Get the service selector to add as workload selector for envoyFilter
+func GetServiceSelector(clusterName string, destService *k8sV1.Service) *common.Map {
+	var selectors = destService.Spec.Selector
+	if len(selectors) == 0{
+		log.Infof(LogFormat, "GetServiceLabels", "no selectors present", destService.Name, clusterName, selectors)
+		return nil
+	}
+	var tempMap = common.NewMap()
+	for key, value := range selectors {
+		tempMap.Put(key,value)
+	}
+	log.Infof(LogFormat, "GetServiceLabels", "selectors present", destService.Name, clusterName, selectors)
+	return tempMap
+}
+
 func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterName string) map[string]uint32 {
 	var ports = make(map[string]uint32)
 

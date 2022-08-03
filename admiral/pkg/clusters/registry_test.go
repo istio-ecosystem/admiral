@@ -36,6 +36,8 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarUpdate:      "enabled",
 		WorkloadSidecarName:        "default",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -133,25 +135,25 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-	if e != nil {
-		return nil, e
+	d, err := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
 	}
-	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	if e != nil {
-		return nil, e
+	s, err := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
 	}
-	n, e := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
-	if e != nil {
-		return nil, e
+	n, err := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
+	if err != nil {
+		return nil, err
 	}
-	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	if e != nil {
-		return nil, e
+	r, err := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
 	}
-	rpc, e := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
-	if e != nil {
-		return nil, e
+	rpc, err := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
 	}
 
 	deployment := k8sAppsV1.Deployment{

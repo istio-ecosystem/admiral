@@ -11,9 +11,11 @@ spec:
   hosts:
     - qal.greeting.mesh
   config:
-    cachePrefix: cache-v1
-    cachettlSec: "86400"
-    dispatcherUrl: qal.greeting.dispatcher.mesh
-    algo: greetingDispatcher
+    cachePrefix: "prefix-v1-a"
+    cacheTtlSec: "1440"
+    dispatcherUrl: "http://test.does.not.matter.mesh/"
+    env: "qal"
+    algorithmName: "ShardedRouting"
+    wasmPath: "/etc/istio/extensions/dynamicrouter.wasm"
     pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"
 

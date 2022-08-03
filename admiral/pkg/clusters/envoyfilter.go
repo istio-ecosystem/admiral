@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/types"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -16,20 +17,22 @@ import (
 var (
 	getSha1 = common.GetSha1
 )
-func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache) (*networking.EnvoyFilter, error) {
+const hostsKey = "hosts: "
 
-	workloadSelectors := make(map[string]string)
-	workloadSelectors[common.GetWorkloadIdentifier()] = workloadIdentityKey
-	workloadSelectors[common.GetEnvKey()] = common.GetRoutingPolicyEnv(routingPolicy)
+func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
 
-	envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, workloadSelectors)
+	envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, workloadSelectorMap)
 
 	selectorLabelsSha, err := getSha1(workloadIdentityKey+common.GetRoutingPolicyEnv(routingPolicy))
 	if err != nil {
 		log.Error("error ocurred while computing workload labels sha1")
 		return nil, err
 	}
-	envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), selectorLabelsSha, "1.10")
+	if len(common.GetEnvoyFilterVersion()) == 0 {
+		log.Error("envoy filter version not supplied")
+		return nil, errors.New("envoy filter version not supplied")
+	}
+	envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), selectorLabelsSha, common.GetEnvoyFilterVersion())
 	envoyfilter := &networking.EnvoyFilter{
 		TypeMeta: metaV1.TypeMeta{
 			Kind:       "EnvoyFilter",
@@ -67,9 +70,18 @@ func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingP
 
 func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string) *v1alpha3.EnvoyFilter {
 	var envoyFilterStringConfig string
+	var wasmPath string
 	for key, val := range routingPolicy.Spec.Config {
+		if key == common.WASMPath {
+			wasmPath = val
+			continue
+		}
 		envoyFilterStringConfig += fmt.Sprintf("%s: %s\n", key, val)
 	}
+	if len(common.GetEnvoyFilterAdditionalConfig()) !=0 {
+		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig()+"\n"
+	}
+	envoyFilterStringConfig += getHosts(routingPolicy)
 
 	configuration := types.Struct{
 		Fields: map[string]*types.Value{
@@ -78,12 +90,13 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		},
 	}
 
+
 	vmConfig := types.Struct{
 		Fields: map[string]*types.Value{
 			"runtime": {Kind: &types.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
 			"code": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
 				"local": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
-					"filename": {Kind: &types.Value_StringValue{StringValue: "/etc/istio/extensions/dynamicrouter.wasm"}},
+					"filename": {Kind: &types.Value_StringValue{StringValue: wasmPath}},
 				}}}},
 			}}}},
 		},
@@ -112,7 +125,12 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		},
 	}
 
-	envoyfilterSpec := &v1alpha3.EnvoyFilter{
+	envoyfilterSpec := getEnvoyFilterSpec(workloadSelectorLabels, typedConfig)
+	return envoyfilterSpec
+}
+
+func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig types.Struct) *v1alpha3.EnvoyFilter {
+	return &v1alpha3.EnvoyFilter{
 		WorkloadSelector: &v1alpha3.WorkloadSelector{Labels: workloadSelectorLabels},
 
 		ConfigPatches: []*v1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
@@ -121,7 +139,7 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 				Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
 					Context: v1alpha3.EnvoyFilter_SIDECAR_OUTBOUND,
 					// TODO: Figure out the possibility of using this for istio version upgrades. Can we add multiple filters with different proxy version Match here?
-					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: `^1\.10.*`},
+					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: "^"+strings.ReplaceAll(common.GetEnvoyFilterVersion(),".","\\.")+".*"},
 					ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
 						Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
 							FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
@@ -152,6 +170,14 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 			},
 		},
 	}
-	return envoyfilterSpec
+}
+
+func getHosts(routingPolicy *v1.RoutingPolicy) string {
+	hosts := ""
+	for _, host := range routingPolicy.Spec.Hosts {
+		hosts += host + ","
+	}
+	hosts = strings.TrimSuffix(hosts,",")
+	return hostsKey + hosts
 }
 
