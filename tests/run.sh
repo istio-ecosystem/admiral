@@ -40,6 +40,6 @@ fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
 ./test4.sh "webapp" "sample"
 # Testing routing policy
-./test6.sh "sample" $install_dir
+./test6.sh "sample" "1.13" $install_dir
 
 ./cleanup.sh $istio_version

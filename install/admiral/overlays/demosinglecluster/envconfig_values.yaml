@@ -20,4 +20,6 @@ spec:
             - --sync_period
             - 10s
             - --argo_rollouts=true
+            - --envoy_filter_version
+            - "1.13"
           name: admiral

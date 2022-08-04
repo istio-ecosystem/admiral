@@ -52,8 +52,8 @@ type AdmiralCache struct {
 	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
 	DependencyNamespaceCache        *common.SidecarEgressMap
 	SeClusterCache                  *common.MapOfMaps
-	RoutingPolicyCache				*routingPolicyCache
 	RoutingPolicyFilterCache		*routingPolicyFilterCache
+	RoutingPolicyCache              *routingPolicyCache
 	argoRolloutsEnabled bool
 }
 
@@ -71,7 +71,12 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
-
+	rpFilterCache := &routingPolicyFilterCache{}
+	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
+	rpFilterCache.mutex = &sync.Mutex{}
+	rpCache := &routingPolicyCache{}
+	rpCache.identityCache = make(map[string]*v1.RoutingPolicy)
+	rpCache.mutex = &sync.Mutex{}
 	admiralCache := &AdmiralCache{
 		IdentityClusterCache:            common.NewMapOfMaps(),
 		CnameClusterCache:               common.NewMapOfMaps(),
@@ -79,6 +84,8 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		ClusterLocalityCache:            common.NewMapOfMaps(),
 		IdentityDependencyCache:         common.NewMapOfMaps(),
 		WorkloadSelectorCache:           common.NewMapOfMaps(),
+		RoutingPolicyFilterCache:        rpFilterCache,
+		RoutingPolicyCache:              rpCache,
 		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
 		CnameIdentityCache:              &sync.Map{},
 		SubsetServiceEntryIdentityCache: &sync.Map{},
@@ -292,7 +299,7 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
 	if common.GetEnableRoutingPolicy() {
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
-			log.Infof(LogErrFormat, "success", "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
+			log.Infof(LogFormat, "success", "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
 			return
 		}
 		dependents := getDependents(obj, r)
