@@ -22,4 +22,5 @@ spec:
             - --argo_rollouts=true
             - --envoy_filter_version
             - "1.13"
+            - --enable_routing_policy=true
           name: admiral

@@ -140,7 +140,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The value of envoy filter version is used to match the proxy version for envoy filter created by routing policy")
 	rootCmd.PersistentFlags().StringVar(&params.EnvoyFilterAdditionalConfig, "envoy_filter_additional_config", "",
 		"The value of envoy filter is to add additional config to the filter config section")
-	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", true,
+	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
 	return rootCmd
 }
