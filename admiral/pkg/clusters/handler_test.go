@@ -688,24 +688,61 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
+	ports := []coreV1.ServicePort{{Port: 8080}, {Port: 8081}}
 
 	service := &coreV1.Service{
 		ObjectMeta: v12.ObjectMeta{Name: ServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now())},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
+			Ports:    ports,
 		},
 	}
-	port1 := coreV1.ServicePort{
-		Port: 8080,
+
+	// namespace1 Services
+	service1 := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: "dummy1", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now())},
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+			Ports: []coreV1.ServicePort{{
+				Port: 8080,
+				Name: "random3",
+			}, {
+				Port: 8081,
+				Name: "random4",
+			},
+			},
+		},
 	}
 
-	port2 := coreV1.ServicePort{
-		Port: 8081,
+	// namespace4 Services
+	service3 := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: "dummy3", Namespace: "namespace4", CreationTimestamp: v12.NewTime(time.Now())},
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+			Ports: []coreV1.ServicePort{{
+				Port: 8080,
+				Name: "random3",
+			}, {
+				Port: 8081,
+				Name: "random4",
+			},
+			},
+		},
 	}
 
-	ports := []coreV1.ServicePort{port1, port2}
-	service.Spec.Ports = ports
+	service4 := &coreV1.Service{
+		ObjectMeta: v12.ObjectMeta{Name: "dummy4", Namespace: "namespace4", CreationTimestamp: v12.NewTime(time.Now())},
+		Spec: coreV1.ServiceSpec{
+			Selector: selectorMap,
+			Ports: []coreV1.ServicePort{{
+				Port: 8081,
+				Name: "random4",
+			},
+			},
+		},
+	}
 
+	// namespace Services
 	stableService := &coreV1.Service{
 		ObjectMeta: v12.ObjectMeta{Name: StableServiceName, Namespace: Namespace, CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15)))},
 		Spec: coreV1.ServiceSpec{
@@ -738,56 +775,13 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		},
 	}
 
-	selectorMap1 := make(map[string]string)
-	selectorMap1["app"] = "test1"
-	service1 := &coreV1.Service{
-		Spec: coreV1.ServiceSpec{
-			Selector: selectorMap,
-		},
-	}
-	service1.Name = "dummy"
-	service1.Namespace = "namespace1"
-	port3 := coreV1.ServicePort{
-		Port: 8080,
-		Name: "random3",
-	}
-
-	port4 := coreV1.ServicePort{
-		Port: 8081,
-		Name: "random4",
-	}
-
-	ports1 := []coreV1.ServicePort{port3, port4}
-	service1.Spec.Ports = ports1
-
-	selectorMap4 := make(map[string]string)
-	selectorMap4["app"] = "test"
-	service4 := &coreV1.Service{
-		Spec: coreV1.ServiceSpec{
-			Selector: selectorMap4,
-		},
-	}
-	service4.Name = "dummy"
-	service4.Namespace = "namespace4"
-	port11 := coreV1.ServicePort{
-		Port: 8080,
-		Name: "random3",
-	}
-
-	port12 := coreV1.ServicePort{
-		Port: 8081,
-		Name: "random4",
-	}
-
-	ports11 := []coreV1.ServicePort{port11, port12}
-	service4.Spec.Ports = ports11
-
 	rcTemp.ServiceController.Cache.Put(service)
 	rcTemp.ServiceController.Cache.Put(service1)
+	rcTemp.ServiceController.Cache.Put(service3)
 	rcTemp.ServiceController.Cache.Put(service4)
 	rcTemp.ServiceController.Cache.Put(stableService)
-	rcTemp.ServiceController.Cache.Put(generatedStableService)
 	rcTemp.ServiceController.Cache.Put(canaryService)
+	rcTemp.ServiceController.Cache.Put(generatedStableService)
 	rcTemp.ServiceController.Cache.Put(latestMatchingService)
 
 	virtualService := &v1alpha32.VirtualService{
@@ -860,25 +854,18 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 
 	canaryRolloutNS4 := argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
-			ObjectMeta: k8sv1.ObjectMeta{Annotations: map[string]string{}},
+			ObjectMeta: k8sv1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: "8080"}},
 		}}}
 	matchLabel4 := make(map[string]string)
 	matchLabel4["app"] = "test"
-
 	labelSelector4 := v12.LabelSelector{
 		MatchLabels: matchLabel4,
 	}
 	canaryRolloutNS4.Spec.Selector = &labelSelector4
-
 	canaryRolloutNS4.Namespace = "namespace4"
 	canaryRolloutNS4.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{},
 	}
-
-	anotationsNS4Map := make(map[string]string)
-	anotationsNS4Map[common.SidecarEnabledPorts] = "8080"
-
-	canaryRolloutNS4.Spec.Template.Annotations = anotationsNS4Map
 
 	canaryRolloutIstioVs := argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
@@ -931,7 +918,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string{"random"}},
+					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{"random"}},
 				},
 			},
 		},
@@ -989,16 +976,32 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 		},
 	}
 
-	resultForDummy := map[string]*WeightedService{"dummy": {Weight: 1, Service: service1}}
+	canaryRolloutWithStableServiceNS4 := argo.Rollout{
+		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
+			ObjectMeta: k8sv1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: "8080"}},
+		}}}
+	canaryRolloutWithStableServiceNS4.Spec.Selector = &labelSelector
 
-	resultForStableServiceOnly := map[string]*WeightedService{StableServiceName: {Weight: 1, Service: stableService}}
+	canaryRolloutWithStableServiceNS4.Namespace = "namespace4"
+	canaryRolloutWithStableServiceNS4.Spec.Strategy = argo.RolloutStrategy{
+		Canary: &argo.CanaryStrategy{
+			StableService: StableServiceName,
+			CanaryService: CanaryServiceName,
+		},
+	}
 
-	resultForEmptyStableServiceOnRollout := map[string]*WeightedService{GeneratedStableServiceName: {Weight: 1, Service: generatedStableService}}
+	resultForDummy := map[string]*WeightedService{service3.Name: {Weight: 1, Service: service3}}
+
+	resultForEmptyStableServiceOnRollout := map[string]*WeightedService{LatestMatchingService: {Weight: 1, Service: latestMatchingService}}
 
 	resultForCanaryWithIstio := map[string]*WeightedService{StableServiceName: {Weight: 80, Service: stableService},
 		CanaryServiceName: {Weight: 20, Service: canaryService}}
 
-	resultForCanaryWithStableService := map[string]*WeightedService{StableServiceName: {Weight: 100, Service: stableService}}
+	resultForCanaryWithStableService := map[string]*WeightedService{StableServiceName: {Weight: 1, Service: stableService}}
+
+	resultForCanaryWithStableServiceWeight := map[string]*WeightedService{StableServiceName: {Weight: 100, Service: stableService}}
+
+	resultRolloutWithOneServiceHavingMeshPort := map[string]*WeightedService{service3.Name: {Weight: 1, Service: service3}}
 
 	testCases := []struct {
 		name    string
@@ -1022,10 +1025,10 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			rc:      rcTemp,
 			result:  resultForEmptyStableServiceOnRollout,
 		}, {
-			name:    "canaryRolloutWithStableService",
+			name:    "canaryRolloutWithIstioVsMimatch",
 			rollout: &canaryRolloutIstioVsMimatch,
 			rc:      rcTemp,
-			result:  resultForStableServiceOnly,
+			result:  resultForCanaryWithStableService,
 		}, {
 			name:    "canaryRolloutWithIstioVirtualService",
 			rollout: &canaryRolloutIstioVs,
@@ -1035,7 +1038,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			name:    "canaryRolloutWithIstioVirtualServiceZeroWeight",
 			rollout: &canaryRolloutIstioVsZeroWeight,
 			rc:      rcTemp,
-			result:  resultForCanaryWithStableService,
+			result:  resultForCanaryWithStableServiceWeight,
 		}, {
 			name:    "canaryRolloutWithIstioRouteMatch",
 			rollout: &canaryRolloutIstioVsRouteMatch,
@@ -1045,21 +1048,25 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			name:    "canaryRolloutWithIstioRouteMisMatch",
 			rollout: &canaryRolloutIstioVsRouteMisMatch,
 			rc:      rcTemp,
-			result:  resultForStableServiceOnly,
-		}, {
+			result:  resultForCanaryWithStableService,
+		},
+		{
 			name:    "canaryRolloutWithStableServiceName",
 			rollout: &canaryRolloutWithStableService,
 			rc:      rcTemp,
-			result:  resultForStableServiceOnly,
+			result:  resultForCanaryWithStableService,
+		},
+		{
+			name:    "canaryRolloutWithOneServiceHavingMeshPort",
+			rollout: &canaryRolloutWithStableServiceNS4,
+			rc:      rcTemp,
+			result:  resultRolloutWithOneServiceHavingMeshPort,
 		},
 	}
 
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.name != "canaryRolloutHappyCase" {
-				return
-			}
 			result := getServiceForRollout(c.rc, c.rollout)
 			if len(c.result) == 0 {
 				if result != nil && len(result) != 0 {
