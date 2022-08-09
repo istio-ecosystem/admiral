@@ -44,4 +44,4 @@ metadata:
 rules:
   - apiGroups: ["networking.istio.io"]
     resources: ['envoyfilters']
-    verbs: ["create", "update", "delete"]
+    verbs: ["create", "update", "delete", "patch"]

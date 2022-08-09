@@ -216,10 +216,6 @@ type routingPolicyCache struct {
 	// map of routing policies key=environment.identity, value: RoutingPolicy object
 	// only one routing policy per identity + env is allowed
 	identityCache map[string]*v1.RoutingPolicy
-
-	// map of dependent identity + env -> [] routingPolicy. There can be potentially multiple routingPolicies that can apply to a client.
-	// dependentRpCache map[string][]*v1.RoutingPolicy
-
 	mutex *sync.Mutex
 }
 

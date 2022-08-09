@@ -40,9 +40,9 @@ const (
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
 	RolloutPodHashLabel           = "rollouts-pod-template-hash"
-	RolloutActiveServiceSuffix	  = "active-service"
-	RolloutStableServiceSuffix	  = "stable-service"
-	WASMPath					  = "wasmPath"
+	RolloutActiveServiceSuffix    = "active-service"
+	RolloutStableServiceSuffix    = "stable-service"
+	WASMPath                      = "wasmPath"
 )
 
 type Event int
