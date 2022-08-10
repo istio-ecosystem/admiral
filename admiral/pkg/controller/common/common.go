@@ -1,6 +1,10 @@
 package common
 
 import (
+	"bytes"
+	"crypto/sha1"
+	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -36,8 +40,9 @@ const (
 	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
 	BlueGreenRolloutPreviewPrefix = "preview"
 	RolloutPodHashLabel           = "rollouts-pod-template-hash"
-	RolloutActiveServiceSuffix	  = "active-service"
-	RolloutStableServiceSuffix	  = "stable-service"
+	RolloutActiveServiceSuffix    = "active-service"
+	RolloutStableServiceSuffix    = "stable-service"
+	WASMPath                      = "wasmPath"
 )
 
 type Event int
@@ -188,6 +193,7 @@ func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
 	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
 }
 
+
 func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelector) bool {
 	if selector == nil || len(selector.MatchLabels) == 0 || len(serviceSelector) == 0 {
 		return false
@@ -207,3 +213,51 @@ func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelect
 	}
 	return match
 }
+
+func GetRoutingPolicyEnv(rp *v1.RoutingPolicy) string {
+	var environment = rp.Annotations[GetEnvKey()]
+	if len(environment) == 0 {
+		environment = rp.Labels[GetEnvKey()]
+	}
+	if len(environment) == 0 {
+		environment = Default
+	}
+	return environment
+}
+
+func GetRoutingPolicyIdentity(rp *v1.RoutingPolicy) string {
+	identity := rp.Labels[GetRoutingPolicyLabel()]
+	return identity
+}
+
+func GetRoutingPolicyKey(rp *v1.RoutingPolicy) string {
+	return ConstructRoutingPolicyKey(GetRoutingPolicyEnv(rp), GetRoutingPolicyIdentity(rp))
+}
+// this function is exactly same as ConstructGtpKey.
+// Not reusing the same function to keep the methods associated with these two objects separate.
+func ConstructRoutingPolicyKey(env, identity string) string {
+	return fmt.Sprintf("%s.%s", env, identity)
+}
+
+func GetSha1 (key interface{}) (string, error) {
+	bv, err := GetBytes(key)
+	if err != nil {
+		return "", err
+	}
+	hasher := sha1.New()
+	hasher.Write(bv)
+	sha := hex.EncodeToString(hasher.Sum(nil))
+	return sha[0:5], nil
+}
+
+
+func GetBytes(key interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(key)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+

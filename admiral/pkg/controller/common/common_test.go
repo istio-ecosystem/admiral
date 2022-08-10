@@ -30,6 +30,8 @@ func init() {
 		WorkloadSidecarName:        "default",
 		WorkloadSidecarUpdate:      "disabled",
 		MetricsEnabled:             true,
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -352,6 +354,59 @@ func TestGetGtpEnv(t *testing.T) {
 			returned := GetGtpEnv(c.gtp)
 			if !cmp.Equal(returned, c.expectedEnv, ignoreUnexported) {
 				t.Fatalf("GTP env mismatch. Diff: %v", cmp.Diff(returned, c.expectedEnv, ignoreUnexported))
+			}
+		})
+	}
+
+}
+
+func TestGetRoutingPolicyEnv(t *testing.T) {
+
+	envNewAnnotationRP := v12.RoutingPolicy{}
+	envNewAnnotationRP.CreationTimestamp = v1.Now()
+	envNewAnnotationRP.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
+	envNewAnnotationRP.Annotations =  map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
+	envNewAnnotationRP.Namespace = "namespace"
+	envNewAnnotationRP.Name = "myRP-new-annotation"
+
+	envLabelRP := v12.RoutingPolicy{}
+	envLabelRP.CreationTimestamp = v1.Now()
+	envLabelRP.Labels = map[string]string{"admiral.io/env": "stage1", "env": "stage2"}
+	envLabelRP.Namespace = "namespace"
+	envLabelRP.Name = "myRP-label"
+
+	noEnvRP := v12.RoutingPolicy{}
+	noEnvRP.CreationTimestamp = v1.Now()
+	noEnvRP.Namespace = "namespace"
+	noEnvRP.Name = "myRP-no-env"
+
+	testCases := []struct {
+		name        string
+		rp         *v12.RoutingPolicy
+		expectedEnv string
+	}{
+		{
+			name:        "Should return env from new annotation",
+			rp:         &envNewAnnotationRP,
+			expectedEnv: "stage1",
+		},
+		{
+			name:        "Should return env from new label",
+			rp:         &envLabelRP,
+			expectedEnv: "stage1",
+		},
+		{
+			name:        "Should return default with no env specified",
+			rp:         &noEnvRP,
+			expectedEnv: "default",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			returned := GetRoutingPolicyEnv(c.rp)
+			if !cmp.Equal(returned, c.expectedEnv, ignoreUnexported) {
+				t.Fatalf("RP env mismatch. Diff: %v", cmp.Diff(returned, c.expectedEnv, ignoreUnexported))
 			}
 		})
 	}

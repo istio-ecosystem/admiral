@@ -32,6 +32,7 @@ CUSTOM_RESOURCE_VERSION=v1
 
 MAIN_PATH_ADMIRAL=./admiral/cmd/admiral/main.go
 OPSYS:=$(shell $(GOCMD) env GOOS)
+DEEPCOPYGEN=deepcopy-gen
 
 PATH:=$(GOBIN):$(PATH)
 
@@ -56,8 +57,10 @@ dep:
 setup:
 	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
 
+model-gen:
+	$(DEEPCOPYGEN) -i ./admiral/pkg/apis/admiral/model/ -O zz_generated.deepcopy
 
-gen-all: api-gen crd-gen
+gen-all: api-gen model-gen crd-gen
 
 install-protoc-mac:
 	curl -OL https://github.com/google/protobuf/releases/download/v$(PROTOC_VER)/$(PROTOC_ZIP)
@@ -137,4 +140,5 @@ gen-yaml:
 	cp ./install/sample/gtp_topology.yaml ./out/yaml/gtp_topology.yaml
 	cp ./install/sample/grpc-client.yaml ./out/yaml/grpc-client.yaml
 	cp ./install/prometheus/prometheus.yaml ./out/yaml/prometheus.yaml
+	cp ./install/sample/rp.yaml ./out/yaml/rp.yaml
 	cp ./install/scripts/*.sh ./out/scripts/

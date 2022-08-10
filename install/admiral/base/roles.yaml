@@ -33,3 +33,15 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "update", "create"]
+
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admiral-sync-write-envoyfilters
+  namespace: admiral
+rules:
+  - apiGroups: ["networking.istio.io"]
+    resources: ['envoyfilters']
+    verbs: ["create", "update", "delete", "patch"]

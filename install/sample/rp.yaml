@@ -1,0 +1,21 @@
+apiVersion: admiral.io/v1alpha1
+kind: RoutingPolicy
+metadata:
+  name: greeting-routing-policy
+  annotations:
+    admiral.io/env: stage
+  labels:
+    identity: greeting
+spec:
+  plugin: greeting
+  hosts:
+    - qal.greeting.mesh
+  config:
+    cachePrefix: "prefix-v1-a"
+    cacheTtlSec: "1440"
+    dispatcherUrl: "http://test.does.not.matter.mesh/"
+    env: "qal"
+    algorithmName: "ShardedRouting"
+    wasmPath: "/etc/istio/extensions/dynamicrouter.wasm"
+    pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"
+

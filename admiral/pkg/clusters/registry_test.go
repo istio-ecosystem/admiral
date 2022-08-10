@@ -36,11 +36,14 @@ func init() {
 		SecretResolver:             "",
 		WorkloadSidecarUpdate:      "enabled",
 		WorkloadSidecarName:        "default",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 	p.LabelSet.PriorityKey = "priority"
+	p.LabelSet.EnvKey = "admiral.io/env"
 
 	common.InitializeConfig(p)
 }
@@ -132,13 +135,25 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, e := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	n, e := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
-	r, e := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-
-	if e != nil {
-		return nil, e
+	d, err := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
+	}
+	s, err := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
+	}
+	n, err := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
+	if err != nil {
+		return nil, err
+	}
+	r, err := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
+	}
+	rpc, err := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		return nil, err
 	}
 
 	deployment := k8sAppsV1.Deployment{
@@ -178,6 +193,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		NodeController:       n,
 		ClusterID:            "test.cluster",
 		RolloutController:    r,
+		RoutingPolicyController: rpc,
 	}
 	return &rc, nil
 }

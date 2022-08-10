@@ -55,3 +55,29 @@ type GlobalTrafficPolicyList struct {
 
 	Items []GlobalTrafficPolicy `json:"items"`
 }
+
+//generic cdr object to wrap the GlobalTrafficPolicy api
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type RoutingPolicy struct {
+	meta_v1.TypeMeta   `json:",inline"`
+	meta_v1.ObjectMeta `json:"metadata"`
+	Spec               model.RoutingPolicy `json:"spec"`
+	Status             RoutingPolicyStatus `json:"status"`
+}
+
+// FooStatus is the status for a Foo resource
+
+type RoutingPolicyStatus struct {
+	ClusterSynced int32  `json:"clustersSynced"`
+	State         string `json:"state"`
+}
+
+// FooList is a list of Foo resources
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type RoutingPolicyList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []RoutingPolicy `json:"items"`
+}

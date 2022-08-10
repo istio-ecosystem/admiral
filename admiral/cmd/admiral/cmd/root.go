@@ -136,7 +136,12 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.AdmiralStateCheckerName, "admiral_state_checker_name", "NoOPStateChecker", "The value of the admiral_state_checker_name label to configure the DR Strategy for Admiral")
 	rootCmd.PersistentFlags().StringVar(&params.DRStateStoreConfigPath, "dr_state_store_config_path", "", "Location of config file which has details for data store. Ex:- Dynamo DB connection details")
 	rootCmd.PersistentFlags().StringVar(&params.ServiceEntryIPPrefix, "se_ip_prefix", "240.0", "IP prefix for the auto generated IPs for service entries. Only the first two octets:  Eg- 240.0")
-
+	rootCmd.PersistentFlags().StringVar(&params.EnvoyFilterVersion, "envoy_filter_version", "",
+		"The value of envoy filter version is used to match the proxy version for envoy filter created by routing policy")
+	rootCmd.PersistentFlags().StringVar(&params.EnvoyFilterAdditionalConfig, "envoy_filter_additional_config", "",
+		"The value of envoy filter is to add additional config to the filter config section")
+	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
+		"If Routing Policy feature needs to be enabled")
 	return rootCmd
 }
 

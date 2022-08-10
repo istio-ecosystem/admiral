@@ -6,13 +6,12 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
+	k8sV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"strconv"
 	"testing"
-
-	k8sV1 "k8s.io/api/core/v1"
 )
 
 func TestGetMeshPorts(t *testing.T) {
@@ -213,6 +212,59 @@ func TestValidateConfigmapBeforePutting(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetServiceSelector(t *testing.T) {
+
+	selector := map[string]string {"app":"test1"}
+
+	testCases := []struct {
+		name        string
+		clusterName string
+		service     k8sV1.Service
+		expected    map[string]string
+		}{
+		{
+			name:        "should return a selectors based on service",
+			clusterName: "test-cluster",
+			service:     k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Selector:  selector},
+			},
+			expected:   selector,
+		},
+		{
+			name:        "should return empty selectors",
+			clusterName: "test-cluster",
+			service:     k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Selector: map[string]string{}},
+			},
+			expected:    nil,
+		},
+		{
+			name:        "should return nil",
+			clusterName: "test-cluster",
+			service:     k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Selector: nil},
+			},
+			expected:    nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			selectors := GetServiceSelector(c.clusterName,&c.service)
+			if selectors == nil {
+				if c.expected != nil {
+					t.Errorf("Wanted selectors: %v, got: %v", c.expected, selectors)
+				}
+			}else if !reflect.DeepEqual(selectors.Copy(), c.expected) {
+				t.Errorf("Wanted selectors: %v, got: %v", c.expected, selectors)
+			}
+		})
+	}
 }
 
 func TestGetMeshPortsForRollout(t *testing.T) {

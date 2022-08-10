@@ -24,7 +24,7 @@ rules:
     resources: ['virtualservices', 'destinationrules', 'serviceentries', 'envoyfilters' ,'gateways', 'sidecars']
     verbs: [ "get", "list", "watch"]
   - apiGroups: ["admiral.io"]
-    resources: ['globaltrafficpolicies']
+    resources: ['globaltrafficpolicies', 'routingpolicies']
     verbs: [ "get", "list", "watch"]
   - apiGroups: ["argoproj.io"]
     resources: ['rollouts']
