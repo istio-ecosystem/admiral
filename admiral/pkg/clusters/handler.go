@@ -726,6 +726,8 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 	var blueGreenActiveService string
 	var blueGreenPreviewService string
 
+	var matchedServices = make(map[string]*WeightedService)
+
 	if rolloutStrategy.BlueGreen != nil {
 		// If rollout uses blue green strategy
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
@@ -739,19 +741,20 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 		canaryService = rolloutStrategy.Canary.CanaryService
 		stableService = rolloutStrategy.Canary.StableService
 
-		//pick stable service if specified
-		if len(stableService) > 0 {
-			istioCanaryWeights[stableService] = 1
-		} else {
-			//pick a service that ends in RolloutStableServiceSuffix if one is available
-			sName := GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices)
-			if len(sName) > 0 {
-				istioCanaryWeights[sName] = 1
-			}
-		}
-
 		//calculate canary weights if canary strategy is using Istio traffic management
 		if len(stableService) > 0 && len(canaryService) > 0 && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
+
+			//pick stable service if specified
+			if len(stableService) > 0 {
+				istioCanaryWeights[stableService] = 1
+			} else {
+				//pick a service that ends in RolloutStableServiceSuffix if one is available
+				sName := GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices)
+				if len(sName) > 0 {
+					istioCanaryWeights[sName] = 1
+				}
+			}
+
 			virtualServiceName := rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name
 			virtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(rollout.Namespace).Get(virtualServiceName, v12.GetOptions{})
 
@@ -797,10 +800,41 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 					log.Warnf("No VirtualService was specified in rollout or the specified VirtualService has NO routes, for rollout with name=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
 				}
 			}
+			for _, service := range cachedServices {
+				match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
+				//make sure the service matches the rollout Selector and also has a mesh port in the port spec
+				if match {
+					ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
+					if len(ports) > 0 {
+						if val, ok := istioCanaryWeights[service.Name]; ok {
+							matchedServices[service.Name] = &WeightedService{Weight: val, Service: service}
+						}
+					}
+				}
+			}
+			return matchedServices
+		} else if len(stableService) > 0 {
+			for _, service := range cachedServices {
+				//skip services that are not referenced in the rollout
+				if service.ObjectMeta.Name != stableService {
+					log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
+					continue
+				}
+
+				match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
+				//make sure the service matches the rollout Selector and also has a mesh port in the port spec
+				if match {
+					ports := GetMeshPortsForRollout(rc.ClusterID, service, rollout)
+					if len(ports) > 0 {
+						if len(istioCanaryWeights) == 0 {
+							matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
+							return matchedServices
+						}
+					}
+				}
+			}
 		}
 	}
-
-	var matchedServices = make(map[string]*WeightedService)
 
 	for _, service := range cachedServices {
 		//skip services that are not referenced in the rollout
@@ -821,9 +855,6 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 				} else if len(istioCanaryWeights) == 0 {
 					matchedServices[service.Name] = &WeightedService{Weight: 1, Service: service}
 					break
-				}
-				if val, ok := istioCanaryWeights[service.Name]; ok {
-					matchedServices[service.Name] = &WeightedService{Weight: val, Service: service}
 				}
 			}
 		}
