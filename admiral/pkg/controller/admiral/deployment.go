@@ -121,8 +121,8 @@ func NewDeploymentController(clusterID string, stopCh <-chan struct{}, handler D
 	return &deploymentController, nil
 }
 
-func (d *DeploymentController) Added(obj interface{}) {
-	HandleAddUpdateDeployment(obj, d)
+func (d *DeploymentController) Added(ctx context.Context, obj interface{}) {
+	HandleAddUpdateDeployment(ctx, obj, d)
 }
 
 func (d *DeploymentController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
@@ -177,9 +177,9 @@ func (d *DeploymentController) shouldIgnoreBasedOnLabels(ctx context.Context, de
 	return false //labels are fine, we should not ignore
 }
 
-func (d *DeploymentController) GetDeploymentBySelectorInNamespace(serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
+func (d *DeploymentController) GetDeploymentBySelectorInNamespace(ctx context.Context, serviceSelector map[string]string, namespace string) []k8sAppsV1.Deployment {
 
-	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(meta_v1.ListOptions{})
+	matchedDeployments, err := d.K8sClient.AppsV1().Deployments(namespace).List(ctx, meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list deployments in cluster, error: %v", err)

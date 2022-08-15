@@ -204,9 +204,9 @@ func (roc *RolloutController) Deleted(ctx context.Context, ojb interface{}) {
 	roc.RolloutHandler.Deleted(ctx, rollout)
 }
 
-func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
+func (d *RolloutController) GetRolloutBySelectorInNamespace(ctx context.Context, serviceSelector map[string]string, namespace string) []argo.Rollout {
 
-	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(meta_v1.ListOptions{})
+	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(ctx, meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)

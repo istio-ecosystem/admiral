@@ -299,11 +299,13 @@ func TestRolloutController_GetRolloutBySelectorInNamespace(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			rolloutController.RolloutClient = c.fakeClient
-			returnedRollouts := rolloutController.GetRolloutBySelectorInNamespace(c.selector, "namespace")
+			returnedRollouts := rolloutController.GetRolloutBySelectorInNamespace(ctx, c.selector, "namespace")
 
 			sort.Slice(returnedRollouts, func(i, j int) bool {
 				return returnedRollouts[i].Name > returnedRollouts[j].Name

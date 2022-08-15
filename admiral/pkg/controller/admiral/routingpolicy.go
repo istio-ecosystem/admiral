@@ -1,9 +1,11 @@
-
 package admiral
 
 import (
+	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"time"
+
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 	"istio.io/client-go/pkg/clientset/versioned"
@@ -11,48 +13,46 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
-// Handler interface contains the methods that are required
+// RoutingPolicyHandler interface contains the methods that are required
 type RoutingPolicyHandler interface {
-	Added(obj *v1.RoutingPolicy)
-	Updated(obj *v1.RoutingPolicy)
-	Deleted(obj *v1.RoutingPolicy)
+	Added(ctx context.Context, obj *v1.RoutingPolicy)
+	Updated(ctx context.Context, obj *v1.RoutingPolicy)
+	Deleted(ctx context.Context, obj *v1.RoutingPolicy)
 }
 
 type RoutingPolicyEntry struct {
-	Identity string
-	RoutingPolicy  *v1.RoutingPolicy
+	Identity      string
+	RoutingPolicy *v1.RoutingPolicy
 }
 
 type RoutingPolicyClusterEntry struct {
-	Identity string
+	Identity        string
 	RoutingPolicies map[string]*v1.RoutingPolicy
 }
 
 type RoutingPolicyController struct {
-	K8sClient			 kubernetes.Interface
+	K8sClient            kubernetes.Interface
 	CrdClient            clientset.Interface
-	IstioClient			 versioned.Interface
+	IstioClient          versioned.Interface
 	RoutingPolicyHandler RoutingPolicyHandler
 	informer             cache.SharedIndexInformer
 }
 
-
-func (r *RoutingPolicyController) Added(obj interface{}) {
+func (r *RoutingPolicyController) Added(ctx context.Context, obj interface{}) {
 	routingPolicy := obj.(*v1.RoutingPolicy)
-	r.RoutingPolicyHandler.Added(routingPolicy)
+	r.RoutingPolicyHandler.Added(ctx, routingPolicy)
 }
 
-func (r *RoutingPolicyController) Updated(obj interface{}, oldObj interface{}) {
+func (r *RoutingPolicyController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 	routingPolicy := obj.(*v1.RoutingPolicy)
-	r.RoutingPolicyHandler.Updated(routingPolicy)
+	r.RoutingPolicyHandler.Updated(ctx, routingPolicy)
 }
 
-func (r *RoutingPolicyController) Deleted(obj interface{}) {
+func (r *RoutingPolicyController) Deleted(ctx context.Context, obj interface{}) {
 	routingPolicy := obj.(*v1.RoutingPolicy)
-	r.RoutingPolicyHandler.Deleted(routingPolicy)
+	r.RoutingPolicyHandler.Deleted(ctx, routingPolicy)
 }
 
 func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyHandler, configPath *rest.Config, resyncPeriod time.Duration) (*RoutingPolicyController, error) {
@@ -84,7 +84,7 @@ func NewRoutingPoliciesController(stopCh <-chan struct{}, handler RoutingPolicyH
 		cache.Indexers{},
 	)
 
-	NewController("rp-ctrl-" + configPath.Host, stopCh, &rpController, rpController.informer)
+	NewController("rp-ctrl-"+configPath.Host, stopCh, &rpController, rpController.informer)
 	return &rpController, nil
 
 }

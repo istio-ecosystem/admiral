@@ -15,8 +15,8 @@ import (
 const configmapName = "se-address-configmap"
 
 type ConfigMapControllerInterface interface {
-	GetConfigMap() (*v1.ConfigMap, error)
-	PutConfigMap(newMap *v1.ConfigMap) error
+	GetConfigMap(ctx context.Context) (*v1.ConfigMap, error)
+	PutConfigMap(ctx context.Context, newMap *v1.ConfigMap) error
 	GetIPPrefixForServiceEntries() (seIPPrefix string)
 }
 

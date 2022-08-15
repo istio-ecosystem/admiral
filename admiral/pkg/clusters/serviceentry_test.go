@@ -106,8 +106,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
 	rr.PutRemoteController("c1", rc)
 	rr.AdmiralCache = &admiralCache
-	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -302,7 +302,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.PutRemoteController("test.cluster", rc)
-	modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+	modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", "bar", rr)
 
 }
 

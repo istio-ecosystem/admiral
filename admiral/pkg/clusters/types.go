@@ -291,10 +291,10 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 		log.Infof(LogFormat, admiral.Delete, "routingpolicy", identityEnvKey, "", "routingpolicy disabled")
 	}
 }
-func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
+func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) {
 	if common.GetEnableRoutingPolicy() {
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
-			log.Infof(LogFormat, "success", "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
+			log.Infof(LogFormat, "success", "routingpolicy", obj.Name, "", "Ignored the RoutingPolicy because of the annotation")
 			return
 		}
 		dependents := getDependents(obj, r)
@@ -302,15 +302,15 @@ func (r RoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
 			log.Info("No dependents found for Routing Policy - ", obj.Name)
 			return
 		}
-		r.processroutingPolicy(dependents, obj, admiral.Add)
+		r.processroutingPolicy(ctx, dependents, obj, admiral.Add)
 
-		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "finished processing routing policy")
+		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "finished processing routing policy")
 	} else {
-		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
+		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "routingpolicy disabled")
 	}
 }
 
-func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) {
+func (r RoutingPolicyHandler) processroutingPolicy(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) {
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
 		for _, dependent := range dependents {
 
@@ -319,7 +319,7 @@ func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string,
 				selectors := r.RemoteRegistry.AdmiralCache.WorkloadSelectorCache.Get(dependent + remoteController.ClusterID).Copy()
 				if len(selectors) != 0 {
 
-					filter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache, selectors)
+					filter, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache, selectors)
 					if err != nil {
 						// Best effort create
 						log.Errorf(LogErrFormat, eventType, "routingpolicy", routingPolicy.Name, remoteController.ClusterID, err)
@@ -333,23 +333,23 @@ func (r RoutingPolicyHandler) processroutingPolicy(dependents map[string]string,
 	}
 }
 
-func (r RoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
+func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy) {
 	if common.GetEnableRoutingPolicy() {
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
-			log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "Ignored the RoutingPolicy because of the annotation")
+			log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "Ignored the RoutingPolicy because of the annotation")
 			// We need to process this as a delete event.
-			r.Deleted(obj)
+			r.Deleted(ctx, obj)
 			return
 		}
 		dependents := getDependents(obj, r)
 		if len(dependents) == 0 {
 			return
 		}
-		r.processroutingPolicy(dependents, obj, admiral.Update)
+		r.processroutingPolicy(ctx, dependents, obj, admiral.Update)
 
-		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "updated routing policy")
+		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "updated routing policy")
 	} else {
-		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, obj.ClusterName, "routingpolicy disabled")
+		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "routingpolicy disabled")
 	}
 }
 
@@ -367,15 +367,15 @@ func getDependents(obj *v1.RoutingPolicy, r RoutingPolicyHandler) map[string]str
 	return dependents
 }
 
-func (r RoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
+func (r RoutingPolicyHandler) Deleted(ctx context.Context, obj *v1.RoutingPolicy) {
 	dependents := getDependents(obj, r)
 	if len(dependents) != 0 {
-		r.deleteEnvoyFilters(dependents, obj, admiral.Delete)
-		log.Infof(LogFormat, admiral.Delete, "routingpolicy", obj.Name, obj.ClusterName, "deleted envoy filter for routing policy")
+		r.deleteEnvoyFilters(ctx, dependents, obj, admiral.Delete)
+		log.Infof(LogFormat, admiral.Delete, "routingpolicy", obj.Name, "", "deleted envoy filter for routing policy")
 	}
 }
 
-func (r RoutingPolicyHandler) deleteEnvoyFilters(dependents map[string]string, obj *v1.RoutingPolicy, eventType admiral.EventType) {
+func (r RoutingPolicyHandler) deleteEnvoyFilters(ctx context.Context, dependents map[string]string, obj *v1.RoutingPolicy, eventType admiral.EventType) {
 	for _, dependent := range dependents {
 		key := dependent + common.GetRoutingPolicyEnv(obj)
 		clusterIdFilterMap := r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Get(key)
@@ -383,7 +383,7 @@ func (r RoutingPolicyHandler) deleteEnvoyFilters(dependents map[string]string, o
 			if filterMap, ok := clusterIdFilterMap[rc.ClusterID]; ok {
 				for _, filter := range filterMap {
 					log.Infof(LogFormat, eventType, "envoyfilter", filter, rc.ClusterID, "deleting")
-					err := rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Delete(filter, &metaV1.DeleteOptions{})
+					err := rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Delete(ctx, filter, metaV1.DeleteOptions{})
 					if err != nil {
 						// Best effort delete
 						log.Errorf(LogErrFormat, eventType, "envoyfilter", filter, rc.ClusterID, err)
@@ -412,31 +412,31 @@ type ServiceHandler struct {
 	ClusterID      string
 }
 
-func (sh *ServiceHandler) Added(obj *k8sV1.Service) {
+func (sh *ServiceHandler) Added(ctx context.Context, obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Added", "service", obj.Name, sh.ClusterID, "received")
-	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	err := HandleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
 		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
-func (sh *ServiceHandler) Updated(obj *k8sV1.Service) {
+func (sh *ServiceHandler) Updated(ctx context.Context, obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Updated", "service", obj.Name, sh.ClusterID, "received")
-	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	err := HandleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
 		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
-func (sh *ServiceHandler) Deleted(obj *k8sV1.Service) {
+func (sh *ServiceHandler) Deleted(ctx context.Context, obj *k8sV1.Service) {
 	log.Infof(LogFormat, "Deleted", "service", obj.Name, sh.ClusterID, "received")
-	err := HandleEventForService(obj, sh.RemoteRegistry, sh.ClusterID)
+	err := HandleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
 		log.Errorf(LogErrFormat, "Error", "service", obj.Name, sh.ClusterID, err)
 	}
 }
 
-func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
+func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
 	if svc.Spec.Selector == nil {
 		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName)
 	}
@@ -447,26 +447,26 @@ func HandleEventForService(svc *k8sV1.Service, remoteRegistry *RemoteRegistry, c
 	deploymentController := rc.DeploymentController
 	rolloutController := rc.RolloutController
 	if deploymentController != nil {
-		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 		if len(matchingDeployements) > 0 {
 			for _, deployment := range matchingDeployements {
-				HandleEventForDeployment(admiral.Update, &deployment, remoteRegistry, clusterName)
+				HandleEventForDeployment(ctx, admiral.Update, &deployment, remoteRegistry, clusterName)
 			}
 		}
 	}
 	if common.GetAdmiralParams().ArgoRolloutsEnabled && rolloutController != nil {
-		matchingRollouts := rolloutController.GetRolloutBySelectorInNamespace(svc.Spec.Selector, svc.Namespace)
+		matchingRollouts := rolloutController.GetRolloutBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 
 		if len(matchingRollouts) > 0 {
 			for _, rollout := range matchingRollouts {
-				HandleEventForRollout(admiral.Update, &rollout, remoteRegistry, clusterName)
+				HandleEventForRollout(ctx, admiral.Update, &rollout, remoteRegistry, clusterName)
 			}
 		}
 	}
 	return nil
 }
 
-func (dh *DependencyHandler) Added(obj *v1.Dependency) {
+func (dh *DependencyHandler) Added(ctx context.Context, obj *v1.Dependency) {
 
 	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
 
@@ -563,7 +563,7 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 }
 
 // helper function to handle add and delete for DeploymentHandler
-func HandleEventForDeployment(event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
+func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
 
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 

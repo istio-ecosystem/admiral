@@ -103,12 +103,12 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 // NewForConfigOrDie creates a new Clientset for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) (*Clientset, error) {
+func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs, err := NewForConfig(c)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return cs, nil
+	return cs
 }
 
 // New creates a new Clientset for the given RESTClient.

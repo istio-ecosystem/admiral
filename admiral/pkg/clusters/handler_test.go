@@ -559,7 +559,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		Spec: v1alpha3.VirtualService{
 			Hosts: []string{"e2e.blah.global"},
 		},
-	})
+	}, v12.CreateOptions{})
 	rr2 := NewRemoteRegistry(nil, common.AdmiralParams{})
 	rr2.AdmiralCache = &AdmiralCache{
 		CnameDependentClusterCache: goodCnameCache,
@@ -816,10 +816,10 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			}}},
 		},
 	}
-
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(virtualService)
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(vsMutipleRoutesWithMatch)
-	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(vsMutipleRoutesWithZeroWeight)
+	ctx := context.Background()
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(ctx, virtualService, v12.CreateOptions{})
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(ctx, vsMutipleRoutesWithMatch, v12.CreateOptions{})
+	rcTemp.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(Namespace).Create(ctx, vsMutipleRoutesWithZeroWeight, v12.CreateOptions{})
 
 	canaryRollout := argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
@@ -921,11 +921,7 @@ func TestGetServiceForRolloutCanary(t *testing.T) {
 			CanaryService: CanaryServiceName,
 			TrafficRouting: &argo.RolloutTrafficRouting{
 				Istio: &argo.IstioTrafficRouting{
-					<<<<<<< HEAD
-					VirtualService: argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{"random"}},
-					====== =
-					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_3, Routes: []string{"random"}},
-					>>>>>>> d45832e (made fixes to work with go1.17)
+					VirtualService: &argo.IstioVirtualService{Name: VS_NAME_2, Routes: []string{"random"}},
 				},
 			},
 		},

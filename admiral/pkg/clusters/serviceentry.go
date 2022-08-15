@@ -120,10 +120,10 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+			createServiceEntry(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
-			weightedServices = getServiceForRollout(rc, rollout)
+			weightedServices = getServiceForRollout(ctx, rc, rollout)
 
 			if len(weightedServices) == 0 {
 				continue
@@ -140,7 +140,7 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
 
 		} else {
 			continue
@@ -195,7 +195,7 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+				AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
@@ -208,7 +208,7 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 						oldPorts := ep.Ports
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
@@ -219,14 +219,14 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 
 							map[string]*networking.ServiceEntry{key: se})
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
@@ -260,7 +260,7 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry, dependentClusters, serviceEntries)
+	AddServiceEntriesWithDr(ctx, remoteRegistry, dependentClusters, serviceEntries)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -409,7 +409,7 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 		}
 	}
 
-	newSidecarConfig := createSidecarSkeletion(&newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
+	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
 
 	//insert into cluster
 	if newSidecarConfig != nil {
@@ -436,8 +436,8 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	return newSidecarObj
 }
 
-//This will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
+//AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
+func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
 
 	cache := rr.AdmiralCache
 
@@ -486,7 +486,7 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
 					deleteDestinationRule(ctx, oldDestinationRule, syncNamespace, rc)
 				} else {
-					newServiceEntry := createServiceEntrySkeletion(seDr.ServiceEntry, seDr.SeName, syncNamespace)
+					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
@@ -494,7 +494,7 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 
-					newDestinationRule := createDestinationRuleSkeletion(seDr.DestinationRule, seDr.DrName, syncNamespace)
+					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
 					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
 					addUpdateDestinationRule(ctx, newDestinationRule, oldDestinationRule, syncNamespace, rc)
 				}
@@ -586,7 +586,7 @@ func GetLocalAddressForSe(ctx context.Context, seName string, seAddressCache *Se
 	return address, false, nil
 }
 
-func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry) ([]v1alpha3.ServiceEntry, error) {
+func GetServiceEntriesByCluster(ctx context.Context, clusterID string, remoteRegistry *RemoteRegistry) ([]*v1alpha3.ServiceEntry, error) {
 	remoteController := remoteRegistry.GetRemoteController(clusterID)
 
 	if remoteController != nil {

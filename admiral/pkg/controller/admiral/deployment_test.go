@@ -306,7 +306,7 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			deploymentController.K8sClient = c.fakeClient
-			returnedDeployments := deploymentController.GetDeploymentBySelectorInNamespace(c.selector, "namespace")
+			returnedDeployments := deploymentController.GetDeploymentBySelectorInNamespace(ctx, c.selector, "namespace")
 
 			sort.Slice(returnedDeployments, func(i, j int) bool {
 				return returnedDeployments[i].Name > returnedDeployments[j].Name

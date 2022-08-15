@@ -23,9 +23,9 @@ import (
 
 // ServiceHandler interface contains the methods that are required
 type ServiceHandler interface {
-	Added(obj *k8sV1.Service)
-	Updated(obj *k8sV1.Service)
-	Deleted(obj *k8sV1.Service)
+	Added(ctx context.Context, obj *k8sV1.Service)
+	Updated(ctx context.Context, obj *k8sV1.Service)
+	Deleted(ctx context.Context, obj *k8sV1.Service)
 }
 
 type ServiceClusterEntry struct {
@@ -186,23 +186,23 @@ func NewServiceController(clusterID string, stopCh <-chan struct{}, handler Serv
 	return &serviceController, nil
 }
 
-func (s *ServiceController) Added(obj interface{}) {
+func (s *ServiceController) Added(ctx context.Context, obj interface{}) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
-	s.ServiceHandler.Added(service)
+	s.ServiceHandler.Added(ctx, service)
 }
 
-func (s *ServiceController) Updated(obj interface{}, oldObj interface{}) {
+func (s *ServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 
 	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
-	s.ServiceHandler.Updated(service)
+	s.ServiceHandler.Updated(ctx, service)
 }
 
 func (s *ServiceController) Deleted(ctx context.Context, obj interface{}) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Delete(service)
-	s.ServiceHandler.Deleted(service)
+	s.ServiceHandler.Deleted(ctx, service)
 }
 
 func (s *serviceCache) shouldIgnoreBasedOnLabels(service *k8sV1.Service) bool {

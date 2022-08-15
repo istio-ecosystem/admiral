@@ -2,20 +2,23 @@ package clusters
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/gogo/protobuf/types"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -68,7 +71,7 @@ func getIstioResourceName(host string, suffix string) string {
 func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
 	var dr = &v1alpha32.DestinationRule{}
 	dr.Host = se.Hosts[0]
-	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.TLSSettings{Mode: v1alpha32.TLSSettings_ISTIO_MUTUAL}}
+	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.ClientTLSSettings{Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL}}
 	processGtp := true
 	if len(locality) == 0 {
 		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
@@ -109,24 +112,24 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.OutlierDetection {
 
 	outlierDetection := &v1alpha32.OutlierDetection{
-		BaseEjectionTime:         &types.Duration{Seconds: DefaultBaseEjectionTime},
-		ConsecutiveGatewayErrors: &types.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
-		Interval:                 &types.Duration{Seconds: DefaultInterval},
+		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
+		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Interval:                 &duration.Duration{Seconds: DefaultInterval},
 	}
 
 	if gtpTrafficPolicy != nil && gtpTrafficPolicy.OutlierDetection != nil {
 		if gtpTrafficPolicy.OutlierDetection.BaseEjectionTime > 0 {
-			outlierDetection.BaseEjectionTime = &types.Duration{
+			outlierDetection.BaseEjectionTime = &duration.Duration{
 				Seconds: gtpTrafficPolicy.OutlierDetection.BaseEjectionTime,
 			}
 		}
 		if gtpTrafficPolicy.OutlierDetection.ConsecutiveGatewayErrors > 0 {
-			outlierDetection.ConsecutiveGatewayErrors = &types.UInt32Value{
+			outlierDetection.ConsecutiveGatewayErrors = &wrappers.UInt32Value{
 				Value: gtpTrafficPolicy.OutlierDetection.ConsecutiveGatewayErrors,
 			}
 		}
 		if gtpTrafficPolicy.OutlierDetection.Interval > 0 {
-			outlierDetection.Interval = &types.Duration{
+			outlierDetection.Interval = &duration.Duration{
 				Seconds: gtpTrafficPolicy.OutlierDetection.Interval,
 			}
 		}
@@ -180,7 +183,7 @@ func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) {
 	}
 }
 
-func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
+func (dh *DestinationRuleHandler) Added(ctx context.Context, obj *v1alpha3.DestinationRule) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -189,10 +192,10 @@ func (dh *DestinationRuleHandler) Added(obj *v1alpha3.DestinationRule) {
 		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(obj, dh, common.Add, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Add, common.DestinationRule)
 }
 
-func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
+func (dh *DestinationRuleHandler) Updated(ctx context.Context, obj *v1alpha3.DestinationRule) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -201,10 +204,10 @@ func (dh *DestinationRuleHandler) Updated(obj *v1alpha3.DestinationRule) {
 		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(obj, dh, common.Update, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Update, common.DestinationRule)
 }
 
-func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
+func (dh *DestinationRuleHandler) Deleted(ctx context.Context, obj *v1alpha3.DestinationRule) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -213,10 +216,10 @@ func (dh *DestinationRuleHandler) Deleted(obj *v1alpha3.DestinationRule) {
 		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(obj, dh, common.Delete, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Delete, common.DestinationRule)
 }
 
-func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
+func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -225,13 +228,13 @@ func (vh *VirtualServiceHandler) Added(obj *v1alpha3.VirtualService) {
 		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(obj, vh, common.Add, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Add, common.VirtualService)
 	if err != nil {
 		log.Error(err)
 	}
 }
 
-func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
+func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.VirtualService) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -240,13 +243,13 @@ func (vh *VirtualServiceHandler) Updated(obj *v1alpha3.VirtualService) {
 		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(obj, vh, common.Update, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Update, common.VirtualService)
 	if err != nil {
 		log.Error(err)
 	}
 }
 
-func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
+func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.VirtualService) {
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return
@@ -255,17 +258,17 @@ func (vh *VirtualServiceHandler) Deleted(obj *v1alpha3.VirtualService) {
 		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(obj, vh, common.Delete, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Delete, common.VirtualService)
 	if err != nil {
 		log.Error(err)
 	}
 }
 
-func (dh *SidecarHandler) Added(obj *v1alpha3.Sidecar) {}
+func (dh *SidecarHandler) Added(ctx context.Context, obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Updated(obj *v1alpha3.Sidecar) {}
+func (dh *SidecarHandler) Updated(ctx context.Context, obj *v1alpha3.Sidecar) {}
 
-func (dh *SidecarHandler) Deleted(obj *v1alpha3.Sidecar) {}
+func (dh *SidecarHandler) Deleted(ctx context.Context, obj *v1alpha3.Sidecar) {}
 
 func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {
 
@@ -289,7 +292,7 @@ func IgnoreIstioResource(exportTo []string, annotations map[string]string, names
 	return true
 }
 
-func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRuleHandler, event common.Event, resourceType common.ResourceType) {
+func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRule, dh *DestinationRuleHandler, event common.Event, resourceType common.ResourceType) {
 	destinationRule := obj.Spec
 
 	clusterId := dh.ClusterID
@@ -316,7 +319,7 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 			if event == common.Delete {
 
-				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
 					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
 				} else {
@@ -325,11 +328,11 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 
 			} else {
 
-				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
+				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
 
 				//copy destination rule only to other clusters
 				if dependentCluster != clusterId {
-					addUpdateDestinationRule(obj, exist, syncNamespace, rc)
+					addUpdateDestinationRule(ctx, obj, exist, syncNamespace, rc)
 				}
 			}
 		}
@@ -344,21 +347,21 @@ func handleDestinationRuleEvent(obj *v1alpha3.DestinationRule, dh *DestinationRu
 		if ClusterID != clusterId {
 			rc := r.GetRemoteController(ClusterID)
 			if event == common.Delete {
-				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
 					log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
 				} else {
 					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
 				}
 			} else {
-				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateDestinationRule(obj, exist, syncNamespace, rc)
+				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
+				addUpdateDestinationRule(ctx, obj, exist, syncNamespace, rc)
 			}
 		}
 	}
 }
 
-func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) error {
+func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) error {
 
 	log.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
 
@@ -377,7 +380,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 	//check if this virtual service is used by Argo rollouts for canary strategy, if so, update the corresponding SE with appropriate weights
 	if common.GetAdmiralParams().ArgoRolloutsEnabled {
-		rollouts, err := vh.RemoteRegistry.GetRemoteController(clusterId).RolloutController.RolloutClient.Rollouts(obj.Namespace).List(v12.ListOptions{})
+		rollouts, err := vh.RemoteRegistry.GetRemoteController(clusterId).RolloutController.RolloutClient.Rollouts(obj.Namespace).List(ctx, v12.ListOptions{})
 
 		if err != nil {
 			log.Errorf(LogErrFormat, "Get", "Rollout", "Error finding rollouts in namespace="+obj.Namespace, clusterId, err)
@@ -385,7 +388,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 			if len(rollouts.Items) > 0 {
 				for _, rollout := range rollouts.Items {
 					if rollout.Spec.Strategy.Canary != nil && rollout.Spec.Strategy.Canary.TrafficRouting != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio.VirtualService.Name == obj.Name {
-						HandleEventForRollout(admiral.Update, &rollout, vh.RemoteRegistry, clusterId)
+						HandleEventForRollout(ctx, admiral.Update, &rollout, vh.RemoteRegistry, clusterId)
 					}
 				}
 			}
@@ -406,14 +409,14 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 
 				if event == common.Delete {
 					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 					if err != nil {
 						return err
 					}
 
 				} else {
 
-					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
+					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
 
 					//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
 					for _, httpRoute := range virtualService.Http {
@@ -434,7 +437,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 						}
 					}
 
-					addUpdateVirtualService(obj, exist, syncNamespace, rc)
+					addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 				}
 			}
 		}
@@ -450,7 +453,7 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 		if ClusterID != clusterId {
 			rc := r.GetRemoteController(ClusterID)
 			if event == common.Delete {
-				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(obj.Name, &v12.DeleteOptions{})
+				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
 					log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
 					return err
@@ -458,15 +461,15 @@ func handleVirtualServiceEvent(obj *v1alpha3.VirtualService, vh *VirtualServiceH
 					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 				}
 			} else {
-				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(obj.Name, v12.GetOptions{})
-				addUpdateVirtualService(obj, exist, syncNamespace, rc)
+				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
+				addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 			}
 		}
 	}
 	return nil
 }
 
-func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
+func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
@@ -476,14 +479,14 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	if exist == nil || len(exist.Spec.Hosts) == 0 {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(obj)
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, obj, v12.CreateOptions{})
 		op = "Add"
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(exist)
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, exist, v12.UpdateOptions{})
 	}
 
 	if err != nil {
@@ -493,7 +496,7 @@ func addUpdateVirtualService(obj *v1alpha3.VirtualService, exist *v1alpha3.Virtu
 	}
 }
 
-func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var err error
 	var op, diff string
 	var skipUpdate bool
@@ -504,7 +507,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 	if exist == nil || exist.Spec.Hosts == nil {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(obj)
+		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(ctx, obj, v12.CreateOptions{})
 		op = "Add"
 		log.Infof(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
 	} else {
@@ -520,7 +523,7 @@ func addUpdateServiceEntry(obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEn
 			return
 		} else {
 			exist.Spec = obj.Spec
-			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(exist)
+			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(ctx, exist, v12.UpdateOptions{})
 		}
 
 	}
@@ -556,7 +559,7 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	seNew := new.Spec
 	seOld := old.Spec
 
-	oldEndpointMap := make(map[string]*v1alpha32.ServiceEntry_Endpoint)
+	oldEndpointMap := make(map[string]*v1alpha32.WorkloadEntry)
 	found := make(map[string]string)
 	for _, oEndpoint := range seOld.Endpoints {
 		oldEndpointMap[oEndpoint.Address] = oEndpoint
@@ -564,7 +567,7 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	for _, nEndpoint := range seNew.Endpoints {
 		if val, ok := oldEndpointMap[nEndpoint.Address]; ok {
 			found[nEndpoint.Address] = "1"
-			if !reflect.DeepEqual(val, nEndpoint) {
+			if !cmp.Equal(val, nEndpoint, protocmp.Transform()) {
 				destructive = true
 				buffer.WriteString(fmt.Sprintf(format, "endpoint", "Update", val.String(), nEndpoint.String()))
 			}
@@ -584,9 +587,9 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	return destructive, diff
 }
 
-func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
+func deleteServiceEntry(ctx context.Context, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	if exist != nil {
-		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(exist.Name, &v12.DeleteOptions{})
+		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(ctx, exist.Name, v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
 		} else {
@@ -595,7 +598,7 @@ func deleteServiceEntry(exist *v1alpha3.ServiceEntry, namespace string, rc *Remo
 	}
 }
 
-func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+func addUpdateDestinationRule(ctx context.Context, obj *v1alpha3.DestinationRule, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	var err error
 	var op string
 	if obj.Annotations == nil {
@@ -605,14 +608,14 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	if exist == nil || exist.Name == "" || exist.Spec.Host == "" {
 		obj.Namespace = namespace
 		obj.ResourceVersion = ""
-		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(obj)
+		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Create(ctx, obj, v12.CreateOptions{})
 		op = "Add"
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		exist.Spec = obj.Spec
 		op = "Update"
-		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Update(exist)
+		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Update(ctx, exist, v12.UpdateOptions{})
 	}
 
 	if err != nil {
@@ -622,9 +625,9 @@ func addUpdateDestinationRule(obj *v1alpha3.DestinationRule, exist *v1alpha3.Des
 	}
 }
 
-func deleteDestinationRule(exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
+func deleteDestinationRule(ctx context.Context, exist *v1alpha3.DestinationRule, namespace string, rc *RemoteController) {
 	if exist != nil {
-		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(exist.Name, &v12.DeleteOptions{})
+		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(ctx, exist.Name, v12.DeleteOptions{})
 		if err != nil {
 			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
 		} else {
@@ -692,18 +695,18 @@ func getDependentClusters(dependents map[string]string, identityClusterCache *co
 	return dependentClusters
 }
 
-func copyEndpoint(e *v1alpha32.ServiceEntry_Endpoint) *v1alpha32.ServiceEntry_Endpoint {
+func copyEndpoint(e *v1alpha32.WorkloadEntry) *v1alpha32.WorkloadEntry {
 	labels := make(map[string]string)
 	util.MapCopy(labels, e.Labels)
 	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
-	return &v1alpha32.ServiceEntry_Endpoint{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
+	return &v1alpha32.WorkloadEntry{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
 }
 
 // A rollout can use one of 2 stratergies :-
 // 1. Canary strategy - which can use a virtual service to manage the weights associated with a stable and canary service. Admiral created endpoints in service entries will use the weights assigned in the Virtual Service
 // 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will use repective service to create active and preview endpoints
-func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[string]*WeightedService {
+func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *argo.Rollout) map[string]*WeightedService {
 
 	if rollout == nil {
 		return nil
@@ -756,7 +759,7 @@ func getServiceForRollout(rc *RemoteController, rollout *argo.Rollout) map[strin
 			}
 
 			virtualServiceName := rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name
-			virtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(rollout.Namespace).Get(virtualServiceName, v12.GetOptions{})
+			virtualService, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(rollout.Namespace).Get(ctx, virtualServiceName, v12.GetOptions{})
 
 			if err != nil {
 				log.Warnf("Error fetching VirtualService referenced in rollout canary for rollout with name=%s in namespace=%s and cluster=%s err=%v", rollout.Name, rollout.Namespace, rc.ClusterID, err)

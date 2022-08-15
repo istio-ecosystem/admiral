@@ -3,6 +3,10 @@ package clusters
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -13,9 +17,6 @@ import (
 	time2 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	testing2 "k8s.io/client-go/testing"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
@@ -59,88 +60,87 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
 	registry.AdmiralCache.IdentityClusterCache.Put("bar", remoteController.ClusterID, remoteController.ClusterID)
 
-
 	handler.RemoteRegistry = registry
 
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta:   time2.TypeMeta{},
+		TypeMeta: time2.TypeMeta{},
 		ObjectMeta: time2.ObjectMeta{
 			Labels: map[string]string{
-				"identity": "foo",
+				"identity":       "foo",
 				"admiral.io/env": "stage",
 			},
 		},
-		Spec:       model.RoutingPolicy{
-			Plugin:               "test",
-			Hosts:                []string{"e2e.testservice.mesh"},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh"},
 			Config: map[string]string{
-				"cachePrefix": "cache-v1",
-				"cachettlSec": "86400",
+				"cachePrefix":       "cache-v1",
+				"cachettlSec":       "86400",
 				"routingServiceUrl": "e2e.test.routing.service.mesh",
-				"pathPrefix": "/sayhello,/v1/company/{id}/",
+				"pathPrefix":        "/sayhello,/v1/company/{id}/",
 			},
 		},
-		Status:     v1.RoutingPolicyStatus{},
+		Status: v1.RoutingPolicyStatus{},
 	}
 
-	selectors := map[string]string{"one":"test1", "two":"test2"}
+	selectors := map[string]string{"one": "test1", "two": "test2"}
 
 	getSha1 = getSha1Error
 
-	envoyfilter, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "barstage", registry.AdmiralCache, selectors)
+	ctx := context.Background()
+
+	envoyfilter, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "barstage", registry.AdmiralCache, selectors)
 
 	assert.NotNil(t, err)
 	assert.Nil(t, envoyfilter)
 
 	getSha1 = common.GetSha1
 
-	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache, selectors)
+	envoyfilter, err = createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache, selectors)
 	assert.Equal(t, "test1", envoyfilter.Spec.WorkloadSelector.GetLabels()["one"])
 	assert.Equal(t, "test2", envoyfilter.Spec.WorkloadSelector.GetLabels()["two"])
 	assert.Equal(t, "test-dynamicrouting-d0fdd-1.13", envoyfilter.Name)
 
-	envoyfilter, err = createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Update, "bar", registry.AdmiralCache, selectors)
+	envoyfilter, err = createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Update, "bar", registry.AdmiralCache, selectors)
 	assert.Nil(t, err)
-
 
 	remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().(*fake.FakeNetworkingV1alpha3).PrependReactor("create", "envoyfilters",
 		func(action testing2.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, errors.New("error creating envoyfilter")
 		},
 	)
-	envoyfilter3, err := createOrUpdateEnvoyFilter(remoteController, routingPolicyFoo, admiral.Add, "bar2", registry.AdmiralCache, selectors)
+	envoyfilter3, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "bar2", registry.AdmiralCache, selectors)
 	assert.NotNil(t, err)
 	assert.Nil(t, envoyfilter3)
 
-
 }
 
-func getSha1Error (key interface{}) (string, error) {
+func getSha1Error(key interface{}) (string, error) {
 	return "", errors.New("error occured while computing the sha")
 }
 
 func TestGetHosts(t *testing.T) {
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta:   time2.TypeMeta{},
+		TypeMeta: time2.TypeMeta{},
 		ObjectMeta: time2.ObjectMeta{
 			Labels: map[string]string{
-				"identity": "foo",
+				"identity":       "foo",
 				"admiral.io/env": "stage",
 			},
 		},
-		Spec:       model.RoutingPolicy{
-			Plugin:               "test",
-			Hosts:                []string{"e2e.testservice.mesh,e2e2.testservice.mesh"},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh,e2e2.testservice.mesh"},
 			Config: map[string]string{
-				"cachePrefix": "cache-v1",
-				"cachettlSec": "86400",
+				"cachePrefix":       "cache-v1",
+				"cachettlSec":       "86400",
 				"routingServiceUrl": "e2e.test.routing.service.mesh",
-				"pathPrefix": "/sayhello,/v1/company/{id}/",
+				"pathPrefix":        "/sayhello,/v1/company/{id}/",
 			},
 		},
-		Status:     v1.RoutingPolicyStatus{},
+		Status: v1.RoutingPolicyStatus{},
 	}
 
 	hosts := getHosts(routingPolicyFoo)
-	assert.Equal(t, "hosts: e2e.testservice.mesh,e2e2.testservice.mesh",hosts)
+	assert.Equal(t, "hosts: e2e.testservice.mesh,e2e2.testservice.mesh", hosts)
 }

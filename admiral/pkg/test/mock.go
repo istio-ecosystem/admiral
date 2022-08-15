@@ -56,15 +56,15 @@ func (m *MockRolloutHandler) Updated(ctx context.Context, obj *argo.Rollout) {
 type MockServiceHandler struct {
 }
 
-func (m *MockServiceHandler) Added(obj *k8sCoreV1.Service) {
+func (m *MockServiceHandler) Added(ctx context.Context, obj *k8sCoreV1.Service) {
 
 }
 
-func (m *MockServiceHandler) Updated(obj *k8sCoreV1.Service) {
+func (m *MockServiceHandler) Updated(ctx context.Context, obj *k8sCoreV1.Service) {
 
 }
 
-func (m *MockServiceHandler) Deleted(obj *k8sCoreV1.Service) {
+func (m *MockServiceHandler) Deleted(ctx context.Context, obj *k8sCoreV1.Service) {
 
 }
 
@@ -190,14 +190,14 @@ type MockRoutingPolicyHandler struct {
 	Obj *v1.RoutingPolicy
 }
 
-func (m *MockRoutingPolicyHandler) Added(obj *v1.RoutingPolicy) {
+func (m *MockRoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) {
 	m.Obj = obj
 }
 
-func (m *MockRoutingPolicyHandler) Deleted(obj *v1.RoutingPolicy) {
+func (m *MockRoutingPolicyHandler) Deleted(ctx context.Context, obj *v1.RoutingPolicy) {
 	m.Obj = nil
 }
 
-func (m *MockRoutingPolicyHandler) Updated(obj *v1.RoutingPolicy) {
+func (m *MockRoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy) {
 	m.Obj = obj
 }

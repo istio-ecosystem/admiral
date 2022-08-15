@@ -1,9 +1,12 @@
 package clusters
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/types"
+	"strings"
+
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -11,19 +14,19 @@ import (
 	"istio.io/api/networking/v1alpha3"
 	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 var (
 	getSha1 = common.GetSha1
 )
+
 const hostsKey = "hosts: "
 
-func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
+func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
 
 	envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, workloadSelectorMap)
 
-	selectorLabelsSha, err := getSha1(workloadIdentityKey+common.GetRoutingPolicyEnv(routingPolicy))
+	selectorLabelsSha, err := getSha1(workloadIdentityKey + common.GetRoutingPolicyEnv(routingPolicy))
 	if err != nil {
 		log.Error("error ocurred while computing workload labels sha1")
 		return nil, err
@@ -50,20 +53,22 @@ func createOrUpdateEnvoyFilter( rc *RemoteController, routingPolicy *v1.RoutingP
 	//get the envoyfilter if it exists. If it exists, update it. Otherwise create it.
 	if eventType == admiral.Add || eventType == admiral.Update {
 		// We query the API server instead of getting it from cache because there could be potential condition where the filter exists in the cache but not on the cluster.
-		filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem).Get(envoyFilterName, metaV1.GetOptions{})
+		filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+			EnvoyFilters(common.NamespaceIstioSystem).Get(ctx, envoyFilterName, metaV1.GetOptions{})
 		if err != nil {
 			log.Infof("msg=%s filtername=%s clustername=%s", "creating the envoy filter", envoyFilterName, rc.ClusterID)
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem).Create(envoyfilter)
+			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+				EnvoyFilters(common.NamespaceIstioSystem).Create(ctx, envoyfilter, metaV1.CreateOptions{})
 			if err != nil {
 				log.Infof("error creating filter: %v", err)
 			}
 		} else {
 			log.Infof("msg=%s filtername=%s clustername=%s", "updating existing envoy filter", envoyFilterName, rc.ClusterID)
 			envoyfilter.ResourceVersion = filter.ResourceVersion
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(common.NamespaceIstioSystem).Update(envoyfilter)
+			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+				EnvoyFilters(common.NamespaceIstioSystem).Update(ctx, envoyfilter, metaV1.UpdateOptions{})
 		}
 	}
-
 
 	return filter, err
 }
@@ -78,38 +83,37 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		}
 		envoyFilterStringConfig += fmt.Sprintf("%s: %s\n", key, val)
 	}
-	if len(common.GetEnvoyFilterAdditionalConfig()) !=0 {
-		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig()+"\n"
+	if len(common.GetEnvoyFilterAdditionalConfig()) != 0 {
+		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig() + "\n"
 	}
 	envoyFilterStringConfig += getHosts(routingPolicy)
 
-	configuration := types.Struct{
-		Fields: map[string]*types.Value{
-			"@type": {Kind: &types.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.StringValue"}},
-			"value": {Kind: &types.Value_StringValue{StringValue: envoyFilterStringConfig}},
+	configuration := structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"@type": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.StringValue"}},
+			"value": {Kind: &structpb.Value_StringValue{StringValue: envoyFilterStringConfig}},
 		},
 	}
 
-
-	vmConfig := types.Struct{
-		Fields: map[string]*types.Value{
-			"runtime": {Kind: &types.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
-			"code": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
-				"local": {Kind: &types.Value_StructValue{StructValue: &types.Struct{Fields: map[string]*types.Value{
-					"filename": {Kind: &types.Value_StringValue{StringValue: wasmPath}},
+	vmConfig := structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"runtime": {Kind: &structpb.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
+			"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+				"local": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
+					"filename": {Kind: &structpb.Value_StringValue{StringValue: wasmPath}},
 				}}}},
 			}}}},
 		},
 	}
 
-	typedConfigValue := types.Struct{
-		Fields: map[string]*types.Value{
+	typedConfigValue := structpb.Struct{
+		Fields: map[string]*structpb.Value{
 			"config": {
-				Kind: &types.Value_StructValue{
-					StructValue: &types.Struct{
-						Fields: map[string]*types.Value{
-							"configuration": {Kind: &types.Value_StructValue{StructValue: &configuration}},
-							"vm_config":     {Kind: &types.Value_StructValue{StructValue: &vmConfig}},
+				Kind: &structpb.Value_StructValue{
+					StructValue: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"configuration": {Kind: &structpb.Value_StructValue{StructValue: &configuration}},
+							"vm_config":     {Kind: &structpb.Value_StructValue{StructValue: &vmConfig}},
 						},
 					},
 				},
@@ -117,11 +121,11 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		},
 	}
 
-	typedConfig := types.Struct{
-		Fields: map[string]*types.Value{
-			"@type":    {Kind: &types.Value_StringValue{StringValue: "type.googleapis.com/udpa.type.v1.TypedStruct"}},
-			"type_url": {Kind: &types.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"}},
-			"value":    {Kind: &types.Value_StructValue{StructValue: &typedConfigValue}},
+	typedConfig := structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"@type":    {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/udpa.type.v1.TypedStruct"}},
+			"type_url": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"}},
+			"value":    {Kind: &structpb.Value_StructValue{StructValue: &typedConfigValue}},
 		},
 	}
 
@@ -129,7 +133,7 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	return envoyfilterSpec
 }
 
-func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig types.Struct) *v1alpha3.EnvoyFilter {
+func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig structpb.Struct) *v1alpha3.EnvoyFilter {
 	return &v1alpha3.EnvoyFilter{
 		WorkloadSelector: &v1alpha3.WorkloadSelector{Labels: workloadSelectorLabels},
 
@@ -139,7 +143,7 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig ty
 				Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
 					Context: v1alpha3.EnvoyFilter_SIDECAR_OUTBOUND,
 					// TODO: Figure out the possibility of using this for istio version upgrades. Can we add multiple filters with different proxy version Match here?
-					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: "^"+strings.ReplaceAll(common.GetEnvoyFilterVersion(),".","\\.")+".*"},
+					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: "^" + strings.ReplaceAll(common.GetEnvoyFilterVersion(), ".", "\\.") + ".*"},
 					ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
 						Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
 							FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
@@ -155,12 +159,11 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig ty
 				},
 				Patch: &v1alpha3.EnvoyFilter_Patch{
 					Operation: v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE,
-					//https://pkg.go.dev/github.com/gogo/protobuf/types#Value
-					Value: &types.Struct{
-						Fields: map[string]*types.Value{
-							"name": {Kind: &types.Value_StringValue{StringValue: "dynamicRoutingFilterPatch"}},
+					Value: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"name": {Kind: &structpb.Value_StringValue{StringValue: "dynamicRoutingFilterPatch"}},
 							"typed_config": {
-								Kind: &types.Value_StructValue{
+								Kind: &structpb.Value_StructValue{
 									StructValue: &typedConfig,
 								},
 							},
@@ -177,7 +180,6 @@ func getHosts(routingPolicy *v1.RoutingPolicy) string {
 	for _, host := range routingPolicy.Spec.Hosts {
 		hosts += host + ","
 	}
-	hosts = strings.TrimSuffix(hosts,",")
+	hosts = strings.TrimSuffix(hosts, ",")
 	return hostsKey + hosts
 }
-

@@ -17,7 +17,7 @@ import (
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 )
 
-// Handler interface contains the methods that are required
+// GlobalTrafficHandler interface contains the methods that are required
 type GlobalTrafficHandler interface {
 	Added(ctx context.Context, obj *v1.GlobalTrafficPolicy)
 	Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy)
