@@ -293,6 +293,7 @@ func IgnoreIstioResource(exportTo []string, annotations map[string]string, names
 }
 
 func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRule, dh *DestinationRuleHandler, event common.Event, resourceType common.ResourceType) {
+	//nolint
 	destinationRule := obj.Spec
 
 	clusterId := dh.ClusterID
@@ -365,6 +366,7 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 
 	log.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
 
+	//nolint
 	virtualService := obj.Spec
 
 	clusterId := vh.ClusterID
@@ -484,6 +486,7 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
+		//nolint
 		exist.Spec = obj.Spec
 		op = "Update"
 		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, exist, v12.UpdateOptions{})
@@ -522,6 +525,7 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
 			return
 		} else {
+			//nolint
 			exist.Spec = obj.Spec
 			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(ctx, exist, v12.UpdateOptions{})
 		}
@@ -556,7 +560,9 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	destructive = false
 	format := "%s %s before: %v, after: %v;"
 	var buffer bytes.Buffer
+	//nolint
 	seNew := new.Spec
+	//nolint
 	seOld := old.Spec
 
 	oldEndpointMap := make(map[string]*v1alpha32.WorkloadEntry)
@@ -613,6 +619,7 @@ func addUpdateDestinationRule(ctx context.Context, obj *v1alpha3.DestinationRule
 	} else {
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
+		//nolint
 		exist.Spec = obj.Spec
 		op = "Update"
 		_, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Update(ctx, exist, v12.UpdateOptions{})
@@ -635,14 +642,18 @@ func deleteDestinationRule(ctx context.Context, exist *v1alpha3.DestinationRule,
 		}
 	}
 }
+
+//nolint
 func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
 	return &v1alpha3.ServiceEntry{Spec: se, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
+//nolint
 func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace string) *v1alpha3.Sidecar {
 	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
+//nolint
 func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
@@ -770,6 +781,7 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ar
 			}
 
 			if virtualService != nil {
+				//nolint
 				var vs = virtualService.Spec
 				if len(vs.Http) > 0 {
 					var httpRoute *v1alpha32.HTTPRoute

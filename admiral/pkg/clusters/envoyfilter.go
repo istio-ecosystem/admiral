@@ -45,6 +45,7 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 			Name:      envoyFilterName,
 			Namespace: common.NamespaceIstioSystem,
 		},
+		//nolint
 		Spec: *envoyfilterSpec,
 	}
 
@@ -121,7 +122,7 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		},
 	}
 
-	typedConfig := structpb.Struct{
+	typedConfig := &structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"@type":    {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/udpa.type.v1.TypedStruct"}},
 			"type_url": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"}},
@@ -133,7 +134,7 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	return envoyfilterSpec
 }
 
-func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig structpb.Struct) *v1alpha3.EnvoyFilter {
+func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *structpb.Struct) *v1alpha3.EnvoyFilter {
 	return &v1alpha3.EnvoyFilter{
 		WorkloadSelector: &v1alpha3.WorkloadSelector{Labels: workloadSelectorLabels},
 
@@ -164,7 +165,7 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig st
 							"name": {Kind: &structpb.Value_StringValue{StringValue: "dynamicRoutingFilterPatch"}},
 							"typed_config": {
 								Kind: &structpb.Value_StructValue{
-									StructValue: &typedConfig,
+									StructValue: typedConfig,
 								},
 							},
 						},
