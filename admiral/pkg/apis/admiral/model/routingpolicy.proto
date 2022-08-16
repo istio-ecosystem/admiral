@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package admiral.global.v1alpha;
+
+option go_package = "model";
+
+//```
+//    apiVersion: admiral.io/v1alpha1
+//    kind: RoutingPolicy
+//    metadata:
+//      name: greeting-routing-policy
+//      annotations:
+//        admiral.io/env: stage
+//      labels:
+//        identity: greeting
+//    spec:
+//      plugin: greeting
+//      hosts:
+//      - qal.greeting.mesh
+//      config:
+//        cachePrefix: cache-v1
+//        cachettlSec: "86400"
+//        dispatcherUrl: qal.greeting.dispatcher.mesh
+//        algo: greetingDispatcher
+//        pathPrefix: "/wpcatalog,/consumercatalog,/v1/company/{id}/auth/hydrate,/consumercatalog"
+//```
+
+message RoutingPolicy {
+  string plugin = 1;
+  repeated string hosts = 2;
+  map<string, string> config = 3;
+}

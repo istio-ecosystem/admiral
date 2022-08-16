@@ -3,10 +3,9 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"k8s.io/client-go/rest"
-	"sync"
+	"os"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -25,62 +24,61 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	log.Infof("Initializing Admiral with params: %v", params)
 
 	common.InitializeConfig(params)
-	w := RemoteRegistry{
-		ctx: ctx,
-		StartTime: time.Now(),
-	}
+
+	CurrentAdmiralState = AdmiralState{ReadOnly: ReadOnlyEnabled, IsStateInitialized: StateNotInitialized}
+	startAdmiralStateChecker(ctx, params)
+	pauseForAdmiralToInitializeState()
+
+	w := NewRemoteRegistry(ctx, params)
 
 	wd := DependencyHandler{
-		RemoteRegistry: &w,
+		RemoteRegistry: w,
 	}
 
 	var err error
 	wd.DepController, err = admiral.NewDependencyController(ctx.Done(), &wd, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with dependency controller init: %v", err)
-	}
-
-	w.RemoteControllers = make(map[string]*RemoteController)
-
-	gtpCache := &globalTrafficCache{}
-	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
-	gtpCache.mutex = &sync.Mutex{}
-
-	w.AdmiralCache = &AdmiralCache{
-		IdentityClusterCache:            common.NewMapOfMaps(),
-		CnameClusterCache:               common.NewMapOfMaps(),
-		CnameDependentClusterCache:      common.NewMapOfMaps(),
-		ClusterLocalityCache:            common.NewMapOfMaps(),
-		IdentityDependencyCache:         common.NewMapOfMaps(),
-		DependencyNamespaceCache:        common.NewSidecarEgressMap(),
-		CnameIdentityCache:              &sync.Map{},
-		SubsetServiceEntryIdentityCache: &sync.Map{},
-		ServiceEntryAddressStore:        &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},
-		GlobalTrafficCache:              gtpCache,
-		SeClusterCache:                  common.NewMapOfMaps(),
-
-		argoRolloutsEnabled: params.ArgoRolloutsEnabled,
+		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
 
 	if !params.ArgoRolloutsEnabled {
 		log.Info("argo rollouts disabled")
 	}
 
-	configMapController, err := admiral.NewConfigMapController()
+	configMapController, err := admiral.NewConfigMapController(params.ServiceEntryIPPrefix)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with configmap controller init: %v", err)
+		return nil, fmt.Errorf("error with configmap controller init: %v", err)
 	}
 	w.AdmiralCache.ConfigMapController = configMapController
 	loadServiceEntryCacheData(w.AdmiralCache.ConfigMapController, w.AdmiralCache)
 
-	err = createSecretController(ctx, &w)
+	err = createSecretController(ctx, w)
 	if err != nil {
-		return nil, fmt.Errorf(" Error with secret control init: %v", err)
+		return nil, fmt.Errorf("error with secret control init: %v", err)
 	}
 
 	go w.shutdown()
 
-	return &w, nil
+	return w, nil
+}
+
+func pauseForAdmiralToInitializeState() {
+	// Sleep until Admiral determines state. This is done to make sure events are not skipped during startup while determining READ-WRITE state
+	start := time.Now()
+	log.Info("Pausing thread to let Admiral determine it's READ-WRITE state. This is to let Admiral determine it's state during startup")
+	for {
+		if CurrentAdmiralState.IsStateInitialized {
+			log.Infof("Time taken for Admiral to complete state initialization =%v ms", time.Since(start).Milliseconds())
+			break
+		}
+		if time.Since(start).Milliseconds() > 60000 {
+			log.Error("Admiral not initialized after 60 seconds. Exiting now!!")
+			os.Exit(-1)
+		}
+		log.Debug("Admiral is waiting to determine state before proceeding with boot up")
+		time.Sleep(100 * time.Millisecond)
+	}
+
 }
 
 func createSecretController(ctx context.Context, w *RemoteRegistry) error {
@@ -136,7 +134,6 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf("error with GlobalTrafficController controller init: %v", err)
 	}
 
-
 	log.Infof("starting node controller clusterID: %v", clusterID)
 	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
 
@@ -188,10 +185,56 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with Rollout controller init: %v", err)
 		}
 	}
+	
+	log.Infof("starting Routing Policies controller for custerID: %v", clusterID)
+	rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 1 * time.Minute)
 
-	r.Lock()
-	defer r.Unlock()
-	r.RemoteControllers[clusterID] = &rc
+	if err != nil {
+		return fmt.Errorf("error with virtualServiceController init: %v", err)
+	}
+
+	log.Infof("starting node controller clusterID: %v", clusterID)
+	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
+
+	if err != nil {
+		return fmt.Errorf("error with NodeController controller init: %v", err)
+	}
+
+	log.Infof("starting service controller clusterID: %v", clusterID)
+	rc.ServiceController, err = admiral.NewServiceController(clusterID, stop, &ServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf("error with ServiceController controller init: %v", err)
+	}
+
+	log.Infof("starting service entry controller for custerID: %v", clusterID)
+	rc.ServiceEntryController, err = istio.NewServiceEntryController(clusterID, stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf("error with ServiceEntryController init: %v", err)
+	}
+
+	log.Infof("starting destination rule controller for custerID: %v", clusterID)
+	rc.DestinationRuleController, err = istio.NewDestinationRuleController(clusterID, stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf("error with DestinationRuleController init: %v", err)
+	}
+
+	log.Infof("starting virtual service controller for custerID: %v", clusterID)
+	rc.VirtualServiceController, err = istio.NewVirtualServiceController(clusterID, stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf("error with VirtualServiceController init: %v", err)
+	}
+
+	rc.SidecarController, err = istio.NewSidecarController(clusterID, stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
+
+	if err != nil {
+		return fmt.Errorf("error with DestinationRuleController init: %v", err)
+	}
+
+	r.PutRemoteController(clusterID, &rc)
 
 	log.Infof("Create Controller %s", clusterID)
 
@@ -202,7 +245,7 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 	//We want to refresh the cache controllers. But the current approach is parking the goroutines used in the previous set of controllers, leading to a rather large memory leak.
 	//This is a temporary fix to only do the controller refresh if the API Server of the remote cluster has changed
 	//The refresh will still park goroutines and still increase memory usage. But it will be a *much* slower leak. Filed https://github.com/istio-ecosystem/admiral/issues/122 for that.
-	controller := r.RemoteControllers[clusterID]
+	controller := r.GetRemoteController(clusterID)
 
 	if clientConfig.Host != controller.ApiServer {
 		log.Infof("Client mismatch, recreating cache controllers for cluster=%v", clusterID)
@@ -218,15 +261,13 @@ func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, cluste
 
 func (r *RemoteRegistry) deleteCacheController(clusterID string) error {
 
-	controller, ok := r.RemoteControllers[clusterID]
+	controller := r.GetRemoteController(clusterID)
 
-	if ok {
+	if controller != nil {
 		close(controller.stop)
 	}
 
-	r.Lock()
-	defer r.Unlock()
-	delete(r.RemoteControllers, clusterID)
+	r.DeleteRemoteController(clusterID)
 
 	log.Infof(LogFormat, "Delete", "remote-controller", clusterID, clusterID, "success")
 	return nil

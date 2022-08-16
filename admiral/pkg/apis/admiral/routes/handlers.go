@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -27,10 +28,38 @@ type IdentityServiceEntry struct {
 	ClusterNames []string `json:"Clusters,omitempty"`
 }
 
-func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	response := fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
+/*
+We expect the DNS health checker to include the query param checkifreadonly with value set to true.
+The query param is used to check if the current Admiral instance is running in Active Mode or Passive Mode (also called read only mode).
+If Running in passive  mode, the health check returns 502 which forces DNS lookup to always return reference to Admiral in Active state.
+*/
 
+func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
+	allQueryParams:= r.URL.Query()
+	checkIfReadOnlyStringVal := allQueryParams.Get("checkifreadonly")
+	//Remove all spaces
+	checkIfReadOnlyStringVal = strings.ReplaceAll(checkIfReadOnlyStringVal," ","")
+	// checkIfReadOnlyStringVal will be empty in case ""checkifreadonly" query param is not sent in the request. checkIfReadOnlyBoolVal will be false
+	checkIfReadOnlyBoolVal, err := strconv.ParseBool(checkIfReadOnlyStringVal)
+	var response string
+
+	if len(checkIfReadOnlyStringVal) ==0 || nil==err {
+		if checkIfReadOnlyBoolVal{
+
+			if clusters.CurrentAdmiralState.ReadOnly{
+				//Force fail health check if Admiral is in Readonly mode
+				w.WriteHeader(503)
+			}else {
+				w.WriteHeader(200)
+			}
+		}else {
+			w.WriteHeader(200)
+		}
+		response = fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
+	}else {
+		w.WriteHeader(400)
+		response = fmt.Sprintf("Health check method called with bad query param value %v for checkifreadonly",checkIfReadOnlyStringVal)
+	}
 	_, writeErr := w.Write([]byte(response))
 	if writeErr != nil {
 		log.Printf("Error writing body: %v", writeErr)

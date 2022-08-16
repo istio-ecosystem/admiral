@@ -29,22 +29,28 @@ type SidecarEgressMap struct {
 }
 
 type AdmiralParams struct {
-	ArgoRolloutsEnabled        bool
-	KubeconfigPath             string
-	CacheRefreshDuration       time.Duration
-	ClusterRegistriesNamespace string
-	DependenciesNamespace      string
-	SyncNamespace              string
-	EnableSAN                  bool
-	SANPrefix                  string
-	SecretResolver             string
-	LabelSet                   *LabelSet
-	LogLevel                   int
-	HostnameSuffix             string
-	PreviewHostnamePrefix      string
-	MetricsEnabled             bool
-	WorkloadSidecarUpdate      string
-	WorkloadSidecarName        string
+	ArgoRolloutsEnabled         bool
+	KubeconfigPath              string
+	CacheRefreshDuration        time.Duration
+	ClusterRegistriesNamespace  string
+	DependenciesNamespace       string
+	SyncNamespace               string
+	EnableSAN                   bool
+	SANPrefix                   string
+	SecretResolver              string
+	LabelSet                    *LabelSet
+	LogLevel                    int
+	HostnameSuffix              string
+	PreviewHostnamePrefix       string
+	MetricsEnabled              bool
+	WorkloadSidecarUpdate       string
+	WorkloadSidecarName         string
+	AdmiralStateCheckerName     string
+	DRStateStoreConfigPath      string
+	ServiceEntryIPPrefix        string
+	EnvoyFilterVersion		    string
+	EnvoyFilterAdditionalConfig	string
+	EnableRoutingPolicy         bool
 }
 
 func (b AdmiralParams) String() string {
@@ -55,7 +61,12 @@ func (b AdmiralParams) String() string {
 		fmt.Sprintf("EnableSAN=%v ", b.EnableSAN) +
 		fmt.Sprintf("SANPrefix=%v ", b.SANPrefix) +
 		fmt.Sprintf("LabelSet=%v ", b.LabelSet) +
-		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver)
+		fmt.Sprintf("SecretResolver=%v ", b.SecretResolver) +
+		fmt.Sprintf("AdmiralStateCheckername=%v ", b.AdmiralStateCheckerName) +
+		fmt.Sprintf("DRStateStoreConfigPath=%v ", b.DRStateStoreConfigPath) +
+		fmt.Sprintf("ServiceEntryIPPrefix=%v ", b.ServiceEntryIPPrefix) +
+		fmt.Sprintf("EnvoyFilterVersion=%v ", b.EnvoyFilterVersion) +
+		fmt.Sprintf("EnableRoutingPolicy=%v ", b.EnableRoutingPolicy)
 }
 
 type LabelSet struct {
@@ -64,6 +75,7 @@ type LabelSet struct {
 	NamespaceSidecarInjectionLabel      string
 	NamespaceSidecarInjectionLabelValue string
 	AdmiralIgnoreLabel                  string
+	PriorityKey                         string
 	WorkloadIdentityKey                 string //Should always be used for both label and annotation (using label as the primary, and falling back to annotation if the label is not found)
 	GlobalTrafficDeploymentLabel        string //label used to tie together deployments and globaltrafficpolicy objects. Configured separately from the identity key because this one _must_ be a label
 	EnvKey                              string //key used to group deployments by env. The order would be to use annotation `EnvKey` and then label `EnvKey` and then fallback to label `env` label
@@ -138,6 +150,12 @@ func (s *MapOfMaps) Put(pkey string, key string, value string) {
 	}
 	mapVal.Put(key, value)
 	s.cache[pkey] = mapVal
+}
+
+func (s *MapOfMaps) PutMap(pkey string, inputMap *Map) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	s.cache[pkey] = inputMap
 }
 
 func (s *MapOfMaps) Get(key string) *Map {
