@@ -1,6 +1,7 @@
 package admiral
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	_ "github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -43,7 +45,8 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	cm.Name = "se-address-configmap"
 	cm.Namespace = "admiral"
 	cm.Labels = map[string]string{"foo": "bar"} //differentiating from a new/empty cm
-	_, err := client.CoreV1().ConfigMaps("admiral").Create(&cm)
+	ctx := context.Background()
+	_, err := client.CoreV1().ConfigMaps("admiral").Create(ctx, &cm, metav1.CreateOptions{})
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -81,7 +84,7 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			cm, err := c.configMapController.GetConfigMap()
+			cm, err := c.configMapController.GetConfigMap(ctx)
 			if err == nil && c.expectedError == nil {
 				//we're fine
 			} else if c.expectedError == nil && err != nil {
@@ -148,7 +151,8 @@ func TestConfigMapController_PutConfigMap(t *testing.T) {
 	cm := v1.ConfigMap{}
 	cm.Name = "se-address-configmap"
 	cm.Namespace = "admiral-remote-ctx"
-	_, err := client.CoreV1().ConfigMaps("admiral-remote-ctx").Create(&cm)
+	ctx := context.Background()
+	_, err := client.CoreV1().ConfigMaps("admiral-remote-ctx").Create(ctx, &cm, metav1.CreateOptions{})
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -156,7 +160,7 @@ func TestConfigMapController_PutConfigMap(t *testing.T) {
 
 	cm.Data = map[string]string{"Foo": "Bar"}
 
-	err = configmapController.PutConfigMap(&cm)
+	err = configmapController.PutConfigMap(ctx, &cm)
 
 	if err != nil {
 		t.Errorf("No error expected. Err: %v", err)

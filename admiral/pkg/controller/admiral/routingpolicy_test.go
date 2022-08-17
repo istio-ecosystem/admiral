@@ -1,16 +1,17 @@
 package admiral
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"testing"
-	"time"
 )
-
 
 func TestNewroutingPolicyController(t *testing.T) {
 	config, err := clientcmd.BuildConfigFromFlags("", "../../test/resources/admins@fake-cluster.k8s.local")
@@ -30,7 +31,6 @@ func TestNewroutingPolicyController(t *testing.T) {
 		t.Errorf("RoutingPolicy controller should never be nil without an error thrown")
 	}
 }
-
 
 func TestRoutingPolicyAddUpdateDelete(t *testing.T) {
 	config, err := clientcmd.BuildConfigFromFlags("", "../../test/resources/admins@fake-cluster.k8s.local")
@@ -53,11 +53,13 @@ func TestRoutingPolicyAddUpdateDelete(t *testing.T) {
 	rp := model.RoutingPolicy{
 		Config: map[string]string{"cacheTTL": "86400", "dispatcherUrl": "stage.greeting.router.mesh", "pathPrefix": "/hello,/hello/v2/"},
 		Plugin: "greeting",
-		Hosts: []string{"stage.greeting.mesh"},
+		Hosts:  []string{"stage.greeting.mesh"},
 	}
 
+	ctx := context.Background()
+
 	rpObj := makeK8sRoutingPolicyObj(rpName, "namespace1", rp)
-	routingPolicyController.Added(rpObj)
+	routingPolicyController.Added(ctx, rpObj)
 
 	if !cmp.Equal(handler.Obj.Spec, rpObj.Spec) {
 		t.Errorf("Add should call the handler with the object")
@@ -66,25 +68,24 @@ func TestRoutingPolicyAddUpdateDelete(t *testing.T) {
 	updatedrp := model.RoutingPolicy{
 		Config: map[string]string{"cacheTTL": "86400", "dispatcherUrl": "e2e.greeting.router.mesh", "pathPrefix": "/hello,/hello/v2/"},
 		Plugin: "greeting",
-		Hosts: []string{"e2e.greeting.mesh"},
+		Hosts:  []string{"e2e.greeting.mesh"},
 	}
 
 	updatedRpObj := makeK8sRoutingPolicyObj(rpName, "namespace1", updatedrp)
 
-	routingPolicyController.Updated(updatedRpObj, rpObj)
+	routingPolicyController.Updated(ctx, updatedRpObj, rpObj)
 
 	if !cmp.Equal(handler.Obj.Spec, updatedRpObj.Spec) {
 		t.Errorf("Update should call the handler with the updated object")
 	}
 
-	routingPolicyController.Deleted(updatedRpObj)
+	routingPolicyController.Deleted(ctx, updatedRpObj)
 
 	if handler.Obj != nil {
 		t.Errorf("Delete should delete the routing policy")
 	}
 
 }
-
 
 func makeK8sRoutingPolicyObj(name string, namespace string, rp model.RoutingPolicy) *v1.RoutingPolicy {
 	return &v1.RoutingPolicy{

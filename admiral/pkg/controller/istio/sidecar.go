@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -13,11 +14,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Handler interface contains the methods that are required
+// SidecarHandler interface contains the methods that are required
 type SidecarHandler interface {
-	Added(obj *networking.Sidecar)
-	Updated(obj *networking.Sidecar)
-	Deleted(obj *networking.Sidecar)
+	Added(ctx context.Context, obj *networking.Sidecar)
+	Updated(ctx context.Context, obj *networking.Sidecar)
+	Deleted(ctx context.Context, obj *networking.Sidecar)
 }
 
 type SidecarEntry struct {
@@ -53,18 +54,18 @@ func NewSidecarController(clusterID string, stopCh <-chan struct{}, handler Side
 	return &sidecarController, nil
 }
 
-func (sec *SidecarController) Added(ojb interface{}) {
+func (sec *SidecarController) Added(ctx context.Context, ojb interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Added(sidecar)
+	sec.SidecarHandler.Added(ctx, sidecar)
 }
 
-func (sec *SidecarController) Updated(ojb interface{}, oldObj interface{}) {
+func (sec *SidecarController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Updated(sidecar)
+	sec.SidecarHandler.Updated(ctx, sidecar)
 }
 
-func (sec *SidecarController) Deleted(ojb interface{}) {
+func (sec *SidecarController) Deleted(ctx context.Context, ojb interface{}) {
 	sidecar := ojb.(*networking.Sidecar)
-	sec.SidecarHandler.Deleted(sidecar)
+	sec.SidecarHandler.Deleted(ctx, sidecar)
 
 }

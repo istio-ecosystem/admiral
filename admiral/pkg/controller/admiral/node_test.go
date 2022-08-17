@@ -1,12 +1,14 @@
 package admiral
 
 import (
+	"context"
+	"testing"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	k8sV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"testing"
 )
 
 func TestNewNodeController(t *testing.T) {
@@ -48,7 +50,9 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	region := "us-west-2"
 	nodeObj := &k8sV1.Node{Spec: k8sV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string{common.NodeRegionLabel: region}}}
 
-	nodeController.Added(nodeObj)
+	ctx := context.Background()
+
+	nodeController.Added(ctx, nodeObj)
 
 	locality := nodeController.Locality
 
@@ -56,13 +60,13 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 		t.Errorf("region expected %v, got: %v", region, locality.Region)
 	}
 
-	nodeController.Updated(nodeObj, nodeObj)
+	nodeController.Updated(ctx, nodeObj, nodeObj)
 	//update should make no difference
 	if locality.Region != region {
 		t.Errorf("region expected %v, got: %v", region, locality.Region)
 	}
 
-	nodeController.Deleted(nodeObj)
+	nodeController.Deleted(ctx, nodeObj)
 	//delete should make no difference
 	if locality.Region != region {
 		t.Errorf("region expected %v, got: %v", region, locality.Region)

@@ -2,9 +2,13 @@ package clusters
 
 import (
 	"context"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
@@ -17,9 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"strings"
-	"testing"
-	"time"
 )
 
 func init() {
@@ -102,7 +103,7 @@ func TestCopyServiceEntry(t *testing.T) {
 
 func TestCopyEndpoint(t *testing.T) {
 
-	se := networking.ServiceEntry_Endpoint{
+	se := networking.WorkloadEntry{
 		Address: "127.0.0.1",
 	}
 
@@ -121,6 +122,7 @@ func TestCopySidecar(t *testing.T) {
 		},
 	}
 
+	//nolint
 	sidecar := v1alpha3.Sidecar{Spec: spec}
 
 	newSidecar := copySidecar(&sidecar)
@@ -172,7 +174,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 			},
 		},
 	}
-	d.Added(&deployment)
+	ctx := context.Background()
+	d.Added(ctx, &deployment)
 	service := k8sCoreV1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
@@ -185,14 +188,14 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 			},
 		},
 	}
-	s.Added(&service)
+	s.Added(ctx, &service)
 
 	rc := RemoteController{
-		DeploymentController: d,
-		ServiceController:    s,
-		NodeController:       n,
-		ClusterID:            "test.cluster",
-		RolloutController:    r,
+		DeploymentController:    d,
+		ServiceController:       s,
+		NodeController:          n,
+		ClusterID:               "test.cluster",
+		RolloutController:       r,
 		RoutingPolicyController: rpc,
 	}
 	return &rc, nil
@@ -241,7 +244,7 @@ func TestInitAdmiral(t *testing.T) {
 }
 
 func TestAdded(t *testing.T) {
-
+	ctx := context.Background()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -270,8 +273,8 @@ func TestAdded(t *testing.T) {
 		},
 	}
 
-	dh.Added(&depData)
-	dh.Deleted(&depData)
+	dh.Added(ctx, &depData)
+	dh.Deleted(ctx, &depData)
 
 }
 

@@ -7,7 +7,7 @@ jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
     docker:
-    - image: circleci/golang:1.16
+    - image: circleci/golang:1.17
     steps:
     - checkout
     - run:
@@ -107,7 +107,7 @@ jobs:
             ./run.sh "1.20.14" "1.12.2" "../out"
   publish-github-release:
     docker:
-    - image: circleci/golang:1.16
+    - image: circleci/golang:1.17
     working_directory: /go/pkg/mod/github.com/admiral
     steps:
     - attach_workspace:

@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -12,10 +13,10 @@ import (
 	"time"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"gopkg.in/yaml.v2"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -34,7 +35,7 @@ type SeDrTuple struct {
 	DestinationRule *networking.DestinationRule
 }
 
-func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntry(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -42,7 +43,7 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 
 	//Handling retries for getting/putting service entries from/in cache
 
-	address := getUniqueAddress(admiralCache, globalFqdn)
+	address := getUniqueAddress(ctx, admiralCache, globalFqdn)
 
 	if len(globalFqdn) == 0 || len(address) == 0 {
 		return nil
@@ -54,7 +55,7 @@ func createServiceEntry(event admiral.EventType, rc *RemoteController, admiralCa
 	return tmpSe
 }
 
-func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
@@ -119,10 +120,11 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
-			createServiceEntry(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+			createServiceEntry(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
-			weightedServices = getServiceForRollout(rc, rollout)
+			weightedServices = getServiceForRollout(ctx, rc, rollout)
+
 			if len(weightedServices) == 0 {
 				continue
 			}
@@ -138,7 +140,8 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
-			createServiceEntryForRollout(event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+
 		} else {
 			continue
 		}
@@ -152,7 +155,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		} else {
 			log.Debugf("No GTPs found for identity=%s in env=%s namespace=%s with key=%s", sourceIdentity, env, namespace, gtpKey)
 		}
-		
+
 		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 		// workload selector cache is needed for routingPolicy's envoyFilter to match the dependency and apply to the right POD
 		// using service labels
@@ -192,7 +195,8 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+				AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
@@ -204,7 +208,8 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						oldPorts := ep.Ports
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -214,13 +219,15 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+
 							map[string]*networking.ServiceEntry{key: se})
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
-						AddServiceEntriesWithDr(remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
+
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -231,7 +238,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
+			modifySidecarForLocalClusterCommunication(ctx, serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
 		}
 
 		for _, val := range dependents {
@@ -253,7 +260,7 @@ func modifyServiceEntryForNewServiceOrPod(event admiral.EventType, env string, s
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(remoteRegistry, dependentClusters, serviceEntries)
+	AddServiceEntriesWithDr(ctx, remoteRegistry, dependentClusters, serviceEntries)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -315,7 +322,7 @@ func getGtpPriority(gtp *v1.GlobalTrafficPolicy) int {
 	return 0
 }
 func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,
-	ep *networking.ServiceEntry_Endpoint, sourceCluster string, meshHost string) {
+	ep *networking.WorkloadEntry, sourceCluster string, meshHost string) {
 	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
 	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
 
@@ -336,8 +343,8 @@ func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[str
 
 //update endpoints for Argo rollouts specific Service Entries to account for traffic splitting (Canary strategy)
 func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, weightedServices map[string]*WeightedService, clusterIngress string, meshPorts map[string]uint32) {
-	var endpoints = make([]*networking.ServiceEntry_Endpoint, 0)
-	var endpointToReplace *networking.ServiceEntry_Endpoint
+	var endpoints = make([]*networking.WorkloadEntry, 0)
+	var endpointToReplace *networking.WorkloadEntry
 
 	//collect all endpoints except the one to replace
 	for _, ep := range serviceEntry.Endpoints {
@@ -367,7 +374,7 @@ func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, w
 	serviceEntry.Endpoints = endpoints
 }
 
-func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
+func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
 
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
@@ -376,7 +383,7 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 		return
 	}
 
-	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
+	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
 
 	if sidecar == nil || (sidecar.Spec.Egress == nil) {
 		return
@@ -402,20 +409,18 @@ func modifySidecarForLocalClusterCommunication(sidecarNamespace string, sidecarE
 		}
 	}
 
+	//nolint
 	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
 
 	//insert into cluster
 	if newSidecarConfig != nil {
-		addUpdateSidecar(newSidecarConfig, sidecar, sidecarNamespace, rc)
+		addUpdateSidecar(ctx, newSidecarConfig, sidecar, sidecarNamespace, rc)
 	}
 }
 
-func addUpdateSidecar(obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
+func addUpdateSidecar(ctx context.Context, obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
 	var err error
-	exist.Labels = obj.Labels
-	exist.Annotations = obj.Annotations
-	exist.Spec = obj.Spec
-	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(exist)
+	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, obj, v12.UpdateOptions{})
 
 	if err != nil {
 		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
@@ -432,8 +437,8 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	return newSidecarObj
 }
 
-//This will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
+//AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
+func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
 
 	cache := rr.AdmiralCache
 
@@ -460,16 +465,16 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 			}
 
 			//check if there is a gtp and add additional hosts/destination rules
-			var seDrSet = createSeAndDrSetFromGtp(env, rc.NodeController.Locality.Region, se, globalTrafficPolicy, cache)
+			var seDrSet = createSeAndDrSetFromGtp(ctx, env, rc.NodeController.Locality.Region, se, globalTrafficPolicy, cache)
 
 			for _, seDr := range seDrSet {
-				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(seDr.SeName, v12.GetOptions{})
+				oldServiceEntry, err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(syncNamespace).Get(ctx, seDr.SeName, v12.GetOptions{})
 				// if old service entry not find, just create a new service entry instead
 				if err != nil {
 					log.Infof(LogFormat, "Get (error)", "old ServiceEntry", seDr.SeName, sourceCluster, err)
 					oldServiceEntry = nil
 				}
-				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(seDr.DrName, v12.GetOptions{})
+				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, seDr.DrName, v12.GetOptions{})
 
 				if err != nil {
 					log.Infof(LogFormat, "Get (error)", "old DestinationRule", seDr.DrName, sourceCluster, err)
@@ -477,29 +482,31 @@ func AddServiceEntriesWithDr(rr *RemoteRegistry, sourceClusters map[string]strin
 				}
 
 				if len(seDr.ServiceEntry.Endpoints) == 0 {
-					deleteServiceEntry(oldServiceEntry, syncNamespace, rc)
+					deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
 					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-					deleteDestinationRule(oldDestinationRule, syncNamespace, rc)
+					deleteDestinationRule(ctx, oldDestinationRule, syncNamespace, rc)
 				} else {
+					//nolint
 					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-						addUpdateServiceEntry(newServiceEntry, oldServiceEntry, syncNamespace, rc)
+						addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 					}
 
+					//nolint
 					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
 					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-					addUpdateDestinationRule(newDestinationRule, oldDestinationRule, syncNamespace, rc)
+					addUpdateDestinationRule(ctx, newDestinationRule, oldDestinationRule, syncNamespace, rc)
 				}
 			}
 		}
 	}
 }
 
-func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy,
+func createSeAndDrSetFromGtp(ctx context.Context, env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy,
 	cache *AdmiralCache) map[string]*SeDrTuple {
 	var defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 	var defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -519,7 +526,7 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 				drName, seName = getIstioResourceName(host, "-dr"), getIstioResourceName(host, "-se")
 				modifiedSe = copyServiceEntry(se)
 				modifiedSe.Hosts[0] = host
-				modifiedSe.Addresses[0] = getUniqueAddress(cache, host)
+				modifiedSe.Addresses[0] = getUniqueAddress(ctx, cache, host)
 			}
 			var seDr = &SeDrTuple{
 				DrName:          drName,
@@ -543,8 +550,8 @@ func createSeAndDrSetFromGtp(env, region string, se *networking.ServiceEntry, gl
 	return seDrSet
 }
 
-func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int) *networking.ServiceEntry_Endpoint {
-	return &networking.ServiceEntry_Endpoint{Address: address,
+func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int) *networking.WorkloadEntry {
+	return &networking.WorkloadEntry{Address: address,
 		Locality: locality,
 		Ports:    map[string]uint32{portName: uint32(portNumber)}} //
 }
@@ -555,8 +562,8 @@ func copyServiceEntry(se *networking.ServiceEntry) *networking.ServiceEntry {
 	return newSe
 }
 
-func loadServiceEntryCacheData(c admiral.ConfigMapControllerInterface, admiralCache *AdmiralCache) {
-	configmap, err := c.GetConfigMap()
+func loadServiceEntryCacheData(ctx context.Context, c admiral.ConfigMapControllerInterface, admiralCache *AdmiralCache) {
+	configmap, err := c.GetConfigMap(ctx)
 	if err != nil {
 		log.Warnf("Failed to refresh configmap state Error: %v", err)
 		return //No need to invalidate the cache
@@ -571,21 +578,22 @@ func loadServiceEntryCacheData(c admiral.ConfigMapControllerInterface, admiralCa
 
 }
 
-//Gets a guarenteed unique local address for a serviceentry. Returns the address, True iff the configmap was updated false otherwise, and an error if any
+//GetLocalAddressForSe gets a guarenteed unique local address for a serviceentry. Returns the address, True iff the configmap was updated false otherwise, and an error if any
 //Any error coupled with an empty string address means the method should be retried
-func GetLocalAddressForSe(seName string, seAddressCache *ServiceEntryAddressStore, configMapController admiral.ConfigMapControllerInterface) (string, bool, error) {
+func GetLocalAddressForSe(ctx context.Context, seName string, seAddressCache *ServiceEntryAddressStore, configMapController admiral.ConfigMapControllerInterface) (string, bool, error) {
 	var address = seAddressCache.EntryAddresses[seName]
 	if len(address) == 0 {
-		address, err := GenerateNewAddressAndAddToConfigMap(seName, configMapController)
+		address, err := GenerateNewAddressAndAddToConfigMap(ctx, seName, configMapController)
 		return address, true, err
 	}
 	return address, false, nil
 }
 
-func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry) ([]v1alpha3.ServiceEntry, error) {
+func GetServiceEntriesByCluster(ctx context.Context, clusterID string, remoteRegistry *RemoteRegistry) ([]*v1alpha3.ServiceEntry, error) {
 	remoteController := remoteRegistry.GetRemoteController(clusterID)
+
 	if remoteController != nil {
-		serviceEnteries, err := remoteController.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetSyncNamespace()).List(v12.ListOptions{})
+		serviceEnteries, err := remoteController.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetSyncNamespace()).List(ctx, v12.ListOptions{})
 
 		if err != nil {
 			log.Errorf(LogFormat, "Get", "ServiceEntries", "", clusterID, err)
@@ -599,10 +607,10 @@ func GetServiceEntriesByCluster(clusterID string, remoteRegistry *RemoteRegistry
 	}
 }
 
-//an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
-func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
+//GenerateNewAddressAndAddToConfigMap an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
+func GenerateNewAddressAndAddToConfigMap(ctx context.Context, seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
 	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
-	cm, err := configMapController.GetConfigMap()
+	cm, err := configMapController.GetConfigMap(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -633,7 +641,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 	newAddressState.Addresses = append(newAddressState.Addresses, address)
 	newAddressState.EntryAddresses[seName] = address
 
-	err = putServiceEntryStateFromConfigmap(configMapController, cm, newAddressState)
+	err = putServiceEntryStateFromConfigmap(ctx, configMapController, cm, newAddressState)
 
 	if err != nil {
 		return "", err
@@ -642,7 +650,7 @@ func GenerateNewAddressAndAddToConfigMap(seName string, configMapController admi
 }
 
 //puts new data into an existing configmap. Providing the original is necessary to prevent fetch and update race conditions
-func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, originalConfigmap *k8sV1.ConfigMap, data *ServiceEntryAddressStore) error {
+func putServiceEntryStateFromConfigmap(ctx context.Context, c admiral.ConfigMapControllerInterface, originalConfigmap *k8sV1.ConfigMap, data *ServiceEntryAddressStore) error {
 	if originalConfigmap == nil {
 		return errors.New("configmap must not be nil")
 	}
@@ -666,10 +674,10 @@ func putServiceEntryStateFromConfigmap(c admiral.ConfigMapControllerInterface, o
 		return err
 	}
 
-	return c.PutConfigMap(originalConfigmap)
+	return c.PutConfigMap(ctx, originalConfigmap)
 }
 
-func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntryForRollout(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -677,7 +685,7 @@ func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController,
 
 	//Handling retries for getting/putting service entries from/in cache
 
-	address := getUniqueAddress(admiralCache, globalFqdn)
+	address := getUniqueAddress(ctx, admiralCache, globalFqdn)
 
 	if len(globalFqdn) == 0 || len(address) == 0 {
 		return nil
@@ -686,10 +694,10 @@ func createServiceEntryForRollout(event admiral.EventType, rc *RemoteController,
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
 	if destRollout.Spec.Strategy.BlueGreen != nil && destRollout.Spec.Strategy.BlueGreen.PreviewService != "" {
-		rolloutServices := getServiceForRollout(rc, destRollout)
+		rolloutServices := getServiceForRollout(ctx, rc, destRollout)
 		if _, ok := rolloutServices[destRollout.Spec.Strategy.BlueGreen.PreviewService]; ok {
 			previewGlobalFqdn := common.BlueGreenRolloutPreviewPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
-			previewAddress := getUniqueAddress(admiralCache, previewGlobalFqdn)
+			previewAddress := getUniqueAddress(ctx, admiralCache, previewGlobalFqdn)
 			if len(previewGlobalFqdn) != 0 && len(previewAddress) != 0 {
 				generateServiceEntry(event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san)
 			}
@@ -722,7 +730,7 @@ func getSanForRollout(destRollout *argo.Rollout, workloadIdentityKey string) (sa
 
 }
 
-func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address string) {
+func getUniqueAddress(ctx context.Context, admiralCache *AdmiralCache, globalFqdn string) (address string) {
 
 	//initializations
 	var err error = nil
@@ -732,7 +740,7 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	needsCacheUpdate := false
 
 	for err == nil && counter < maxRetries {
-		address, needsCacheUpdate, err = GetLocalAddressForSe(getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
+		address, needsCacheUpdate, err = GetLocalAddressForSe(ctx, getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
 
 		if err != nil {
 			log.Errorf("Error getting local address for Service Entry. Err: %v", err)
@@ -752,7 +760,7 @@ func getUniqueAddress(admiralCache *AdmiralCache, globalFqdn string) (address st
 	}
 
 	if needsCacheUpdate {
-		loadServiceEntryCacheData(admiralCache.ConfigMapController, admiralCache)
+		loadServiceEntryCacheData(ctx, admiralCache.ConfigMapController, admiralCache)
 	}
 
 	return address
@@ -783,7 +791,7 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 			Addresses:       []string{address}, //It is possible that the address is an empty string. That is fine as the se creation will fail and log an error
 			SubjectAltNames: san,
 		}
-		tmpSe.Endpoints = []*networking.ServiceEntry_Endpoint{}
+		tmpSe.Endpoints = []*networking.WorkloadEntry{}
 	}
 
 	endpointAddress, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
@@ -800,7 +808,7 @@ func generateServiceEntry(event admiral.EventType, admiralCache *AdmiralCache, m
 		tmpSe.Endpoints = append(tmpSe.Endpoints, seEndpoint)
 	} else if event == admiral.Delete {
 		// create a tmp endpoint list to store all the endpoints that we intend to keep
-		remainEndpoints := []*networking.ServiceEntry_Endpoint{}
+		remainEndpoints := []*networking.WorkloadEntry{}
 		// if the endpoint is not equal to the endpoint we intend to delete, append it to remainEndpoint list
 		for _, existingEndpoint := range tmpSe.Endpoints {
 			if !reflect.DeepEqual(existingEndpoint, seEndpoint) {

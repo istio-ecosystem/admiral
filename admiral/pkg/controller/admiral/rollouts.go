@@ -1,6 +1,7 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -10,8 +11,8 @@ import (
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	argoinformers "github.com/argoproj/argo-rollouts/pkg/client/informers/externalversions"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -20,9 +21,9 @@ import (
 
 // Handler interface contains the methods that are required
 type RolloutHandler interface {
-	Added(obj *argo.Rollout)
-	Updated(obj *argo.Rollout)
-	Deleted(obj *argo.Rollout)
+	Added(ctx context.Context, obj *argo.Rollout)
+	Updated(ctx context.Context, obj *argo.Rollout)
+	Deleted(ctx context.Context, obj *argo.Rollout)
 }
 
 type RolloutsEntry struct {
@@ -109,7 +110,7 @@ func (p *rolloutCache) DeleteFromRolloutToClusterCache(key string, rollout *argo
 	}
 }
 
-func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Rollout) bool {
+func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(ctx context.Context, rollout *argo.Rollout) bool {
 	if rollout.Spec.Template.Labels[d.labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
@@ -122,7 +123,7 @@ func (d *RolloutController) shouldIgnoreBasedOnLabelsForRollout(rollout *argo.Ro
 		return true
 	}
 
-	ns, err := d.K8sClient.CoreV1().Namespaces().Get(rollout.Namespace, meta_v1.GetOptions{})
+	ns, err := d.K8sClient.CoreV1().Namespaces().Get(ctx, rollout.Namespace, meta_v1.GetOptions{})
 	if err != nil {
 		log.Warnf("Failed to get namespace object for rollout with namespace %v, err: %v", rollout.Namespace, err)
 		return false
@@ -172,21 +173,21 @@ func NewRolloutsController(clusterID string, stopCh <-chan struct{}, handler Rol
 	return &roController, nil
 }
 
-func (roc *RolloutController) Added(ojb interface{}) {
-	HandleAddUpdateRollout(ojb, roc)
+func (roc *RolloutController) Added(ctx context.Context, ojb interface{}) {
+	HandleAddUpdateRollout(ctx, ojb, roc)
 }
 
-func (roc *RolloutController) Updated(ojb interface{}, oldObj interface{}) {
-	HandleAddUpdateRollout(ojb, roc)
+func (roc *RolloutController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
+	HandleAddUpdateRollout(ctx, ojb, roc)
 }
 
-func HandleAddUpdateRollout(ojb interface{}, roc *RolloutController) {
+func HandleAddUpdateRollout(ctx context.Context, ojb interface{}, roc *RolloutController) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 {
-		if !roc.shouldIgnoreBasedOnLabelsForRollout(rollout) {
+		if !roc.shouldIgnoreBasedOnLabelsForRollout(ctx, rollout) {
 			roc.Cache.UpdateRolloutToClusterCache(key, rollout)
-			roc.RolloutHandler.Added(rollout)
+			roc.RolloutHandler.Added(ctx, rollout)
 		} else {
 			roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
 			log.Debugf("ignoring rollout %v based on labels", rollout.Name)
@@ -194,18 +195,18 @@ func HandleAddUpdateRollout(ojb interface{}, roc *RolloutController) {
 	}
 }
 
-func (roc *RolloutController) Deleted(ojb interface{}) {
+func (roc *RolloutController) Deleted(ctx context.Context, ojb interface{}) {
 	rollout := ojb.(*argo.Rollout)
 	key := roc.Cache.getKey(rollout)
 	if len(key) > 0 {
 		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
 	}
-	roc.RolloutHandler.Deleted(rollout)
+	roc.RolloutHandler.Deleted(ctx, rollout)
 }
 
-func (d *RolloutController) GetRolloutBySelectorInNamespace(serviceSelector map[string]string, namespace string) []argo.Rollout {
+func (d *RolloutController) GetRolloutBySelectorInNamespace(ctx context.Context, serviceSelector map[string]string, namespace string) []argo.Rollout {
 
-	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(meta_v1.ListOptions{})
+	matchedRollouts, err := d.RolloutClient.Rollouts(namespace).List(ctx, meta_v1.ListOptions{})
 
 	if err != nil {
 		logrus.Errorf("Failed to list rollouts in cluster, error: %v", err)

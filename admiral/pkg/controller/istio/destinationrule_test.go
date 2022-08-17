@@ -1,14 +1,17 @@
 package istio
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd"
-	"testing"
-	"time"
 )
 
 func TestNewDestinationRuleController(t *testing.T) {
@@ -31,20 +34,21 @@ func TestNewDestinationRuleController(t *testing.T) {
 
 	dstRule := &v1alpha3.DestinationRule{Spec: v1alpha32.DestinationRule{}, ObjectMeta: v1.ObjectMeta{Name: "dr1", Namespace: "namespace1"}}
 
-	destinationRuleController.Added(dstRule)
+	ctx := context.Background()
 
-	if !cmp.Equal(dstRule.Spec, handler.Obj.Spec) {
+	destinationRuleController.Added(ctx, dstRule)
+	if !cmp.Equal(&dstRule.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the added obj")
 	}
 
 	updatedDstRule := &v1alpha3.DestinationRule{Spec: v1alpha32.DestinationRule{Host: "hello.global"}, ObjectMeta: v1.ObjectMeta{Name: "dr1", Namespace: "namespace1"}}
-	destinationRuleController.Updated(updatedDstRule, dstRule)
+	destinationRuleController.Updated(ctx, updatedDstRule, dstRule)
 
-	if !cmp.Equal(updatedDstRule.Spec, handler.Obj.Spec) {
+	if !cmp.Equal(&updatedDstRule.Spec, &handler.Obj.Spec, protocmp.Transform()) {
 		t.Errorf("Handler should have the updated obj")
 	}
 
-	destinationRuleController.Deleted(dstRule)
+	destinationRuleController.Deleted(ctx, dstRule)
 
 	if handler.Obj != nil {
 		t.Errorf("Handler should have no obj")

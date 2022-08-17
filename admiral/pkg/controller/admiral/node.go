@@ -1,7 +1,9 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sV1Informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/rest"
@@ -11,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Handler interface contains the methods that are required
+// NodeHandler interface contains the methods that are required
 type NodeHandler interface {
 }
 
@@ -50,17 +52,17 @@ func NewNodeController(clusterID string, stopCh <-chan struct{}, handler NodeHan
 	return &nodeController, nil
 }
 
-func (p *NodeController) Added(obj interface{}) {
+func (p *NodeController) Added(ctx context.Context, obj interface{}) {
 	node := obj.(*k8sV1.Node)
 	if p.Locality == nil {
 		p.Locality = &Locality{Region: common.GetNodeLocality(node)}
 	}
 }
 
-func (p *NodeController) Updated(obj interface{}, oldObj interface{}) {
+func (p *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 	//ignore
 }
 
-func (p *NodeController) Deleted(obj interface{}) {
+func (p *NodeController) Deleted(ctx context.Context, obj interface{}) {
 	//ignore
 }

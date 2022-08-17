@@ -26,8 +26,10 @@ import (
 )
 
 // RoutingPolicyLister helps list RoutingPolicies.
+// All objects returned here must be treated as read-only.
 type RoutingPolicyLister interface {
 	// List lists all RoutingPolicies in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.RoutingPolicy, err error)
 	// RoutingPolicies returns an object that can list and get RoutingPolicies.
 	RoutingPolicies(namespace string) RoutingPolicyNamespaceLister
@@ -58,10 +60,13 @@ func (s *routingPolicyLister) RoutingPolicies(namespace string) RoutingPolicyNam
 }
 
 // RoutingPolicyNamespaceLister helps list and get RoutingPolicies.
+// All objects returned here must be treated as read-only.
 type RoutingPolicyNamespaceLister interface {
 	// List lists all RoutingPolicies in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.RoutingPolicy, err error)
 	// Get retrieves the RoutingPolicy from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.RoutingPolicy, error)
 	RoutingPolicyNamespaceListerExpansion
 }

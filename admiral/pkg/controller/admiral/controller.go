@@ -1,10 +1,12 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
+	"time"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
-	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -17,11 +19,11 @@ const (
 	maxRetries = 5
 )
 
-// Handler interface contains the methods that are required
+// Delegator interface contains the methods that are required
 type Delegator interface {
-	Added(interface{})
-	Updated(interface{}, interface{})
-	Deleted(interface{})
+	Added(context.Context, interface{})
+	Updated(context.Context, interface{}, interface{})
+	Deleted(context.Context, interface{})
 }
 
 type EventType string
@@ -137,13 +139,13 @@ func (c *Controller) processNextItem() bool {
 }
 
 func (c *Controller) processItem(informerCacheObj InformerCacheObj) error {
-
+	ctx := context.Background()
 	if informerCacheObj.eventType == Delete {
-		c.delegator.Deleted(informerCacheObj.obj)
+		c.delegator.Deleted(ctx, informerCacheObj.obj)
 	} else if informerCacheObj.eventType == Update {
-		c.delegator.Updated(informerCacheObj.obj, informerCacheObj.oldObj)
+		c.delegator.Updated(ctx, informerCacheObj.obj, informerCacheObj.oldObj)
 	} else if informerCacheObj.eventType == Add {
-		c.delegator.Added(informerCacheObj.obj)
+		c.delegator.Added(ctx, informerCacheObj.obj)
 	}
 	return nil
 }
@@ -162,17 +164,17 @@ func NewMonitoredDelegator(d Delegator, clusterID string, objectType string) *Mo
 	}
 }
 
-func (s *MonitoredDelegator) Added(obj interface{}) {
+func (s *MonitoredDelegator) Added(ctx context.Context, obj interface{}) {
 	common.EventsProcessed.With(s.clusterID, s.objectType, common.AddEventLabelValue).Inc()
-	s.d.Added(obj)
+	s.d.Added(ctx, obj)
 }
 
-func (s *MonitoredDelegator) Updated(obj interface{}, oldObj interface{}) {
+func (s *MonitoredDelegator) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 	common.EventsProcessed.With(s.clusterID, s.objectType, common.UpdateEventLabelValue).Inc()
-	s.d.Updated(obj, oldObj)
+	s.d.Updated(ctx, obj, oldObj)
 }
 
-func (s *MonitoredDelegator) Deleted(obj interface{}) {
+func (s *MonitoredDelegator) Deleted(ctx context.Context, obj interface{}) {
 	common.EventsProcessed.With(s.clusterID, s.objectType, common.DeleteEventLabelValue).Inc()
-	s.d.Deleted(obj)
+	s.d.Deleted(ctx, obj)
 }

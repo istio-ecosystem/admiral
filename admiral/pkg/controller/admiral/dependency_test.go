@@ -1,13 +1,15 @@
 package admiral
 
 import (
+	"context"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
-	"time"
 )
 
 func TestNewDependencyController(t *testing.T) {
@@ -39,11 +41,13 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 		t.Errorf("Dependency controller should never be nil without an error thrown")
 	}
 
+	ctx := context.Background()
+
 	//test add
 	depName := "dep1"
 	dep := model.Dependency{IdentityLabel: "identity", Destinations: []string{"greeting", "payments"}, Source: "webapp"}
 	depObj := makeK8sDependencyObj(depName, "namespace1", dep)
-	dependencyController.Added(depObj)
+	dependencyController.Added(ctx, depObj)
 
 	newDepObj := dependencyController.Cache.Get(depName)
 
@@ -54,7 +58,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	//test update
 	updatedDep := model.Dependency{IdentityLabel: "identity", Destinations: []string{"greeting", "payments", "newservice"}, Source: "webapp"}
 	updatedObj := makeK8sDependencyObj(depName, "namespace1", updatedDep)
-	dependencyController.Updated(makeK8sDependencyObj(depName, "namespace1", updatedDep), depObj)
+	dependencyController.Updated(ctx, makeK8sDependencyObj(depName, "namespace1", updatedDep), depObj)
 
 	updatedDepObj := dependencyController.Cache.Get(depName)
 
@@ -63,7 +67,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	}
 
 	//test delete
-	dependencyController.Deleted(updatedDepObj)
+	dependencyController.Deleted(ctx, updatedDepObj)
 
 	deletedDepObj := dependencyController.Cache.Get(depName)
 
