@@ -2,19 +2,22 @@ package routes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"github.com/gorilla/mux"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	"net/http/httptest"
-	"strings"
-	"testing"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestReturnSuccessGET(t *testing.T) {
@@ -93,6 +96,7 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetServiceEntriesByCluster(t *testing.T) {
+	ctx := context.Background()
 	url := "https://admiral.com/cluster/cluster1/serviceentries"
 	opts := RouteOpts{
 		RemoteRegistry: clusters.NewRemoteRegistry(nil, common.AdmiralParams{}),
@@ -158,7 +162,7 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 			}
 			opts.RemoteRegistry = rr
 			if c.name == "success with service entry for cluster" {
-				fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(&v1alpha3.ServiceEntry{})
+				fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &v1alpha3.ServiceEntry{}, v1.CreateOptions{})
 			}
 			opts.GetServiceEntriesByCluster(w, r)
 			resp := w.Result()

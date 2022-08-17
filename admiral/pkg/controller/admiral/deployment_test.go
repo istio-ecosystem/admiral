@@ -1,21 +1,25 @@
 package admiral
 
 import (
+	"context"
+	"sort"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
-	"sort"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestDeploymentController_Added(t *testing.T) {
+	ctx := context.Background()
 	//Deployments with the correct label are added to the cache
 	mdh := test.MockDeploymentHandler{}
 	cache := deploymentCache{
@@ -98,14 +102,14 @@ func TestDeploymentController_Added(t *testing.T) {
 				ns := coreV1.Namespace{}
 				ns.Name = "test-ns"
 				ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
-				depController.K8sClient.CoreV1().Namespaces().Create(&ns)
+				depController.K8sClient.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
 			}
 			depController.Cache.cache = map[string]*DeploymentClusterEntry{}
 
 			if c.name == "Expects ignored deployment identified by label to be removed from the cache" {
 				depController.Cache.UpdateDeploymentToClusterCache("id", &deployment)
 			}
-			depController.Added(c.deployment)
+			depController.Added(ctx, c.deployment)
 
 			if c.expectedDeployment == nil {
 				if len(depController.Cache.cache) != 0 || (depController.Cache.cache["id"] != nil && len(depController.Cache.cache["id"].Deployments) != 0) {
@@ -159,6 +163,8 @@ func TestDeploymentController_Deleted(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			depController.K8sClient = fake.NewSimpleClientset()
@@ -171,7 +177,7 @@ func TestDeploymentController_Deleted(t *testing.T) {
 					},
 				}
 			}
-			depController.Deleted(c.deployment)
+			depController.Deleted(ctx, c.deployment)
 
 			if c.expectedDeployment == nil {
 				if len(depController.Cache.cache) > 0 && len(depController.Cache.cache["id"].Deployments) != 0 {
@@ -202,7 +208,7 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	deployment.Namespace = "namespace"
 	deployment.Name = "fake-app-deployment-qal"
 	deployment.Spec = k8sAppsV1.DeploymentSpec{
-		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"}},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "qal"},
@@ -214,7 +220,7 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	deployment2.Namespace = "namespace"
 	deployment2.Name = "fake-app-deployment-e2e"
 	deployment2.Spec = k8sAppsV1.DeploymentSpec{
-		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"}},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "e2e"},
@@ -227,7 +233,7 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	deployment3.Name = "fake-app-deployment-prf-1"
 	deployment3.CreationTimestamp = v1.Now()
 	deployment3.Spec = k8sAppsV1.DeploymentSpec{
-		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"},},
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app1"}},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app1", "env": "prf"},
@@ -240,7 +246,7 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 	deployment4.Name = "fake-app-deployment-prf-2"
 	deployment4.CreationTimestamp = v1.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)
 	deployment4.Spec = k8sAppsV1.DeploymentSpec{
-		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app2"},},
+		Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": "app2"}},
 		Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
 				Labels: map[string]string{"identity": "app2", "env": "prf"},
@@ -295,11 +301,12 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			deploymentController.K8sClient = c.fakeClient
-			returnedDeployments := deploymentController.GetDeploymentBySelectorInNamespace(c.selector, "namespace")
+			returnedDeployments := deploymentController.GetDeploymentBySelectorInNamespace(ctx, c.selector, "namespace")
 
 			sort.Slice(returnedDeployments, func(i, j int) bool {
 				return returnedDeployments[i].Name > returnedDeployments[j].Name

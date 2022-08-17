@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -13,11 +14,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Handler interface contains the methods that are required
+// VirtualServiceHandler interface contains the methods that are required
 type VirtualServiceHandler interface {
-	Added(obj *networking.VirtualService)
-	Updated(obj *networking.VirtualService)
-	Deleted(obj *networking.VirtualService)
+	Added(ctx context.Context, obj *networking.VirtualService)
+	Updated(ctx context.Context, obj *networking.VirtualService)
+	Deleted(ctx context.Context, obj *networking.VirtualService)
 }
 
 type VirtualServiceController struct {
@@ -48,18 +49,18 @@ func NewVirtualServiceController(clusterID string, stopCh <-chan struct{}, handl
 	return &drController, nil
 }
 
-func (sec *VirtualServiceController) Added(ojb interface{}) {
+func (sec *VirtualServiceController) Added(ctx context.Context, ojb interface{}) {
 	dr := ojb.(*networking.VirtualService)
-	sec.VirtualServiceHandler.Added(dr)
+	sec.VirtualServiceHandler.Added(ctx, dr)
 }
 
-func (sec *VirtualServiceController) Updated(ojb interface{}, oldObj interface{}) {
+func (sec *VirtualServiceController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
 	dr := ojb.(*networking.VirtualService)
-	sec.VirtualServiceHandler.Updated(dr)
+	sec.VirtualServiceHandler.Updated(ctx, dr)
 }
 
-func (sec *VirtualServiceController) Deleted(ojb interface{}) {
+func (sec *VirtualServiceController) Deleted(ctx context.Context, ojb interface{}) {
 	dr := ojb.(*networking.VirtualService)
-	sec.VirtualServiceHandler.Deleted(dr)
+	sec.VirtualServiceHandler.Deleted(ctx, dr)
 
 }

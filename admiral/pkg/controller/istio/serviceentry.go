@@ -1,6 +1,7 @@
 package istio
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -53,17 +54,17 @@ func NewServiceEntryController(clusterID string, stopCh <-chan struct{}, handler
 	return &seController, nil
 }
 
-func (sec *ServiceEntryController) Added(ojb interface{}) {
+func (sec *ServiceEntryController) Added(ctx context.Context, ojb interface{}) {
 	se := ojb.(*networking.ServiceEntry)
 	sec.ServiceEntryHandler.Added(se)
 }
 
-func (sec *ServiceEntryController) Updated(ojb interface{}, oldObj interface{}) {
+func (sec *ServiceEntryController) Updated(ctx context.Context, ojb interface{}, oldObj interface{}) {
 	se := ojb.(*networking.ServiceEntry)
 	sec.ServiceEntryHandler.Updated(se)
 }
 
-func (sec *ServiceEntryController) Deleted(ojb interface{}) {
+func (sec *ServiceEntryController) Deleted(ctx context.Context, ojb interface{}) {
 	se := ojb.(*networking.ServiceEntry)
 	sec.ServiceEntryHandler.Deleted(se)
 }

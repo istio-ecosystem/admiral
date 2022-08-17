@@ -20,6 +20,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/testing/protocmp"
 	"gopkg.in/yaml.v2"
 	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -68,24 +69,27 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	se := istionetworkingv1alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
 		Hosts:     []string{"dev.bar.global"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{},
 	}
 
 	seConfig := v1alpha3.ServiceEntry{
+		//nolint
 		Spec: se,
 	}
 	seConfig.Name = "se1"
 	seConfig.Namespace = "admiral-sync"
 
+	ctx := context.Background()
+
 	fakeIstioClient := istiofake.NewSimpleClientset()
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(&seConfig)
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &seConfig, v12.CreateOptions{})
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
 			IstioClient: fakeIstioClient,
@@ -102,8 +106,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
 	rr.PutRemoteController("c1", rc)
 	rr.AdmiralCache = &admiralCache
-	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-	AddServiceEntriesWithDr(rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -136,7 +140,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	se := &istionetworkingv1alpha3.ServiceEntry{
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{host},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
 			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
 		},
@@ -239,11 +243,11 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): nil},
 		},
 	}
-
+	ctx := context.Background()
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := createSeAndDrSetFromGtp(c.env, c.locality, c.se, c.gtp, &admiralCache)
+			result := createSeAndDrSetFromGtp(ctx, c.env, c.locality, c.se, c.gtp, &admiralCache)
 			generatedHosts := make([]string, 0, len(result))
 			for generatedHost := range result {
 				generatedHosts = append(generatedHosts, generatedHost)
@@ -298,7 +302,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	}
 
 	rr.PutRemoteController("test.cluster", rc)
-	modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+	modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", "bar", rr)
 
 }
 
@@ -417,10 +421,10 @@ func TestGetLocalAddressForSe(t *testing.T) {
 			wantedError:         errors.New("BAD THINGS HAPPENED"),
 		},
 	}
-
+	ctx := context.Background()
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			seAddress, needsCacheUpdate, err := GetLocalAddressForSe(c.seName, &c.seAddressCache, c.cacheController)
+			seAddress, needsCacheUpdate, err := GetLocalAddressForSe(ctx, c.seName, &c.seAddressCache, c.cacheController)
 			if c.wantAddess != "" {
 				if !reflect.DeepEqual(seAddress, c.wantAddess) {
 					t.Errorf("Wanted se address: %s, got: %s", c.wantAddess, seAddress)
@@ -482,10 +486,14 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 
 	sidecarEgressMap := make(map[string]common.SidecarEgress)
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+	ctx := context.Background()
 
-	modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
+	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
 
-	sidecarObj, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(common.GetWorkloadSidecarName(), v12.GetOptions{})
+	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	if err == nil {
+		t.Errorf("expected 404 not found error but got nil")
+	}
 
 	if sidecarObj != nil {
 		t.Fatalf("Modify non existing resource failed, as no new resource should be created.")
@@ -512,15 +520,18 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		Egress: []*istionetworkingv1alpha3.IstioEgressListener{&istioEgress},
 	}
 
-	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(existingSidecarObj)
-
+	ctx := context.Background()
+	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
+	if err != nil {
+		t.Error(err)
+	}
 	if createdSidecar != nil {
 
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
-		modifySidecarForLocalClusterCommunication("test-sidecar-namespace", sidecarEgressMap, remoteController)
+		modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
 
-		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get("default", v12.GetOptions{})
+		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", v12.GetOptions{})
 
 		if err != nil || updatedSidecar == nil {
 			t.Fail()
@@ -535,7 +546,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		createdSidecar.Spec.Egress = createdSidecar.Spec.Egress[:0]
 		updatedSidecar.Spec.Egress = updatedSidecar.Spec.Egress[:0]
 
-		if !cmp.Equal(updatedSidecar, createdSidecar) {
+		if !cmp.Equal(updatedSidecar, createdSidecar, protocmp.Transform()) {
 			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
 		}
 		var matched *istionetworkingv1alpha3.IstioEgressListener
@@ -554,7 +565,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 				listener.Hosts = listener.Hosts[:0]
 				matched.Hosts = matched.Hosts[:0]
 				assert.ElementsMatch(t, oldHosts, newHosts, "hosts should match")
-				if !cmp.Equal(listener, matched) {
+				if !cmp.Equal(listener, matched, protocmp.Transform()) {
 					t.Fatalf("Listeners do not match. Details - %v", cmp.Diff(listener, matched))
 				}
 			} else {
@@ -637,7 +648,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -650,7 +661,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -663,7 +674,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
@@ -677,7 +688,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
@@ -691,7 +702,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
@@ -704,7 +715,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints:       []*istionetworkingv1alpha3.ServiceEntry_Endpoint{},
+		Endpoints:       []*istionetworkingv1alpha3.WorkloadEntry{},
 	}
 
 	grpcSe := istionetworkingv1alpha3.ServiceEntry{
@@ -715,7 +726,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -788,11 +799,13 @@ func TestCreateServiceEntry(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
 			var createdSE *istionetworkingv1alpha3.ServiceEntry
-			createdSE = createServiceEntry(c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE = createServiceEntry(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -832,7 +845,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForRollout(admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			createdSE := createServiceEntryForRollout(ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -846,6 +859,8 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	const NAMESPACE = "test-test"
 	const SERVICENAME = "serviceNameActive"
 	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+
+	ctx := context.Background()
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -964,7 +979,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
-	se := modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(ctx, admiral.Add, "test", "bar", rr)
 	if nil == se {
 		t.Fatalf("no service entries found")
 	}
@@ -983,6 +998,8 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	const ACTIVE_SERVICENAME = "serviceNameActive"
 	const PREVIEW_SERVICENAME = "serviceNamePreview"
 	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
+
+	ctx := context.Background()
 
 	p := common.AdmiralParams{
 		KubeconfigPath:        "testdata/fake.config",
@@ -1114,7 +1131,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 
 	s.Cache.Put(previewService)
 
-	se := modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+	se := modifyServiceEntryForNewServiceOrPod(ctx, admiral.Add, "test", "bar", rr)
 
 	if nil == se {
 		t.Fatalf("no service entries found")
@@ -1136,7 +1153,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME},
 	}
 
-	se = modifyServiceEntryForNewServiceOrPod(admiral.Add, "test", "bar", rr)
+	se = modifyServiceEntryForNewServiceOrPod(ctx, admiral.Add, "test", "bar", rr)
 
 	if len(se) != 1 {
 		t.Fatalf("Expected 1 service entries to be created but found %d", len(se))
@@ -1156,7 +1173,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	const ACTIVE_MESH_HOST = "qal.example.mesh"
 	const PREVIEW_MESH_HOST = "preview.qal.example.mesh"
 
-	rollout := argo.Rollout{}
+	rollout := &argo.Rollout{}
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		BlueGreen: &argo.BlueGreenStrategy{
 			ActiveService:  ACTIVE_SERVICE,
@@ -1166,7 +1183,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	rollout.Spec.Template.Annotations = map[string]string{}
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
 
-	endpoint := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+	endpoint := &istionetworkingv1alpha3.WorkloadEntry{
 		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
 	}
 
@@ -1177,23 +1194,23 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
 	}
 
-	activeWantedEndpoints := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+	activeWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
 		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
-	previewWantedEndpoints := istionetworkingv1alpha3.ServiceEntry_Endpoint{
+	previewWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
 		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
 	testCases := []struct {
 		name             string
-		rollout          argo.Rollout
-		inputEndpoint    istionetworkingv1alpha3.ServiceEntry_Endpoint
+		rollout          *argo.Rollout
+		inputEndpoint    *istionetworkingv1alpha3.WorkloadEntry
 		weightedServices map[string]*WeightedService
 		clusterIngress   string
 		meshPorts        map[string]uint32
 		meshHost         string
-		wantedEndpoints  istionetworkingv1alpha3.ServiceEntry_Endpoint
+		wantedEndpoints  *istionetworkingv1alpha3.WorkloadEntry
 	}{
 		{
 			name:             "should return endpoint with active service address",
@@ -1217,7 +1234,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			updateEndpointsForBlueGreen(&c.rollout, c.weightedServices, map[string]string{}, &c.inputEndpoint, "test", c.meshHost)
+			updateEndpointsForBlueGreen(c.rollout, c.weightedServices, map[string]string{}, c.inputEndpoint, "test", c.meshHost)
 			if c.inputEndpoint.Address != c.wantedEndpoints.Address {
 				t.Errorf("Wanted %s endpoint, got: %s", c.wantedEndpoints.Address, c.inputEndpoint.Address)
 			}
@@ -1235,7 +1252,7 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	const NAMESPACE = "namespace"
 
 	se := &istionetworkingv1alpha3.ServiceEntry{
-		Endpoints: []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
 			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		},
@@ -1252,13 +1269,13 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
 	}
 
-	wantedEndpoints := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+	wantedEndpoints := []*istionetworkingv1alpha3.WorkloadEntry{
 		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
 		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
 	}
 
-	wantedEndpointsZeroWeights := []*istionetworkingv1alpha3.ServiceEntry_Endpoint{
+	wantedEndpointsZeroWeights := []*istionetworkingv1alpha3.WorkloadEntry{
 		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
 	}
@@ -1269,7 +1286,7 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 		weightedServices  map[string]*WeightedService
 		clusterIngress    string
 		meshPorts         map[string]uint32
-		wantedEndpoints   []*istionetworkingv1alpha3.ServiceEntry_Endpoint
+		wantedEndpoints   []*istionetworkingv1alpha3.WorkloadEntry
 	}{
 		{
 			name:              "should return endpoints with assigned weights",

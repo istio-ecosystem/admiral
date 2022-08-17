@@ -1,22 +1,24 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"sync"
 	"time"
+
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 )
 
-// Handler interface contains the methods that are required
+// DepHandler interface contains the methods that are required
 type DepHandler interface {
-	Added(obj *v1.Dependency)
-	Updated(obj *v1.Dependency)
-	Deleted(obj *v1.Dependency)
+	Added(ctx context.Context, obj *v1.Dependency)
+	Updated(ctx context.Context, obj *v1.Dependency)
+	Deleted(ctx context.Context, obj *v1.Dependency)
 }
 
 type DependencyController struct {
@@ -92,20 +94,20 @@ func NewDependencyController(stopCh <-chan struct{}, handler DepHandler, configP
 	return &depController, nil
 }
 
-func (d *DependencyController) Added(ojb interface{}) {
+func (d *DependencyController) Added(ctx context.Context, ojb interface{}) {
 	dep := ojb.(*v1.Dependency)
 	d.Cache.Put(dep)
-	d.DepHandler.Added(dep)
+	d.DepHandler.Added(ctx, dep)
 }
 
-func (d *DependencyController) Updated(obj interface{}, oldObj interface{}) {
+func (d *DependencyController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 	dep := obj.(*v1.Dependency)
 	d.Cache.Put(dep)
-	d.DepHandler.Updated(dep)
+	d.DepHandler.Updated(ctx, dep)
 }
 
-func (d *DependencyController) Deleted(ojb interface{}) {
+func (d *DependencyController) Deleted(ctx context.Context, ojb interface{}) {
 	dep := ojb.(*v1.Dependency)
 	d.Cache.Delete(dep)
-	d.DepHandler.Deleted(dep)
+	d.DepHandler.Deleted(ctx, dep)
 }

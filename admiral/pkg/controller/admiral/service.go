@@ -1,10 +1,12 @@
 package admiral
 
 import (
+	"context"
 	"fmt"
-	"github.com/prometheus/common/log"
 	"sort"
 	"time"
+
+	"github.com/prometheus/common/log"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,11 +21,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// Handler interface contains the methods that are required
+// ServiceHandler interface contains the methods that are required
 type ServiceHandler interface {
-	Added(obj *k8sV1.Service)
-	Updated(obj *k8sV1.Service)
-	Deleted(obj *k8sV1.Service)
+	Added(ctx context.Context, obj *k8sV1.Service)
+	Updated(ctx context.Context, obj *k8sV1.Service)
+	Deleted(ctx context.Context, obj *k8sV1.Service)
 }
 
 type ServiceClusterEntry struct {
@@ -80,7 +82,7 @@ func (s *serviceCache) Get(key string) []*k8sV1.Service {
 	defer s.mutex.Unlock()
 	serviceClusterEntry := s.cache[key]
 	if serviceClusterEntry != nil {
-		return getOrderedServices (serviceClusterEntry.Service[key])
+		return getOrderedServices(serviceClusterEntry.Service[key])
 	} else {
 		return nil
 	}
@@ -88,7 +90,7 @@ func (s *serviceCache) Get(key string) []*k8sV1.Service {
 
 func getOrderedServices(serviceMap map[string]*k8sV1.Service) []*k8sV1.Service {
 	orderedServices := make([]*k8sV1.Service, 0, len(serviceMap))
-	for  _, value := range serviceMap {
+	for _, value := range serviceMap {
 		orderedServices = append(orderedServices, value)
 	}
 	if len(orderedServices) > 1 {
@@ -164,13 +166,15 @@ func NewServiceController(clusterID string, stopCh <-chan struct{}, handler Serv
 		return nil, fmt.Errorf("failed to create ingress service controller k8s client: %v", err)
 	}
 
+	ctx := context.Background()
+
 	serviceController.informer = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
-				return serviceController.K8sClient.CoreV1().Services(meta_v1.NamespaceAll).List(opts)
+				return serviceController.K8sClient.CoreV1().Services(meta_v1.NamespaceAll).List(ctx, opts)
 			},
 			WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
-				return serviceController.K8sClient.CoreV1().Services(meta_v1.NamespaceAll).Watch(opts)
+				return serviceController.K8sClient.CoreV1().Services(meta_v1.NamespaceAll).Watch(ctx, opts)
 			},
 		},
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
@@ -182,22 +186,23 @@ func NewServiceController(clusterID string, stopCh <-chan struct{}, handler Serv
 	return &serviceController, nil
 }
 
-func (s *ServiceController) Added(obj interface{}) {
+func (s *ServiceController) Added(ctx context.Context, obj interface{}) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
-	s.ServiceHandler.Added(service)
+	s.ServiceHandler.Added(ctx, service)
 }
 
-func (s *ServiceController) Updated(obj interface{}, oldObj interface{}) {
+func (s *ServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
+
 	service := obj.(*k8sV1.Service)
 	s.Cache.Put(service)
-	s.ServiceHandler.Updated(service)
+	s.ServiceHandler.Updated(ctx, service)
 }
 
-func (s *ServiceController) Deleted(obj interface{}) {
+func (s *ServiceController) Deleted(ctx context.Context, obj interface{}) {
 	service := obj.(*k8sV1.Service)
 	s.Cache.Delete(service)
-	s.ServiceHandler.Deleted(service)
+	s.ServiceHandler.Deleted(ctx, service)
 }
 
 func (s *serviceCache) shouldIgnoreBasedOnLabels(service *k8sV1.Service) bool {

@@ -19,6 +19,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	"time"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
@@ -37,15 +38,15 @@ type RoutingPoliciesGetter interface {
 
 // RoutingPolicyInterface has methods to work with RoutingPolicy resources.
 type RoutingPolicyInterface interface {
-	Create(*v1.RoutingPolicy) (*v1.RoutingPolicy, error)
-	Update(*v1.RoutingPolicy) (*v1.RoutingPolicy, error)
-	UpdateStatus(*v1.RoutingPolicy) (*v1.RoutingPolicy, error)
-	Delete(name string, options *metav1.DeleteOptions) error
-	DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error
-	Get(name string, options metav1.GetOptions) (*v1.RoutingPolicy, error)
-	List(opts metav1.ListOptions) (*v1.RoutingPolicyList, error)
-	Watch(opts metav1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.RoutingPolicy, err error)
+	Create(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.CreateOptions) (*v1.RoutingPolicy, error)
+	Update(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.UpdateOptions) (*v1.RoutingPolicy, error)
+	UpdateStatus(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.UpdateOptions) (*v1.RoutingPolicy, error)
+	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
+	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1.RoutingPolicy, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*v1.RoutingPolicyList, error)
+	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RoutingPolicy, err error)
 	RoutingPolicyExpansion
 }
 
@@ -64,20 +65,20 @@ func newRoutingPolicies(c *AdmiralV1Client, namespace string) *routingPolicies {
 }
 
 // Get takes name of the routingPolicy, and returns the corresponding routingPolicy object, and an error if there is any.
-func (c *routingPolicies) Get(name string, options metav1.GetOptions) (result *v1.RoutingPolicy, err error) {
+func (c *routingPolicies) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.RoutingPolicy, err error) {
 	result = &v1.RoutingPolicy{}
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("routingpolicies").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // List takes label and field selectors, and returns the list of RoutingPolicies that match those selectors.
-func (c *routingPolicies) List(opts metav1.ListOptions) (result *v1.RoutingPolicyList, err error) {
+func (c *routingPolicies) List(ctx context.Context, opts metav1.ListOptions) (result *v1.RoutingPolicyList, err error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -88,13 +89,13 @@ func (c *routingPolicies) List(opts metav1.ListOptions) (result *v1.RoutingPolic
 		Resource("routingpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
-	return result, err
+	return
 }
 
 // Watch returns a watch.Interface that watches the requested routingPolicies.
-func (c *routingPolicies) Watch(opts metav1.ListOptions) (watch.Interface, error) {
+func (c *routingPolicies) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	var timeout time.Duration
 	if opts.TimeoutSeconds != nil {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
@@ -105,87 +106,90 @@ func (c *routingPolicies) Watch(opts metav1.ListOptions) (watch.Interface, error
 		Resource("routingpolicies").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a routingPolicy and creates it.  Returns the server's representation of the routingPolicy, and an error, if there is any.
-func (c *routingPolicies) Create(routingPolicy *v1.RoutingPolicy) (result *v1.RoutingPolicy, err error) {
+func (c *routingPolicies) Create(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.CreateOptions) (result *v1.RoutingPolicy, err error) {
 	result = &v1.RoutingPolicy{}
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("routingpolicies").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(routingPolicy).
-		Do().
+		Do(ctx).
 		Into(result)
-	return result, err
+	return
 }
 
 // Update takes the representation of a routingPolicy and updates it. Returns the server's representation of the routingPolicy, and an error, if there is any.
-func (c *routingPolicies) Update(routingPolicy *v1.RoutingPolicy) (result *v1.RoutingPolicy, err error) {
+func (c *routingPolicies) Update(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.UpdateOptions) (result *v1.RoutingPolicy, err error) {
 	result = &v1.RoutingPolicy{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("routingpolicies").
 		Name(routingPolicy.Name).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(routingPolicy).
-		Do().
+		Do(ctx).
 		Into(result)
-	return result, err
+	return
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-
-func (c *routingPolicies) UpdateStatus(routingPolicy *v1.RoutingPolicy) (result *v1.RoutingPolicy, err error) {
+func (c *routingPolicies) UpdateStatus(ctx context.Context, routingPolicy *v1.RoutingPolicy, opts metav1.UpdateOptions) (result *v1.RoutingPolicy, err error) {
 	result = &v1.RoutingPolicy{}
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("routingpolicies").
 		Name(routingPolicy.Name).
 		SubResource("status").
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(routingPolicy).
-		Do().
+		Do(ctx).
 		Into(result)
-	return result, err
+	return
 }
 
 // Delete takes name of the routingPolicy and deletes it. Returns an error if one occurs.
-func (c *routingPolicies) Delete(name string, options *metav1.DeleteOptions) error {
+func (c *routingPolicies) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("routingpolicies").
 		Name(name).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *routingPolicies) DeleteCollection(options *metav1.DeleteOptions, listOptions metav1.ListOptions) error {
+func (c *routingPolicies) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	var timeout time.Duration
-	if listOptions.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
+	if listOpts.TimeoutSeconds != nil {
+		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("routingpolicies").
-		VersionedParams(&listOptions, scheme.ParameterCodec).
+		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Body(options).
-		Do().
+		Body(&opts).
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched routingPolicy.
-func (c *routingPolicies) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1.RoutingPolicy, err error) {
+func (c *routingPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.RoutingPolicy, err error) {
 	result = &v1.RoutingPolicy{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("routingpolicies").
-		SubResource(subresources...).
 		Name(name).
+		SubResource(subresources...).
+		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
-	return result, err
+	return
 }

@@ -1,14 +1,16 @@
 package admiral
 
 import (
-	"github.com/stretchr/testify/assert"
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMonitoredDelegator_Added(t *testing.T) {
 	td := &TestDelegator{}
 	d := NewMonitoredDelegator(td, "test", "test")
-	d.Added(nil)
+	d.Added(context.Background(), nil)
 
 	assert.True(t, td.AddedInvoked)
 	assert.False(t, td.DeleteInvoked)
@@ -18,7 +20,7 @@ func TestMonitoredDelegator_Added(t *testing.T) {
 func TestMonitoredDelegator_Deleted(t *testing.T) {
 	td := &TestDelegator{}
 	d := NewMonitoredDelegator(td, "test", "test")
-	d.Deleted(nil)
+	d.Deleted(context.Background(), nil)
 
 	assert.False(t, td.AddedInvoked)
 	assert.True(t, td.DeleteInvoked)
@@ -28,7 +30,7 @@ func TestMonitoredDelegator_Deleted(t *testing.T) {
 func TestMonitoredDelegator_Updated(t *testing.T) {
 	td := &TestDelegator{}
 	d := NewMonitoredDelegator(td, "test", "test")
-	d.Updated(nil, nil)
+	d.Updated(context.Background(), nil, nil)
 
 	assert.False(t, td.AddedInvoked)
 	assert.False(t, td.DeleteInvoked)
@@ -41,14 +43,14 @@ type TestDelegator struct {
 	DeleteInvoked  bool
 }
 
-func (t *TestDelegator) Added(obj interface{}) {
+func (t *TestDelegator) Added(context.Context, interface{}) {
 	t.AddedInvoked = true
 }
 
-func (t *TestDelegator) Updated(obj interface{}, oldObj interface{}) {
+func (t *TestDelegator) Updated(context.Context, interface{}, interface{}) {
 	t.UpdatedInvoked = true
 }
 
-func (t *TestDelegator) Deleted(obj interface{}) {
+func (t *TestDelegator) Deleted(context.Context, interface{}) {
 	t.DeleteInvoked = true
 }
