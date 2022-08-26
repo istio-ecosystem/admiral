@@ -29,7 +29,6 @@ import (
 )
 
 func TestGetDependentClusters(t *testing.T) {
-
 	identityClusterCache := common.NewMapOfMaps()
 	identityClusterCache.Put("id1", "dep1", "cl1")
 	identityClusterCache.Put("id2", "dep2", "cl2")
@@ -102,7 +101,6 @@ func TestGetDependentClusters(t *testing.T) {
 }
 
 func TestIgnoreIstioResource(t *testing.T) {
-
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name           string

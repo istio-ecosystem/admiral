@@ -370,6 +370,7 @@ func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRu
 
 func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) error {
 	var (
+		//nolint
 		virtualService = obj.Spec
 		clusterId      = vh.ClusterID
 		r              = vh.RemoteRegistry
