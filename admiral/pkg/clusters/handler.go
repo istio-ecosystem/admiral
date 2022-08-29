@@ -8,21 +8,23 @@ import (
 	"strings"
 	"time"
 
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,26 +34,35 @@ const (
 	DefaultInterval                 int64  = 60
 )
 
+// ServiceEntryHandler responsible for handling Add/Update/Delete events for
+// ServiceEntry resources
 type ServiceEntryHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
 }
 
+// DestinationRuleHandler responsible for handling Add/Update/Delete events for
+// DestinationRule resources
 type DestinationRuleHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
 }
 
+// VirtualServiceHandler responsible for handling Add/Update/Delete events for
+// VirtualService resources
 type VirtualServiceHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
 }
 
+// SidecarHandler responsible for handling Add/Update/Delete events for
+// Sidecar resources
 type SidecarHandler struct {
 	RemoteRegistry *RemoteRegistry
 	ClusterID      string
 }
 
+// WeightedService utility to store weighted services for argo rollouts
 type WeightedService struct {
 	Weight  int32
 	Service *k8sV1.Service
@@ -69,10 +80,13 @@ func getIstioResourceName(host string, suffix string) string {
 }
 
 func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.DestinationRule {
-	var dr = &v1alpha32.DestinationRule{}
+	var (
+		processGtp = true
+		dr         = &v1alpha32.DestinationRule{}
+	)
 	dr.Host = se.Hosts[0]
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.ClientTLSSettings{Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL}}
-	processGtp := true
+
 	if len(locality) == 0 {
 		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
 		processGtp = false
@@ -84,7 +98,6 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 
 		if len(gtpTrafficPolicy.Target) > 0 {
 			var localityLbSettings = &v1alpha32.LocalityLoadBalancerSetting{}
-
 			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
 				distribute := make([]*v1alpha32.LocalityLoadBalancerSetting_Distribute, 0)
 				targetTrafficMap := make(map[string]uint32)
@@ -110,7 +123,6 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 }
 
 func getOutlierDetection(se *v1alpha32.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy) *v1alpha32.OutlierDetection {
-
 	outlierDetection := &v1alpha32.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
@@ -271,7 +283,6 @@ func (dh *SidecarHandler) Updated(ctx context.Context, obj *v1alpha3.Sidecar) {}
 func (dh *SidecarHandler) Deleted(ctx context.Context, obj *v1alpha3.Sidecar) {}
 
 func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {
-
 	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		return true
 	}
@@ -293,44 +304,35 @@ func IgnoreIstioResource(exportTo []string, annotations map[string]string, names
 }
 
 func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRule, dh *DestinationRuleHandler, event common.Event, resourceType common.ResourceType) {
-	//nolint
-	destinationRule := obj.Spec
-
-	clusterId := dh.ClusterID
-
-	syncNamespace := common.GetSyncNamespace()
-
-	r := dh.RemoteRegistry
-
-	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host).Copy()
+	var (
+		//nolint
+		destinationRule      = obj.Spec
+		clusterId            = dh.ClusterID
+		syncNamespace        = common.GetSyncNamespace()
+		r                    = dh.RemoteRegistry
+		dependentClusters    = r.AdmiralCache.CnameDependentClusterCache.Get(destinationRule.Host).Copy()
+		allDependentClusters = make(map[string]string)
+	)
 
 	if len(dependentClusters) > 0 {
-
 		log.Infof(LogFormat, "Event", "DestinationRule", obj.Name, clusterId, "Processing")
-
-		allDependentClusters := make(map[string]string)
-
 		util.MapCopy(allDependentClusters, dependentClusters)
-
 		allDependentClusters[clusterId] = clusterId
-
 		for _, dependentCluster := range allDependentClusters {
-
 			rc := r.GetRemoteController(dependentCluster)
-
 			if event == common.Delete {
-
 				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
-					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "success")
+					if k8sErrors.IsNotFound(err) {
+						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Either DestinationRule was already deleted, or it never existed")
+					} else {
+						log.Errorf(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+					}
 				} else {
-					log.Errorf(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
 				}
-
 			} else {
-
 				exist, _ := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
-
 				//copy destination rule only to other clusters
 				if dependentCluster != clusterId {
 					addUpdateDestinationRule(ctx, obj, exist, syncNamespace, rc)
@@ -350,7 +352,11 @@ func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRu
 			if event == common.Delete {
 				err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
-					log.Infof(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+					if k8sErrors.IsNotFound(err) {
+						log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Either DestinationRule was already deleted, or it never existed")
+					} else {
+						log.Errorf(LogErrFormat, "Delete", "DestinationRule", obj.Name, clusterId, err)
+					}
 				} else {
 					log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, clusterId, "Success")
 				}
@@ -362,25 +368,24 @@ func handleDestinationRuleEvent(ctx context.Context, obj *v1alpha3.DestinationRu
 	}
 }
 
-func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService, vh *VirtualServiceHandler, event common.Event, resourceType common.ResourceType) error {
-
+func handleVirtualServiceEvent(
+	ctx context.Context, obj *v1alpha3.VirtualService, vh *VirtualServiceHandler,
+	event common.Event, resourceType common.ResourceType) error {
+	var (
+		//nolint
+		virtualService = obj.Spec
+		clusterId      = vh.ClusterID
+		r              = vh.RemoteRegistry
+		syncNamespace  = common.GetSyncNamespace()
+	)
 	log.Infof(LogFormat, "Event", resourceType, obj.Name, vh.ClusterID, "Received event")
-
-	//nolint
-	virtualService := obj.Spec
-
-	clusterId := vh.ClusterID
-
-	r := vh.RemoteRegistry
-
-	syncNamespace := common.GetSyncNamespace()
 
 	if len(virtualService.Hosts) > 1 {
 		log.Errorf(LogFormat, "Event", resourceType, obj.Name, clusterId, "Skipping as multiple hosts not supported for virtual service namespace="+obj.Namespace)
 		return nil
 	}
 
-	//check if this virtual service is used by Argo rollouts for canary strategy, if so, update the corresponding SE with appropriate weights
+	// check if this virtual service is used by Argo rollouts for canary strategy, if so, update the corresponding SE with appropriate weights
 	if common.GetAdmiralParams().ArgoRolloutsEnabled {
 		rollouts, err := vh.RemoteRegistry.GetRemoteController(clusterId).RolloutController.RolloutClient.Rollouts(obj.Namespace).List(ctx, v12.ListOptions{})
 
@@ -398,28 +403,24 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 	}
 
 	dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0]).Copy()
-
 	if len(dependentClusters) > 0 {
-
 		for _, dependentCluster := range dependentClusters {
-
 			rc := r.GetRemoteController(dependentCluster)
-
 			if clusterId != dependentCluster {
-
 				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
-
 				if event == common.Delete {
-					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 					if err != nil {
-						return err
+						if k8sErrors.IsNotFound(err) {
+							log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+						} else {
+							log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+						}
+					} else {
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 					}
-
 				} else {
-
 					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
-
 					//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
 					for _, httpRoute := range virtualService.Http {
 						for _, destination := range httpRoute.Route {
@@ -429,7 +430,6 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 							}
 						}
 					}
-
 					for _, tlsRoute := range virtualService.Tls {
 						for _, destination := range tlsRoute.Route {
 							//get at index 0, we do not support wildcards or multiple hosts currently
@@ -438,7 +438,6 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 							}
 						}
 					}
-
 					addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 				}
 			}
@@ -448,8 +447,8 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 		log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "No dependent clusters found")
 	}
 
-	//copy the VirtualService `as is` if they are not generated by Admiral (not in CnameDependentClusterCache)
-	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Replicating `as is` to all clusters")
+	// copy the VirtualService `as is` if they are not generated by Admiral (not in CnameDependentClusterCache)
+	log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Replicating 'as is' to all clusters")
 	remoteClusters := r.GetClusterIds()
 	for _, ClusterID := range remoteClusters {
 		if ClusterID != clusterId {
@@ -457,8 +456,11 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 			if event == common.Delete {
 				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
 				if err != nil {
-					log.Infof(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
-					return err
+					if k8sErrors.IsNotFound(err) {
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+					} else {
+						log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+					}
 				} else {
 					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 				}
@@ -472,8 +474,11 @@ func handleVirtualServiceEvent(ctx context.Context, obj *v1alpha3.VirtualService
 }
 
 func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) {
-	var err error
-	var op string
+	var (
+		err error
+		op  string
+	)
+
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
@@ -500,9 +505,12 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 }
 
 func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
-	var err error
-	var op, diff string
-	var skipUpdate bool
+	var (
+		err        error
+		op, diff   string
+		skipUpdate bool
+	)
+
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
@@ -539,20 +547,20 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 	}
 }
 
-func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (skipDestructive bool, diff string) {
-	skipDestructive = false
-	destructive, diff := getServiceEntryDiff(new, old)
+func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (bool, string) {
+	var (
+		skipDestructive   = false
+		destructive, diff = getServiceEntryDiff(new, old)
+	)
 	//do not update SEs during bootup phase if they are destructive
 	if time.Since(rc.StartTime) < (2*common.GetAdmiralParams().CacheRefreshDuration) && destructive {
 		skipDestructive = true
 	}
-
 	return skipDestructive, diff
 }
 
 //Diffs only endpoints
 func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (destructive bool, diff string) {
-
 	//we diff only if both objects exist
 	if old == nil || new == nil {
 		return false, ""
@@ -597,7 +605,11 @@ func deleteServiceEntry(ctx context.Context, exist *v1alpha3.ServiceEntry, names
 	if exist != nil {
 		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(ctx, exist.Name, v12.DeleteOptions{})
 		if err != nil {
-			log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
+			if k8sErrors.IsNotFound(err) {
+				log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Either ServiceEntry was already deleted, or it never existed")
+			} else {
+				log.Errorf(LogErrFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, err)
+			}
 		} else {
 			log.Infof(LogFormat, "Delete", "ServiceEntry", exist.Name, rc.ClusterID, "Success")
 		}
@@ -636,7 +648,11 @@ func deleteDestinationRule(ctx context.Context, exist *v1alpha3.DestinationRule,
 	if exist != nil {
 		err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Delete(ctx, exist.Name, v12.DeleteOptions{})
 		if err != nil {
-			log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
+			if k8sErrors.IsNotFound(err) {
+				log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Either DestinationRule was already deleted, or it never existed")
+			} else {
+				log.Errorf(LogErrFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, err)
+			}
 		} else {
 			log.Infof(LogFormat, "Delete", "DestinationRule", exist.Name, rc.ClusterID, "Success")
 		}
@@ -659,13 +675,10 @@ func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, n
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
-
 	if deployment == nil {
 		return nil
 	}
-
 	cachedServices := rc.ServiceController.Cache.Get(deployment.Namespace)
-
 	if cachedServices == nil {
 		return nil
 	}
@@ -686,11 +699,9 @@ func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deploym
 
 func getDependentClusters(dependents map[string]string, identityClusterCache *common.MapOfMaps, sourceServices map[string]*k8sV1.Service) map[string]string {
 	var dependentClusters = make(map[string]string)
-
 	if dependents == nil {
 		return dependentClusters
 	}
-
 	for depIdentity := range dependents {
 		clusters := identityClusterCache.Get(depIdentity)
 		if clusters == nil {
@@ -707,9 +718,11 @@ func getDependentClusters(dependents map[string]string, identityClusterCache *co
 }
 
 func copyEndpoint(e *v1alpha32.WorkloadEntry) *v1alpha32.WorkloadEntry {
-	labels := make(map[string]string)
+	var (
+		labels = make(map[string]string)
+		ports  = make(map[string]uint32)
+	)
 	util.MapCopy(labels, e.Labels)
-	ports := make(map[string]uint32)
 	util.MapCopy(ports, e.Ports)
 	return &v1alpha32.WorkloadEntry{Address: e.Address, Ports: ports, Locality: e.Locality, Labels: labels}
 }
@@ -718,35 +731,31 @@ func copyEndpoint(e *v1alpha32.WorkloadEntry) *v1alpha32.WorkloadEntry {
 // 1. Canary strategy - which can use a virtual service to manage the weights associated with a stable and canary service. Admiral created endpoints in service entries will use the weights assigned in the Virtual Service
 // 2. Blue green strategy- this contains 2 service instances in a namespace, an active service and a preview service. Admiral will use repective service to create active and preview endpoints
 func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *argo.Rollout) map[string]*WeightedService {
-
 	if rollout == nil {
 		return nil
 	}
 	cachedServices := rc.ServiceController.Cache.Get(rollout.Namespace)
-
 	if cachedServices == nil {
 		return nil
 	}
 	rolloutStrategy := rollout.Spec.Strategy
-
 	if rolloutStrategy.BlueGreen == nil && rolloutStrategy.Canary == nil {
 		return nil
 	}
-
-	var canaryService, stableService, virtualServiceRouteName string
-
-	var istioCanaryWeights = make(map[string]int32)
-
-	var blueGreenActiveService string
-	var blueGreenPreviewService string
-
-	var matchedServices = make(map[string]*WeightedService)
+	var (
+		canaryService           string
+		stableService           string
+		virtualServiceRouteName string
+		istioCanaryWeights      = make(map[string]int32)
+		blueGreenActiveService  string
+		blueGreenPreviewService string
+		matchedServices         = make(map[string]*WeightedService)
+	)
 
 	if rolloutStrategy.BlueGreen != nil {
 		// If rollout uses blue green strategy
 		blueGreenActiveService = rolloutStrategy.BlueGreen.ActiveService
 		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
-
 		if len(blueGreenActiveService) == 0 {
 			//pick a service that ends in RolloutActiveServiceSuffix if one is available
 			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices)
@@ -757,7 +766,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ar
 
 		//calculate canary weights if canary strategy is using Istio traffic management
 		if len(stableService) > 0 && len(canaryService) > 0 && rolloutStrategy.Canary.TrafficRouting != nil && rolloutStrategy.Canary.TrafficRouting.Istio != nil {
-
 			//pick stable service if specified
 			if len(stableService) > 0 {
 				istioCanaryWeights[stableService] = 1
@@ -835,7 +843,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ar
 					log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 					continue
 				}
-
 				match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
 				//make sure the service matches the rollout Selector and also has a mesh port in the port spec
 				if match {
@@ -857,7 +864,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ar
 			log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 			continue
 		}
-
 		match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
 		//make sure the service matches the rollout Selector and also has a mesh port in the port spec
 		if match {

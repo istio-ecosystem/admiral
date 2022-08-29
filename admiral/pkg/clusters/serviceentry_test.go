@@ -804,8 +804,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			var createdSE *istionetworkingv1alpha3.ServiceEntry
-			createdSE = createServiceEntry(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE := createServiceEntryForDeployment(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -855,13 +854,12 @@ func TestCreateServiceEntry(t *testing.T) {
 }
 
 func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
-
-	const NAMESPACE = "test-test"
-	const SERVICENAME = "serviceNameActive"
-	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
-
+	const (
+		namespace                  = "test-test"
+		serviceName                = "serviceNameActive"
+		rolloutPodHashLabel string = "rollouts-pod-template-hash"
+	)
 	ctx := context.Background()
-
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -937,7 +935,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		},
 	}
 
-	rollout.Namespace = NAMESPACE
+	rollout.Namespace = namespace
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{},
 	}
@@ -956,15 +954,15 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
-	selectorMap[ROLLOUT_POD_HASH_LABEL] = "hash"
+	selectorMap[rolloutPodHashLabel] = "hash"
 
 	activeService := &coreV1.Service{
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 		},
 	}
-	activeService.Name = SERVICENAME
-	activeService.Namespace = NAMESPACE
+	activeService.Name = serviceName
+	activeService.Namespace = namespace
 	port1 := coreV1.ServicePort{
 		Port: 8080,
 		Name: "random1",
