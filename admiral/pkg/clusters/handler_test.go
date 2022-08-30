@@ -1589,6 +1589,26 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		},
 	}
 
+	invalidEndpoint := v1alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.test-service.mesh"},
+		Addresses: []string{"240.10.1.1"},
+		Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      v1alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*v1alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "test.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+
+	invalidEndpointSe := &v1alpha32.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{Name: "se3", Namespace: "namespace"},
+		//nolint
+		Spec: invalidEndpoint,
+	}
+
 	newSeOneEndpoint := &v1alpha32.ServiceEntry{
 		ObjectMeta: metaV1.ObjectMeta{Name: "se1", Namespace: "namespace"},
 		//nolint
@@ -1645,6 +1665,13 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 			oldSe:           oldSeTwoEndpoints,
 			skipDestructive: false,
 		},
+		{
+			name:            "Should create an SE with one endpoint",
+			rc:              rcNotInWarmupPhase,
+			newSe:           invalidEndpointSe,
+			oldSe:           nil,
+			skipDestructive: false,
+		},
 	}
 
 	//Run the test for every provided case
@@ -1661,6 +1688,78 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 				if diff != "" {
 					t.Errorf("Failed. Got %v, expected %v", se.Spec.String(), c.oldSe.Spec.String())
 				}
+			}
+		})
+	}
+}
+
+func TestValidateServiceEntryEndpoints(t *testing.T) {
+
+	twoValidEndpoints := []*v1alpha3.WorkloadEntry{
+		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+	}
+
+	oneValidEndpoints := []*v1alpha3.WorkloadEntry{
+		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+	}
+
+	dummyEndpoints := []*v1alpha3.WorkloadEntry{
+		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+	}
+
+	validAndInvalidEndpoints := []*v1alpha3.WorkloadEntry{
+		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+	}
+
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name                      string
+		endpoints                 []*v1alpha3.WorkloadEntry
+		expectedAreEndpointsValid bool
+		expectedValidEndpoints    []*v1alpha3.WorkloadEntry
+	}{
+		{
+			name:                      "Validate SE with dummy endpoint",
+			endpoints:                 dummyEndpoints,
+			expectedAreEndpointsValid: false,
+			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{},
+		},
+		{
+			name:                      "Validate SE with valid endpoint",
+			endpoints:                 oneValidEndpoints,
+			expectedAreEndpointsValid: true,
+			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"}},
+		},
+		{
+			name:                      "Validate endpoint with multiple valid endpoints",
+			endpoints:                 twoValidEndpoints,
+			expectedAreEndpointsValid: true,
+			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
+				{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"}},
+		},
+		{
+			name:                      "Validate endpoint with mix of valid and dummy endpoints",
+			endpoints:                 validAndInvalidEndpoints,
+			expectedAreEndpointsValid: false,
+			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
+				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"}},
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			areValidEndpoints, validEndpoints := validateServiceEntryEndpoints(c.endpoints)
+
+			if areValidEndpoints != c.expectedAreEndpointsValid {
+				t.Errorf("Failed. Got %v, expected %v", areValidEndpoints, c.expectedAreEndpointsValid)
+			}
+
+			if len(validEndpoints) != len(c.expectedValidEndpoints) {
+				t.Errorf("Failed. Got %v, expected %v", len(validEndpoints), len(c.expectedValidEndpoints))
 			}
 		})
 	}
