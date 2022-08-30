@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,6 +67,7 @@ type RemoteRegistry struct {
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
 	StartTime         time.Time
+	ExcludeAssetList  []string
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
@@ -100,6 +102,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		StartTime:         time.Now(),
 		remoteControllers: make(map[string]*RemoteController),
 		AdmiralCache:      admiralCache,
+		ExcludeAssetList:  params.ExcludeAssetList,
 	}
 }
 
@@ -436,6 +439,15 @@ func (sh *ServiceHandler) Deleted(ctx context.Context, obj *k8sV1.Service) {
 	}
 }
 
+func isAnExcludedAsset(assetName string, excludedAssetList []string) bool {
+	for _, excludedAsset := range excludedAssetList {
+		if strings.EqualFold(assetName, excludedAsset) {
+			return true
+		}
+	}
+	return false
+}
+
 func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegistry *RemoteRegistry, clusterName string) error {
 	if svc.Spec.Selector == nil {
 		return fmt.Errorf("selector missing on service=%s in namespace=%s cluster=%s", svc.Name, svc.Namespace, clusterName)
@@ -447,9 +459,9 @@ func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegist
 	deploymentController := rc.DeploymentController
 	rolloutController := rc.RolloutController
 	if deploymentController != nil {
-		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
-		if len(matchingDeployements) > 0 {
-			for _, deployment := range matchingDeployements {
+		matchingDeployments := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployments) > 0 {
+			for _, deployment := range matchingDeployments {
 				HandleEventForDeployment(ctx, admiral.Update, &deployment, remoteRegistry, clusterName)
 			}
 		}
@@ -467,31 +479,23 @@ func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegist
 }
 
 func (dh *DependencyHandler) Added(ctx context.Context, obj *v1.Dependency) {
-
 	log.Infof(LogFormat, "Add", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
-
 	HandleDependencyRecord(ctx, obj, dh.RemoteRegistry)
-
 }
 
 func (dh *DependencyHandler) Updated(ctx context.Context, obj *v1.Dependency) {
-
 	log.Infof(LogFormat, "Update", "dependency-record", obj.Name, "", "Received=true namespace="+obj.Namespace)
-
 	// need clean up before handle it as added, I need to handle update that delete the dependency, find diff first
 	// this is more complex cos want to make sure no other service depend on the same service (which we just removed the dependancy).
 	// need to make sure nothing depend on that before cleaning up the SE for that service
 	HandleDependencyRecord(ctx, obj, dh.RemoteRegistry)
-
 }
 
 func HandleDependencyRecord(ctx context.Context, obj *v1.Dependency, remoteRegitry *RemoteRegistry) {
 	sourceIdentity := obj.Spec.Source
-
 	if len(sourceIdentity) == 0 {
 		log.Infof(LogFormat, "Event", "dependency-record", obj.Name, "", "No identity found namespace="+obj.Namespace)
 	}
-
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
 }
 
@@ -547,10 +551,8 @@ func (rh *RolloutHandler) Deleted(ctx context.Context, obj *argo.Rollout) {
 
 // HandleEventForRollout helper function to handle add and delete for RolloutHandler
 func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *argo.Rollout, remoteRegistry *RemoteRegistry, clusterName string) {
-
 	log.Infof(LogFormat, event, "rollout", obj.Name, clusterName, "Received")
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
-
 	if len(globalIdentifier) == 0 {
 		log.Infof(LogFormat, "Event", "rollout", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
@@ -564,16 +566,12 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 
 // helper function to handle add and delete for DeploymentHandler
 func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
-
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
-
 	if len(globalIdentifier) == 0 {
 		log.Infof(LogFormat, "Event", "deployment", obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return
 	}
-
 	env := common.GetEnv(obj)
-
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
 }
@@ -581,15 +579,11 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 // HandleEventForGlobalTrafficPolicy processes all the events related to GTPs
 func HandleEventForGlobalTrafficPolicy(ctx context.Context, event admiral.EventType, gtp *v1.GlobalTrafficPolicy,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
-
 	globalIdentifier := common.GetGtpIdentity(gtp)
-
 	if len(globalIdentifier) == 0 {
 		return fmt.Errorf(LogFormat, "Event", "globaltrafficpolicy", gtp.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+gtp.Namespace)
 	}
-
 	env := common.GetGtpEnv(gtp)
-
 	// For now we're going to force all the events to update only in order to prevent
 	// the endpoints from being deleted.
 	// TODO: Need to come up with a way to prevent deleting default endpoints so that this hack can be removed.

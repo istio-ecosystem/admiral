@@ -56,46 +56,37 @@ func createServiceEntry(ctx context.Context, event admiral.EventType, rc *Remote
 }
 
 func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
-
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
-
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
 		return nil
 	}
-
 	if IsCacheWarmupTime(remoteRegistry) {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
 		return nil
 	}
 	//create a service entry, destination rule and virtual service in the local cluster
-	sourceServices := make(map[string]*k8sV1.Service)
-	sourceWeightedServices := make(map[string]map[string]*WeightedService)
-	sourceDeployments := make(map[string]*k8sAppsV1.Deployment)
-	sourceRollouts := make(map[string]*argo.Rollout)
-
-	var serviceEntries = make(map[string]*networking.ServiceEntry)
-
-	var cname string
-	cnames := make(map[string]string)
-	var serviceInstance *k8sV1.Service
-	var weightedServices map[string]*WeightedService
-	var rollout *argo.Rollout
-	var deployment *k8sAppsV1.Deployment
-	var gtps = make(map[string][]*v1.GlobalTrafficPolicy)
-
-	var namespace string
-
-	var gtpKey = common.ConstructGtpKey(env, sourceIdentity)
-
-	start := time.Now()
-
-	clusters := remoteRegistry.GetClusterIds()
+	var (
+		namespace              string
+		cname                  string
+		serviceInstance        *k8sV1.Service
+		weightedServices       map[string]*WeightedService
+		rollout                *argo.Rollout
+		deployment             *k8sAppsV1.Deployment
+		gtps                   = make(map[string][]*v1.GlobalTrafficPolicy)
+		sourceServices         = make(map[string]*k8sV1.Service)
+		sourceWeightedServices = make(map[string]map[string]*WeightedService)
+		sourceDeployments      = make(map[string]*k8sAppsV1.Deployment)
+		sourceRollouts         = make(map[string]*argo.Rollout)
+		serviceEntries         = make(map[string]*networking.ServiceEntry)
+		cnames                 = make(map[string]string)
+		start                  = time.Now()
+		gtpKey                 = common.ConstructGtpKey(env, sourceIdentity)
+		clusters               = remoteRegistry.GetClusterIds()
+	)
 
 	for _, clusterId := range clusters {
-
 		rc := remoteRegistry.GetRemoteController(clusterId)
-
 		if rc == nil {
 			log.Warnf(LogFormat, "Find", "remote-controller", clusterId, clusterId, "remote controller not available/initialized for the cluster")
 			continue
@@ -109,7 +100,16 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
 
+		if deployment == nil && rollout == nil {
+			log.Infof("Neither deployment nor rollouts found for identity=%s in env=%s namespace=%s", sourceIdentity, env, namespace)
+			continue
+		}
+
 		if deployment != nil {
+			if isAnExcludedAsset(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeAssetList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+				return nil
+			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
@@ -117,14 +117,16 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 			}
 			namespace = deployment.Namespace
 			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
-
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntry(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
+			if isAnExcludedAsset(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeAssetList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+				return nil
+			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			weightedServices = getServiceForRollout(ctx, rc, rollout)
-
 			if len(weightedServices) == 0 {
 				continue
 			}
@@ -136,14 +138,10 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 			}
 			namespace = rollout.Namespace
 			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
-
 			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
 			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
-
-		} else {
-			continue
 		}
 
 		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
@@ -207,9 +205,8 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 					if blueGreenStrategy {
 						oldPorts := ep.Ports
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
-
-						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-
+						AddServiceEntriesWithDr(
+							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -219,15 +216,15 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 						//add one endpoint per each service, may be modify
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
-						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-
+						AddServiceEntriesWithDr(
+							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: se})
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
-						AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-
+						AddServiceEntriesWithDr(
+							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry})
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
@@ -238,21 +235,21 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(ctx, serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
+			modifySidecarForLocalClusterCommunication(
+				ctx, serviceInstance.Namespace,
+				remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
 		}
 
 		for _, val := range dependents {
-			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance.Namespace, localFqdn, cnames)
+			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(
+				val, serviceInstance.Namespace, localFqdn, cnames)
 		}
-
 	}
 
 	util.LogElapsedTimeSince("WriteServiceEntryToSourceClusters", sourceIdentity, env, "", start)
 
 	//Write to dependent clusters
-
 	start = time.Now()
-
 	dependentClusters := getDependentClusters(dependents, remoteRegistry.AdmiralCache.IdentityClusterCache, sourceServices)
 
 	//update cname dependent cluster cache
@@ -261,9 +258,7 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 	}
 
 	AddServiceEntriesWithDr(ctx, remoteRegistry, dependentClusters, serviceEntries)
-
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
-
 	return serviceEntries
 }
 
