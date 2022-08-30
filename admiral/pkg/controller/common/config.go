@@ -1,9 +1,10 @@
 package common
 
 import (
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var admiralParams = AdmiralParams{

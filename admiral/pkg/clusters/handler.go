@@ -387,15 +387,21 @@ func handleVirtualServiceEvent(
 
 	// check if this virtual service is used by Argo rollouts for canary strategy, if so, update the corresponding SE with appropriate weights
 	if common.GetAdmiralParams().ArgoRolloutsEnabled {
-		rollouts, err := vh.RemoteRegistry.GetRemoteController(clusterId).RolloutController.RolloutClient.Rollouts(obj.Namespace).List(ctx, v12.ListOptions{})
-
-		if err != nil {
-			log.Errorf(LogErrFormat, "Get", "Rollout", "Error finding rollouts in namespace="+obj.Namespace, clusterId, err)
-		} else {
-			if len(rollouts.Items) > 0 {
-				for _, rollout := range rollouts.Items {
-					if rollout.Spec.Strategy.Canary != nil && rollout.Spec.Strategy.Canary.TrafficRouting != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio.VirtualService.Name == obj.Name {
-						HandleEventForRollout(ctx, admiral.Update, &rollout, vh.RemoteRegistry, clusterId)
+		rc := vh.RemoteRegistry.GetRemoteController(clusterId)
+		if rc == nil {
+			return fmt.Errorf("could not find the remote controller for cluster=%s", clusterId)
+		}
+		rolloutController := rc.RolloutController
+		if rolloutController != nil {
+			rollouts, err := rolloutController.RolloutClient.Rollouts(obj.Namespace).List(ctx, v12.ListOptions{})
+			if err != nil {
+				log.Errorf(LogErrFormat, "Get", "Rollout", "Error finding rollouts in namespace="+obj.Namespace, clusterId, err)
+			} else {
+				if len(rollouts.Items) > 0 {
+					for _, rollout := range rollouts.Items {
+						if rollout.Spec.Strategy.Canary != nil && rollout.Spec.Strategy.Canary.TrafficRouting != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio != nil && rollout.Spec.Strategy.Canary.TrafficRouting.Istio.VirtualService.Name == obj.Name {
+							HandleEventForRollout(ctx, admiral.Update, &rollout, vh.RemoteRegistry, clusterId)
+						}
 					}
 				}
 			}
@@ -406,39 +412,41 @@ func handleVirtualServiceEvent(
 	if len(dependentClusters) > 0 {
 		for _, dependentCluster := range dependentClusters {
 			rc := r.GetRemoteController(dependentCluster)
-			if clusterId != dependentCluster {
-				log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
-				if event == common.Delete {
-					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
-					if err != nil {
-						if k8sErrors.IsNotFound(err) {
-							log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+			if rc != nil {
+				if clusterId != dependentCluster {
+					log.Infof(LogFormat, "Event", "VirtualService", obj.Name, clusterId, "Processing")
+					if event == common.Delete {
+						err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
+						if err != nil {
+							if k8sErrors.IsNotFound(err) {
+								log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+							} else {
+								log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+							}
 						} else {
-							log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+							log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 						}
 					} else {
-						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
-					}
-				} else {
-					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
-					//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
-					for _, httpRoute := range virtualService.Http {
-						for _, destination := range httpRoute.Route {
-							//get at index 0, we do not support wildcards or multiple hosts currently
-							if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
-								destination.Destination.Host = virtualService.Hosts[0]
+						exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
+						//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
+						for _, httpRoute := range virtualService.Http {
+							for _, destination := range httpRoute.Route {
+								//get at index 0, we do not support wildcards or multiple hosts currently
+								if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
+									destination.Destination.Host = virtualService.Hosts[0]
+								}
 							}
 						}
-					}
-					for _, tlsRoute := range virtualService.Tls {
-						for _, destination := range tlsRoute.Route {
-							//get at index 0, we do not support wildcards or multiple hosts currently
-							if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
-								destination.Destination.Host = virtualService.Hosts[0]
+						for _, tlsRoute := range virtualService.Tls {
+							for _, destination := range tlsRoute.Route {
+								//get at index 0, we do not support wildcards or multiple hosts currently
+								if strings.HasSuffix(destination.Destination.Host, common.DotLocalDomainSuffix) {
+									destination.Destination.Host = virtualService.Hosts[0]
+								}
 							}
 						}
+						addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 					}
-					addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 				}
 			}
 		}
@@ -453,20 +461,22 @@ func handleVirtualServiceEvent(
 	for _, ClusterID := range remoteClusters {
 		if ClusterID != clusterId {
 			rc := r.GetRemoteController(ClusterID)
-			if event == common.Delete {
-				err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
-				if err != nil {
-					if k8sErrors.IsNotFound(err) {
-						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+			if rc != nil {
+				if event == common.Delete {
+					err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, obj.Name, v12.DeleteOptions{})
+					if err != nil {
+						if k8sErrors.IsNotFound(err) {
+							log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Either VirtualService was already deleted, or it never existed")
+						} else {
+							log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+						}
 					} else {
-						log.Errorf(LogErrFormat, "Delete", "VirtualService", obj.Name, clusterId, err)
+						log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
 					}
 				} else {
-					log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, clusterId, "Success")
+					exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
+					addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 				}
-			} else {
-				exist, _ := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, obj.Name, v12.GetOptions{})
-				addUpdateVirtualService(ctx, obj, exist, syncNamespace, rc)
 			}
 		}
 	}

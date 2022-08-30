@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -507,7 +508,9 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		rr2                 = NewRemoteRegistry(context.TODO(), common.AdmiralParams{})
 		fakeIstioClient     = istioFake.NewSimpleClientset()
 		fullFakeIstioClient = istioFake.NewSimpleClientset()
-
+		happyAdmiralParams  = common.AdmiralParams{
+			ArgoRolloutsEnabled: true,
+		}
 		tooManyHosts = v1alpha32.VirtualService{
 			Spec: v1alpha3.VirtualService{
 				Hosts: []string{"qa.blah.global", "e2e.blah.global"},
@@ -550,7 +553,13 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		CnameDependentClusterCache: cnameCache,
 		SeClusterCache:             common.NewMapOfMaps(),
 	}
+	rr.PutRemoteController("cluster.k8s.global", &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: fakeIstioClient,
+		},
+	})
 	noDependentClustersHandler := VirtualServiceHandler{
+		ClusterID:      "cluster.k8s.global",
 		RemoteRegistry: rr,
 	}
 
@@ -566,6 +575,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	})
 	handlerEmptyClient := VirtualServiceHandler{
 		RemoteRegistry: rr1,
+		ClusterID:      "cluster.k8s.global",
 	}
 	fullFakeIstioClient.NetworkingV1alpha3().VirtualServices("ns").Create(ctx, &v1alpha32.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
@@ -585,7 +595,11 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		},
 	})
 	handlerFullClient := VirtualServiceHandler{
-		ClusterID:      "cluster2.k8s.global",
+		ClusterID:      "cluster.k8s.global",
+		RemoteRegistry: rr2,
+	}
+	handlerWithoutClusterInRemoteRegistry := VirtualServiceHandler{
+		ClusterID:      "non-existent-cluster",
 		RemoteRegistry: rr2,
 	}
 
@@ -660,14 +674,22 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			handler:       &handlerFullClient,
 			event:         2,
 		},
+		{
+			name:          "Should not panic, but return an error when cluster does not exist in remote registry cache",
+			vs:            &happyPath,
+			expectedError: fmt.Errorf("could not find the remote controller for cluster=%s", "non-existent-cluster"),
+			handler:       &handlerWithoutClusterInRemoteRegistry,
+			event:         2,
+		},
 	}
 
 	//Run the test for every provided case
+	common.InitializeConfig(happyAdmiralParams)
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			err := handleVirtualServiceEvent(ctx, c.vs, c.handler, c.event, common.VirtualService)
-			if err != c.expectedError {
-				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
+			if !reflect.DeepEqual(err, c.expectedError) {
+				t.Fatalf("Error mismatch, expected: '%v' but got: '%v'", c.expectedError, err)
 			}
 		})
 	}

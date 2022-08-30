@@ -39,6 +39,7 @@ func init() {
 		WorkloadSidecarName:        "default",
 		EnableRoutingPolicy:        true,
 		EnvoyFilterVersion:         "1.13",
+		ArgoRolloutsEnabled:        true,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
