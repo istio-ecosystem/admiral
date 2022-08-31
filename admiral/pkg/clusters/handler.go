@@ -32,7 +32,7 @@ const (
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
 	DefaultInterval                 int64  = 60
-	DefaultHTTP2MaxRequest          int32  = 1000
+	DefaultHTTP2MaxRequests          int32  = 1000
 	DefaultMaxRequestsPerConnection int32  = 100
 )
 
