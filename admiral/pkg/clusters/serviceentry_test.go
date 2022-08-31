@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gopkg.in/yaml.v2"
-	istionetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	istioNetworkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v14 "k8s.io/api/apps/v1"
@@ -53,6 +53,95 @@ func init() {
 	common.InitializeConfig(p)
 }
 
+func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
+	var (
+		clusterID = "test"
+		p         = common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+		}
+		rr1, _ = InitAdmiral(context.Background(), p)
+		config = rest.Config{
+			Host: "localhost",
+		}
+	)
+	rr1.ExcludeAssetList = []string{"asset1"}
+	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	rolloutController, err := admiral.NewRolloutsController(clusterID, make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	rc := &RemoteController{
+		DeploymentController: deploymentController,
+		RolloutController:    rolloutController,
+	}
+	rr1.PutRemoteController(clusterID, rc)
+	serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", "asset1", rr1)
+	if serviceEntries != nil {
+		t.Fatalf("expected service entries to be: %v, but got: %v", nil, serviceEntries)
+	}
+}
+
+/*
+func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
+	var (
+		clusterID = "test"
+		p         = common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+		}
+		rr1, _ = InitAdmiral(context.Background(), p)
+		rr2, _ = InitAdmiral(context.Background(), p)
+		config = rest.Config{
+			Host: "localhost",
+		}
+	)
+	rr1.ExcludeAssetList = []string{"asset1"}
+	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	rolloutController, err := admiral.NewRolloutsController(clusterID, make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	rc := &RemoteController{
+		DeploymentController: deploymentController,
+		RolloutController:    rolloutController,
+	}
+	rr1.PutRemoteController(clusterID, rc)
+	rr2.PutRemoteController(clusterID, rc)
+	testCases := []struct {
+		name                   string
+		assetIdentity          string
+		remoteRegistry         *RemoteRegistry
+		expectedServiceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry
+	}{
+		{
+			name:                   "when asset is in the exclude list",
+			assetIdentity:          "asset1",
+			remoteRegistry:         rr1,
+			expectedServiceEntries: nil,
+		},
+			{
+				name:                   "when asset is NOT in the exclude list",
+				assetIdentity:          "bar",
+				remoteRegistry:         rr2,
+				expectedServiceEntries: nil,
+			},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", c.assetIdentity, c.remoteRegistry)
+			if !reflect.DeepEqual(serviceEntries, c.expectedServiceEntries) {
+				t.Fatalf("expected service entries to be: %v, but got: %v", c.expectedServiceEntries, serviceEntries)
+			}
+		})
+	}
+}
+*/
+
 func TestAddServiceEntriesWithDr(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
@@ -67,16 +156,16 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	gtpCache.mutex = &sync.Mutex{}
 	admiralCache.GlobalTrafficCache = gtpCache
 
-	se := istionetworkingv1alpha3.ServiceEntry{
+	se := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
-	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+	emptyEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"dev.bar.global"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
 	}
 
 	seConfig := v1alpha3.ServiceEntry{
@@ -106,8 +195,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
 	rr.PutRemoteController("c1", rc)
 	rr.AdmiralCache = &admiralCache
-	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
-	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &emptyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -137,10 +226,10 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 
 	admiralCache.ConfigMapController = cacheController
 
-	se := &istionetworkingv1alpha3.ServiceEntry{
+	se := &istioNetworkingV1Alpha3.ServiceEntry{
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{host},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
 			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
 		},
@@ -204,7 +293,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		name     string
 		env      string
 		locality string
-		se       *istionetworkingv1alpha3.ServiceEntry
+		se       *istioNetworkingV1Alpha3.ServiceEntry
 		gtp      *v13.GlobalTrafficPolicy
 		seDrSet  map[string]*SeDrTuple
 	}{
@@ -512,12 +601,12 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	existingSidecarObj.ObjectMeta.Namespace = "test-sidecar-namespace"
 	existingSidecarObj.ObjectMeta.Name = "default"
 
-	istioEgress := istionetworkingv1alpha3.IstioEgressListener{
+	istioEgress := istioNetworkingV1Alpha3.IstioEgressListener{
 		Hosts: []string{"test-host"},
 	}
 
-	existingSidecarObj.Spec = istionetworkingv1alpha3.Sidecar{
-		Egress: []*istionetworkingv1alpha3.IstioEgressListener{&istioEgress},
+	existingSidecarObj.Spec = istioNetworkingV1Alpha3.Sidecar{
+		Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{&istioEgress},
 	}
 
 	ctx := context.Background()
@@ -549,7 +638,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		if !cmp.Equal(updatedSidecar, createdSidecar, protocmp.Transform()) {
 			t.Fatalf("Modify existing sidecar failed as configuration is not same. Details - %v", cmp.Diff(updatedSidecar, createdSidecar))
 		}
-		var matched *istionetworkingv1alpha3.IstioEgressListener
+		var matched *istioNetworkingV1Alpha3.IstioEgressListener
 		for _, listener := range createdSidecarEgress {
 			matched = nil
 
@@ -640,93 +729,93 @@ func TestCreateServiceEntry(t *testing.T) {
 	secondDeployment := v14.Deployment{}
 	secondDeployment.Spec.Template.Labels = map[string]string{"env": "e2e", "identity": "my-first-service"}
 
-	se := istionetworkingv1alpha3.ServiceEntry{
+	se := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
-	oneEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+	oneEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 		},
 	}
 
-	twoEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+	twoEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
-		},
-	}
-
-	threeEndpointSe := istionetworkingv1alpha3.ServiceEntry{
-		Hosts:     []string{"e2e.my-first-service.mesh"},
-		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
-			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
-		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
-	eastEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+
+	threeEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		},
+	}
+	eastEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 		},
 	}
 
-	emptyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+	emptyEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "http", Protocol: "http"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints:       []*istionetworkingv1alpha3.WorkloadEntry{},
+		Endpoints:       []*istioNetworkingV1Alpha3.WorkloadEntry{},
 	}
 
-	grpcSe := istionetworkingv1alpha3.ServiceEntry{
+	grpcSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts:     []string{"e2e.my-first-service.mesh"},
 		Addresses: []string{localAddress},
-		Ports: []*istionetworkingv1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+		Ports: []*istioNetworkingV1Alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
 			Name: "grpc", Protocol: "grpc"}},
-		Location:        istionetworkingv1alpha3.ServiceEntry_MESH_INTERNAL,
-		Resolution:      istionetworkingv1alpha3.ServiceEntry_DNS,
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2"},
 		},
 	}
@@ -738,8 +827,8 @@ func TestCreateServiceEntry(t *testing.T) {
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		deployment     v14.Deployment
-		serviceEntries map[string]*istionetworkingv1alpha3.ServiceEntry
-		expectedResult *istionetworkingv1alpha3.ServiceEntry
+		serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry
+		expectedResult *istioNetworkingV1Alpha3.ServiceEntry
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
@@ -748,7 +837,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32{"grpc": uint32(80)},
 			deployment:     deployment,
-			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{},
 			expectedResult: &grpcSe,
 		},
 		{
@@ -758,7 +847,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32{"http": uint32(80)},
 			deployment:     deployment,
-			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{},
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{},
 			expectedResult: &se,
 		},
 		{
@@ -768,7 +857,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache: admiralCache,
 			meshPorts:    map[string]uint32{"http": uint32(80)},
 			deployment:   deployment,
-			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &oneEndpointSe,
 			},
 			expectedResult: &emptyEndpointSe,
@@ -780,7 +869,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache: admiralCache,
 			meshPorts:    map[string]uint32{"http": uint32(80)},
 			deployment:   deployment,
-			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &twoEndpointSe,
 			},
 			expectedResult: &eastEndpointSe,
@@ -792,7 +881,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			admiralCache: admiralCache,
 			meshPorts:    map[string]uint32{"http": uint32(80)},
 			deployment:   deployment,
-			serviceEntries: map[string]*istionetworkingv1alpha3.ServiceEntry{
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &threeEndpointSe,
 			},
 			expectedResult: &eastEndpointSe,
@@ -804,7 +893,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			var createdSE *istionetworkingv1alpha3.ServiceEntry
+			var createdSE *istioNetworkingV1Alpha3.ServiceEntry
 			createdSE = createServiceEntry(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
@@ -822,7 +911,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		rollout        argo.Rollout
-		expectedResult *istionetworkingv1alpha3.ServiceEntry
+		expectedResult *istioNetworkingV1Alpha3.ServiceEntry
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
@@ -845,7 +934,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForRollout(ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istionetworkingv1alpha3.ServiceEntry{})
+			createdSE := createServiceEntryForRollout(ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -1183,7 +1272,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	rollout.Spec.Template.Annotations = map[string]string{}
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
 
-	endpoint := &istionetworkingv1alpha3.WorkloadEntry{
+	endpoint := &istioNetworkingV1Alpha3.WorkloadEntry{
 		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
 	}
 
@@ -1194,23 +1283,23 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
 	}
 
-	activeWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
+	activeWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
 		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
-	previewWantedEndpoints := &istionetworkingv1alpha3.WorkloadEntry{
+	previewWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
 		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
 	testCases := []struct {
 		name             string
 		rollout          *argo.Rollout
-		inputEndpoint    *istionetworkingv1alpha3.WorkloadEntry
+		inputEndpoint    *istioNetworkingV1Alpha3.WorkloadEntry
 		weightedServices map[string]*WeightedService
 		clusterIngress   string
 		meshPorts        map[string]uint32
 		meshHost         string
-		wantedEndpoints  *istionetworkingv1alpha3.WorkloadEntry
+		wantedEndpoints  *istioNetworkingV1Alpha3.WorkloadEntry
 	}{
 		{
 			name:             "should return endpoint with active service address",
@@ -1251,8 +1340,8 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	const STABLE_SERVICE = "stableService"
 	const NAMESPACE = "namespace"
 
-	se := &istionetworkingv1alpha3.ServiceEntry{
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+	se := &istioNetworkingV1Alpha3.ServiceEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		},
@@ -1269,24 +1358,24 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
 	}
 
-	wantedEndpoints := []*istionetworkingv1alpha3.WorkloadEntry{
+	wantedEndpoints := []*istioNetworkingV1Alpha3.WorkloadEntry{
 		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
 		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
 	}
 
-	wantedEndpointsZeroWeights := []*istionetworkingv1alpha3.WorkloadEntry{
+	wantedEndpointsZeroWeights := []*istioNetworkingV1Alpha3.WorkloadEntry{
 		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
 	}
 
 	testCases := []struct {
 		name              string
-		inputServiceEntry *istionetworkingv1alpha3.ServiceEntry
+		inputServiceEntry *istioNetworkingV1Alpha3.ServiceEntry
 		weightedServices  map[string]*WeightedService
 		clusterIngress    string
 		meshPorts         map[string]uint32
-		wantedEndpoints   []*istionetworkingv1alpha3.WorkloadEntry
+		wantedEndpoints   []*istioNetworkingV1Alpha3.WorkloadEntry
 	}{
 		{
 			name:              "should return endpoints with assigned weights",
