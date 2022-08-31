@@ -187,7 +187,7 @@ func TestGetDestinationRule(t *testing.T) {
 		OutlierDetection: outlierDetection,
 		ConnectionPool: &v1alpha3.ConnectionPoolSettings{
 			Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
-				Http2MaxRequests:         DefaultHTTP2MaxRequest,
+				Http2MaxRequests:         DefaultHTTP2MaxRequests,
 				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 			},
 		},
@@ -212,7 +212,7 @@ func TestGetDestinationRule(t *testing.T) {
 			OutlierDetection: outlierDetection,
 			ConnectionPool: &v1alpha3.ConnectionPoolSettings{
 				Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
-					Http2MaxRequests:         DefaultHTTP2MaxRequest,
+					Http2MaxRequests:         DefaultHTTP2MaxRequests,
 					MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 				},
 			},
@@ -237,7 +237,7 @@ func TestGetDestinationRule(t *testing.T) {
 			OutlierDetection: outlierDetection,
 			ConnectionPool: &v1alpha3.ConnectionPoolSettings{
 				Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
-					Http2MaxRequests:         DefaultHTTP2MaxRequest,
+					Http2MaxRequests:         DefaultHTTP2MaxRequests,
 					MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 				},
 			},

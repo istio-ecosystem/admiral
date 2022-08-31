@@ -32,7 +32,7 @@ const (
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
 	DefaultInterval                 int64  = 60
-	DefaultHTTP2MaxRequests          int32  = 1000
+	DefaultHTTP2MaxRequests         int32  = 1000
 	DefaultMaxRequestsPerConnection int32  = 100
 )
 
@@ -93,7 +93,7 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 		},
 		ConnectionPool: &v1alpha32.ConnectionPoolSettings{
 			Http: &v1alpha32.ConnectionPoolSettings_HTTPSettings{
-				Http2MaxRequests:         DefaultHTTP2MaxRequest,
+				Http2MaxRequests:         DefaultHTTP2MaxRequests,
 				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 			},
 		},
