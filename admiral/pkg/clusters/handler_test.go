@@ -1713,28 +1713,84 @@ func TestValidateServiceEntryEndpoints(t *testing.T) {
 		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
 	}
 
+	twoValidEndpointsSe := &v1alpha32.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{Name: "twoValidEndpointsSe", Namespace: "namespace"},
+		Spec: v1alpha3.ServiceEntry{
+			Hosts:     []string{"e2e.my-first-service.mesh"},
+			Addresses: []string{"240.10.1.1"},
+			Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+				Name: "http", Protocol: "http"}},
+			Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+			Resolution:      v1alpha3.ServiceEntry_DNS,
+			SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+			Endpoints:       twoValidEndpoints,
+		},
+	}
+
+	oneValidEndpointsSe := &v1alpha32.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{Name: "twoValidEndpointsSe", Namespace: "namespace"},
+		Spec: v1alpha3.ServiceEntry{
+			Hosts:     []string{"e2e.my-first-service.mesh"},
+			Addresses: []string{"240.10.1.1"},
+			Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+				Name: "http", Protocol: "http"}},
+			Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+			Resolution:      v1alpha3.ServiceEntry_DNS,
+			SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+			Endpoints:       oneValidEndpoints,
+		},
+	}
+
+	dummyEndpointsSe := &v1alpha32.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{Name: "twoValidEndpointsSe", Namespace: "namespace"},
+		Spec: v1alpha3.ServiceEntry{
+			Hosts:     []string{"e2e.my-first-service.mesh"},
+			Addresses: []string{"240.10.1.1"},
+			Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+				Name: "http", Protocol: "http"}},
+			Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+			Resolution:      v1alpha3.ServiceEntry_DNS,
+			SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+			Endpoints:       dummyEndpoints,
+		},
+	}
+
+	validAndInvalidEndpointsSe := &v1alpha32.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{Name: "twoValidEndpointsSe", Namespace: "namespace"},
+		Spec: v1alpha3.ServiceEntry{
+			Hosts:     []string{"e2e.my-first-service.mesh"},
+			Addresses: []string{"240.10.1.1"},
+			Ports: []*v1alpha3.Port{{Number: uint32(common.DefaultServiceEntryPort),
+				Name: "http", Protocol: "http"}},
+			Location:        v1alpha3.ServiceEntry_MESH_INTERNAL,
+			Resolution:      v1alpha3.ServiceEntry_DNS,
+			SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+			Endpoints:       validAndInvalidEndpoints,
+		},
+	}
+
 	//Struct of test case info. Name is required.
 	testCases := []struct {
 		name                      string
-		endpoints                 []*v1alpha3.WorkloadEntry
+		serviceEntry              *v1alpha32.ServiceEntry
 		expectedAreEndpointsValid bool
 		expectedValidEndpoints    []*v1alpha3.WorkloadEntry
 	}{
 		{
 			name:                      "Validate SE with dummy endpoint",
-			endpoints:                 dummyEndpoints,
+			serviceEntry:              dummyEndpointsSe,
 			expectedAreEndpointsValid: false,
 			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{},
 		},
 		{
 			name:                      "Validate SE with valid endpoint",
-			endpoints:                 oneValidEndpoints,
+			serviceEntry:              oneValidEndpointsSe,
 			expectedAreEndpointsValid: true,
 			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"}},
 		},
 		{
 			name:                      "Validate endpoint with multiple valid endpoints",
-			endpoints:                 twoValidEndpoints,
+			serviceEntry:              twoValidEndpointsSe,
 			expectedAreEndpointsValid: true,
 			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
 				{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
@@ -1742,7 +1798,7 @@ func TestValidateServiceEntryEndpoints(t *testing.T) {
 		},
 		{
 			name:                      "Validate endpoint with mix of valid and dummy endpoints",
-			endpoints:                 validAndInvalidEndpoints,
+			serviceEntry:              validAndInvalidEndpointsSe,
 			expectedAreEndpointsValid: false,
 			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
 				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"}},
@@ -1752,14 +1808,14 @@ func TestValidateServiceEntryEndpoints(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			areValidEndpoints, validEndpoints := validateServiceEntryEndpoints(c.endpoints)
+			areValidEndpoints := validateAndProcessServiceEntryEndpoints(c.serviceEntry)
 
 			if areValidEndpoints != c.expectedAreEndpointsValid {
 				t.Errorf("Failed. Got %v, expected %v", areValidEndpoints, c.expectedAreEndpointsValid)
 			}
 
-			if len(validEndpoints) != len(c.expectedValidEndpoints) {
-				t.Errorf("Failed. Got %v, expected %v", len(validEndpoints), len(c.expectedValidEndpoints))
+			if len(c.serviceEntry.Spec.Endpoints) != len(c.expectedValidEndpoints) {
+				t.Errorf("Failed. Got %v, expected %v", len(c.serviceEntry.Spec.Endpoints), len(c.expectedValidEndpoints))
 			}
 		})
 	}

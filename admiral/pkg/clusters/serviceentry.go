@@ -462,15 +462,16 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 					oldDestinationRule = nil
 				}
 
-				var areEndpointsValid = true
-				var validEndpoints = make([]*networking.WorkloadEntry, 0)
+				var deleteOldServiceEntry = false
 				if oldServiceEntry != nil {
-					areEndpointsValid, validEndpoints := validateServiceEntryEndpoints(oldServiceEntry.Spec.Endpoints)
-					log.Infof("type=ServiceEntry, name=%s, endpointsValid=%v, numberOfValidEndpoints=%d", oldServiceEntry.Name, areEndpointsValid, len(validEndpoints))
+					areEndpointsValid := validateAndProcessServiceEntryEndpoints(oldServiceEntry)
+					if !areEndpointsValid && len(oldServiceEntry.Spec.Endpoints) == 0 {
+						deleteOldServiceEntry = true
+					}
 				}
 
 				//clean service entry in case no endpoints are configured or if all the endpoints are invalid
-				if (len(seDr.ServiceEntry.Endpoints) == 0) || (!areEndpointsValid && len(validEndpoints) == 0) {
+				if (len(seDr.ServiceEntry.Endpoints) == 0) || deleteOldServiceEntry {
 					deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
 					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists

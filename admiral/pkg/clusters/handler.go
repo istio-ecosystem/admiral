@@ -504,19 +504,21 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 	}
 }
 
-func validateServiceEntryEndpoints(endpoints []*v1alpha32.WorkloadEntry) (bool, []*v1alpha32.WorkloadEntry) {
+func validateAndProcessServiceEntryEndpoints(obj *v1alpha3.ServiceEntry) bool {
 	var areEndpointsValid = true
-	validEndpoints := make([]*v1alpha32.WorkloadEntry, 0)
 
-	for _, endpoint := range endpoints {
+	temp := make([]*v1alpha32.WorkloadEntry, 0)
+	for _, endpoint := range obj.Spec.Endpoints {
 		if endpoint.Address == "dummy.admiral.global" {
 			areEndpointsValid = false
 		} else {
-			validEndpoints = append(validEndpoints, endpoint)
+			temp = append(temp, endpoint)
 		}
 	}
+	obj.Spec.Endpoints = temp
+	log.Infof("type=ServiceEntry, name=%s, endpointsValid=%v, numberOfValidEndpoints=%d", obj.Name, areEndpointsValid, len(obj.Spec.Endpoints))
 
-	return areEndpointsValid, validEndpoints
+	return areEndpointsValid
 }
 
 func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
@@ -531,14 +533,12 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
 
-	areEndpointsValid, validEndpoints := validateServiceEntryEndpoints(obj.Spec.Endpoints)
-	log.Infof("type=ServiceEntry, name=%s, endpointsValid=%v, numberOfValidEndpoints=%d", obj.Name, areEndpointsValid, len(validEndpoints))
+	areEndpointsValid := validateAndProcessServiceEntryEndpoints(obj)
 
 	if exist == nil || exist.Spec.Hosts == nil {
 		op = "Add"
 		//se will be created if endpoints are valid, in case they are not valid se will be created with just valid endpoints
-		if areEndpointsValid || (!areEndpointsValid && len(validEndpoints) > 0) {
-			obj.Spec.Endpoints = validEndpoints
+		if len(obj.Spec.Endpoints) > 0 {
 			obj.Namespace = namespace
 			obj.ResourceVersion = ""
 			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(ctx, obj, v12.CreateOptions{})
