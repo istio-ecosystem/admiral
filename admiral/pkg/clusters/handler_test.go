@@ -180,7 +180,18 @@ func TestGetDestinationRule(t *testing.T) {
 		Interval:                 &duration.Duration{Seconds: 60},
 		MaxEjectionPercent:       100,
 	}
-	mTLS := &v1alpha3.TrafficPolicy{Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL}, OutlierDetection: outlierDetection}
+	mTLS := &v1alpha3.TrafficPolicy{
+		Tls: &v1alpha3.ClientTLSSettings{
+			Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL,
+		},
+		OutlierDetection: outlierDetection,
+		ConnectionPool: &v1alpha3.ConnectionPoolSettings{
+			Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
+				Http2MaxRequests:         DefaultHTTP2MaxRequest,
+				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
+			},
+		},
+	}
 
 	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
 		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
@@ -199,6 +210,12 @@ func TestGetDestinationRule(t *testing.T) {
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{},
 			},
 			OutlierDetection: outlierDetection,
+			ConnectionPool: &v1alpha3.ConnectionPoolSettings{
+				Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
+					Http2MaxRequests:         DefaultHTTP2MaxRequest,
+					MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
+				},
+			},
 		},
 	}
 
@@ -218,6 +235,12 @@ func TestGetDestinationRule(t *testing.T) {
 				},
 			},
 			OutlierDetection: outlierDetection,
+			ConnectionPool: &v1alpha3.ConnectionPoolSettings{
+				Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
+					Http2MaxRequests:         DefaultHTTP2MaxRequest,
+					MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
+				},
+			},
 		},
 	}
 
