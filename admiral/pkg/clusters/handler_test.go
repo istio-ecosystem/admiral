@@ -191,6 +191,11 @@ func TestGetDestinationRule(t *testing.T) {
 				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 			},
 		},
+		LoadBalancer: &v1alpha3.LoadBalancerSettings{
+			LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{
+				Simple: v1alpha3.LoadBalancerSettings_LEAST_REQUEST,
+			},
+		},
 	}
 
 	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
@@ -206,7 +211,7 @@ func TestGetDestinationRule(t *testing.T) {
 		TrafficPolicy: &v1alpha3.TrafficPolicy{
 			Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL},
 			LoadBalancer: &v1alpha3.LoadBalancerSettings{
-				LbPolicy:          &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
+				LbPolicy:          &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_LEAST_REQUEST},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{},
 			},
 			OutlierDetection: outlierDetection,
@@ -224,7 +229,7 @@ func TestGetDestinationRule(t *testing.T) {
 		TrafficPolicy: &v1alpha3.TrafficPolicy{
 			Tls: &v1alpha3.ClientTLSSettings{Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL},
 			LoadBalancer: &v1alpha3.LoadBalancerSettings{
-				LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_ROUND_ROBIN},
+				LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{Simple: v1alpha3.LoadBalancerSettings_LEAST_REQUEST},
 				LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{
 					Distribute: []*v1alpha3.LocalityLoadBalancerSetting_Distribute{
 						{

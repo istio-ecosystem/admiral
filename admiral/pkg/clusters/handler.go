@@ -97,6 +97,11 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
 			},
 		},
+		LoadBalancer: &v1alpha32.LoadBalancerSettings{
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{
+				Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST,
+			},
+		},
 	}
 
 	if len(locality) == 0 {
@@ -105,7 +110,7 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
-			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_ROUND_ROBIN},
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST},
 		}
 
 		if len(gtpTrafficPolicy.Target) > 0 {
