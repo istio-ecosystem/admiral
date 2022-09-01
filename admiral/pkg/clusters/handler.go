@@ -32,6 +32,8 @@ const (
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
 	DefaultInterval                 int64  = 60
+	DefaultHTTP2MaxRequests         int32  = 1000
+	DefaultMaxRequestsPerConnection int32  = 100
 )
 
 // ServiceEntryHandler responsible for handling Add/Update/Delete events for
@@ -85,7 +87,22 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 		dr         = &v1alpha32.DestinationRule{}
 	)
 	dr.Host = se.Hosts[0]
-	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.ClientTLSSettings{Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL}}
+	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{
+		Tls: &v1alpha32.ClientTLSSettings{
+			Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL,
+		},
+		ConnectionPool: &v1alpha32.ConnectionPoolSettings{
+			Http: &v1alpha32.ConnectionPoolSettings_HTTPSettings{
+				Http2MaxRequests:         DefaultHTTP2MaxRequests,
+				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
+			},
+		},
+		LoadBalancer: &v1alpha32.LoadBalancerSettings{
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{
+				Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST,
+			},
+		},
+	}
 
 	if len(locality) == 0 {
 		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
@@ -93,7 +110,7 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
-			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_ROUND_ROBIN},
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST},
 		}
 
 		if len(gtpTrafficPolicy.Target) > 0 {
