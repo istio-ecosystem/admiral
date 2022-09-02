@@ -79,6 +79,13 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{},
 	}
 
+	dummyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"dev.dummy.global"},
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+		},
+	}
+
 	seConfig := v1alpha3.ServiceEntry{
 		//nolint
 		Spec: se,
@@ -86,10 +93,19 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	seConfig.Name = "se1"
 	seConfig.Namespace = "admiral-sync"
 
+	dummySeConfig := v1alpha3.ServiceEntry{
+		//nolint
+		Spec: dummyEndpointSe,
+	}
+	dummySeConfig.Name = "dummySe"
+	dummySeConfig.Namespace = "admiral-sync"
+
 	ctx := context.Background()
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &seConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &dummySeConfig, v12.CreateOptions{})
+
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
 			IstioClient: fakeIstioClient,
@@ -104,10 +120,12 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
-	rr.PutRemoteController("c1", rc)
+	rr.PutRemoteController("cl1", rc)
 	rr.AdmiralCache = &admiralCache
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &se})
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istionetworkingv1alpha3.ServiceEntry{"dummySe": &dummyEndpointSe})
+
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
