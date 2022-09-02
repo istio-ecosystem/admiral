@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,61 +24,59 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func init() {
-	p := common.AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		SecretResolver:             "",
-		WorkloadSidecarUpdate:      "enabled",
-		WorkloadSidecarName:        "default",
-		EnableRoutingPolicy:        true,
-		EnvoyFilterVersion:         "1.13",
-	}
+var registryTestSingleton sync.Once
 
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-	p.LabelSet.PriorityKey = "priority"
-	p.LabelSet.EnvKey = "admiral.io/env"
-
-	common.InitializeConfig(p)
+func setupForRegistryTests() {
+	registryTestSingleton.Do(func() {
+		p := common.AdmiralParams{
+			KubeconfigPath:             "testdata/fake.config",
+			LabelSet:                   &common.LabelSet{},
+			EnableSAN:                  true,
+			SANPrefix:                  "prefix",
+			HostnameSuffix:             "mesh",
+			SyncNamespace:              "ns",
+			CacheRefreshDuration:       time.Minute,
+			ClusterRegistriesNamespace: "default",
+			DependenciesNamespace:      "default",
+			SecretResolver:             "",
+			WorkloadSidecarUpdate:      "enabled",
+			WorkloadSidecarName:        "default",
+			EnableRoutingPolicy:        true,
+			EnvoyFilterVersion:         "1.13",
+		}
+		p.LabelSet.WorkloadIdentityKey = "identity"
+		p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+		p.LabelSet.PriorityKey = "priority"
+		p.LabelSet.EnvKey = "admiral.io/env"
+		common.InitializeConfig(p)
+	})
 }
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
-
+	setupForRegistryTests()
 	w := NewRemoteRegistry(nil, common.AdmiralParams{})
-
 	err := w.deleteCacheController("I don't exit")
-
 	if err != nil {
 		t.Fail()
 	}
 }
 
 func TestDeleteCacheController(t *testing.T) {
-
-	w := NewRemoteRegistry(nil, common.AdmiralParams{})
-
-	r := rest.Config{
-		Host: "test.com",
-	}
-
-	cluster := "test.cluster"
+	setupForRegistryTests()
+	var (
+		cluster = "test.cluster"
+		w       = NewRemoteRegistry(context.TODO(), common.AdmiralParams{})
+		r       = rest.Config{
+			Host: "test.com",
+		}
+	)
 	w.createCacheController(&r, cluster, time.Second*time.Duration(300))
 	rc := w.GetRemoteController(cluster)
-
 	if rc == nil {
 		t.Fail()
 	}
 
 	err := w.deleteCacheController(cluster)
-
 	if err != nil {
 		t.Fail()
 	}
@@ -89,54 +88,56 @@ func TestDeleteCacheController(t *testing.T) {
 }
 
 func TestCopyServiceEntry(t *testing.T) {
-
-	se := networking.ServiceEntry{
-		Hosts: []string{"test.com"},
-	}
-
-	r := copyServiceEntry(&se)
-
+	setupForRegistryTests()
+	var (
+		se = networking.ServiceEntry{
+			Hosts: []string{"test.com"},
+		}
+		r = copyServiceEntry(&se)
+	)
 	if r.Hosts[0] != "test.com" {
 		t.Fail()
 	}
 }
 
 func TestCopyEndpoint(t *testing.T) {
-
-	se := networking.WorkloadEntry{
-		Address: "127.0.0.1",
-	}
-
-	r := copyEndpoint(&se)
-
+	var (
+		se = networking.WorkloadEntry{
+			Address: "127.0.0.1",
+		}
+		r = copyEndpoint(&se)
+	)
+	setupForRegistryTests()
 	if r.Address != "127.0.0.1" {
 		t.Fail()
 	}
-
 }
 
 func TestCopySidecar(t *testing.T) {
-	spec := networking.Sidecar{
-		WorkloadSelector: &networking.WorkloadSelector{
-			Labels: map[string]string{"TestLabel": "TestValue"},
-		},
-	}
-
-	//nolint
-	sidecar := v1alpha3.Sidecar{Spec: spec}
-
-	newSidecar := copySidecar(&sidecar)
-
+	setupForRegistryTests()
+	var (
+		spec = networking.Sidecar{
+			WorkloadSelector: &networking.WorkloadSelector{
+				Labels: map[string]string{"TestLabel": "TestValue"},
+			},
+		}
+		//nolint
+		sidecar    = v1alpha3.Sidecar{Spec: spec}
+		newSidecar = copySidecar(&sidecar)
+	)
 	if newSidecar.Spec.WorkloadSelector != spec.WorkloadSelector {
 		t.Fail()
 	}
 }
 
 func createMockRemoteController(f func(interface{})) (*RemoteController, error) {
-	config := rest.Config{
-		Host: "localhost",
-	}
-	stop := make(chan struct{})
+	var (
+		config = rest.Config{
+			Host: "localhost",
+		}
+		stop = make(chan struct{})
+	)
+
 	d, err := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
 		return nil, err
@@ -202,83 +203,72 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-
+	setupForRegistryTests()
 	err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
-
 	if err != nil {
 		t.Fail()
 	}
-
 	common.SetKubeconfigPath("fail")
-
 	err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
-
-	common.SetKubeconfigPath("testdata/fake.config")
-
 	if err == nil {
 		t.Fail()
 	}
+	common.SetKubeconfigPath("testdata/fake.config")
 }
 
 func TestInitAdmiral(t *testing.T) {
-
+	setupForRegistryTests()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 		LabelSet:       &common.LabelSet{},
 	}
-
 	p.LabelSet.WorkloadIdentityKey = "overridden-key"
-
 	rr, err := InitAdmiral(context.Background(), p)
-
 	if err != nil {
 		t.Fail()
 	}
 	if len(rr.GetClusterIds()) != 0 {
 		t.Fail()
 	}
-
 	if common.GetWorkloadIdentifier() != "identity" {
 		t.Errorf("Workload identity label override failed. Expected \"identity\", got %v", common.GetWorkloadIdentifier())
 	}
 }
 
 func TestAdded(t *testing.T) {
-	ctx := context.Background()
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-	rr, _ := InitAdmiral(context.Background(), p)
-
+	setupForRegistryTests()
+	var (
+		ctx = context.Background()
+		p   = common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+		}
+		rr, _ = InitAdmiral(context.Background(), p)
+	)
 	rc, _ := createMockRemoteController(func(i interface{}) {
 		t.Fail()
 	})
 	rr.PutRemoteController("test.cluster", rc)
-	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
-
-	if e != nil {
+	d, err := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
+	if err != nil {
 		t.Fail()
 	}
-
 	dh := DependencyHandler{
 		RemoteRegistry: rr,
 		DepController:  d,
 	}
-
 	depData := v1.Dependency{
 		Spec: depModel.Dependency{
-			IdentityLabel: "idenity",
+			IdentityLabel: "identity",
 			Destinations:  []string{"one", "two"},
 			Source:        "bar",
 		},
 	}
-
 	dh.Added(ctx, &depData)
 	dh.Deleted(ctx, &depData)
-
 }
 
 func TestGetServiceForDeployment(t *testing.T) {
+	setupForRegistryTests()
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
 		//res := i.(istio.Config)
 		//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
@@ -298,7 +288,6 @@ func TestGetServiceForDeployment(t *testing.T) {
 		//	}
 		//}
 	})
-
 	service := k8sCoreV1.Service{}
 	service.Namespace = "under-test"
 	service.Spec.Ports = []k8sCoreV1.ServicePort{
@@ -364,6 +353,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 }
 
 func TestUpdateCacheController(t *testing.T) {
+	setupForRegistryTests()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}

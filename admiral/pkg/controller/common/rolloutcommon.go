@@ -1,11 +1,12 @@
 package common
 
 import (
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	log "github.com/sirupsen/logrus"
 	"sort"
 	"strings"
+
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	log "github.com/sirupsen/logrus"
 )
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global

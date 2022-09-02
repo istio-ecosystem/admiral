@@ -28,76 +28,102 @@ import (
 	v14 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
 
-func init() {
-	p := common.AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		SecretResolver:             "",
+var serviceEntryTestSingleton sync.Once
+
+func setupForServiceEntryTests() {
+	serviceEntryTestSingleton.Do(func() {
+		p := common.AdmiralParams{
+			KubeconfigPath:             "testdata/fake.config",
+			LabelSet:                   &common.LabelSet{},
+			EnableSAN:                  true,
+			SANPrefix:                  "prefix",
+			HostnameSuffix:             "mesh",
+			SyncNamespace:              "ns",
+			CacheRefreshDuration:       0,
+			ClusterRegistriesNamespace: "default",
+			DependenciesNamespace:      "default",
+			SecretResolver:             "",
+		}
+		p.LabelSet.WorkloadIdentityKey = "identity"
+		p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+		p.LabelSet.PriorityKey = "priority"
+		p.LabelSet.EnvKey = "env"
+		common.InitializeConfig(p)
+	})
+}
+
+func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
+	return argo.Rollout{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				"env": "test",
+			},
+		},
+		Spec: argo.RolloutSpec{
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: v12.ObjectMeta{
+					Labels: map[string]string{"identity": identityLabelValue},
+					Annotations: map[string]string{
+						"env": "test",
+					},
+				},
+			},
+			Strategy: argo.RolloutStrategy{
+				Canary: &argo.CanaryStrategy{
+					TrafficRouting: &argo.RolloutTrafficRouting{
+						Istio: &argo.IstioTrafficRouting{
+							VirtualService: &argo.IstioVirtualService{
+								Name: name + "-canary",
+							},
+						},
+					},
+					CanaryService: name + "-canary",
+					StableService: name + "-stable",
+				},
+			},
+			Selector: &v12.LabelSelector{
+				MatchLabels: map[string]string{
+					"identity": identityLabelValue,
+					"app":      identityLabelValue,
+				},
+			},
+		},
 	}
-
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-	p.LabelSet.PriorityKey = "priority"
-
-	common.InitializeConfig(p)
 }
 
 func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
+	setupForServiceEntryTests()
 	var (
-		clusterID = "test"
-		p         = common.AdmiralParams{
-			KubeconfigPath: "testdata/fake.config",
+		env                     = "test"
+		stop                    = make(chan struct{})
+		foobarMetadataName      = "foobar"
+		foobarMetadataNamespace = "foobar-ns"
+		foobarRollout           = makeTestRollout(foobarMetadataName, foobarMetadataNamespace, foobarMetadataName)
+		clusterID               = "test-dev-k8s"
+		p                       = common.AdmiralParams{
+			KubeconfigPath:       "testdata/fake.config",
+			CacheRefreshDuration: 0,
 		}
-		rr1, _ = InitAdmiral(context.Background(), p)
-		config = rest.Config{
-			Host: "localhost",
-		}
-	)
-	rr1.ExcludeAssetList = []string{"asset1"}
-	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-	if err != nil {
-		t.Fail()
-	}
-	rolloutController, err := admiral.NewRolloutsController(clusterID, make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	if err != nil {
-		t.Fail()
-	}
-	rc := &RemoteController{
-		DeploymentController: deploymentController,
-		RolloutController:    rolloutController,
-	}
-	rr1.PutRemoteController(clusterID, rc)
-	serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", "asset1", rr1)
-	if serviceEntries != nil {
-		t.Fatalf("expected service entries to be: %v, but got: %v", nil, serviceEntries)
-	}
-}
-
-/*
-func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
-	var (
-		clusterID = "test"
-		p         = common.AdmiralParams{
-			KubeconfigPath: "testdata/fake.config",
+		config              = rest.Config{Host: "localhost"}
+		foobarCanaryService = &coreV1.Service{
+			ObjectMeta: v12.ObjectMeta{
+				Name:      foobarMetadataName + "-canary",
+				Namespace: foobarMetadataNamespace,
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": foobarMetadataName},
+			},
 		}
 		rr1, _ = InitAdmiral(context.Background(), p)
 		rr2, _ = InitAdmiral(context.Background(), p)
-		config = rest.Config{
-			Host: "localhost",
-		}
 	)
-	rr1.ExcludeAssetList = []string{"asset1"}
 	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
 		t.Fail()
@@ -106,12 +132,24 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
+	rolloutController.Cache.UpdateRolloutToClusterCache("foobar", &foobarRollout)
+	serviceController, err := admiral.NewServiceController(clusterID, stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	serviceController.Cache.Put(foobarCanaryService)
 	rc := &RemoteController{
 		DeploymentController: deploymentController,
 		RolloutController:    rolloutController,
+		ServiceController:    serviceController,
 	}
 	rr1.PutRemoteController(clusterID, rc)
+	rr1.ExcludeAssetList = []string{"asset1"}
+	rr1.StartTime = time.Now()
+
 	rr2.PutRemoteController(clusterID, rc)
+	rr2.StartTime = time.Now()
+
 	testCases := []struct {
 		name                   string
 		assetIdentity          string
@@ -124,38 +162,36 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		},
-			{
-				name:                   "when asset is NOT in the exclude list",
-				assetIdentity:          "bar",
-				remoteRegistry:         rr2,
-				expectedServiceEntries: nil,
-			},
+		{
+			name:                   "when asset is NOT in the exclude list",
+			assetIdentity:          "foobar",
+			remoteRegistry:         rr2,
+			expectedServiceEntries: nil,
+		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, "test", c.assetIdentity, c.remoteRegistry)
-			if !reflect.DeepEqual(serviceEntries, c.expectedServiceEntries) {
-				t.Fatalf("expected service entries to be: %v, but got: %v", c.expectedServiceEntries, serviceEntries)
+			serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, env, c.assetIdentity, c.remoteRegistry)
+			if len(serviceEntries) != len(c.expectedServiceEntries) {
+				t.Fatalf("expected service entries to be of length: %d, but got: %d", len(c.expectedServiceEntries), len(serviceEntries))
 			}
 		})
 	}
 }
-*/
 
 func TestAddServiceEntriesWithDr(t *testing.T) {
-	admiralCache := AdmiralCache{}
-
+	setupForServiceEntryTests()
+	var (
+		admiralCache       = AdmiralCache{}
+		cnameIdentityCache = sync.Map{}
+		gtpCache           = &globalTrafficCache{}
+	)
 	admiralCache.SeClusterCache = common.NewMapOfMaps()
-
-	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
-
-	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v13.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
 	admiralCache.GlobalTrafficCache = gtpCache
-
 	se := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
@@ -200,14 +236,14 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
-
-	host := "dev.bar.global"
-	west := "west"
-	east := "east"
-	eastWithCaps := "East"
-
-	admiralCache := AdmiralCache{}
-
+	setupForServiceEntryTests()
+	var (
+		host         = "dev.bar.global"
+		west         = "west"
+		east         = "east"
+		eastWithCaps = "East"
+		admiralCache = AdmiralCache{}
+	)
 	admiralCache.ServiceEntryAddressStore = &ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{},
 		Addresses:      []string{},
@@ -354,7 +390,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
-
+	setupForServiceEntryTests()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -396,6 +432,7 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 }
 
 func TestGetLocalAddressForSe(t *testing.T) {
+	setupForServiceEntryTests()
 	t.Parallel()
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"e2e.a.mesh": common.LocalAddressPrefix + ".10.1"},
@@ -537,11 +574,13 @@ func TestGetLocalAddressForSe(t *testing.T) {
 }
 
 func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
-	address := "1.2.3.4"
-	locality := "us-west-2"
-	portName := "port"
-
-	endpoint := makeRemoteEndpointForServiceEntry(address, locality, portName, common.DefaultMtlsPort)
+	setupForServiceEntryTests()
+	var (
+		address  = "1.2.3.4"
+		locality = "us-west-2"
+		portName = "port"
+		endpoint = makeRemoteEndpointForServiceEntry(address, locality, portName, common.DefaultMtlsPort)
+	)
 
 	if endpoint.Address != address {
 		t.Errorf("Address mismatch. Got: %v, expected: %v", endpoint.Address, address)
@@ -567,15 +606,18 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, 
 }
 
 func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
-	sidecarController := &istio.SidecarController{}
+	setupForServiceEntryTests()
+	var (
+		ctx               = context.Background()
+		sidecarEgressMap  = make(map[string]common.SidecarEgress)
+		sidecarController = &istio.SidecarController{}
+		remoteController  = &RemoteController{}
+	)
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 
-	remoteController := &RemoteController{}
 	remoteController.SidecarController = sidecarController
 
-	sidecarEgressMap := make(map[string]common.SidecarEgress)
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
-	ctx := context.Background()
 
 	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
 
@@ -583,33 +625,33 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected 404 not found error but got nil")
 	}
-
 	if sidecarObj != nil {
 		t.Fatalf("Modify non existing resource failed, as no new resource should be created.")
 	}
 }
 
 func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
-
-	sidecarController := &istio.SidecarController{}
+	setupForServiceEntryTests()
+	var (
+		ctx                = context.Background()
+		existingSidecarObj = &v1alpha3.Sidecar{}
+		istioEgress        = istioNetworkingV1Alpha3.IstioEgressListener{
+			Hosts: []string{"test-host"},
+		}
+		remoteController  = &RemoteController{}
+		sidecarController = &istio.SidecarController{}
+	)
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 
-	remoteController := &RemoteController{}
 	remoteController.SidecarController = sidecarController
 
-	existingSidecarObj := &v1alpha3.Sidecar{}
 	existingSidecarObj.ObjectMeta.Namespace = "test-sidecar-namespace"
 	existingSidecarObj.ObjectMeta.Name = "default"
-
-	istioEgress := istioNetworkingV1Alpha3.IstioEgressListener{
-		Hosts: []string{"test-host"},
-	}
 
 	existingSidecarObj.Spec = istioNetworkingV1Alpha3.Sidecar{
 		Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{&istioEgress},
 	}
 
-	ctx := context.Background()
 	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
 	if err != nil {
 		t.Error(err)
@@ -667,22 +709,21 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 }
 
 func TestCreateServiceEntry(t *testing.T) {
-
-	config := rest.Config{
-		Host: "localhost",
+	setupForServiceEntryTests()
+	var (
+		stop               = make(chan struct{})
+		admiralCache       = AdmiralCache{}
+		cnameIdentityCache = sync.Map{}
+		config             = rest.Config{
+			Host: "localhost",
+		}
+		fakeIstioClient = istiofake.NewSimpleClientset()
+	)
+	s, err := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fatalf("%v", err)
 	}
-	stop := make(chan struct{})
-	s, e := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-
-	if e != nil {
-		t.Fatalf("%v", e)
-	}
-
-	admiralCache := AdmiralCache{}
-
 	localAddress := common.LocalAddressPrefix + ".10.1"
-
-	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
 
@@ -692,8 +733,6 @@ func TestCreateServiceEntry(t *testing.T) {
 	}
 
 	admiralCache.CnameClusterCache = common.NewMapOfMaps()
-
-	fakeIstioClient := istiofake.NewSimpleClientset()
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
 			IstioClient: fakeIstioClient,
@@ -944,37 +983,44 @@ func TestCreateServiceEntry(t *testing.T) {
 }
 
 func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
-
-	const NAMESPACE = "test-test"
-	const SERVICENAME = "serviceNameActive"
-	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
-
-	ctx := context.Background()
-
-	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
-	}
-
-	rr, _ := InitAdmiral(context.Background(), p)
+	setupForServiceEntryTests()
+	const (
+		namespace                  = "test-test"
+		serviceName                = "serviceNameActive"
+		rolloutPodHashLabel string = "rollouts-pod-template-hash"
+	)
+	var (
+		ctx    = context.Background()
+		config = rest.Config{
+			Host: "localhost",
+		}
+		p = common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+		}
+		rr, _ = InitAdmiral(context.Background(), p)
+	)
 
 	rr.StartTime = time.Now().Add(-60 * time.Second)
-
-	config := rest.Config{
-		Host: "localhost",
-	}
-
-	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-
-	r, e := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	v, e := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
-
-	if e != nil {
+	d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
 		t.Fail()
 	}
-	s, e := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-
-	gtpc, e := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
-
+	r, err := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	v, err := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	s, err := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	gtpc, err := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{"test.test.mesh-se": common.LocalAddressPrefix + ".10.1"},
 		Addresses:      []string{common.LocalAddressPrefix + ".10.1"},
@@ -1026,7 +1072,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		},
 	}
 
-	rollout.Namespace = NAMESPACE
+	rollout.Namespace = namespace
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		Canary: &argo.CanaryStrategy{},
 	}
@@ -1045,15 +1091,15 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
-	selectorMap[ROLLOUT_POD_HASH_LABEL] = "hash"
+	selectorMap[rolloutPodHashLabel] = "hash"
 
 	activeService := &coreV1.Service{
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorMap,
 		},
 	}
-	activeService.Name = SERVICENAME
-	activeService.Namespace = NAMESPACE
+	activeService.Name = serviceName
+	activeService.Namespace = namespace
 	port1 := coreV1.ServicePort{
 		Port: 8080,
 		Name: "random1",
@@ -1082,35 +1128,46 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 }
 
 func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
+	setupForServiceEntryTests()
+	const (
+		namespace                  = "test-test"
+		activeServiceName          = "serviceNameActive"
+		previewServiceName         = "serviceNamePreview"
+		rolloutPodHashLabel string = "rollouts-pod-template-hash"
+	)
+	var (
+		ctx = context.Background()
+		p   = common.AdmiralParams{
+			KubeconfigPath:        "testdata/fake.config",
+			PreviewHostnamePrefix: "preview",
+		}
+		rr, _  = InitAdmiral(context.Background(), p)
+		config = rest.Config{
+			Host: "localhost",
+		}
+	)
 
-	const NAMESPACE = "test-test"
-	const ACTIVE_SERVICENAME = "serviceNameActive"
-	const PREVIEW_SERVICENAME = "serviceNamePreview"
-	const ROLLOUT_POD_HASH_LABEL string = "rollouts-pod-template-hash"
-
-	ctx := context.Background()
-
-	p := common.AdmiralParams{
-		KubeconfigPath:        "testdata/fake.config",
-		PreviewHostnamePrefix: "preview",
-	}
-	rr, _ := InitAdmiral(context.Background(), p)
-	config := rest.Config{
-		Host: "localhost",
-	}
 	rr.StartTime = time.Now().Add(-60 * time.Second)
-
-	d, e := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
-
-	r, e := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
-	v, e := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
-
-	if e != nil {
+	d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
 		t.Fail()
 	}
-	s, e := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
-	gtpc, e := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
-
+	r, err := admiral.NewRolloutsController("test", make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	v, err := istio.NewVirtualServiceController("", make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	s, err := admiral.NewServiceController("test", make(chan struct{}), &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
+	gtpc, err := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fail()
+	}
 	cacheWithEntry := ServiceEntryAddressStore{
 		EntryAddresses: map[string]string{
 			"test.test.mesh-se":         common.LocalAddressPrefix + ".10.1",
@@ -1165,9 +1222,9 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 		},
 	}
 
-	rollout.Namespace = NAMESPACE
+	rollout.Namespace = namespace
 	rollout.Spec.Strategy = argo.RolloutStrategy{
-		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME, PreviewService: PREVIEW_SERVICENAME},
+		BlueGreen: &argo.BlueGreenStrategy{ActiveService: activeServiceName, PreviewService: previewServiceName},
 	}
 	labelMap := make(map[string]string)
 	labelMap["identity"] = "test"
@@ -1184,7 +1241,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 
 	selectorMap := make(map[string]string)
 	selectorMap["app"] = "test"
-	selectorMap[ROLLOUT_POD_HASH_LABEL] = "hash"
+	selectorMap[rolloutPodHashLabel] = "hash"
 
 	port1 := coreV1.ServicePort{
 		Port: 8080,
@@ -1203,8 +1260,8 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 			Selector: selectorMap,
 		},
 	}
-	activeService.Name = ACTIVE_SERVICENAME
-	activeService.Namespace = NAMESPACE
+	activeService.Name = activeServiceName
+	activeService.Namespace = namespace
 	activeService.Spec.Ports = ports
 
 	s.Cache.Put(activeService)
@@ -1214,8 +1271,8 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 			Selector: selectorMap,
 		},
 	}
-	previewService.Name = PREVIEW_SERVICENAME
-	previewService.Namespace = NAMESPACE
+	previewService.Name = previewServiceName
+	previewService.Namespace = namespace
 	previewService.Spec.Ports = ports
 
 	s.Cache.Put(previewService)
@@ -1239,7 +1296,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 
 	// When Preview service is not defined in BlueGreen strategy
 	rollout.Spec.Strategy = argo.RolloutStrategy{
-		BlueGreen: &argo.BlueGreenStrategy{ActiveService: ACTIVE_SERVICENAME},
+		BlueGreen: &argo.BlueGreenStrategy{ActiveService: activeServiceName},
 	}
 
 	se = modifyServiceEntryForNewServiceOrPod(ctx, admiral.Add, "test", "bar", rr)
@@ -1255,40 +1312,44 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 }
 
 func TestUpdateEndpointsForBlueGreen(t *testing.T) {
-	const CLUSTER_INGRESS_1 = "ingress1.com"
-	const ACTIVE_SERVICE = "activeService"
-	const PREVIEW_SERVICE = "previewService"
-	const NAMESPACE = "namespace"
-	const ACTIVE_MESH_HOST = "qal.example.mesh"
-	const PREVIEW_MESH_HOST = "preview.qal.example.mesh"
+	setupForServiceEntryTests()
+	const (
+		clusterIngress1 = "ingress1.com"
+		activeService   = "activeService"
+		previewService  = "previewService"
+		namespace       = "namespace"
+		activeMeshHost  = "qal.example.mesh"
+		previewMeshHost = "preview.qal.example.mesh"
+	)
+	var (
+		rollout   = &argo.Rollout{}
+		meshPorts = map[string]uint32{"http": 8080}
+	)
 
-	rollout := &argo.Rollout{}
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		BlueGreen: &argo.BlueGreenStrategy{
-			ActiveService:  ACTIVE_SERVICE,
-			PreviewService: PREVIEW_SERVICE,
+			ActiveService:  activeService,
+			PreviewService: previewService,
 		},
 	}
 	rollout.Spec.Template.Annotations = map[string]string{}
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
 
 	endpoint := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
+		Labels: map[string]string{}, Address: clusterIngress1, Ports: map[string]uint32{"http": 15443},
 	}
 
-	meshPorts := map[string]uint32{"http": 8080}
-
 	weightedServices := map[string]*WeightedService{
-		ACTIVE_SERVICE:  {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: ACTIVE_SERVICE, Namespace: NAMESPACE}}},
-		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
+		activeService:  {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: activeService, Namespace: namespace}}},
+		previewService: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: previewService, Namespace: namespace}}},
 	}
 
 	activeWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
+		Address: activeService + common.Sep + namespace + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
 	previewWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Ports: meshPorts,
+		Address: previewService + common.Sep + namespace + common.DotLocalDomainSuffix, Ports: meshPorts,
 	}
 
 	testCases := []struct {
@@ -1307,7 +1368,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 			inputEndpoint:    endpoint,
 			weightedServices: weightedServices,
 			meshPorts:        meshPorts,
-			meshHost:         ACTIVE_MESH_HOST,
+			meshHost:         activeMeshHost,
 			wantedEndpoints:  activeWantedEndpoints,
 		},
 		{
@@ -1316,7 +1377,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 			inputEndpoint:    endpoint,
 			weightedServices: weightedServices,
 			meshPorts:        meshPorts,
-			meshHost:         PREVIEW_MESH_HOST,
+			meshHost:         previewMeshHost,
 			wantedEndpoints:  previewWantedEndpoints,
 		},
 	}
@@ -1332,42 +1393,41 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 }
 
 func TestUpdateEndpointsForWeightedServices(t *testing.T) {
+	setupForServiceEntryTests()
 	t.Parallel()
-
-	const CLUSTER_INGRESS_1 = "ingress1.com"
-	const CLUSTER_INGRESS_2 = "ingress2.com"
-	const CANARY_SERVICE = "canaryService"
-	const STABLE_SERVICE = "stableService"
-	const NAMESPACE = "namespace"
-
-	se := &istioNetworkingV1Alpha3.ServiceEntry{
-		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-		},
-	}
-
-	meshPorts := map[string]uint32{"http": 8080}
-
-	weightedServices := map[string]*WeightedService{
-		CANARY_SERVICE: {Weight: 10, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
-		STABLE_SERVICE: {Weight: 90, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
-	}
-	weightedServicesZeroWeight := map[string]*WeightedService{
-		CANARY_SERVICE: {Weight: 0, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
-		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
-	}
-
-	wantedEndpoints := []*istioNetworkingV1Alpha3.WorkloadEntry{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
-		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
-	}
-
-	wantedEndpointsZeroWeights := []*istioNetworkingV1Alpha3.WorkloadEntry{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
-	}
+	const (
+		clusterIngress1 = "ingress1.com"
+		clusterIngress2 = "ingress2.com"
+		canaryService   = "canaryService"
+		stableService   = "stableService"
+		namespace       = "namespace"
+	)
+	var (
+		meshPorts = map[string]uint32{"http": 8080}
+		se        = &istioNetworkingV1Alpha3.ServiceEntry{
+			Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+				{Labels: map[string]string{}, Address: clusterIngress1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+				{Labels: map[string]string{}, Address: clusterIngress2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			},
+		}
+		weightedServices = map[string]*WeightedService{
+			canaryService: {Weight: 10, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
+			stableService: {Weight: 90, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
+		}
+		weightedServicesZeroWeight = map[string]*WeightedService{
+			canaryService: {Weight: 0, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
+			stableService: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
+		}
+		wantedEndpoints = []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: clusterIngress2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			{Address: stableService + common.Sep + namespace + common.DotLocalDomainSuffix, Weight: 90, Ports: meshPorts},
+			{Address: canaryService + common.Sep + namespace + common.DotLocalDomainSuffix, Weight: 10, Ports: meshPorts},
+		}
+		wantedEndpointsZeroWeights = []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: clusterIngress2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			{Address: stableService + common.Sep + namespace + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
+		}
+	)
 
 	testCases := []struct {
 		name              string
@@ -1381,7 +1441,7 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 			name:              "should return endpoints with assigned weights",
 			inputServiceEntry: copyServiceEntry(se),
 			weightedServices:  weightedServices,
-			clusterIngress:    CLUSTER_INGRESS_1,
+			clusterIngress:    clusterIngress1,
 			meshPorts:         meshPorts,
 			wantedEndpoints:   wantedEndpoints,
 		},
@@ -1397,7 +1457,7 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 			name:              "should not return endpoints with zero weight",
 			inputServiceEntry: copyServiceEntry(se),
 			weightedServices:  weightedServicesZeroWeight,
-			clusterIngress:    CLUSTER_INGRESS_1,
+			clusterIngress:    clusterIngress1,
 			meshPorts:         meshPorts,
 			wantedEndpoints:   wantedEndpointsZeroWeights,
 		},
@@ -1421,42 +1481,32 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestUpdateGlobalGtpCache(t *testing.T) {
-
+	setupForServiceEntryTests()
 	var (
+		env_stage    = "stage"
+		identity1    = "identity1"
 		admiralCache = &AdmiralCache{GlobalTrafficCache: &globalTrafficCache{identityCache: make(map[string]*v13.GlobalTrafficPolicy), mutex: &sync.Mutex{}}}
-
-		identity1 = "identity1"
-
-		env_stage = "stage"
-
-		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
+		gtp          = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hello"}},
 		}}
-
 		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp2"}},
 		}}
-
 		gtp7 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp7", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-45))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp7"}},
 		}}
-
 		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp3"}},
 		}}
-
 		gtp4 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp4", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "10"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp4"}},
 		}}
-
 		gtp5 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp5", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp5"}},
 		}}
-
 		gtp6 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp6", Namespace: "namespace3", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "1000"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp6"}},
 		}}
@@ -1541,8 +1591,13 @@ func isLower(s string) bool {
 }
 
 func TestIsBlueGreenStrategy(t *testing.T) {
+	setupForServiceEntryTests()
 	var (
-		emptyRollout                 *argo.Rollout
+		emptyRollout          *argo.Rollout
+		rolloutWithEmptySpec  = &argo.Rollout{}
+		rolloutWithNoStrategy = &argo.Rollout{
+			Spec: argo.RolloutSpec{},
+		}
 		rolloutWithBlueGreenStrategy = &argo.Rollout{
 			Spec: argo.RolloutSpec{
 				Strategy: argo.RolloutStrategy{
@@ -1561,10 +1616,6 @@ func TestIsBlueGreenStrategy(t *testing.T) {
 				},
 			},
 		}
-		rolloutWithNoStrategy = &argo.Rollout{
-			Spec: argo.RolloutSpec{},
-		}
-		rolloutWithEmptySpec = &argo.Rollout{}
 	)
 	cases := []struct {
 		name           string
@@ -1607,7 +1658,6 @@ func TestIsBlueGreenStrategy(t *testing.T) {
 			expectedResult: false,
 		},
 	}
-
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			result := isBlueGreenStrategy(c.rollout)
