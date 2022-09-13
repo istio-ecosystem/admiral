@@ -28,7 +28,7 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 
 	selectorLabelsSha, err := getSha1(workloadIdentityKey + common.GetRoutingPolicyEnv(routingPolicy))
 	if err != nil {
-		log.Error("error ocurred while computing workload labels sha1")
+		log.Error("error occurred while computing workload labels sha1")
 		return nil, err
 	}
 	if len(common.GetEnvoyFilterVersion()) == 0 {
