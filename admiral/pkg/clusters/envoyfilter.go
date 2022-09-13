@@ -21,6 +21,7 @@ var (
 )
 
 const hostsKey = "hosts: "
+const pluginKey = "plugin: "
 
 func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
 
@@ -87,7 +88,8 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	if len(common.GetEnvoyFilterAdditionalConfig()) != 0 {
 		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig() + "\n"
 	}
-	envoyFilterStringConfig += getHosts(routingPolicy)
+	envoyFilterStringConfig += getHosts(routingPolicy) + "\n"
+	envoyFilterStringConfig += getPlugin(routingPolicy)
 
 	configuration := structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -183,4 +185,9 @@ func getHosts(routingPolicy *v1.RoutingPolicy) string {
 	}
 	hosts = strings.TrimSuffix(hosts, ",")
 	return hostsKey + hosts
+}
+
+func getPlugin(routingPolicy *v1.RoutingPolicy) string {
+	plugin := routingPolicy.Spec.Plugin
+	return pluginKey + plugin
 }
