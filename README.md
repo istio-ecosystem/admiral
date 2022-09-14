@@ -46,3 +46,49 @@ Refer to [Contributing doc](./CONTRIBUTING.md)
 ## Release Cadence
 
 Details can be found [here](./docs/Processes.md)
+
+## Admiral sequence diagram
+```mermaid
+sequenceDiagram
+		autonumber 1
+    Service/VirtualService Handler->>+Rollout/Deployment Handler: Add/Update/Delete events
+    loop
+			autonumber 1
+			GTP Handler->>GTP Handler: Add/Update/Delete events
+    end
+		autonumber 1
+    GTP Handler ->> ServiceEntry Handler: Add/Update
+		loop
+				autonumber 1
+        Rollout/Deployment Handler->>Rollout/Deployment Handler: Add/Delete events of rollout/deployment
+    end
+		autonumber 1
+		Rollout/Deployment Handler->>ServiceEntry Handler: Add/Update
+    autonumber 2
+    ServiceEntry Handler->>RemoteControllers: Fetch All Cluster Controllers
+		rect rgb(255, 255, 220)
+	    loop
+		    ServiceEntry Handler->>K8sAPI 1..N: For each cluster, get corresponding service object
+				K8sAPI 1..N-->>ServiceEntry Handler: Continue if service does not exist for deployment/rollout
+				K8sAPI 1..N-->>ServiceEntry Handler: Build list of source services
+	    end
+		end
+	  rect rgb(255, 255, 220)
+	    loop
+				ServiceEntry Handler->>K8sAPI 1..N: Derive SE from each service in the list
+				ServiceEntry Handler->>GTP Cache: Derive DR from GTP
+			  rect rgb(204, 255, 204)
+			    loop
+				    ServiceEntry Handler->>K8sAPI 1..N: Add/Update SE/DR in source clusters
+					end
+		    end
+	    end
+		end
+
+    ServiceEntry Handler->>DependencyCache: Fetch dependent clusters
+		rect rgb(204, 255, 204)
+	    loop
+				ServiceEntry Handler->>K8sAPI 1..N: Add/Update SE/DR in dependent clusters
+			end
+		end
+```
