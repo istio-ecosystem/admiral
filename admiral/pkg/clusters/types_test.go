@@ -276,7 +276,7 @@ func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
 }
 
 func TestRoutingPolicyHandler(t *testing.T) {
-	setupForTypeTests()
+	common.ResetSync()
 	p := common.AdmiralParams{
 		KubeconfigPath:             "testdata/fake.config",
 		LabelSet:                   &common.LabelSet{},

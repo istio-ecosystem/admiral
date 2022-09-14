@@ -301,10 +301,10 @@ func sortGtpsByPriorityAndCreationTime(gtpsToOrder []*v1.GlobalTrafficPolicy, id
 		jTime := gtpsToOrder[j].CreationTimestamp
 
 		if iPriority != jPriority {
-			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
+			log.Infof("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
 			return iPriority > jPriority
 		}
-		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
+		log.Infof("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
 		return iTime.After(jTime.Time)
 	})
 }

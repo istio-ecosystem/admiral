@@ -1,16 +1,22 @@
 package common
 
 import (
-	log "github.com/sirupsen/logrus"
-	"sync"
 	"time"
+
+	"github.com/matryer/resync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var admiralParams = AdmiralParams{
 	LabelSet: &LabelSet{},
 }
 
-var once sync.Once
+var once resync.Once
+
+func ResetSync() {
+	once.Reset()
+}
 
 func InitializeConfig(params AdmiralParams) {
 	var initHappened = false

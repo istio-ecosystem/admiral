@@ -1483,33 +1483,33 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	}
 }
 
+func makeGTP(name, namespace, identity, env, dnsPrefix string, creationTimestamp v12.Time) *v13.GlobalTrafficPolicy {
+	return &v13.GlobalTrafficPolicy{
+		ObjectMeta: v12.ObjectMeta{
+			Name:              name,
+			Namespace:         namespace,
+			CreationTimestamp: creationTimestamp,
+			Labels:            map[string]string{"identity": identity, "env": env},
+		},
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{{DnsPrefix: dnsPrefix}},
+		},
+	}
+}
+
 func TestUpdateGlobalGtpCache(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
-		env_stage    = "stage"
+		envStage     = "stage"
 		identity1    = "identity1"
 		admiralCache = &AdmiralCache{GlobalTrafficCache: &globalTrafficCache{identityCache: make(map[string]*v13.GlobalTrafficPolicy), mutex: &sync.Mutex{}}}
-		gtp          = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hello"}},
-		}}
-		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp2"}},
-		}}
-		gtp7 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp7", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-45))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp7"}},
-		}}
-		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp3"}},
-		}}
-		gtp4 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp4", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "10"}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp4"}},
-		}}
-		gtp5 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp5", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp5"}},
-		}}
-		gtp6 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp6", Namespace: "namespace3", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": env_stage, "priority": "1000"}}, Spec: model.GlobalTrafficPolicy{
-			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp6"}},
-		}}
+		gtp1         = makeGTP("gtp1", "namespace1", identity1, envStage, "hellogtp1", v12.NewTime(time.Now().Add(time.Duration(-30))))
+		gtp2         = makeGTP("gtp2", "namespace1", identity1, envStage, "hellogtp2", v12.NewTime(time.Now().Add(time.Duration(-15))))
+		gtp7         = makeGTP("gtp7", "namespace1", identity1, envStage, "hellogtp7", v12.NewTime(time.Now().Add(time.Duration(-45))))
+		gtp3         = makeGTP("gtp3", "namespace2", identity1, envStage, "hellogtp3", v12.NewTime(time.Now()))
+		gtp4         = makeGTP("gtp4", "namespace1", identity1, envStage, "hellogtp4", v12.NewTime(time.Now().Add(time.Duration(-30))))
+		gtp5         = makeGTP("gtp5", "namespace1", identity1, envStage, "hellogtp5", v12.NewTime(time.Now().Add(time.Duration(-15))))
+		gtp6         = makeGTP("gtp6", "namespace3", identity1, envStage, "hellogtp6", v12.NewTime(time.Now()))
 	)
 
 	testCases := []struct {
@@ -1523,49 +1523,49 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 			name:        "Should return nil when no GTP present",
 			gtps:        map[string][]*v13.GlobalTrafficPolicy{},
 			identity:    identity1,
-			env:         env_stage,
+			env:         envStage,
 			expectedGtp: nil,
 		},
 		{
 			name:        "Should return the only existing gtp",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp1}},
 			identity:    identity1,
-			env:         env_stage,
-			expectedGtp: gtp,
+			env:         envStage,
+			expectedGtp: gtp1,
 		},
 		{
 			name:        "Should return the gtp recently created within the cluster",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp1, gtp2}},
 			identity:    identity1,
-			env:         env_stage,
+			env:         envStage,
 			expectedGtp: gtp2,
 		},
 		{
 			name:        "Should return the gtp recently created from another cluster",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2}, "c2": {gtp3}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp1, gtp2}, "c2": {gtp3}},
 			identity:    identity1,
-			env:         env_stage,
+			env:         envStage,
 			expectedGtp: gtp3,
 		},
 		{
 			name:        "Should return the existing priority gtp within the cluster",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2, gtp7}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp1, gtp2, gtp7}},
 			identity:    identity1,
-			env:         env_stage,
+			env:         envStage,
 			expectedGtp: gtp7,
 		},
 		{
 			name:        "Should return the recently created priority gtp within the cluster",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp5, gtp4, gtp, gtp2}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp5, gtp4, gtp1, gtp2}},
 			identity:    identity1,
-			env:         env_stage,
-			expectedGtp: gtp4,
+			env:         envStage,
+			expectedGtp: gtp5,
 		},
 		{
 			name:        "Should return the recently created priority gtp from another cluster",
-			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp, gtp2, gtp4, gtp5, gtp7}, "c2": {gtp6}, "c3": {gtp3}},
+			gtps:        map[string][]*v13.GlobalTrafficPolicy{"c1": {gtp1, gtp2, gtp4, gtp5, gtp7}, "c2": {gtp6}, "c3": {gtp3}},
 			identity:    identity1,
-			env:         env_stage,
+			env:         envStage,
 			expectedGtp: gtp6,
 		},
 	}

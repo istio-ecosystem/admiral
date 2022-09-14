@@ -268,11 +268,13 @@ type routingPolicyFilterCache struct {
 func (r *routingPolicyFilterCache) Get(identityEnvKey string) (filters map[string]map[string]string) {
 	defer r.mutex.Unlock()
 	r.mutex.Lock()
+	fmt.Printf("r.filterCache: %+v", r.filterCache)
 	return r.filterCache[identityEnvKey]
 }
 
 func (r *routingPolicyFilterCache) Put(identityEnvKey string, clusterId string, filterName string) {
 	defer r.mutex.Unlock()
+	fmt.Printf("identityEnvKey: %v\n", identityEnvKey)
 	r.mutex.Lock()
 	if r.filterCache[identityEnvKey] == nil {
 		r.filterCache[identityEnvKey] = make(map[string]map[string]string)
@@ -295,7 +297,9 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 	}
 }
 func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) {
+	fmt.Println("comes inside Added")
 	if common.GetEnableRoutingPolicy() {
+		fmt.Println("routing policy is enabled")
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
 			log.Infof(LogFormat, "success", "routingpolicy", obj.Name, "", "Ignored the RoutingPolicy because of the annotation")
 			return
@@ -305,7 +309,7 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 			log.Info("No dependents found for Routing Policy - ", obj.Name)
 			return
 		}
-		r.processroutingPolicy(ctx, dependents, obj, admiral.Add)
+		r.processRoutingPolicy(ctx, dependents, obj, admiral.Add)
 
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "finished processing routing policy")
 	} else {
@@ -313,10 +317,10 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 	}
 }
 
-func (r RoutingPolicyHandler) processroutingPolicy(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) {
+func (r RoutingPolicyHandler) processRoutingPolicy(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) {
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
 		for _, dependent := range dependents {
-
+			fmt.Printf("dependent: %v\n", dependent)
 			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
 				selectors := r.RemoteRegistry.AdmiralCache.WorkloadSelectorCache.Get(dependent + remoteController.ClusterID).Copy()
@@ -348,7 +352,7 @@ func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy
 		if len(dependents) == 0 {
 			return
 		}
-		r.processroutingPolicy(ctx, dependents, obj, admiral.Update)
+		r.processRoutingPolicy(ctx, dependents, obj, admiral.Update)
 
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "updated routing policy")
 	} else {
