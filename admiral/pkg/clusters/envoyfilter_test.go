@@ -141,32 +141,38 @@ func TestGetHosts(t *testing.T) {
 		Status: v1.RoutingPolicyStatus{},
 	}
 
-	hosts := getHosts(routingPolicyFoo)
+	hosts, err := getHosts(routingPolicyFoo)
+	if err != nil {
+		assert.Fail(t, err.Error())
+	}
 	assert.Equal(t, "hosts: e2e.testservice.mesh,e2e2.testservice.mesh", hosts)
 }
 
 func TestGetPlugin(t *testing.T) {
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta:   time2.TypeMeta{},
+		TypeMeta: time2.TypeMeta{},
 		ObjectMeta: time2.ObjectMeta{
 			Labels: map[string]string{
-				"identity": "foo",
+				"identity":       "foo",
 				"admiral.io/env": "stage",
 			},
 		},
-		Spec:       model.RoutingPolicy{
-			Plugin:               "test",
-			Hosts:                []string{"e2e.testservice.mesh,e2e2.testservice.mesh"},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh,e2e2.testservice.mesh"},
 			Config: map[string]string{
-				"cachePrefix": "cache-v1",
-				"cachettlSec": "86400",
+				"cachePrefix":       "cache-v1",
+				"cachettlSec":       "86400",
 				"routingServiceUrl": "e2e.test.routing.service.mesh",
-				"pathPrefix": "/sayhello,/v1/company/{id}/",
+				"pathPrefix":        "/sayhello,/v1/company/{id}/",
 			},
 		},
-		Status:     v1.RoutingPolicyStatus{},
+		Status: v1.RoutingPolicyStatus{},
 	}
 
-	plugin := getPlugin(routingPolicyFoo)
-	assert.Equal(t, "plugin: test",plugin)
+	plugin, err := getPlugin(routingPolicyFoo)
+	if err != nil {
+		assert.Fail(t, err.Error())
+	}
+	assert.Equal(t, "plugin: test", plugin)
 }

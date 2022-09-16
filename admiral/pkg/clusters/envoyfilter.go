@@ -25,7 +25,11 @@ const pluginKey = "plugin: "
 
 func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
 
-	envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, workloadSelectorMap)
+	envoyfilterSpec, err := constructEnvoyFilterStruct(routingPolicy, workloadSelectorMap)
+	if err != nil {
+		log.Error("error occurred while constructing envoy filter struct")
+		return nil, err
+	}
 
 	selectorLabelsSha, err := getSha1(workloadIdentityKey + common.GetRoutingPolicyEnv(routingPolicy))
 	if err != nil {
@@ -75,7 +79,7 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 	return filter, err
 }
 
-func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string) *v1alpha3.EnvoyFilter {
+func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string) (*v1alpha3.EnvoyFilter, error) {
 	var envoyFilterStringConfig string
 	var wasmPath string
 	for key, val := range routingPolicy.Spec.Config {
@@ -88,8 +92,16 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	if len(common.GetEnvoyFilterAdditionalConfig()) != 0 {
 		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig() + "\n"
 	}
-	envoyFilterStringConfig += getHosts(routingPolicy) + "\n"
-	envoyFilterStringConfig += getPlugin(routingPolicy)
+	hosts, err := getHosts(routingPolicy)
+	if err != nil {
+		return nil, err
+	}
+	envoyFilterStringConfig += hosts + "\n"
+	plugin, err := getPlugin(routingPolicy)
+	if err != nil {
+		return nil, err
+	}
+	envoyFilterStringConfig += plugin
 
 	configuration := structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -133,7 +145,7 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	}
 
 	envoyfilterSpec := getEnvoyFilterSpec(workloadSelectorLabels, typedConfig)
-	return envoyfilterSpec
+	return envoyfilterSpec, nil
 }
 
 func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *structpb.Struct) *v1alpha3.EnvoyFilter {
@@ -178,16 +190,24 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *s
 	}
 }
 
-func getHosts(routingPolicy *v1.RoutingPolicy) string {
+func getHosts(routingPolicy *v1.RoutingPolicy) (string, error) {
 	hosts := ""
 	for _, host := range routingPolicy.Spec.Hosts {
 		hosts += host + ","
 	}
+	if len(hosts) == 0 {
+		log.Error("routing policy hosts cannot be empty")
+		return "", errors.New("routing policy hosts cannot be empty")
+	}
 	hosts = strings.TrimSuffix(hosts, ",")
-	return hostsKey + hosts
+	return hostsKey + hosts, nil
 }
 
-func getPlugin(routingPolicy *v1.RoutingPolicy) string {
+func getPlugin(routingPolicy *v1.RoutingPolicy) (string, error) {
 	plugin := routingPolicy.Spec.Plugin
-	return pluginKey + plugin
+	if len(plugin) == 0 {
+		log.Error("routing policy plugin cannot be empty")
+		return "", errors.New("routing policy plugin cannot be empty")
+	}
+	return pluginKey + plugin, nil
 }
