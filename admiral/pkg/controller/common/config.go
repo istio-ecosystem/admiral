@@ -1,16 +1,21 @@
 package common
 
 import (
-	log "github.com/sirupsen/logrus"
-	"sync"
 	"time"
+
+	"github.com/matryer/resync"
+	log "github.com/sirupsen/logrus"
 )
 
 var admiralParams = AdmiralParams{
 	LabelSet: &LabelSet{},
 }
 
-var once sync.Once
+var once resync.Once
+
+func ResetSync() {
+	once.Reset()
+}
 
 func InitializeConfig(params AdmiralParams) {
 	var initHappened = false
@@ -19,7 +24,9 @@ func InitializeConfig(params AdmiralParams) {
 		initHappened = true
 		InitializeMetrics()
 	})
-	if !initHappened {
+	if initHappened {
+		log.Info("InitializeConfig was called.")
+	} else {
 		log.Warn("InitializeConfig was called but didn't take effect. It can only be called once, and thus has already been initialized. Please ensure you aren't re-initializing the config.")
 	}
 }

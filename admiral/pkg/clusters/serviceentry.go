@@ -99,7 +99,15 @@ func modifyServiceEntryForNewServiceOrPod(
 		if rc.RolloutController != nil {
 			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
+		if deployment == nil && rollout == nil {
+			log.Infof("Neither deployment nor rollouts found for identity=%s in env=%s namespace=%s", sourceIdentity, env, namespace)
+			continue
+		}
 		if deployment != nil {
+			if isAnExcludedAsset(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeAssetList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+				return nil
+			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
@@ -112,6 +120,10 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
+			if isAnExcludedAsset(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeAssetList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+				return nil
+			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			weightedServices = getServiceForRollout(ctx, rc, rollout)
 			if len(weightedServices) == 0 {
@@ -367,8 +379,10 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 		return
 	}
 
-	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
-
+	sidecar, err := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	if err != nil {
+		return
+	}
 	if sidecar == nil || (sidecar.Spec.Egress == nil) {
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,6 +67,7 @@ type RemoteRegistry struct {
 	ctx               context.Context
 	AdmiralCache      *AdmiralCache
 	StartTime         time.Time
+	ExcludeAssetList  []string
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
@@ -100,6 +102,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		StartTime:         time.Now(),
 		remoteControllers: make(map[string]*RemoteController),
 		AdmiralCache:      admiralCache,
+		ExcludeAssetList:  params.ExcludeAssetList,
 	}
 }
 
@@ -149,6 +152,15 @@ func (r *RemoteRegistry) shutdown() {
 	for _, v := range r.remoteControllers {
 		close(v.stop)
 	}
+}
+
+func isAnExcludedAsset(assetName string, excludedAssetList []string) bool {
+	for _, excludedAsset := range excludedAssetList {
+		if strings.EqualFold(assetName, excludedAsset) {
+			return true
+		}
+	}
+	return false
 }
 
 type ServiceEntryAddressStore struct {
@@ -447,9 +459,9 @@ func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegist
 	deploymentController := rc.DeploymentController
 	rolloutController := rc.RolloutController
 	if deploymentController != nil {
-		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
-		if len(matchingDeployements) > 0 {
-			for _, deployment := range matchingDeployements {
+		matchingDeployments := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployments) > 0 {
+			for _, deployment := range matchingDeployments {
 				HandleEventForDeployment(ctx, admiral.Update, &deployment, remoteRegistry, clusterName)
 			}
 		}
