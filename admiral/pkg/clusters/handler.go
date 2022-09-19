@@ -9,16 +9,12 @@ import (
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
@@ -91,7 +87,6 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 		dr         = &v1alpha32.DestinationRule{}
 	)
 	dr.Host = se.Hosts[0]
-	processGtp := true
 	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{
 		Tls: &v1alpha32.ClientTLSSettings{
 			Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL,

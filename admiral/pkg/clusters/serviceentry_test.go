@@ -405,9 +405,9 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
 	}
 
-	dummyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+	dummyEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.dummy.global"},
-		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
@@ -447,7 +447,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	rr.AdmiralCache = &admiralCache
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se})
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &emptyEndpointSe})
-  AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"dummySe": &dummyEndpointSe})
+	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"dummySe": &dummyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -836,14 +836,7 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	remoteController.SidecarController = sidecarController
 
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
-	ctx := context.Background()
-
 	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
-	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
-	if err == nil {
-		t.Errorf("expected 404 not found error but got nil")
-	}
-
 	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
 	if err == nil {
 		t.Errorf("expected 404 not found error but got nil")
@@ -880,11 +873,6 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		t.Error(err)
 	}
 
-	ctx := context.Background()
-	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
-	if err != nil {
-		t.Error(err)
-	}
 	if createdSidecar != nil {
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
