@@ -461,5 +461,46 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	handler.Updated(ctx, routingPolicyFoo)
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage"))
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
+}
 
+func TestIsAnExcludedAsset(t *testing.T) {
+	testCases := []struct {
+		name              string
+		assetName         string
+		excludedAssetList []string
+		expectedResult    bool
+	}{
+		{
+			name: "Given an asset is in the exclude list, " +
+				"When isAnExcludedAsset is called, " +
+				"Then, it should return true",
+			assetName:         "excluded-asset1",
+			excludedAssetList: []string{"excluded-asset1"},
+			expectedResult:    true,
+		},
+		{
+			name: "Given an asset is NOT in the exclude list, " +
+				"When isAnExcludedAsset is called, " +
+				"Then, it should return false",
+			assetName:         "not-excluded-asset1",
+			excludedAssetList: []string{"excluded-asset1"},
+			expectedResult:    false,
+		},
+		{
+			name: "Given an asset in the exclude list, " +
+				"When the asset name closely matches an excluded asset, " +
+				"And is different by one character, " +
+				"Then, it should return false",
+			assetName:         "e1",
+			excludedAssetList: []string{"e2"},
+			expectedResult:    false,
+		},
+	}
+
+	for _, c := range testCases {
+		result := isAnExcludedAsset(c.assetName, c.excludedAssetList)
+		if result != c.expectedResult {
+			t.Fatalf("expected: %v, got: %v", c.expectedResult, result)
+		}
+	}
 }
