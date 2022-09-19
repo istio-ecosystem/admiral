@@ -28,6 +28,7 @@ var typeTestSingleton sync.Once
 
 func setupForTypeTests() {
 	typeTestSingleton.Do(func() {
+		common.ResetSync()
 		p := common.AdmiralParams{
 			KubeconfigPath:             "testdata/fake.config",
 			LabelSet:                   &common.LabelSet{},

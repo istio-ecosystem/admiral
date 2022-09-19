@@ -55,7 +55,9 @@ func createServiceEntry(ctx context.Context, event admiral.EventType, rc *Remote
 	return tmpSe
 }
 
-func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.EventType, env string, sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+func modifyServiceEntryForNewServiceOrPod(
+	ctx context.Context, event admiral.EventType, env string, sourceIdentity string,
+	remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
@@ -193,11 +195,12 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
-				AddServiceEntriesWithDr(ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-
+				AddServiceEntriesWithDr(
+					ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 					map[string]*networking.ServiceEntry{key: serviceEntry})
 			}
-			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(
+				common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
@@ -266,7 +269,6 @@ func modifyServiceEntryForNewServiceOrPod(ctx context.Context, event admiral.Eve
 //i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
 //ii) Updates the global GTP cache with the selected GTP in i)
 func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
-	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
 	for _, gtpsInCluster := range gtps {
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
@@ -378,7 +380,10 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 		return
 	}
 
-	sidecar, _ := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	sidecar, err := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	if err != nil {
+		return
+	}
 
 	if sidecar == nil || (sidecar.Spec.Egress == nil) {
 		return
@@ -735,7 +740,9 @@ func getUniqueAddress(ctx context.Context, admiralCache *AdmiralCache, globalFqd
 	needsCacheUpdate := false
 
 	for err == nil && counter < maxRetries {
-		address, needsCacheUpdate, err = GetLocalAddressForSe(ctx, getIstioResourceName(globalFqdn, "-se"), admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
+		address, needsCacheUpdate, err = GetLocalAddressForSe(
+			ctx, getIstioResourceName(globalFqdn, "-se"),
+			admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
 
 		if err != nil {
 			log.Errorf("Error getting local address for Service Entry. Err: %v", err)

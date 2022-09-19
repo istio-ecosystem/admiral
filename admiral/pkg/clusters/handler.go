@@ -659,13 +659,10 @@ func createDestinationRuleSkeletion(dr v1alpha32.DestinationRule, name string, n
 }
 
 func getServiceForDeployment(rc *RemoteController, deployment *k8sAppsV1.Deployment) *k8sV1.Service {
-
 	if deployment == nil {
 		return nil
 	}
-
 	cachedServices := rc.ServiceController.Cache.Get(deployment.Namespace)
-
 	if cachedServices == nil {
 		return nil
 	}

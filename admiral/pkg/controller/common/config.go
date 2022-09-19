@@ -25,7 +25,9 @@ func InitializeConfig(params AdmiralParams) {
 		initHappened = true
 		InitializeMetrics()
 	})
-	if !initHappened {
+	if initHappened {
+		log.Info("InitializeConfig was called.")
+	} else {
 		log.Warn("InitializeConfig was called but didn't take effect. It can only be called once, and thus has already been initialized. Please ensure you aren't re-initializing the config.")
 	}
 }

@@ -19,15 +19,16 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/testing/protocmp"
 	"gopkg.in/yaml.v2"
 	istioNetworkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	k8sAppsV1 "k8s.io/api/apps/v1"
 	v14 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -35,26 +36,72 @@ import (
 
 var serviceEntryTestSingleton sync.Once
 
+func admiralParams() common.AdmiralParams {
+	return common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			GatewayApp:          "gatewayapp",
+			WorkloadIdentityKey: "identity",
+			PriorityKey:         "priority",
+			EnvKey:              "env",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       0,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		WorkloadSidecarName:        "default",
+		SecretResolver:             "",
+	}
+}
+
 func setupForServiceEntryTests() {
+	var initHappened bool
 	serviceEntryTestSingleton.Do(func() {
-		p := common.AdmiralParams{
-			KubeconfigPath:             "testdata/fake.config",
-			LabelSet:                   &common.LabelSet{},
-			EnableSAN:                  true,
-			SANPrefix:                  "prefix",
-			HostnameSuffix:             "mesh",
-			SyncNamespace:              "ns",
-			CacheRefreshDuration:       0,
-			ClusterRegistriesNamespace: "default",
-			DependenciesNamespace:      "default",
-			SecretResolver:             "",
-		}
-		p.LabelSet.WorkloadIdentityKey = "identity"
-		p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-		p.LabelSet.PriorityKey = "priority"
-		p.LabelSet.EnvKey = "env"
-		common.InitializeConfig(p)
+		common.ResetSync()
+		initHappened = true
+		common.InitializeConfig(admiralParams())
 	})
+	if !initHappened {
+		log.Warn("InitializeConfig was NOT called from setupForServiceEntryTests")
+	} else {
+		log.Info("InitializeConfig was called setupForServiceEntryTests")
+	}
+}
+
+func makeTestDeployment(name, namespace, identityLabelValue string) *k8sAppsV1.Deployment {
+	return &k8sAppsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Annotations: map[string]string{
+				"env": "test",
+				"traffic.sidecar.istio.io/includeInboundPorts": "8090",
+			},
+		},
+		Spec: k8sAppsV1.DeploymentSpec{
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"env": "test",
+						"traffic.sidecar.istio.io/includeInboundPorts": "8090",
+					},
+					Labels: map[string]string{
+						"identity": identityLabelValue,
+					},
+				},
+				Spec: coreV1.PodSpec{},
+			},
+			Selector: &v12.LabelSelector{
+				MatchLabels: map[string]string{
+					"identity": identityLabelValue,
+					"app":      identityLabelValue,
+				},
+			},
+		},
+	}
 }
 
 func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
@@ -72,6 +119,7 @@ func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
 					Labels: map[string]string{"identity": identityLabelValue},
 					Annotations: map[string]string{
 						"env": "test",
+						"traffic.sidecar.istio.io/includeInboundPorts": "8090",
 					},
 				},
 			},
@@ -101,54 +149,162 @@ func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
 func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
-		env                     = "test"
-		stop                    = make(chan struct{})
-		foobarMetadataName      = "foobar"
-		foobarMetadataNamespace = "foobar-ns"
-		foobarRollout           = makeTestRollout(foobarMetadataName, foobarMetadataNamespace, foobarMetadataName)
-		clusterID               = "test-dev-k8s"
-		p                       = common.AdmiralParams{
-			KubeconfigPath:       "testdata/fake.config",
-			CacheRefreshDuration: 0,
+		env                                 = "test"
+		stop                                = make(chan struct{})
+		foobarMetadataName                  = "foobar"
+		foobarMetadataNamespace             = "foobar-ns"
+		rollout1Identity                    = "rollout1"
+		deployment1Identity                 = "deployment1"
+		testRollout1                        = makeTestRollout(foobarMetadataName, foobarMetadataNamespace, rollout1Identity)
+		testDeployment1                     = makeTestDeployment(foobarMetadataName, foobarMetadataNamespace, deployment1Identity)
+		clusterID                           = "test-dev-k8s"
+		fakeIstioClient                     = istiofake.NewSimpleClientset()
+		config                              = rest.Config{Host: "localhost"}
+		expectedServiceEntriesForDeployment = map[string]*istioNetworkingV1Alpha3.ServiceEntry{
+			"test." + deployment1Identity + ".mesh": &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts:     []string{"test." + deployment1Identity + ".mesh"},
+				Addresses: []string{"127.0.0.1"},
+				Ports: []*istioNetworkingV1Alpha3.Port{
+					&istioNetworkingV1Alpha3.Port{
+						Number:   80,
+						Protocol: "http",
+						Name:     "http",
+					},
+				},
+				Location:   istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+				Resolution: istioNetworkingV1Alpha3.ServiceEntry_DNS,
+				Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+					&istioNetworkingV1Alpha3.WorkloadEntry{
+						Address: "dummy.admiral.global",
+						Ports: map[string]uint32{
+							"http": 0,
+						},
+						Locality: "us-west-2",
+					},
+				},
+				SubjectAltNames: []string{"spiffe://prefix/" + deployment1Identity},
+			},
 		}
-		config              = rest.Config{Host: "localhost"}
-		foobarCanaryService = &coreV1.Service{
+		/*
+			expectedServiceEntriesForRollout = map[string]*istioNetworkingV1Alpha3.ServiceEntry{
+				"test." + deployment1Identity + ".mesh": &istioNetworkingV1Alpha3.ServiceEntry{
+					Hosts:     []string{"test." + rollout1Identity + ".mesh"},
+					Addresses: []string{"127.0.0.1"},
+					Ports: []*istioNetworkingV1Alpha3.Port{
+						&istioNetworkingV1Alpha3.Port{
+							Number:   80,
+							Protocol: "http",
+							Name:     "http",
+						},
+					},
+					Location:   istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+					Resolution: istioNetworkingV1Alpha3.ServiceEntry_DNS,
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						&istioNetworkingV1Alpha3.WorkloadEntry{
+							Address: "dummy.admiral.global",
+							Ports: map[string]uint32{
+								"http": 0,
+							},
+							Locality: "us-west-2",
+						},
+					},
+					SubjectAltNames: []string{"spiffe://prefix/" + rollout1Identity},
+				},
+			}
+		*/
+		serviceEntryAddressStore = &ServiceEntryAddressStore{
+			EntryAddresses: map[string]string{
+				"test." + deployment1Identity + ".mesh-se": "127.0.0.1",
+				"test." + rollout1Identity + ".mesh-se":    "127.0.0.1",
+			},
+			Addresses: []string{},
+		}
+		serviceForRollout = &coreV1.Service{
 			ObjectMeta: v12.ObjectMeta{
-				Name:      foobarMetadataName + "-canary",
+				Name:      foobarMetadataName + "-stable",
 				Namespace: foobarMetadataNamespace,
 			},
 			Spec: coreV1.ServiceSpec{
-				Selector: map[string]string{"app": foobarMetadataName},
+				Selector: map[string]string{"app": rollout1Identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
 			},
 		}
-		rr1, _ = InitAdmiral(context.Background(), p)
-		rr2, _ = InitAdmiral(context.Background(), p)
+		serviceForDeployment = &coreV1.Service{
+			ObjectMeta: v12.ObjectMeta{
+				Name:      foobarMetadataName,
+				Namespace: foobarMetadataNamespace,
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": deployment1Identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
+		rr1, _ = InitAdmiral(context.Background(), admiralParams())
+		rr2, _ = InitAdmiral(context.Background(), admiralParams())
 	)
 	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
 		t.Fail()
 	}
+	deploymentController.Cache.UpdateDeploymentToClusterCache(deployment1Identity, testDeployment1)
 	rolloutController, err := admiral.NewRolloutsController(clusterID, make(chan struct{}), &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
 		t.Fail()
 	}
-	rolloutController.Cache.UpdateRolloutToClusterCache("foobar", &foobarRollout)
+	rolloutController.Cache.UpdateRolloutToClusterCache(rollout1Identity, &testRollout1)
 	serviceController, err := admiral.NewServiceController(clusterID, stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	serviceController.Cache.Put(foobarCanaryService)
+	virtualServiceController, err := istio.NewVirtualServiceController(clusterID, make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	gtpc, err := admiral.NewGlobalTrafficController("", make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, time.Second*time.Duration(300))
+	if err != nil {
+		t.Fatalf("%v", err)
+		t.FailNow()
+	}
+	t.Logf("expectedServiceEntriesForDeployment: %v\n", expectedServiceEntriesForDeployment)
+	serviceController.Cache.Put(serviceForRollout)
+	serviceController.Cache.Put(serviceForDeployment)
 	rc := &RemoteController{
-		DeploymentController: deploymentController,
-		RolloutController:    rolloutController,
-		ServiceController:    serviceController,
+		ClusterID:                clusterID,
+		DeploymentController:     deploymentController,
+		RolloutController:        rolloutController,
+		ServiceController:        serviceController,
+		VirtualServiceController: virtualServiceController,
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+		},
+		GlobalTraffic: gtpc,
 	}
 	rr1.PutRemoteController(clusterID, rc)
 	rr1.ExcludeAssetList = []string{"asset1"}
 	rr1.StartTime = time.Now()
+	rr1.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
 
 	rr2.PutRemoteController(clusterID, rc)
 	rr2.StartTime = time.Now()
+	rr2.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
 
 	testCases := []struct {
 		name                   string
@@ -157,23 +313,68 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
 		expectedServiceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry
 	}{
 		{
-			name:                   "when asset is in the exclude list",
+			name: "Given asset is using a deployment," +
+				"And asset is in the exclude list, " +
+				"When modifyServiceEntryForNewServiceOrPod is called, " +
+				"Then, it should skip creating service entries, and return an empty map of service entries",
 			assetIdentity:          "asset1",
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		},
 		{
-			name:                   "when asset is NOT in the exclude list",
-			assetIdentity:          "foobar",
-			remoteRegistry:         rr2,
+			name: "Given asset is using a rollout," +
+				"And asset is in the exclude list, " +
+				"When modifyServiceEntryForNewServiceOrPod is called, " +
+				"Then, it should skip creating service entries, and return an empty map of service entries",
+			assetIdentity:          "asset1",
+			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		},
+		{
+			name: "Given asset is using a deployment, " +
+				"And asset is NOT in the exclude list" +
+				"When modifyServiceEntryForNewServiceOrPod is called, " +
+				"Then, corresponding service entry should be created, " +
+				"And the function should return a map containing the created service entry",
+			assetIdentity:          deployment1Identity,
+			remoteRegistry:         rr2,
+			expectedServiceEntries: expectedServiceEntriesForDeployment,
+		},
+		/*
+			{
+				name: "Given asset is using a rollout, " +
+					"And asset is NOT in the exclude list" +
+					"When modifyServiceEntryForNewServiceOrPod is called, " +
+					"Then, corresponding service entry should be created, " +
+					"And the function should return a map containing the created service entry",
+				assetIdentity:          rollout1Identity,
+				remoteRegistry:         rr2,
+				expectedServiceEntries: expectedServiceEntriesForRollout,
+			},
+		*/
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			serviceEntries := modifyServiceEntryForNewServiceOrPod(context.Background(), admiral.Add, env, c.assetIdentity, c.remoteRegistry)
+			serviceEntries := modifyServiceEntryForNewServiceOrPod(
+				context.Background(),
+				admiral.Add,
+				env,
+				c.assetIdentity,
+				c.remoteRegistry,
+			)
 			if len(serviceEntries) != len(c.expectedServiceEntries) {
 				t.Fatalf("expected service entries to be of length: %d, but got: %d", len(c.expectedServiceEntries), len(serviceEntries))
+			}
+			if len(c.expectedServiceEntries) > 0 {
+				for k := range c.expectedServiceEntries {
+					if serviceEntries[k] == nil {
+						t.Fatalf(
+							"expected service entries to contain service entry for: %s, "+
+								"but did not find it. Got map: %v",
+							k, serviceEntries,
+						)
+					}
+				}
 			}
 		})
 	}
@@ -394,7 +595,10 @@ func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
-	rr, _ := InitAdmiral(context.Background(), p)
+	rr, err := InitAdmiral(context.Background(), p)
+	if err != nil {
+		t.Fatalf("unable to initialize admiral, err: %v", err)
+	}
 	rr.StartTime = time.Now().Add(-60 * time.Second)
 
 	config := rest.Config{
@@ -593,10 +797,10 @@ func TestMakeRemoteEndpointForServiceEntry(t *testing.T) {
 	}
 }
 
-func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *v1.ConfigMap {
+func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, resourceVersion string) *coreV1.ConfigMap {
 	bytes, _ := yaml.Marshal(addressStore)
 
-	cm := v1.ConfigMap{
+	cm := coreV1.ConfigMap{
 		Data: map[string]string{"serviceEntryAddressStore": string(bytes)},
 	}
 	cm.Name = "se-address-configmap"
@@ -660,6 +864,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
+		time.Sleep(5 * time.Second)
 		modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
 
 		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", v12.GetOptions{})
@@ -695,6 +900,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 				newHosts := matched.Hosts
 				listener.Hosts = listener.Hosts[:0]
 				matched.Hosts = matched.Hosts[:0]
+				t.Logf("old: %v, new: %v", oldHosts, newHosts)
 				assert.ElementsMatch(t, oldHosts, newHosts, "hosts should match")
 				if !cmp.Equal(listener, matched, protocmp.Transform()) {
 					t.Fatalf("Listeners do not match. Details - %v", cmp.Diff(listener, matched))
@@ -997,9 +1203,11 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 		p = common.AdmiralParams{
 			KubeconfigPath: "testdata/fake.config",
 		}
-		rr, _ = InitAdmiral(context.Background(), p)
 	)
-
+	rr, err := InitAdmiral(context.Background(), p)
+	if err != nil {
+		t.Fatalf("unable to initialize admiral, err: %v", err)
+	}
 	rr.StartTime = time.Now().Add(-60 * time.Second)
 	d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
@@ -1141,12 +1349,14 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 			KubeconfigPath:        "testdata/fake.config",
 			PreviewHostnamePrefix: "preview",
 		}
-		rr, _  = InitAdmiral(context.Background(), p)
 		config = rest.Config{
 			Host: "localhost",
 		}
 	)
-
+	rr, err := InitAdmiral(context.Background(), p)
+	if err != nil {
+		t.Fatalf("unable to initialize admiral, err: %v", err)
+	}
 	rr.StartTime = time.Now().Add(-60 * time.Second)
 	d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
@@ -1340,8 +1550,8 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	}
 
 	weightedServices := map[string]*WeightedService{
-		activeService:  {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: activeService, Namespace: namespace}}},
-		previewService: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: previewService, Namespace: namespace}}},
+		activeService:  {Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: activeService, Namespace: namespace}}},
+		previewService: {Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: previewService, Namespace: namespace}}},
 	}
 
 	activeWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
@@ -1411,12 +1621,12 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 			},
 		}
 		weightedServices = map[string]*WeightedService{
-			canaryService: {Weight: 10, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
-			stableService: {Weight: 90, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
+			canaryService: {Weight: 10, Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
+			stableService: {Weight: 90, Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
 		}
 		weightedServicesZeroWeight = map[string]*WeightedService{
-			canaryService: {Weight: 0, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
-			stableService: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
+			canaryService: {Weight: 0, Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: canaryService, Namespace: namespace}}},
+			stableService: {Weight: 100, Service: &coreV1.Service{ObjectMeta: v12.ObjectMeta{Name: stableService, Namespace: namespace}}},
 		}
 		wantedEndpoints = []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: clusterIngress2, Weight: 10, Ports: map[string]uint32{"http": 15443}},

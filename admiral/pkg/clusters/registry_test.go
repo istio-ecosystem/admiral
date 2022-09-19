@@ -28,6 +28,7 @@ var registryTestSingleton sync.Once
 
 func setupForRegistryTests() {
 	registryTestSingleton.Do(func() {
+		common.ResetSync()
 		p := common.AdmiralParams{
 			KubeconfigPath:             "testdata/fake.config",
 			LabelSet:                   &common.LabelSet{},
