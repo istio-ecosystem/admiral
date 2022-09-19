@@ -55,6 +55,8 @@ func TestDeploymentHandler(t *testing.T) {
 	setupForTypeTests()
 	ctx := context.Background()
 
+	ctx := context.Background()
+
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
@@ -135,6 +137,8 @@ func TestDeploymentHandler(t *testing.T) {
 
 func TestRolloutHandler(t *testing.T) {
 	setupForTypeTests()
+	ctx := context.Background()
+
 	ctx := context.Background()
 
 	p := common.AdmiralParams{

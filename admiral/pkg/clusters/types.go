@@ -306,7 +306,6 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 			return
 		}
 		r.processRoutingPolicy(ctx, dependents, obj, admiral.Add)
-
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "finished processing routing policy")
 	} else {
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "routingpolicy disabled")
@@ -348,7 +347,6 @@ func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy
 			return
 		}
 		r.processRoutingPolicy(ctx, dependents, obj, admiral.Update)
-
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "updated routing policy")
 	} else {
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "routingpolicy disabled")

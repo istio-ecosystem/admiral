@@ -35,7 +35,7 @@ type SeDrTuple struct {
 	DestinationRule *networking.DestinationRule
 }
 
-func createServiceEntry(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
+func createServiceEntryForDeployment(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
@@ -50,14 +50,12 @@ func createServiceEntry(ctx context.Context, event admiral.EventType, rc *Remote
 	}
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
-
-	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
-	return tmpSe
+	return generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
 }
 
 func modifyServiceEntryForNewServiceOrPod(
-	ctx context.Context, event admiral.EventType, env string, sourceIdentity string,
-	remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
+	ctx context.Context, event admiral.EventType, env string,
+	sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
@@ -76,15 +74,15 @@ func modifyServiceEntryForNewServiceOrPod(
 		rollout                *argo.Rollout
 		deployment             *k8sAppsV1.Deployment
 		gtps                   = make(map[string][]*v1.GlobalTrafficPolicy)
+		start                  = time.Now()
+		gtpKey                 = common.ConstructGtpKey(env, sourceIdentity)
+		clusters               = remoteRegistry.GetClusterIds()
+		cnames                 = make(map[string]string)
 		sourceServices         = make(map[string]*k8sV1.Service)
 		sourceWeightedServices = make(map[string]map[string]*WeightedService)
 		sourceDeployments      = make(map[string]*k8sAppsV1.Deployment)
 		sourceRollouts         = make(map[string]*argo.Rollout)
 		serviceEntries         = make(map[string]*networking.ServiceEntry)
-		cnames                 = make(map[string]string)
-		start                  = time.Now()
-		gtpKey                 = common.ConstructGtpKey(env, sourceIdentity)
-		clusters               = remoteRegistry.GetClusterIds()
 	)
 
 	for _, clusterId := range clusters {
@@ -93,20 +91,16 @@ func modifyServiceEntryForNewServiceOrPod(
 			log.Warnf(LogFormat, "Find", "remote-controller", clusterId, clusterId, "remote controller not available/initialized for the cluster")
 			continue
 		}
-
 		if rc.DeploymentController != nil {
 			deployment = rc.DeploymentController.Cache.Get(sourceIdentity, env)
 		}
-
 		if rc.RolloutController != nil {
 			rollout = rc.RolloutController.Cache.Get(sourceIdentity, env)
 		}
-
 		if deployment == nil && rollout == nil {
 			log.Infof("Neither deployment nor rollouts found for identity=%s in env=%s namespace=%s", sourceIdentity, env, namespace)
 			continue
 		}
-
 		if deployment != nil {
 			if isAnExcludedAsset(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeAssetList) {
 				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
@@ -121,7 +115,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
-			createServiceEntry(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
 			if isAnExcludedAsset(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeAssetList) {
 				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
@@ -144,6 +138,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
 			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+		} else {
+			continue
 		}
 
 		gtpsInNamespace := rc.GlobalTraffic.Cache.Get(gtpKey, namespace)
@@ -229,7 +225,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						AddServiceEntriesWithDr(
 							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry})
-						//swap it back to use for next iteration
+						// swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
 					}
@@ -384,7 +380,6 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 	if err != nil {
 		return
 	}
-
 	if sidecar == nil || (sidecar.Spec.Egress == nil) {
 		return
 	}
@@ -421,7 +416,6 @@ func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNames
 func addUpdateSidecar(ctx context.Context, obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {
 	var err error
 	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, obj, v12.UpdateOptions{})
-
 	if err != nil {
 		log.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
 	} else {
@@ -439,9 +433,7 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 
 //AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
-
 	cache := rr.AdmiralCache
-
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
 
@@ -480,8 +472,16 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 					log.Infof(LogFormat, "Get (error)", "old DestinationRule", seDr.DrName, sourceCluster, err)
 					oldDestinationRule = nil
 				}
+				var deleteOldServiceEntry = false
+				if oldServiceEntry != nil {
+					areEndpointsValid := validateAndProcessServiceEntryEndpoints(oldServiceEntry)
+					if !areEndpointsValid && len(oldServiceEntry.Spec.Endpoints) == 0 {
+						deleteOldServiceEntry = true
+					}
+				}
 
-				if len(seDr.ServiceEntry.Endpoints) == 0 {
+				//clean service entry in case no endpoints are configured or if all the endpoints are invalid
+				if (len(seDr.ServiceEntry.Endpoints) == 0) || deleteOldServiceEntry {
 					deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
 					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
@@ -489,7 +489,6 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 				} else {
 					//nolint
 					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
-
 					if newServiceEntry != nil {
 						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
 						addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
@@ -743,7 +742,6 @@ func getUniqueAddress(ctx context.Context, admiralCache *AdmiralCache, globalFqd
 		address, needsCacheUpdate, err = GetLocalAddressForSe(
 			ctx, getIstioResourceName(globalFqdn, "-se"),
 			admiralCache.ServiceEntryAddressStore, admiralCache.ConfigMapController)
-
 		if err != nil {
 			log.Errorf("Error getting local address for Service Entry. Err: %v", err)
 			break

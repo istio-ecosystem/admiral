@@ -405,17 +405,30 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
 	}
 
+	dummyEndpointSe := istionetworkingv1alpha3.ServiceEntry{
+		Hosts: []string{"dev.dummy.global"},
+		Endpoints: []*istionetworkingv1alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+		},
+	}
+
 	seConfig := v1alpha3.ServiceEntry{
 		//nolint
 		Spec: se,
 	}
 	seConfig.Name = "se1"
 	seConfig.Namespace = "admiral-sync"
-
+	dummySeConfig := v1alpha3.ServiceEntry{
+		//nolint
+		Spec: dummyEndpointSe,
+	}
+	dummySeConfig.Name = "dummySe"
+	dummySeConfig.Namespace = "admiral-sync"
 	ctx := context.Background()
-
 	fakeIstioClient := istiofake.NewSimpleClientset()
 	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &seConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &dummySeConfig, v12.CreateOptions{})
+
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
 			IstioClient: fakeIstioClient,
@@ -430,10 +443,11 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
-	rr.PutRemoteController("c1", rc)
+	rr.PutRemoteController("cl1", rc)
 	rr.AdmiralCache = &admiralCache
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se})
 	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &emptyEndpointSe})
+  AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"dummySe": &dummyEndpointSe})
 }
 
 func TestCreateSeAndDrSetFromGtp(t *testing.T) {
@@ -822,8 +836,13 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	remoteController.SidecarController = sidecarController
 
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
+	ctx := context.Background()
 
 	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
+	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	if err == nil {
+		t.Errorf("expected 404 not found error but got nil")
+	}
 
 	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
 	if err == nil {
@@ -860,8 +879,13 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if createdSidecar != nil {
 
+	ctx := context.Background()
+	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
+	if err != nil {
+		t.Error(err)
+	}
+	if createdSidecar != nil {
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
 		time.Sleep(5 * time.Second)
@@ -1138,8 +1162,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			var createdSE *istioNetworkingV1Alpha3.ServiceEntry
-			createdSE = createServiceEntry(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE := createServiceEntryForDeployment(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -1535,7 +1558,6 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 		rollout   = &argo.Rollout{}
 		meshPorts = map[string]uint32{"http": 8080}
 	)
-
 	rollout.Spec.Strategy = argo.RolloutStrategy{
 		BlueGreen: &argo.BlueGreenStrategy{
 			ActiveService:  activeService,
@@ -1544,7 +1566,6 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	}
 	rollout.Spec.Template.Annotations = map[string]string{}
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
-
 	endpoint := &istioNetworkingV1Alpha3.WorkloadEntry{
 		Labels: map[string]string{}, Address: clusterIngress1, Ports: map[string]uint32{"http": 15443},
 	}
@@ -1638,7 +1659,6 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 			{Address: stableService + common.Sep + namespace + common.DotLocalDomainSuffix, Weight: 100, Ports: meshPorts},
 		}
 	)
-
 	testCases := []struct {
 		name              string
 		inputServiceEntry *istioNetworkingV1Alpha3.ServiceEntry
