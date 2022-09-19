@@ -35,14 +35,15 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func admiralParams() common.AdmiralParams {
+func admiralParamsForServiceEntryTests() common.AdmiralParams {
 	return common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 		LabelSet: &common.LabelSet{
-			GatewayApp:          "gatewayapp",
-			WorkloadIdentityKey: "identity",
-			PriorityKey:         "priority",
-			EnvKey:              "env",
+			GatewayApp:                   "gatewayapp",
+			WorkloadIdentityKey:          "identity",
+			PriorityKey:                  "priority",
+			EnvKey:                       "env",
+			GlobalTrafficDeploymentLabel: "identity",
 		},
 		EnableSAN:                  true,
 		SANPrefix:                  "prefix",
@@ -63,7 +64,7 @@ func setupForServiceEntryTests() {
 	serviceEntryTestSingleton.Do(func() {
 		common.ResetSync()
 		initHappened = true
-		common.InitializeConfig(admiralParams())
+		common.InitializeConfig(admiralParamsForServiceEntryTests())
 	})
 	if !initHappened {
 		log.Warn("InitializeConfig was NOT called from setupForServiceEntryTests")
@@ -264,8 +265,8 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
 				},
 			},
 		}
-		rr1, _ = InitAdmiral(context.Background(), admiralParams())
-		rr2, _ = InitAdmiral(context.Background(), admiralParams())
+		rr1, _ = InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
+		rr2, _ = InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
 	)
 	deploymentController, err := admiral.NewDeploymentController(clusterID, make(chan struct{}), &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
 	if err != nil {
@@ -1702,13 +1703,11 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 }
 
 func TestUpdateGlobalGtpCache(t *testing.T) {
-
+	setupForServiceEntryTests()
 	var (
 		admiralCache = &AdmiralCache{GlobalTrafficCache: &globalTrafficCache{identityCache: make(map[string]*v13.GlobalTrafficPolicy), mutex: &sync.Mutex{}}}
-
-		identity1 = "identity1"
-
-		envStage = "stage"
+		identity1    = "identity1"
+		envStage     = "stage"
 
 		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hello"}},

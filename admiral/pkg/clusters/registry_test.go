@@ -26,30 +26,34 @@ import (
 
 var registryTestSingleton sync.Once
 
+func admiralParamsForRegistryTests() common.AdmiralParams {
+	return common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:          "identity",
+			GlobalTrafficDeploymentLabel: "identity",
+			PriorityKey:                  "priority",
+			EnvKey:                       "admiral.io/env",
+		},
+		KubeconfigPath:             "testdata/fake.config",
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+		WorkloadSidecarUpdate:      "enabled",
+		WorkloadSidecarName:        "default",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
+	}
+}
+
 func setupForRegistryTests() {
 	registryTestSingleton.Do(func() {
 		common.ResetSync()
-		p := common.AdmiralParams{
-			KubeconfigPath:             "testdata/fake.config",
-			LabelSet:                   &common.LabelSet{},
-			EnableSAN:                  true,
-			SANPrefix:                  "prefix",
-			HostnameSuffix:             "mesh",
-			SyncNamespace:              "ns",
-			CacheRefreshDuration:       time.Minute,
-			ClusterRegistriesNamespace: "default",
-			DependenciesNamespace:      "default",
-			SecretResolver:             "",
-			WorkloadSidecarUpdate:      "enabled",
-			WorkloadSidecarName:        "default",
-			EnableRoutingPolicy:        true,
-			EnvoyFilterVersion:         "1.13",
-		}
-		p.LabelSet.WorkloadIdentityKey = "identity"
-		p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-		p.LabelSet.PriorityKey = "priority"
-		p.LabelSet.EnvKey = "admiral.io/env"
-		common.InitializeConfig(p)
+		common.InitializeConfig(admiralParamsForRegistryTests())
 	})
 }
 

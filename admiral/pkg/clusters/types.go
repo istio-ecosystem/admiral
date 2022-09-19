@@ -208,7 +208,6 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy) error {
 	identity := gtp.Labels[common.GetGlobalTrafficDeploymentLabel()]
 	key := common.ConstructGtpKey(gtpEnv, identity)
 	g.identityCache[key] = gtp
-
 	return nil
 }
 

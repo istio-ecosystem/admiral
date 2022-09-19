@@ -27,28 +27,32 @@ var ignoreUnexported = cmpopts.IgnoreUnexported(v1.GlobalTrafficPolicy{}.Status)
 
 var typeTestSingleton sync.Once
 
+func admiralParamsForTypesTests() common.AdmiralParams {
+	return common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:          "identity",
+			EnvKey:                       "admiral.io/env",
+			GlobalTrafficDeploymentLabel: "identity",
+			PriorityKey:                  "priority",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
+	}
+}
+
 func setupForTypeTests() {
 	typeTestSingleton.Do(func() {
 		common.ResetSync()
-		p := common.AdmiralParams{
-			KubeconfigPath:             "testdata/fake.config",
-			LabelSet:                   &common.LabelSet{},
-			EnableSAN:                  true,
-			SANPrefix:                  "prefix",
-			HostnameSuffix:             "mesh",
-			SyncNamespace:              "ns",
-			CacheRefreshDuration:       time.Minute,
-			ClusterRegistriesNamespace: "default",
-			DependenciesNamespace:      "default",
-			SecretResolver:             "",
-			EnableRoutingPolicy:        true,
-			EnvoyFilterVersion:         "1.13",
-		}
-		p.LabelSet.WorkloadIdentityKey = "identity"
-		p.LabelSet.EnvKey = "admiral.io/env"
-		p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-		p.LabelSet.PriorityKey = "priority"
-		common.InitializeConfig(p)
+		common.InitializeConfig(admiralParamsForTypesTests())
 	})
 }
 
