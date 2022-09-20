@@ -282,6 +282,10 @@ func (r *routingPolicyFilterCache) Put(identityEnvKey string, clusterId string, 
 }
 
 func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
+	if CurrentAdmiralState.ReadOnly {
+		log.Infof(LogFormat, admiral.Delete, "routingpolicy", identityEnvKey, "", "skipping read-only mode")
+		return
+	}
 	if common.GetEnableRoutingPolicy() {
 		defer r.mutex.Unlock()
 		r.mutex.Lock()
@@ -292,6 +296,10 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 	}
 }
 func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) {
+	if CurrentAdmiralState.ReadOnly {
+		log.Infof(LogFormat, admiral.Add, "routingpolicy", "", "", "skipping read-only mode")
+		return
+	}
 	if common.GetEnableRoutingPolicy() {
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
 			log.Infof(LogFormat, "success", "routingpolicy", obj.Name, "", "Ignored the RoutingPolicy because of the annotation")
@@ -334,6 +342,10 @@ func (r RoutingPolicyHandler) processroutingPolicy(ctx context.Context, dependen
 }
 
 func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy) {
+	if CurrentAdmiralState.ReadOnly {
+		log.Infof(LogFormat, admiral.Update, "routingpolicy", "", "", "skipping read-only mode")
+		return
+	}
 	if common.GetEnableRoutingPolicy() {
 		if common.ShouldIgnoreResource(obj.ObjectMeta) {
 			log.Infof(LogFormat, admiral.Update, "routingpolicy", obj.Name, "", "Ignored the RoutingPolicy because of the annotation")

@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -8,19 +9,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	admiralFake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
 	v12 "k8s.io/api/apps/v1"
 	v13 "k8s.io/api/core/v1"
 	time2 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 )
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(v1.GlobalTrafficPolicy{}.Status)
@@ -453,4 +455,81 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage"))
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
 
+}
+
+func TestRoutingPolicyReadOnly(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath:             "testdata/fake.config",
+		LabelSet:                   &common.LabelSet{},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheRefreshDuration:       time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		SecretResolver:             "",
+		EnableRoutingPolicy:        true,
+		EnvoyFilterVersion:         "1.13",
+	}
+
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+
+	handler := RoutingPolicyHandler{}
+
+	testcases := []struct {
+		name      string
+		rp        *v1.RoutingPolicy
+		readOnly  bool
+		doesError bool
+	}{
+		{
+			name:      "Readonly test for DR scenario - Routing Policy",
+			rp:        &v1.RoutingPolicy{},
+			readOnly:  true,
+			doesError: true,
+		},
+		{
+			name:      "Readonly false test for DR scenario - Routing Policy",
+			rp:        &v1.RoutingPolicy{},
+			readOnly:  false,
+			doesError: false,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, c := range testcases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.readOnly {
+				CurrentAdmiralState.ReadOnly = true
+			} else {
+				CurrentAdmiralState.ReadOnly = false
+			}
+			var buf bytes.Buffer
+			log.SetOutput(&buf)
+			defer func() {
+				log.SetOutput(os.Stderr)
+			}()
+			// Add routing policy test
+			handler.Added(ctx, c.rp)
+			t.Log(buf.String())
+			val := strings.Contains(buf.String(), "skipping read-only mode")
+			assert.Equal(t, c.doesError, val)
+
+			// Update routing policy test
+			handler.Updated(ctx, c.rp)
+			t.Log(buf.String())
+			val = strings.Contains(buf.String(), "skipping read-only mode")
+			assert.Equal(t, c.doesError, val)
+
+			// Delete routing policy test
+			handler.Deleted(ctx, c.rp)
+			t.Log(buf.String())
+			val = strings.Contains(buf.String(), "skipping read-only mode")
+			assert.Equal(t, c.doesError, val)
+		})
+	}
 }
