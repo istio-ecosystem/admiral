@@ -61,13 +61,13 @@ type AdmiralCache struct {
 
 type RemoteRegistry struct {
 	sync.Mutex
-	remoteControllers map[string]*RemoteController
-	SecretController  *secret.Controller
-	secretClient      k8s.Interface
-	ctx               context.Context
-	AdmiralCache      *AdmiralCache
-	StartTime         time.Time
-	ExcludeAssetList  []string
+	remoteControllers   map[string]*RemoteController
+	SecretController    *secret.Controller
+	secretClient        k8s.Interface
+	ctx                 context.Context
+	AdmiralCache        *AdmiralCache
+	StartTime           time.Time
+	ExcludeIdentityList []string
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
@@ -98,11 +98,11 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
 	}
 	return &RemoteRegistry{
-		ctx:               ctx,
-		StartTime:         time.Now(),
-		remoteControllers: make(map[string]*RemoteController),
-		AdmiralCache:      admiralCache,
-		ExcludeAssetList:  params.ExcludeAssetList,
+		ctx:                 ctx,
+		StartTime:           time.Now(),
+		remoteControllers:   make(map[string]*RemoteController),
+		AdmiralCache:        admiralCache,
+		ExcludeIdentityList: params.ExcludeIdentityList,
 	}
 }
 

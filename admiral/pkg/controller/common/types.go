@@ -51,7 +51,7 @@ type AdmiralParams struct {
 	EnvoyFilterVersion          string
 	EnvoyFilterAdditionalConfig string
 	EnableRoutingPolicy         bool
-	ExcludeAssetList            []string
+	ExcludeIdentityList         []string
 }
 
 func (b AdmiralParams) String() string {
