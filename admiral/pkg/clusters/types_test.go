@@ -463,42 +463,42 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
 }
 
-func TestIsAnExcludedAsset(t *testing.T) {
+func TestIsAnExcludedIdentity(t *testing.T) {
 	testCases := []struct {
-		name              string
-		assetName         string
-		excludedAssetList []string
-		expectedResult    bool
+		name                 string
+		identityName         string
+		excludedIdentityList []string
+		expectedResult       bool
 	}{
 		{
-			name: "Given an asset is in the exclude list, " +
-				"When isAnExcludedAsset is called, " +
+			name: "Given an identity is in the exclude list, " +
+				"When isAnExcludedIdentity is called, " +
 				"Then, it should return true",
-			assetName:         "excluded-asset1",
-			excludedAssetList: []string{"excluded-asset1"},
-			expectedResult:    true,
+			identityName:         "excluded-identity1",
+			excludedIdentityList: []string{"excluded-identity1"},
+			expectedResult:       true,
 		},
 		{
-			name: "Given an asset is NOT in the exclude list, " +
-				"When isAnExcludedAsset is called, " +
+			name: "Given an identity is NOT in the exclude list, " +
+				"When isAnExcludedIdentity is called, " +
 				"Then, it should return false",
-			assetName:         "not-excluded-asset1",
-			excludedAssetList: []string{"excluded-asset1"},
-			expectedResult:    false,
+			identityName:         "not-excluded-identity1",
+			excludedIdentityList: []string{"excluded-identity1"},
+			expectedResult:       false,
 		},
 		{
-			name: "Given an asset in the exclude list, " +
-				"When the asset name closely matches an excluded asset, " +
+			name: "Given an identity in the exclude list, " +
+				"When the identity name closely matches an excluded identity, " +
 				"And is different by one character, " +
 				"Then, it should return false",
-			assetName:         "e1",
-			excludedAssetList: []string{"e2"},
-			expectedResult:    false,
+			identityName:         "e1",
+			excludedIdentityList: []string{"e2"},
+			expectedResult:       false,
 		},
 	}
 
 	for _, c := range testCases {
-		result := isAnExcludedAsset(c.assetName, c.excludedAssetList)
+		result := isAnExcludedIdentity(c.identityName, c.excludedIdentityList)
 		if result != c.expectedResult {
 			t.Fatalf("expected: %v, got: %v", c.expectedResult, result)
 		}

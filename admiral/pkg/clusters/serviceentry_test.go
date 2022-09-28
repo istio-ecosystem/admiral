@@ -162,7 +162,7 @@ func makeGTP(name, namespace, identity, env, dnsPrefix string, creationTimestamp
 	}
 }
 
-func TestModifyServiceEntryForNewServiceOrPodForExcludedAsset(t *testing.T) {
+func TestModifyServiceEntryForNewServiceOrPodForExcludedIdentity(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
 		env                                 = "test"

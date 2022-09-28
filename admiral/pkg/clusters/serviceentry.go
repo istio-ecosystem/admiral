@@ -104,8 +104,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 		if deployment != nil {
-			if isAnExcludedAsset(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeIdentityList) {
-				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+			if isAnExcludedIdentity(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeIdentityList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
 				return nil
 			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
@@ -120,8 +120,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
-			if isAnExcludedAsset(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeIdentityList) {
-				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as asset is in the exclude list")
+			if isAnExcludedIdentity(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeIdentityList) {
+				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
 				return nil
 			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
