@@ -143,7 +143,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
 	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludeIdentityList, "exclude_asset_list", []string{},
-		"List of assets which should be excluded from getting processed")
+		"List of identities which should be excluded from getting processed")
 	return rootCmd
 }
 
