@@ -154,7 +154,7 @@ func (r *RemoteRegistry) shutdown() {
 	}
 }
 
-func isAnExcludedAsset(assetName string, excludedAssetList []string) bool {
+func isAnExcludedAsset(assetName string, excludedIdentityList []string) bool {
 	for _, excludedAsset := range excludedAssetList {
 		if strings.EqualFold(assetName, excludedAsset) {
 			return true
