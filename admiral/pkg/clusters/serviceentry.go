@@ -104,7 +104,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 		if deployment != nil {
-			if isAnExcludedIdentity(common.GetDeploymentGlobalIdentifier(deployment), remoteRegistry.ExcludeIdentityList) {
+			if len(remoteRegistry.ExcludedIdentityMap) > 0 && remoteRegistry.ExcludedIdentityMap[common.GetDeploymentGlobalIdentifier(deployment)] {
 				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
 				return nil
 			}
@@ -120,7 +120,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
-			if isAnExcludedIdentity(common.GetRolloutGlobalIdentifier(rollout), remoteRegistry.ExcludeIdentityList) {
+			if len(remoteRegistry.ExcludedIdentityMap) > 0 && remoteRegistry.ExcludedIdentityMap[common.GetRolloutGlobalIdentifier(rollout)] {
 				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
 				return nil
 			}

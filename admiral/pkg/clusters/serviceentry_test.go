@@ -314,7 +314,9 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedIdentity(t *testing.T) {
 		GlobalTraffic: gtpc,
 	}
 	rr1.PutRemoteController(clusterID, rc)
-	rr1.ExcludeIdentityList = []string{"asset1"}
+	rr1.ExcludedIdentityMap = map[string]bool{
+		"asset1": true,
+	}
 	rr1.StartTime = time.Now()
 	rr1.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
 

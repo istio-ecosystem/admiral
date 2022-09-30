@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +66,7 @@ type RemoteRegistry struct {
 	ctx                 context.Context
 	AdmiralCache        *AdmiralCache
 	StartTime           time.Time
-	ExcludeIdentityList []string
+	ExcludedIdentityMap map[string]bool
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
@@ -102,7 +101,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		StartTime:           time.Now(),
 		remoteControllers:   make(map[string]*RemoteController),
 		AdmiralCache:        admiralCache,
-		ExcludeIdentityList: params.ExcludeIdentityList,
+		ExcludedIdentityMap: mapSliceToBool(params.ExcludedIdentityList, true),
 	}
 }
 
@@ -152,15 +151,6 @@ func (r *RemoteRegistry) shutdown() {
 	for _, v := range r.remoteControllers {
 		close(v.stop)
 	}
-}
-
-func isAnExcludedIdentity(identityName string, excludedIdentityList []string) bool {
-	for _, excludedIdentity := range excludedIdentityList {
-		if strings.EqualFold(identityName, excludedIdentity) {
-			return true
-		}
-	}
-	return false
 }
 
 type ServiceEntryAddressStore struct {

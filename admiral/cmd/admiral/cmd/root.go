@@ -142,7 +142,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The value of envoy filter is to add additional config to the filter config section")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
-	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludeIdentityList, "exclude_identity_list", []string{},
+	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
 		"List of identities which should be excluded from getting processed")
 	return rootCmd
 }
