@@ -60,12 +60,13 @@ type AdmiralCache struct {
 
 type RemoteRegistry struct {
 	sync.Mutex
-	remoteControllers map[string]*RemoteController
-	SecretController  *secret.Controller
-	secretClient      k8s.Interface
-	ctx               context.Context
-	AdmiralCache      *AdmiralCache
-	StartTime         time.Time
+	remoteControllers   map[string]*RemoteController
+	SecretController    *secret.Controller
+	secretClient        k8s.Interface
+	ctx                 context.Context
+	AdmiralCache        *AdmiralCache
+	StartTime           time.Time
+	ExcludedIdentityMap map[string]bool
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
@@ -96,10 +97,11 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
 	}
 	return &RemoteRegistry{
-		ctx:               ctx,
-		StartTime:         time.Now(),
-		remoteControllers: make(map[string]*RemoteController),
-		AdmiralCache:      admiralCache,
+		ctx:                 ctx,
+		StartTime:           time.Now(),
+		remoteControllers:   make(map[string]*RemoteController),
+		AdmiralCache:        admiralCache,
+		ExcludedIdentityMap: mapSliceToBool(params.ExcludedIdentityList, true),
 	}
 }
 
@@ -196,7 +198,6 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy) error {
 	identity := gtp.Labels[common.GetGlobalTrafficDeploymentLabel()]
 	key := common.ConstructGtpKey(gtpEnv, identity)
 	g.identityCache[key] = gtp
-
 	return nil
 }
 
@@ -459,9 +460,9 @@ func HandleEventForService(ctx context.Context, svc *k8sV1.Service, remoteRegist
 	deploymentController := rc.DeploymentController
 	rolloutController := rc.RolloutController
 	if deploymentController != nil {
-		matchingDeployements := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
-		if len(matchingDeployements) > 0 {
-			for _, deployment := range matchingDeployements {
+		matchingDeployments := deploymentController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
+		if len(matchingDeployments) > 0 {
+			for _, deployment := range matchingDeployments {
 				HandleEventForDeployment(ctx, admiral.Update, &deployment, remoteRegistry, clusterName)
 			}
 		}

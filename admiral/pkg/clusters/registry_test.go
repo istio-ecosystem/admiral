@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,10 +24,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func init() {
-	p := common.AdmiralParams{
+var registryTestSingleton sync.Once
+
+func admiralParamsForRegistryTests() common.AdmiralParams {
+	return common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:          "identity",
+			GlobalTrafficDeploymentLabel: "identity",
+			PriorityKey:                  "priority",
+			EnvKey:                       "admiral.io/env",
+		},
 		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
 		EnableSAN:                  true,
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
@@ -40,34 +48,30 @@ func init() {
 		EnableRoutingPolicy:        true,
 		EnvoyFilterVersion:         "1.13",
 	}
+}
 
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-	p.LabelSet.PriorityKey = "priority"
-	p.LabelSet.EnvKey = "admiral.io/env"
-
-	common.InitializeConfig(p)
+func setupForRegistryTests() {
+	registryTestSingleton.Do(func() {
+		common.ResetSync()
+		common.InitializeConfig(admiralParamsForRegistryTests())
+	})
 }
 
 func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
-
+	setupForRegistryTests()
 	w := NewRemoteRegistry(nil, common.AdmiralParams{})
-
 	err := w.deleteCacheController("I don't exit")
-
 	if err != nil {
 		t.Fail()
 	}
 }
 
 func TestDeleteCacheController(t *testing.T) {
-
+	setupForRegistryTests()
 	w := NewRemoteRegistry(nil, common.AdmiralParams{})
-
 	r := rest.Config{
 		Host: "test.com",
 	}
-
 	cluster := "test.cluster"
 	w.createCacheController(&r, cluster, time.Second*time.Duration(300))
 	rc := w.GetRemoteController(cluster)
@@ -89,7 +93,7 @@ func TestDeleteCacheController(t *testing.T) {
 }
 
 func TestCopyServiceEntry(t *testing.T) {
-
+	setupForRegistryTests()
 	se := networking.ServiceEntry{
 		Hosts: []string{"test.com"},
 	}
@@ -102,7 +106,7 @@ func TestCopyServiceEntry(t *testing.T) {
 }
 
 func TestCopyEndpoint(t *testing.T) {
-
+	setupForRegistryTests()
 	se := networking.WorkloadEntry{
 		Address: "127.0.0.1",
 	}
@@ -116,6 +120,7 @@ func TestCopyEndpoint(t *testing.T) {
 }
 
 func TestCopySidecar(t *testing.T) {
+	setupForRegistryTests()
 	spec := networking.Sidecar{
 		WorkloadSelector: &networking.WorkloadSelector{
 			Labels: map[string]string{"TestLabel": "TestValue"},
@@ -202,9 +207,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 }
 
 func TestCreateSecretController(t *testing.T) {
-
+	setupForRegistryTests()
 	err := createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
-
 	if err != nil {
 		t.Fail()
 	}
@@ -221,14 +225,12 @@ func TestCreateSecretController(t *testing.T) {
 }
 
 func TestInitAdmiral(t *testing.T) {
-
+	setupForRegistryTests()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 		LabelSet:       &common.LabelSet{},
 	}
-
 	p.LabelSet.WorkloadIdentityKey = "overridden-key"
-
 	rr, err := InitAdmiral(context.Background(), p)
 
 	if err != nil {
@@ -244,6 +246,7 @@ func TestInitAdmiral(t *testing.T) {
 }
 
 func TestAdded(t *testing.T) {
+	setupForRegistryTests()
 	ctx := context.Background()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -279,6 +282,7 @@ func TestAdded(t *testing.T) {
 }
 
 func TestGetServiceForDeployment(t *testing.T) {
+	setupForRegistryTests()
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
 		//res := i.(istio.Config)
 		//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
@@ -364,6 +368,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 }
 
 func TestUpdateCacheController(t *testing.T) {
+	setupForRegistryTests()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}

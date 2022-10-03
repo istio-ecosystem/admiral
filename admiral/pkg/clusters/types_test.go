@@ -27,10 +27,17 @@ import (
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(v1.GlobalTrafficPolicy{}.Status)
 
-func init() {
-	p := common.AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
+var typeTestSingleton sync.Once
+
+func admiralParamsForTypesTests() common.AdmiralParams {
+	return common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:          "identity",
+			EnvKey:                       "admiral.io/env",
+			GlobalTrafficDeploymentLabel: "identity",
+			PriorityKey:                  "priority",
+		},
 		EnableSAN:                  true,
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
@@ -42,17 +49,17 @@ func init() {
 		EnableRoutingPolicy:        true,
 		EnvoyFilterVersion:         "1.13",
 	}
+}
 
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.EnvKey = "admiral.io/env"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-	p.LabelSet.PriorityKey = "priority"
-
-	common.InitializeConfig(p)
+func setupForTypeTests() {
+	typeTestSingleton.Do(func() {
+		common.ResetSync()
+		common.InitializeConfig(admiralParamsForTypesTests())
+	})
 }
 
 func TestDeploymentHandler(t *testing.T) {
-
+	setupForTypeTests()
 	ctx := context.Background()
 
 	p := common.AdmiralParams{
@@ -134,7 +141,7 @@ func TestDeploymentHandler(t *testing.T) {
 }
 
 func TestRolloutHandler(t *testing.T) {
-
+	setupForTypeTests()
 	ctx := context.Background()
 
 	p := common.AdmiralParams{
@@ -221,6 +228,7 @@ func TestRolloutHandler(t *testing.T) {
 }
 
 func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
+	setupForTypeTests()
 	ctx := context.Background()
 	event := admiral.EventType("Add")
 	p := common.AdmiralParams{
@@ -276,6 +284,7 @@ func TestHandleEventForGlobalTrafficPolicy(t *testing.T) {
 }
 
 func TestRoutingPolicyHandler(t *testing.T) {
+	common.ResetSync()
 	p := common.AdmiralParams{
 		KubeconfigPath:             "testdata/fake.config",
 		LabelSet:                   &common.LabelSet{},
@@ -454,7 +463,6 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	handler.Updated(ctx, routingPolicyFoo)
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar4stage"))
 	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("bar3stage"))
-
 }
 
 func TestRoutingPolicyReadOnly(t *testing.T) {
