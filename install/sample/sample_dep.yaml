@@ -1,5 +1,5 @@
 ---
-apiVersion: admiral.io/v1
+apiVersion: admiral.io/v1alpha1
 kind: Dependency
 metadata:
   name: dependency
@@ -13,7 +13,7 @@ spec:
 ---
 
 ---
-apiVersion: admiral.io/v1
+apiVersion: admiral.io/v1alpha1
 kind: Dependency
 metadata:
   name: dependency-grpc-client
