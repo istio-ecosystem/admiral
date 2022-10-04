@@ -9,7 +9,7 @@ spec:
     plural: dependencies
   scope: Namespaced
   versions:
-    - name: v1
+    - name: v1alpha1
       schema:
         openAPIV3Schema:
           description: generic cdr object to wrap the dependency api
@@ -42,22 +42,9 @@ spec:
                   description: 'REQUIRED: identifier for the source workload'
                   type: string
               type: object
-            status:
-              description: ""
-              properties:
-                clustersSynced:
-                  format: int32
-                  type: integer
-                state:
-                  type: string
-              required:
-                - clustersSynced
-                - state
-              type: object
           required:
             - metadata
             - spec
-            - status
           type: object
       served: true
       storage: true
