@@ -1,4 +1,4 @@
-apiVersion: admiral.io/v1alpha1
+apiVersion: admiral.io/v1
 kind: GlobalTrafficPolicy
 metadata:
   name: gtp-service1
