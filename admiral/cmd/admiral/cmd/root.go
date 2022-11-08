@@ -4,17 +4,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/routes"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/routes"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -142,6 +142,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The value of envoy filter is to add additional config to the filter config section")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
+	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
+		"List of identities which should be excluded from getting processed")
 	return rootCmd
 }
 

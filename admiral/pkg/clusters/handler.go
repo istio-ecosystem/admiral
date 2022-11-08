@@ -8,16 +8,15 @@ import (
 	"strings"
 	"time"
 
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/testing/protocmp"
 	v1alpha32 "istio.io/api/networking/v1alpha3"
@@ -32,6 +31,8 @@ const (
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
 	DefaultInterval                 int64  = 60
+	DefaultHTTP2MaxRequests         int32  = 1000
+	DefaultMaxRequestsPerConnection int32  = 100
 )
 
 // ServiceEntryHandler responsible for handling Add/Update/Delete events for
@@ -85,7 +86,22 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 		dr         = &v1alpha32.DestinationRule{}
 	)
 	dr.Host = se.Hosts[0]
-	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{Tls: &v1alpha32.ClientTLSSettings{Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL}}
+	dr.TrafficPolicy = &v1alpha32.TrafficPolicy{
+		Tls: &v1alpha32.ClientTLSSettings{
+			Mode: v1alpha32.ClientTLSSettings_ISTIO_MUTUAL,
+		},
+		ConnectionPool: &v1alpha32.ConnectionPoolSettings{
+			Http: &v1alpha32.ConnectionPoolSettings_HTTPSettings{
+				Http2MaxRequests:         DefaultHTTP2MaxRequests,
+				MaxRequestsPerConnection: DefaultMaxRequestsPerConnection,
+			},
+		},
+		LoadBalancer: &v1alpha32.LoadBalancerSettings{
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{
+				Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST,
+			},
+		},
+	}
 
 	if len(locality) == 0 {
 		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
@@ -93,7 +109,7 @@ func getDestinationRule(se *v1alpha32.ServiceEntry, locality string, gtpTrafficP
 	}
 	if gtpTrafficPolicy != nil && processGtp {
 		var loadBalancerSettings = &v1alpha32.LoadBalancerSettings{
-			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_ROUND_ROBIN},
+			LbPolicy: &v1alpha32.LoadBalancerSettings_Simple{Simple: v1alpha32.LoadBalancerSettings_LEAST_REQUEST},
 		}
 
 		if len(gtpTrafficPolicy.Target) > 0 {
@@ -514,6 +530,23 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 	}
 }
 
+func validateAndProcessServiceEntryEndpoints(obj *v1alpha3.ServiceEntry) bool {
+	var areEndpointsValid = true
+
+	temp := make([]*v1alpha32.WorkloadEntry, 0)
+	for _, endpoint := range obj.Spec.Endpoints {
+		if endpoint.Address == "dummy.admiral.global" {
+			areEndpointsValid = false
+		} else {
+			temp = append(temp, endpoint)
+		}
+	}
+	obj.Spec.Endpoints = temp
+	log.Infof("type=ServiceEntry, name=%s, endpointsValid=%v, numberOfValidEndpoints=%d", obj.Name, areEndpointsValid, len(obj.Spec.Endpoints))
+
+	return areEndpointsValid
+}
+
 func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	var (
 		err        error
@@ -525,13 +558,21 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
+
+	areEndpointsValid := validateAndProcessServiceEntryEndpoints(obj)
+
 	if exist == nil || exist.Spec.Hosts == nil {
-		obj.Namespace = namespace
-		obj.ResourceVersion = ""
-		_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(ctx, obj, v12.CreateOptions{})
 		op = "Add"
-		log.Infof(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
-	} else {
+		//se will be created if endpoints are valid, in case they are not valid se will be created with just valid endpoints
+		if len(obj.Spec.Endpoints) > 0 {
+			obj.Namespace = namespace
+			obj.ResourceVersion = ""
+			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Create(ctx, obj, v12.CreateOptions{})
+			log.Infof(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "New SE", obj.Spec.String())
+		} else {
+			log.Errorf(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Creation of SE skipped as endpoints are not valid", obj.Spec.String())
+		}
+	} else if areEndpointsValid { //update will happen only when all the endpoints are valid
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		op = "Update"
@@ -547,7 +588,6 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 			exist.Spec = obj.Spec
 			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(ctx, exist, v12.UpdateOptions{})
 		}
-
 	}
 
 	if err != nil {

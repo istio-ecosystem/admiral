@@ -194,47 +194,6 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		return fmt.Errorf("error with virtualServiceController init: %v", err)
 	}
 
-	log.Infof("starting node controller clusterID: %v", clusterID)
-	rc.NodeController, err = admiral.NewNodeController(clusterID, stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig)
-
-	if err != nil {
-		return fmt.Errorf("error with NodeController controller init: %v", err)
-	}
-
-	log.Infof("starting service controller clusterID: %v", clusterID)
-	rc.ServiceController, err = admiral.NewServiceController(clusterID, stop, &ServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with ServiceController controller init: %v", err)
-	}
-
-	log.Infof("starting service entry controller for custerID: %v", clusterID)
-	rc.ServiceEntryController, err = istio.NewServiceEntryController(clusterID, stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with ServiceEntryController init: %v", err)
-	}
-
-	log.Infof("starting destination rule controller for custerID: %v", clusterID)
-	rc.DestinationRuleController, err = istio.NewDestinationRuleController(clusterID, stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with DestinationRuleController init: %v", err)
-	}
-
-	log.Infof("starting virtual service controller for custerID: %v", clusterID)
-	rc.VirtualServiceController, err = istio.NewVirtualServiceController(clusterID, stop, &VirtualServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with VirtualServiceController init: %v", err)
-	}
-
-	rc.SidecarController, err = istio.NewSidecarController(clusterID, stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod)
-
-	if err != nil {
-		return fmt.Errorf("error with DestinationRuleController init: %v", err)
-	}
-
 	r.PutRemoteController(clusterID, &rc)
 
 	log.Infof("Create Controller %s", clusterID)

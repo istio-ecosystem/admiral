@@ -48,9 +48,10 @@ type AdmiralParams struct {
 	AdmiralStateCheckerName     string
 	DRStateStoreConfigPath      string
 	ServiceEntryIPPrefix        string
-	EnvoyFilterVersion		    string
-	EnvoyFilterAdditionalConfig	string
+	EnvoyFilterVersion          string
+	EnvoyFilterAdditionalConfig string
 	EnableRoutingPolicy         bool
+	ExcludedIdentityList        []string
 }
 
 func (b AdmiralParams) String() string {

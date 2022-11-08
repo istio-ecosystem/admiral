@@ -2,15 +2,16 @@ package clusters
 
 import (
 	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func GetMeshPorts(clusterName string, destService *k8sV1.Service,
@@ -30,13 +31,13 @@ func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 // Get the service selector to add as workload selector for envoyFilter
 func GetServiceSelector(clusterName string, destService *k8sV1.Service) *common.Map {
 	var selectors = destService.Spec.Selector
-	if len(selectors) == 0{
+	if len(selectors) == 0 {
 		log.Infof(LogFormat, "GetServiceLabels", "no selectors present", destService.Name, clusterName, selectors)
 		return nil
 	}
 	var tempMap = common.NewMap()
 	for key, value := range selectors {
-		tempMap.Put(key,value)
+		tempMap.Put(key, value)
 	}
 	log.Infof(LogFormat, "GetServiceLabels", "selectors present", destService.Name, clusterName, selectors)
 	return tempMap
@@ -93,7 +94,7 @@ func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 		}
 		if _, ok := meshPortMap[targetPort]; ok {
 			var protocol = GetPortProtocol(servicePort.Name)
-			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port for protocol: " + protocol)
+			log.Debugf(LogFormat, "GetMeshPorts", servicePort.Port, destService.Name, clusterName, "Adding mesh port for protocol: "+protocol)
 			ports[protocol] = uint32(servicePort.Port)
 			break
 		}
@@ -146,4 +147,12 @@ func ValidateConfigmapBeforePutting(cm *k8sV1.ConfigMap) error {
 
 func IsCacheWarmupTime(remoteRegistry *RemoteRegistry) bool {
 	return time.Since(remoteRegistry.StartTime) < common.GetAdmiralParams().CacheRefreshDuration
+}
+
+func mapSliceToBool(list []string, value bool) map[string]bool {
+	m := make(map[string]bool, len(list))
+	for _, item := range list {
+		m[item] = value
+	}
+	return m
 }
