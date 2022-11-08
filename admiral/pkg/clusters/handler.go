@@ -418,7 +418,7 @@ func handleVirtualServiceEvent(
 		}
 	}
 
-	if virtualService.Hosts != nil {
+	if len(virtualService.Hosts) != 0 {
 		dependentClusters := r.AdmiralCache.CnameDependentClusterCache.Get(virtualService.Hosts[0]).Copy()
 		if len(dependentClusters) > 0 {
 			for _, dependentCluster := range dependentClusters {
