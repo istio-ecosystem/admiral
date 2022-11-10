@@ -80,13 +80,23 @@ func (p *deploymentCache) UpdateDeploymentToClusterCache(key string, deployment 
 func (p *deploymentCache) DeleteFromDeploymentClusterCache(key string, deployment *k8sAppsV1.Deployment) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
-
-	env := common.GetEnv(deployment)
-
-	dce := p.cache[key]
+	var (
+		env = common.GetEnv(deployment)
+		dce = p.cache[key]
+	)
 
 	if dce != nil {
-		delete(dce.Deployments, env)
+		if dce.Deployments[env] != nil && deployment.Name == dce.Deployments[env].Name {
+			log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
+				deployment.Name, deployment.Namespace, "", "ignoring deployment and deleting from cache")
+			delete(dce.Deployments, env)
+		} else {
+			log.Warnf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Get", "Deployment",
+				deployment.Name, deployment.Namespace, "", "ignoring deployment delete as it doesn't match the one in cache")
+		}
+	} else {
+		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Delete", "Deployment",
+			deployment.Name, deployment.Namespace, "", "nothing to delete, deployment not found in cache")
 	}
 }
 
@@ -138,7 +148,6 @@ func HandleAddUpdateDeployment(ctx context.Context, ojb interface{}, d *Deployme
 			d.DeploymentHandler.Added(ctx, deployment)
 		} else {
 			d.Cache.DeleteFromDeploymentClusterCache(key, deployment)
-			log.Debugf("ignoring deployment %v based on labels", deployment.Name)
 		}
 	}
 }
