@@ -327,3 +327,116 @@ func TestDeploymentController_GetDeploymentBySelectorInNamespace(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteFromDeploymentClusterCache(t *testing.T) {
+	var (
+		identity = "app1"
+		env      = "prd"
+
+		deploymentWithoutEnvAnnotation1 = k8sAppsV1.Deployment{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      "abc-service",
+				Namespace: "namespace-" + env,
+			},
+			Spec: k8sAppsV1.DeploymentSpec{
+				Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": identity}},
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{
+						Labels: map[string]string{"identity": identity},
+					},
+				},
+			},
+		}
+		deploymentWithoutEnvAnnotation2 = k8sAppsV1.Deployment{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      "debug",
+				Namespace: "namespace-" + env,
+			},
+			Spec: k8sAppsV1.DeploymentSpec{
+				Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": identity}},
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{
+						Labels: map[string]string{"identity": identity},
+					},
+				},
+			},
+		}
+		deploymentWitEnvAnnotation1 = k8sAppsV1.Deployment{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      "abc-service",
+				Namespace: "namespace-" + env,
+			},
+			Spec: k8sAppsV1.DeploymentSpec{
+				Selector: &v1.LabelSelector{MatchLabels: map[string]string{"identity": identity}},
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: v1.ObjectMeta{
+						Labels: map[string]string{"identity": identity, "env": "prd"},
+					},
+				},
+			},
+		}
+	)
+
+	testCases := []struct {
+		name                        string
+		deploymentInCache           *k8sAppsV1.Deployment
+		deploymentToDelete          *k8sAppsV1.Deployment
+		expectedDeploymentCacheSize int
+	}{
+		{
+			name: "Given deployment cache has a valid deployment in its cache, " +
+				"And the deployment does not have an env annotation" +
+				"And a debug deployment exists, without the env annotation" +
+				"And the env key is derived from namespace " +
+				"When DeleteFromDeploymentClusterCache is called for a debug deployment" +
+				"Then, the valid deployment should not be deleted from the cache",
+			deploymentInCache:           &deploymentWithoutEnvAnnotation1,
+			deploymentToDelete:          &deploymentWithoutEnvAnnotation2,
+			expectedDeploymentCacheSize: 1,
+		},
+		{
+			name: "Given deployment cache has a valid deployment in its cache, " +
+				"And the deployment does not have an env annotation" +
+				"And the env key is derived from namespace " +
+				"When DeleteFromDeploymentClusterCache is called for the same deployment" +
+				"Then, the deployment should be deleted from the cache",
+			deploymentInCache:           &deploymentWithoutEnvAnnotation1,
+			deploymentToDelete:          &deploymentWithoutEnvAnnotation1,
+			expectedDeploymentCacheSize: 0,
+		},
+		{
+			name: "Given deployment cache has a valid deployment in its cache, " +
+				"And the deployment as a valid env annotation" +
+				"And a debug deployment exists, without an env annotation" +
+				"When DeleteFromDeploymentClusterCache is called for a debug deployment" +
+				"Then, the valid deployment should not be deleted from the cache",
+			deploymentInCache:           &deploymentWitEnvAnnotation1,
+			deploymentToDelete:          &deploymentWithoutEnvAnnotation2,
+			expectedDeploymentCacheSize: 1,
+		},
+		{
+			name: "Given deployment cache has a valid deployment in its cache, " +
+				"And the deployment as a valid env annotation" +
+				"And a debug deployment exists, without an env annotation" +
+				"When DeleteFromDeploymentClusterCache is called for the same deployment" +
+				"Then, the deployment should be deleted from the cache",
+			deploymentInCache:           &deploymentWitEnvAnnotation1,
+			deploymentToDelete:          &deploymentWitEnvAnnotation1,
+			expectedDeploymentCacheSize: 0,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			deploymentCache := deploymentCache{
+				cache: make(map[string]*DeploymentClusterEntry),
+				mutex: &sync.Mutex{},
+			}
+			deploymentCache.UpdateDeploymentToClusterCache(identity, c.deploymentInCache)
+			deploymentCache.DeleteFromDeploymentClusterCache(identity, c.deploymentToDelete)
+			if len(deploymentCache.cache[identity].Deployments) != c.expectedDeploymentCacheSize {
+				t.Fatalf("expected deployment cache size to have size: %v, but got: %v",
+					c.expectedDeploymentCacheSize, len(deploymentCache.cache))
+			}
+		})
+	}
+}
