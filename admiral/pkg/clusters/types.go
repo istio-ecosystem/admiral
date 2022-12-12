@@ -21,6 +21,18 @@ import (
 	k8s "k8s.io/client-go/kubernetes"
 )
 
+type ServiceEntrySuspender interface {
+	SuspendUpdate(identity string, environment string) bool
+}
+
+type IgnoredIdentityCache struct {
+	RWLock                 *sync.RWMutex
+	Enabled                bool                `json:"enabled"`
+	All                    bool                `json:"all"`
+	ClusterEnvironment     string              `json:"clusterEnvironment"`
+	EnvironmentsByIdentity map[string][]string `json:"environmentsByIdentities"`
+}
+
 type RemoteController struct {
 	ClusterID                 string
 	ApiServer                 string
@@ -60,16 +72,18 @@ type AdmiralCache struct {
 
 type RemoteRegistry struct {
 	sync.Mutex
-	remoteControllers   map[string]*RemoteController
-	SecretController    *secret.Controller
-	secretClient        k8s.Interface
-	ctx                 context.Context
-	AdmiralCache        *AdmiralCache
-	StartTime           time.Time
-	ExcludedIdentityMap map[string]bool
+	remoteControllers           map[string]*RemoteController
+	SecretController            *secret.Controller
+	secretClient                k8s.Interface
+	ctx                         context.Context
+	AdmiralCache                *AdmiralCache
+	StartTime                   time.Time
+	ServiceEntryUpdateSuspender ServiceEntrySuspender
+	ExcludedIdentityMap         map[string]bool
 }
 
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
+	var serviceEntryUpdateSuspender ServiceEntrySuspender
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
@@ -96,12 +110,17 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		SeClusterCache:                  common.NewMapOfMaps(),
 		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
 	}
+	if common.GetSecretResolver() == "" {
+		serviceEntryUpdateSuspender = NewDefaultServiceEntrySuspender(params.ExcludedIdentityList)
+	} else {
+		serviceEntryUpdateSuspender = NewDummyServiceEntrySuspender()
+	}
 	return &RemoteRegistry{
-		ctx:                 ctx,
-		StartTime:           time.Now(),
-		remoteControllers:   make(map[string]*RemoteController),
-		AdmiralCache:        admiralCache,
-		ExcludedIdentityMap: mapSliceToBool(params.ExcludedIdentityList, true),
+		ctx:                         ctx,
+		StartTime:                   time.Now(),
+		remoteControllers:           make(map[string]*RemoteController),
+		AdmiralCache:                admiralCache,
+		ServiceEntryUpdateSuspender: serviceEntryUpdateSuspender,
 	}
 }
 
