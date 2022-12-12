@@ -106,10 +106,10 @@ func TestSuspendGeneration(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			checker := &endpointSuspension{
+			checker := &serviceEntrySuspender{
 				ignoredIdentityCache: c.ignoredIdentityCache,
 			}
-			ignore := checker.SuspendGeneration(c.sourceIdentity, c.sourceEnvironment)
+			ignore := checker.SuspendUpdate(c.sourceIdentity, c.sourceEnvironment)
 			if ignore != c.expectedIgnoreDecision {
 				t.Errorf("expected ignore decision to be: %v, got: %v", c.expectedIgnoreDecision, ignore)
 			}

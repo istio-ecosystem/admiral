@@ -17,11 +17,11 @@ const (
 	alertMsgSuspensionForIdentityInMatchingEnvironment = "op=dynamicEndpointSuspension message=endpoint generation suspended for identity for given environment"
 )
 
-type endpointSuspension struct {
+type serviceEntrySuspender struct {
 	ignoredIdentityCache *IgnoredIdentityCache
 }
 
-func NewDefaultEndpointSuspension(items []string) *endpointSuspension {
+func NewDefaultServiceEntrySuspender(items []string) *serviceEntrySuspender {
 	var (
 		enabled               bool
 		environmentByIdentity = make(map[string][]string)
@@ -32,7 +32,7 @@ func NewDefaultEndpointSuspension(items []string) *endpointSuspension {
 	for _, item := range items {
 		environmentByIdentity[item] = []string{""}
 	}
-	return &endpointSuspension{ignoredIdentityCache: &IgnoredIdentityCache{
+	return &serviceEntrySuspender{ignoredIdentityCache: &IgnoredIdentityCache{
 		RWLock:                 &sync.RWMutex{},
 		All:                    false,
 		Enabled:                enabled,
@@ -40,19 +40,19 @@ func NewDefaultEndpointSuspension(items []string) *endpointSuspension {
 	}}
 }
 
-func NewDummyEndpointSuspension() *endpointSuspension {
-	return &endpointSuspension{
+func NewDummyServiceEntrySuspender() *serviceEntrySuspender {
+	return &serviceEntrySuspender{
 		ignoredIdentityCache: &IgnoredIdentityCache{
 			RWLock: &sync.RWMutex{},
 		},
 	}
 }
 
-func (des *endpointSuspension) SuspendGeneration(identity, environment string) bool {
+func (des *serviceEntrySuspender) SuspendUpdate(identity, environment string) bool {
 	return des.enabled() && (des.all() || des.identityByEnvironment(identity, environment))
 }
 
-func (des *endpointSuspension) enabled() bool {
+func (des *serviceEntrySuspender) enabled() bool {
 	if des.ignoredIdentityCache.Enabled {
 		log.Println(alertMsgSuspensionEnabled)
 	}
@@ -60,7 +60,7 @@ func (des *endpointSuspension) enabled() bool {
 	return des.ignoredIdentityCache.Enabled
 }
 
-func (des *endpointSuspension) all() bool {
+func (des *serviceEntrySuspender) all() bool {
 	if des.ignoredIdentityCache.All {
 		log.Println(alertMsgSuspensionForAll)
 	}
@@ -68,7 +68,7 @@ func (des *endpointSuspension) all() bool {
 	return des.ignoredIdentityCache.All
 }
 
-func (des *endpointSuspension) identityByEnvironment(identity, environment string) bool {
+func (des *serviceEntrySuspender) identityByEnvironment(identity, environment string) bool {
 	log.Printf("op=dynamicEndpointSuspension message=checking if identity %s in environment %s is in the suspension list",
 		identity, environment)
 	des.ignoredIdentityCache.RWLock.RLock()

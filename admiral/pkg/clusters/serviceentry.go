@@ -58,7 +58,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
-	if remoteRegistry.EndpointSuspension.SuspendGeneration(sourceIdentity, env) {
+	if remoteRegistry.ServiceEntryUpdateSuspender.SuspendUpdate(sourceIdentity, env) {
 		log.Infof(LogFormat, event, env, sourceIdentity, "",
 			"skipping update because endpoint generation is suspended for identity '"+sourceIdentity+"' in environment '"+env+"'")
 		return nil
