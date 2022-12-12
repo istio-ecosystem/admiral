@@ -148,11 +148,3 @@ func ValidateConfigmapBeforePutting(cm *k8sV1.ConfigMap) error {
 func IsCacheWarmupTime(remoteRegistry *RemoteRegistry) bool {
 	return time.Since(remoteRegistry.StartTime) < common.GetAdmiralParams().CacheRefreshDuration
 }
-
-func mapSliceToBool(list []string, value bool) map[string]bool {
-	m := make(map[string]bool, len(list))
-	for _, item := range list {
-		m[item] = value
-	}
-	return m
-}

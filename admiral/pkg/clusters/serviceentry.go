@@ -58,6 +58,12 @@ func modifyServiceEntryForNewServiceOrPod(
 	sourceIdentity string, remoteRegistry *RemoteRegistry) map[string]*networking.ServiceEntry {
 	defer util.LogElapsedTime("modifyServiceEntryForNewServiceOrPod", sourceIdentity, env, "")()
 
+	if remoteRegistry.EndpointSuspension.SuspendGeneration(sourceIdentity, env) {
+		log.Infof(LogFormat, event, env, sourceIdentity, "",
+			"skipping update because endpoint generation is suspended for identity '"+sourceIdentity+"' in environment '"+env+"'")
+		return nil
+	}
+
 	if CurrentAdmiralState.ReadOnly {
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped as Admiral is in Read-only mode")
 		return nil
@@ -104,10 +110,6 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 		if deployment != nil {
-			if len(remoteRegistry.ExcludedIdentityMap) > 0 && remoteRegistry.ExcludedIdentityMap[common.GetDeploymentGlobalIdentifier(deployment)] {
-				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
-				return nil
-			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			serviceInstance = getServiceForDeployment(rc, deployment)
 			if serviceInstance == nil {
@@ -120,10 +122,6 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceDeployments[rc.ClusterID] = deployment
 			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
 		} else if rollout != nil {
-			if len(remoteRegistry.ExcludedIdentityMap) > 0 && remoteRegistry.ExcludedIdentityMap[common.GetRolloutGlobalIdentifier(rollout)] {
-				log.Infof(LogFormat, event, env, sourceIdentity, clusterId, "Processing skipped as identity is in the exclude list")
-				return nil
-			}
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			weightedServices = getServiceForRollout(ctx, rc, rollout)
 			if len(weightedServices) == 0 {
