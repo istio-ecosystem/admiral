@@ -40,6 +40,14 @@ func NewDefaultEndpointSuspension(items []string) *endpointSuspension {
 	}}
 }
 
+func NewDummyEndpointSuspension() *endpointSuspension {
+	return &endpointSuspension{
+		ignoredIdentityCache: &IgnoredIdentityCache{
+			RWLock: &sync.RWMutex{},
+		},
+	}
+}
+
 func (des *endpointSuspension) SuspendGeneration(identity, environment string) bool {
 	return des.enabled() && (des.all() || des.identityByEnvironment(identity, environment))
 }
@@ -48,6 +56,7 @@ func (des *endpointSuspension) enabled() bool {
 	if des.ignoredIdentityCache.Enabled {
 		log.Println(alertMsgSuspensionEnabled)
 	}
+	log.Println("op=dynamicEndpointSuspension message=endpoint generation suspension is not enabled")
 	return des.ignoredIdentityCache.Enabled
 }
 
@@ -55,6 +64,7 @@ func (des *endpointSuspension) all() bool {
 	if des.ignoredIdentityCache.All {
 		log.Println(alertMsgSuspensionForAll)
 	}
+	log.Println("op=dynamicEndpointSuspension message=endpoint generation suspension for 'all' identities is not enabled")
 	return des.ignoredIdentityCache.All
 }
 

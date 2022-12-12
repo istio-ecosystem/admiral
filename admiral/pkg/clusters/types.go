@@ -109,7 +109,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	if common.GetSecretResolver() == "" {
 		endpointSuspension = NewDefaultEndpointSuspension(params.ExcludedIdentityList)
 	} else {
-		log.Fatalf("unrecognized secret resolver type %v specified", common.GetSecretResolver())
+		endpointSuspension = NewDummyEndpointSuspension()
 	}
 	return &RemoteRegistry{
 		ctx:                ctx,
