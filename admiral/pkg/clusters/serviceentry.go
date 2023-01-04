@@ -36,7 +36,7 @@ type SeDrTuple struct {
 }
 
 func createServiceEntryForDeployment(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
-	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry, deleteSe bool) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
@@ -50,7 +50,11 @@ func createServiceEntryForDeployment(ctx context.Context, event admiral.EventTyp
 	}
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
-	return generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
+	if event == admiral.Delete && !deleteSe {
+		return serviceEntries[globalFqdn]
+	}else {
+		return generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
+	}
 }
 
 func modifyServiceEntryForNewServiceOrPod(
@@ -91,7 +95,12 @@ func modifyServiceEntryForNewServiceOrPod(
 		sourceDeployments      = make(map[string]*k8sAppsV1.Deployment)
 		sourceRollouts         = make(map[string]*argo.Rollout)
 		serviceEntries         = make(map[string]*networking.ServiceEntry)
+		deleteSe			   = true
 	)
+
+	//if event == admiral.Delete {
+	//
+	//}
 
 	for _, clusterId := range clusters {
 		rc := remoteRegistry.GetRemoteController(clusterId)
@@ -109,6 +118,11 @@ func modifyServiceEntryForNewServiceOrPod(
 			log.Infof("Neither deployment nor rollouts found for identity=%s in env=%s namespace=%s", sourceIdentity, env, namespace)
 			continue
 		}
+
+		// To handle a case where the rollout and deployment share the same env
+		if event == admiral.Delete && deployment != nil &&  rollout != nil {
+			deleteSe = false
+		}
 		if deployment != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			serviceInstance = getServiceForDeployment(rc, deployment)
@@ -120,8 +134,9 @@ func modifyServiceEntryForNewServiceOrPod(
 
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
-			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
-		} else if rollout != nil {
+			createServiceEntryForDeployment(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries, deleteSe)
+		}
+		if rollout != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(sourceIdentity, rc.ClusterID, rc.ClusterID)
 			weightedServices = getServiceForRollout(ctx, rc, rollout)
 			if len(weightedServices) == 0 {
@@ -139,7 +154,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
-			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+			createServiceEntryForRollout(ctx, event, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries, deleteSe)
 		} else {
 			continue
 		}
@@ -679,7 +694,7 @@ func putServiceEntryStateFromConfigmap(ctx context.Context, c admiral.ConfigMapC
 }
 
 func createServiceEntryForRollout(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
-	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
+	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, deleteSe bool) *networking.ServiceEntry {
 
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
@@ -705,8 +720,11 @@ func createServiceEntryForRollout(ctx context.Context, event admiral.EventType, 
 		}
 	}
 
-	tmpSe := generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
-	return tmpSe
+	if event == admiral.Delete && !deleteSe {
+		return serviceEntries[globalFqdn]
+	}else {
+		return generateServiceEntry(event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san)
+	}
 }
 
 func getSanForDeployment(destDeployment *k8sAppsV1.Deployment, workloadIdentityKey string) (san []string) {

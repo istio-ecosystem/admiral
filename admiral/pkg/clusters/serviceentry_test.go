@@ -1102,6 +1102,7 @@ func TestCreateServiceEntry(t *testing.T) {
 		meshPorts      map[string]uint32
 		deployment     v14.Deployment
 		serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry
+		deleteSe       bool
 		expectedResult *istioNetworkingV1Alpha3.ServiceEntry
 	}{
 		{
@@ -1112,6 +1113,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			meshPorts:      map[string]uint32{"grpc": uint32(80)},
 			deployment:     deployment,
 			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{},
+			deleteSe:       true,
 			expectedResult: &grpcSe,
 		},
 		{
@@ -1122,6 +1124,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			meshPorts:      map[string]uint32{"http": uint32(80)},
 			deployment:     deployment,
 			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{},
+			deleteSe:       true,
 			expectedResult: &se,
 		},
 		{
@@ -1134,6 +1137,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &oneEndpointSe,
 			},
+			deleteSe:       true,
 			expectedResult: &emptyEndpointSe,
 		},
 		{
@@ -1146,6 +1150,7 @@ func TestCreateServiceEntry(t *testing.T) {
 			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &twoEndpointSe,
 			},
+			deleteSe:       true,
 			expectedResult: &eastEndpointSe,
 		},
 		{
@@ -1158,7 +1163,21 @@ func TestCreateServiceEntry(t *testing.T) {
 			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
 				"e2e.my-first-service.mesh": &threeEndpointSe,
 			},
+			deleteSe:       true,
 			expectedResult: &eastEndpointSe,
+		},
+		{
+			name:         "Delete the service entry with deleteSe set to false, should not delete the se",
+			action:       admiral.Delete,
+			rc:           rc,
+			admiralCache: admiralCache,
+			meshPorts:    map[string]uint32{"http": uint32(80)},
+			deployment:   deployment,
+			serviceEntries: map[string]*istioNetworkingV1Alpha3.ServiceEntry{
+				"e2e.my-first-service.mesh": &oneEndpointSe,
+			},
+			deleteSe:       false,
+			expectedResult: &oneEndpointSe,
 		},
 	}
 
@@ -1167,7 +1186,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForDeployment(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE := createServiceEntryForDeployment(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries, c.deleteSe)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -1181,25 +1200,41 @@ func TestCreateServiceEntry(t *testing.T) {
 	rolloutSeCreationTestCases := []struct {
 		name           string
 		rc             *RemoteController
+		action         admiral.EventType
 		admiralCache   AdmiralCache
 		meshPorts      map[string]uint32
 		rollout        argo.Rollout
+		deleteSe       bool
 		expectedResult *istioNetworkingV1Alpha3.ServiceEntry
 	}{
 		{
 			name:           "Should return a created service entry with grpc protocol",
 			rc:             rc,
+			action:         admiral.Add,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32{"grpc": uint32(80)},
 			rollout:        rollout,
+			deleteSe:       true,
 			expectedResult: &grpcSe,
 		},
 		{
 			name:           "Should return a created service entry with http protocol",
 			rc:             rc,
+			action:         admiral.Add,
 			admiralCache:   admiralCache,
 			meshPorts:      map[string]uint32{"http": uint32(80)},
 			rollout:        rollout,
+			deleteSe:       false,
+			expectedResult: &se,
+		},
+		{
+			name:           "Delete the service entry with deleteSe set to false, should not delete the se",
+			rc:             rc,
+			action:         admiral.Delete,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			rollout:        rollout,
+			deleteSe:       true,
 			expectedResult: &se,
 		},
 	}
@@ -1207,7 +1242,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE := createServiceEntryForRollout(ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
+			createdSE := createServiceEntryForRollout(ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{}, c.deleteSe)
 			if !reflect.DeepEqual(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
