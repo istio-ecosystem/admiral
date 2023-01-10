@@ -36,8 +36,8 @@ type SeDrTuple struct {
 }
 
 const (
-	istioCustomResourceCreatedByAnnotationLabel = "app.kubernetes.io/created-by"
-	istioCustomResourceCreatedByAnnotationValue = "admiral"
+	resourceCreatedByAnnotationLabel = "app.kubernetes.io/created-by"
+	resourceCreatedByAnnotationValue = "admiral"
 )
 
 func createServiceEntryForDeployment(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
@@ -476,11 +476,9 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 				// check if the existing service entry was created outside of admiral
 				// if it was, then admiral will not take any action on this SE
 				skipSEUpdate := false
-				if oldServiceEntry != nil {
-					if !isGeneratedByAdmiral(oldServiceEntry.Annotations) {
-						log.Infof(LogFormat, "update", "ServiceEntry", oldServiceEntry.Name, sourceCluster, "skipped updating the SE as there exists a custom SE with the same name in "+syncNamespace+" namespace")
-						skipSEUpdate = true
-					}
+				if oldServiceEntry != nil && !isGeneratedByAdmiral(oldServiceEntry.Annotations) {
+					log.Infof(LogFormat, "update", "ServiceEntry", oldServiceEntry.Name, sourceCluster, "skipped updating the SE as there exists a custom SE with the same name in "+syncNamespace+" namespace")
+					skipSEUpdate = true
 				}
 
 				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, seDr.DrName, v12.GetOptions{})
@@ -493,11 +491,9 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 				// check if the existing destination rule was created outside of admiral
 				// if it was, then admiral will not take any action on this DR
 				skipDRUpdate := false
-				if oldDestinationRule != nil {
-					if !isGeneratedByAdmiral(oldDestinationRule.Annotations) {
-						log.Infof(LogFormat, "update", "DestinationRule", oldDestinationRule.Name, sourceCluster, "skipped updating the DR as there exists a custom DR with the same name in "+syncNamespace+" namespace")
-						skipDRUpdate = true
-					}
+				if oldDestinationRule != nil && !isGeneratedByAdmiral(oldDestinationRule.Annotations) {
+					log.Infof(LogFormat, "update", "DestinationRule", oldDestinationRule.Name, sourceCluster, "skipped updating the DR as there exists a custom DR with the same name in "+syncNamespace+" namespace")
+					skipDRUpdate = true
 				}
 
 				if skipSEUpdate && skipDRUpdate {
@@ -546,8 +542,8 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 }
 
 func isGeneratedByAdmiral(annotations map[string]string) bool {
-	seAnnotationVal, ok := annotations[istioCustomResourceCreatedByAnnotationLabel]
-	if !ok || seAnnotationVal != istioCustomResourceCreatedByAnnotationValue {
+	seAnnotationVal, ok := annotations[resourceCreatedByAnnotationLabel]
+	if !ok || seAnnotationVal != resourceCreatedByAnnotationValue {
 		return false
 	}
 	return true

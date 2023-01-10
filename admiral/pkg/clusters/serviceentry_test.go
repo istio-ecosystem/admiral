@@ -424,12 +424,12 @@ func TestIsGeneratedByAdmiral(t *testing.T) {
 		},
 		{
 			name:           "given a annotations map, and the map contains the admiral created by annotation but value is not admiral, and isGeneratedByAdmiral is called, the func should return false",
-			annotations:    map[string]string{istioCustomResourceCreatedByAnnotationLabel: "foobar"},
+			annotations:    map[string]string{resourceCreatedByAnnotationLabel: "foobar"},
 			expectedResult: false,
 		},
 		{
 			name:           "given a annotations map, and the map contains the admiral created by annotation, and isGeneratedByAdmiral is called, the func should return true",
-			annotations:    map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			annotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 			expectedResult: true,
 		},
 	}
@@ -505,7 +505,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	admiralOverrideSE := v1alpha3.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{
-			Annotations: map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
 		Spec: istioNetworkingV1Alpha3.ServiceEntry{
@@ -524,7 +524,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	seConfig := v1alpha3.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{
-			Annotations: map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
 		Spec: se,
@@ -534,7 +534,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	dummySeConfig := v1alpha3.ServiceEntry{
 		ObjectMeta: v12.ObjectMeta{
-			Annotations: map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
 		Spec: dummyEndpointSe,
@@ -544,7 +544,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	dummyDRConfig := v1alpha3.DestinationRule{
 		ObjectMeta: v12.ObjectMeta{
-			Annotations: map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: istioNetworkingV1Alpha3.DestinationRule{
 			Host: "dev.dummy.global",
@@ -555,7 +555,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	emptyEndpointDR := v1alpha3.DestinationRule{
 		ObjectMeta: v12.ObjectMeta{
-			Annotations: map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: istioNetworkingV1Alpha3.DestinationRule{
 			Host: "dev.bar.global",
@@ -668,14 +668,14 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &newSE},
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
-			expectedAnnotations:      map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		{
 			name:                     "given a serviceEntry that already exists in the sync ns, when AddServiceEntriesWithDr is called, then the se is updated and the corresponding dr is updated as well",
 			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se},
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
-			expectedAnnotations:      map[string]string{istioCustomResourceCreatedByAnnotationLabel: istioCustomResourceCreatedByAnnotationValue},
+			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		{
 			name:                     "given a serviceEntry that already exists in the sync ns and the serviceEntry does not have any valid endpoints, when AddServiceEntriesWithDr is called, then the se should be deleted along with the corresponding dr",
