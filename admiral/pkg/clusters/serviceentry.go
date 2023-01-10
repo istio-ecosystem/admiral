@@ -35,6 +35,11 @@ type SeDrTuple struct {
 	DestinationRule *networking.DestinationRule
 }
 
+const (
+	resourceCreatedByAnnotationLabel = "app.kubernetes.io/created-by"
+	resourceCreatedByAnnotationValue = "admiral"
+)
+
 func createServiceEntryForDeployment(ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destDeployment *k8sAppsV1.Deployment, serviceEntries map[string]*networking.ServiceEntry) *networking.ServiceEntry {
 
@@ -467,6 +472,15 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 					log.Infof(LogFormat, "Get (error)", "old ServiceEntry", seDr.SeName, sourceCluster, err)
 					oldServiceEntry = nil
 				}
+
+				// check if the existing service entry was created outside of admiral
+				// if it was, then admiral will not take any action on this SE
+				skipSEUpdate := false
+				if oldServiceEntry != nil && !isGeneratedByAdmiral(oldServiceEntry.Annotations) {
+					log.Infof(LogFormat, "update", "ServiceEntry", oldServiceEntry.Name, sourceCluster, "skipped updating the SE as there exists a custom SE with the same name in "+syncNamespace+" namespace")
+					skipSEUpdate = true
+				}
+
 				oldDestinationRule, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, seDr.DrName, v12.GetOptions{})
 
 				if err != nil {
@@ -474,8 +488,20 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 					oldDestinationRule = nil
 				}
 
+				// check if the existing destination rule was created outside of admiral
+				// if it was, then admiral will not take any action on this DR
+				skipDRUpdate := false
+				if oldDestinationRule != nil && !isGeneratedByAdmiral(oldDestinationRule.Annotations) {
+					log.Infof(LogFormat, "update", "DestinationRule", oldDestinationRule.Name, sourceCluster, "skipped updating the DR as there exists a custom DR with the same name in "+syncNamespace+" namespace")
+					skipDRUpdate = true
+				}
+
+				if skipSEUpdate && skipDRUpdate {
+					return
+				}
+
 				var deleteOldServiceEntry = false
-				if oldServiceEntry != nil {
+				if oldServiceEntry != nil && !skipSEUpdate {
 					areEndpointsValid := validateAndProcessServiceEntryEndpoints(oldServiceEntry)
 					if !areEndpointsValid && len(oldServiceEntry.Spec.Endpoints) == 0 {
 						deleteOldServiceEntry = true
@@ -484,27 +510,43 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 
 				//clean service entry in case no endpoints are configured or if all the endpoints are invalid
 				if (len(seDr.ServiceEntry.Endpoints) == 0) || deleteOldServiceEntry {
-					deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
-					cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
-					// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
-					deleteDestinationRule(ctx, oldDestinationRule, syncNamespace, rc)
+					if !skipSEUpdate {
+						deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
+						cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
+					}
+					if !skipDRUpdate {
+						// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
+						deleteDestinationRule(ctx, oldDestinationRule, syncNamespace, rc)
+					}
 				} else {
-					//nolint
-					newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
-					if newServiceEntry != nil {
-						newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
-						addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
-						cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
+					if !skipSEUpdate {
+						//nolint
+						newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
+						if newServiceEntry != nil {
+							newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+							addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
+							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
+						}
 					}
 
-					//nolint
-					newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
-					// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
-					addUpdateDestinationRule(ctx, newDestinationRule, oldDestinationRule, syncNamespace, rc)
+					if !skipDRUpdate {
+						//nolint
+						newDestinationRule := createDestinationRuleSkeletion(*seDr.DestinationRule, seDr.DrName, syncNamespace)
+						// if event was deletion when this function was called, then GlobalTrafficCache should already deleted the cache globalTrafficPolicy is an empty shell object
+						addUpdateDestinationRule(ctx, newDestinationRule, oldDestinationRule, syncNamespace, rc)
+					}
 				}
 			}
 		}
 	}
+}
+
+func isGeneratedByAdmiral(annotations map[string]string) bool {
+	seAnnotationVal, ok := annotations[resourceCreatedByAnnotationLabel]
+	if !ok || seAnnotationVal != resourceCreatedByAnnotationValue {
+		return false
+	}
+	return true
 }
 
 func createSeAndDrSetFromGtp(ctx context.Context, env, region string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy,

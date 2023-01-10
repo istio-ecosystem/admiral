@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	v14 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -398,6 +400,51 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedIdentity(t *testing.T) {
 	}
 }
 
+func TestIsGeneratedByAdmiral(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		annotations    map[string]string
+		expectedResult bool
+	}{
+		{
+			name:           "given nil annotation, and isGeneratedByAdmiral is called, the func should return false",
+			annotations:    nil,
+			expectedResult: false,
+		},
+		{
+			name:           "given empty annotation, and isGeneratedByAdmiral is called, the func should return false",
+			annotations:    map[string]string{},
+			expectedResult: false,
+		},
+		{
+			name:           "given a annotations map, and the map does not contain the admiral created by annotation, and isGeneratedByAdmiral is called, the func should return false",
+			annotations:    map[string]string{"test": "foobar"},
+			expectedResult: false,
+		},
+		{
+			name:           "given a annotations map, and the map contains the admiral created by annotation but value is not admiral, and isGeneratedByAdmiral is called, the func should return false",
+			annotations:    map[string]string{resourceCreatedByAnnotationLabel: "foobar"},
+			expectedResult: false,
+		},
+		{
+			name:           "given a annotations map, and the map contains the admiral created by annotation, and isGeneratedByAdmiral is called, the func should return true",
+			annotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := isGeneratedByAdmiral(tt.annotations)
+			if actual != tt.expectedResult {
+				t.Errorf("expected %v but got %v", tt.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
 func TestAddServiceEntriesWithDr(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
@@ -411,6 +458,13 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	gtpCache.identityCache = make(map[string]*v13.GlobalTrafficPolicy)
 	gtpCache.mutex = &sync.Mutex{}
 	admiralCache.GlobalTrafficCache = gtpCache
+
+	newSE := istioNetworkingV1Alpha3.ServiceEntry{
+		Hosts: []string{"dev.newse.global"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+		},
+	}
 
 	se := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
@@ -431,25 +485,103 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		},
 	}
 
+	userGeneratedSE := v1alpha3.ServiceEntry{
+		//nolint
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{"dev.custom.global"},
+			Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+				{
+					Address:  "custom.svc.cluster.local",
+					Ports:    map[string]uint32{"http": 80},
+					Network:  "mesh1",
+					Locality: "us-west",
+					Weight:   100,
+				},
+			},
+		},
+	}
+	userGeneratedSE.Name = "dev.custom.global-se"
+	userGeneratedSE.Namespace = "ns"
+
+	admiralOverrideSE := v1alpha3.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
+		//nolint
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{"dev.custom.global"},
+			Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+				{
+					Address:  "override.svc.cluster.local",
+					Ports:    map[string]uint32{"http": 80},
+					Network:  "mesh1",
+					Locality: "us-west",
+					Weight:   100,
+				},
+			},
+		},
+	}
+
 	seConfig := v1alpha3.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
 		//nolint
 		Spec: se,
 	}
-	seConfig.Name = "se1"
-	seConfig.Namespace = "admiral-sync"
+	seConfig.Name = "dev.bar.global-se"
+	seConfig.Namespace = "ns"
 
 	dummySeConfig := v1alpha3.ServiceEntry{
+		ObjectMeta: v12.ObjectMeta{
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
 		//nolint
 		Spec: dummyEndpointSe,
 	}
-	dummySeConfig.Name = "dummySe"
-	dummySeConfig.Namespace = "admiral-sync"
+	dummySeConfig.Name = "dev.dummy.global-se"
+	dummySeConfig.Namespace = "ns"
+
+	dummyDRConfig := v1alpha3.DestinationRule{
+		ObjectMeta: v12.ObjectMeta{
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
+		Spec: istioNetworkingV1Alpha3.DestinationRule{
+			Host: "dev.dummy.global",
+		},
+	}
+	dummyDRConfig.Name = "dev.dummy.global-default-dr"
+	dummyDRConfig.Namespace = "ns"
+
+	emptyEndpointDR := v1alpha3.DestinationRule{
+		ObjectMeta: v12.ObjectMeta{
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
+		Spec: istioNetworkingV1Alpha3.DestinationRule{
+			Host: "dev.bar.global",
+		},
+	}
+	emptyEndpointDR.Name = "dev.bar.global-default-dr"
+	emptyEndpointDR.Namespace = "ns"
+
+	userGeneratedDestinationRule := v1alpha3.DestinationRule{
+		Spec: istioNetworkingV1Alpha3.DestinationRule{
+			Host: "dev.custom.global",
+		},
+	}
+	userGeneratedDestinationRule.Name = "dev.custom.global-default-dr"
+	userGeneratedDestinationRule.Namespace = "ns"
 
 	ctx := context.Background()
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &seConfig, v12.CreateOptions{})
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &dummySeConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &seConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &dummySeConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &userGeneratedSE, v12.CreateOptions{})
+
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &userGeneratedDestinationRule, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &dummyDRConfig, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &emptyEndpointDR, v12.CreateOptions{})
 
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
@@ -464,12 +596,121 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			},
 		},
 	}
-	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	setupForServiceEntryTests()
+	rr := NewRemoteRegistry(nil, common.GetAdmiralParams())
 	rr.PutRemoteController("cl1", rc)
 	rr.AdmiralCache = &admiralCache
-	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se})
-	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &emptyEndpointSe})
-	AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, map[string]*istioNetworkingV1Alpha3.ServiceEntry{"dummySe": &dummyEndpointSe})
+
+	destinationRuleFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+		for _, serviceEntry := range serviceEntries {
+			drName := getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
+			dr, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if dr == nil {
+				return fmt.Errorf("expected the destinationRule %s but it wasn't found", drName)
+			}
+			if !reflect.DeepEqual(expectedAnnotations, dr.Annotations) {
+				return fmt.Errorf("expected SE annotations %v but got %v", expectedAnnotations, dr.Annotations)
+			}
+		}
+		return nil
+	}
+
+	destinationRuleNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+		for _, serviceEntry := range serviceEntries {
+			drName := getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
+			_, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
+			if err != nil && !k8sErrors.IsNotFound(err) {
+				return err
+			}
+		}
+		return nil
+	}
+
+	serviceEntryFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+		for _, serviceEntry := range serviceEntries {
+			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
+			se, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if se == nil {
+				return fmt.Errorf("expected the service entry %s but it wasn't found", seName)
+			}
+			if !reflect.DeepEqual(expectedAnnotations, se.Annotations) {
+				return fmt.Errorf("expected SE annotations %v but got %v", expectedAnnotations, se.Annotations)
+			}
+		}
+		return nil
+	}
+	serviceEntryNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+		for _, serviceEntry := range serviceEntries {
+			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
+			_, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
+			if err != nil && !k8sErrors.IsNotFound(err) {
+				return err
+			}
+		}
+		return nil
+	}
+
+	testCases := []struct {
+		name                     string
+		serviceEntries           map[string]*istioNetworkingV1Alpha3.ServiceEntry
+		serviceEntryAssertion    func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error
+		destinationRuleAssertion func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error
+		expectedAnnotations      map[string]string
+	}{
+		{
+			name:                     "given a serviceEntry that does not exists, when AddServiceEntriesWithDr is called, then the se is created and the corresponding dr is created",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &newSE},
+			serviceEntryAssertion:    serviceEntryFoundAssertion,
+			destinationRuleAssertion: destinationRuleFoundAssertion,
+			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
+		{
+			name:                     "given a serviceEntry that already exists in the sync ns, when AddServiceEntriesWithDr is called, then the se is updated and the corresponding dr is updated as well",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se},
+			serviceEntryAssertion:    serviceEntryFoundAssertion,
+			destinationRuleAssertion: destinationRuleFoundAssertion,
+			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+		},
+		{
+			name:                     "given a serviceEntry that already exists in the sync ns and the serviceEntry does not have any valid endpoints, when AddServiceEntriesWithDr is called, then the se should be deleted along with the corresponding dr",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &emptyEndpointSe},
+			serviceEntryAssertion:    serviceEntryNotFoundAssertion,
+			destinationRuleAssertion: destinationRuleNotFoundAssertion,
+		},
+		{
+			name:                     "given a serviceEntry that already exists in the sync ns, and the endpoints contain dummy addresses, when AddServiceEntriesWithDr is called, then the se should be deleted",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"dummySe": &dummyEndpointSe},
+			serviceEntryAssertion:    serviceEntryNotFoundAssertion,
+			destinationRuleAssertion: destinationRuleNotFoundAssertion,
+		},
+		{
+			name:                     "given a user generated custom serviceEntry that already exists in the sync ns, when AddServiceEntriesWithDr is called with a service entry on the same hostname, then the user generated SE will not be overriden",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"admiralOverrideSE": &admiralOverrideSE.Spec},
+			serviceEntryAssertion:    serviceEntryFoundAssertion,
+			destinationRuleAssertion: destinationRuleFoundAssertion,
+			expectedAnnotations:      nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries)
+			err := tt.serviceEntryAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations)
+			if err != nil {
+				t.Error(err)
+			}
+			err = tt.destinationRuleAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations)
+			if err != nil {
+				t.Error(err)
+			}
+		})
+	}
 
 }
 
