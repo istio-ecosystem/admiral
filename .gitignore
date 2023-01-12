@@ -4,3 +4,5 @@
 out*
 *.tar.gz
 *.out
+istio-*
+.DS_Store

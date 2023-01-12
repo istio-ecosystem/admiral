@@ -2,7 +2,7 @@
 
 function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 
-[ $# -lt 2 ] && { echo "Usage: $0 <istio_version> [osx|linux]" ; exit 1; }
+[ $# -lt 2 ] && { echo "Usage: $0 <istio_version> [osx|osx-arm64|linux]" ; exit 1; }
 
 istio_version=$1
 os=$2
