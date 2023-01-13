@@ -73,10 +73,7 @@ api-gen:
 	go install k8s.io/code-generator/cmd/deepcopy-gen
 
 crd-gen:
-	go get -d -u -fix k8s.io/code-generator@v0.17.3
-	go get -d -u -fix k8s.io/apimachinery@v0.17.3
-	go get -d -u -fix k8s.io/gengo
-	$(GOPATH)/src/k8s.io/code-generator/generate-groups.sh all "$(ROOT_PACKAGE)/pkg/client" "$(ROOT_PACKAGE)/pkg/apis" "$(CUSTOM_RESOURCE_NAME):$(CUSTOM_RESOURCE_VERSION)"
+	hack/update-codegen.sh
 
 # Cross compilation
 build-linux:
