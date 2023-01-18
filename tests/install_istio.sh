@@ -2,7 +2,7 @@
 
 function ver { printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' '); }
 
-[ $# -lt 2 ] && { echo "Usage: $0 <istio_version> [osx|linux]" ; exit 1; }
+[ $# -lt 2 ] && { echo "Usage: $0 <istio_version> [osx|osx-arm64|linux]" ; exit 1; }
 
 istio_version=$1
 os=$2
@@ -28,13 +28,6 @@ kubectl create secret generic cacerts -n istio-system --from-file="istio-$istio_
 
 #Generate, install and verify Istio CRDs
 
-if [ $(ver $istio_version) -lt $(ver 1.8.6) ]
-then
-    echo "Istio version $istio_version is no longer officially supported by this version of Admiral"
-    exit 1
-else
-    #install istio core with DNS proxying enabled and multicluster enabled
-# TODO Also add east-west gateway to this installation
 cat <<EOF > cluster1.yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
@@ -86,6 +79,15 @@ spec:
                 targetPort: 15443
 EOF
 
+if [ $(ver $istio_version) -lt $(ver 1.8.6) ]
+then
+    echo "Istio version $istio_version is no longer officially supported by this version of Admiral"
+    exit 1
+#install istio core with DNS proxying enabled and multicluster enabled
+elif [ "$os" == "osx-arm64" ]; then
+    # defalt image does not support iptable manipulation on apple silicon - https://stackoverflow.com/questions/72073613/istio-installation-failed-apple-silicon-m1
+    "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml --set hub=ghcr.io/resf/istio -y
+else
     "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml -y
 fi
 rm -rf cluster1.yaml

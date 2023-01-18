@@ -1,7 +1,7 @@
 DOCKER_REPO?=admiralproj
 IMAGE?=$(DOCKER_REPO)/admiral
 DOCKER_USER?=aattuluri
-KUSTOMIZE_VERSION?=3.8.2
+KUSTOMIZE_VERSION?=4.5.5
 
 DOCKERFILE?=Dockerfile.admiral
 

@@ -23,6 +23,8 @@ export KUBECONFIG=~/.kube/config
                                                                                                    
 Mac: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 osx` 
 
+Mac (Apple Silicon): `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 osx-arm64`
+
 Linux: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 linux`                                                                                            
 
 * Set up necessary permissions and configurations for Admiral
