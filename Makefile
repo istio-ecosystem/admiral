@@ -58,7 +58,7 @@ setup:
 	$(GOGET) -u github.com/golang/protobuf/protoc-gen-go@v1.3.2
 
 model-gen:
-	$(DEEPCOPYGEN) -i ./admiral/pkg/apis/admiral/model/ -O zz_generated.deepcopy
+	$(DEEPCOPYGEN) -i ./admiral/pkg/apis/admiral/model/ -O zz_generated.deepcopy -o ./ --go-header-file hack/boilerplate.go.txt
 
 gen-all: api-gen model-gen crd-gen
 
