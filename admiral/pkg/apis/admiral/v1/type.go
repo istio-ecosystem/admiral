@@ -81,3 +81,30 @@ type RoutingPolicyList struct {
 
 	Items []RoutingPolicy `json:"items"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
+// +kubebuilder:printcolumn:name="Destination",type="string",JSONPath=`.spec.destination.identity`
+// +kubebuilder:printcolumn:name="Proxy",type="string",JSONPath=`.spec.proxy.identity`
+type DependencyProxy struct {
+	meta_v1.TypeMeta   `json:",inline"`
+	meta_v1.ObjectMeta `json:"metadata"`
+	Spec               model.DependencyProxy `json:"spec"`
+	Status             DependencyProxyStatus `json:"status"`
+}
+
+// DependencyProxyStatus is the status for a DependencyProxy resource
+type DependencyProxyStatus struct {
+	ClusterSynced int32  `json:"clustersSynced"`
+	State         string `json:"state"`
+}
+
+// DependencyProxyList is a list of DependencyProxy resources
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type DependencyProxyList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []DependencyProxy `json:"items"`
+}

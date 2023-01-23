@@ -1,0 +1,75 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: dependencyproxies.admiral.io
+spec:
+  group: admiral.io
+  names:
+    kind: DependencyProxy
+    listKind: DependencyProxyList
+    plural: dependencyproxies
+    singular: dependencyproxy
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .spec.destination.identity
+          name: Destination
+          type: string
+        - jsonPath: .spec.proxy.identity
+          name: Proxy
+          type: string
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: 'The below example of DependencyProxy ```yaml apiVersion:
+              admiral.io/v1alpha1 kind: DependencyProxy metadata: name: dependency-proxy-example
+              namespace: admiral annotations: admiral.io/env: stage spec: destination:
+              identity: dns_suffix: "xyz" dns_prefix: - "test0" - "test1" proxy: identity:
+              nginx-gw ```'
+              properties:
+                destination:
+                  description: Configuration of the destination identity for which the
+                    requests should be proxied.
+                  properties:
+                    dns_prefixes:
+                      description: An ordered list of all DNS prefixes.
+                      items:
+                        type: string
+                      type: array
+                    dns_suffix:
+                      description: The DNS suffix that should be appended while constructing
+                        the endpoint of the destination service.
+                      type: string
+                    identity:
+                      description: Identifier of the destination workload.
+                      type: string
+                  type: object
+                proxy:
+                  description: Configuration of the proxy's identity through which the
+                    requests to the destination will be proxied through.
+                  properties:
+                    identity:
+                      description: Identifier of the proxy's workload
+                      type: string
+                  type: object
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

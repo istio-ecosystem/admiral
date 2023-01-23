@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=admiral.io, Version=v1
 	case v1.SchemeGroupVersion.WithResource("dependencies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().Dependencies().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("dependencyproxies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().DependencyProxies().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().GlobalTrafficPolicies().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("routingpolicies"):

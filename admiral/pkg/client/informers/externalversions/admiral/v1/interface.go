@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// Dependencies returns a DependencyInformer.
 	Dependencies() DependencyInformer
+	// DependencyProxies returns a DependencyProxyInformer.
+	DependencyProxies() DependencyProxyInformer
 	// GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 	GlobalTrafficPolicies() GlobalTrafficPolicyInformer
 	// RoutingPolicies returns a RoutingPolicyInformer.
@@ -46,6 +48,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // Dependencies returns a DependencyInformer.
 func (v *version) Dependencies() DependencyInformer {
 	return &dependencyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// DependencyProxies returns a DependencyProxyInformer.
+func (v *version) DependencyProxies() DependencyProxyInformer {
+	return &dependencyProxyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.

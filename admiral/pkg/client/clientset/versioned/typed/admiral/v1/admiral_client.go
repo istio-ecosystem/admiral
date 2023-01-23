@@ -29,6 +29,7 @@ import (
 type AdmiralV1Interface interface {
 	RESTClient() rest.Interface
 	DependenciesGetter
+	DependencyProxiesGetter
 	GlobalTrafficPoliciesGetter
 	RoutingPoliciesGetter
 }
@@ -40,6 +41,10 @@ type AdmiralV1Client struct {
 
 func (c *AdmiralV1Client) Dependencies(namespace string) DependencyInterface {
 	return newDependencies(c, namespace)
+}
+
+func (c *AdmiralV1Client) DependencyProxies(namespace string) DependencyProxyInterface {
+	return newDependencyProxies(c, namespace)
 }
 
 func (c *AdmiralV1Client) GlobalTrafficPolicies(namespace string) GlobalTrafficPolicyInterface {
