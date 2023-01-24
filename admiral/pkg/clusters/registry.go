@@ -42,15 +42,6 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
 
-	dependencyProxyHandler := DependencyProxyHandler{
-		RemoteRegistry: w,
-	}
-
-	dependencyProxyHandler.DepController, err = admiral.NewDependencyProxyController(ctx.Done(), &dependencyProxyHandler, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
-	if err != nil {
-		return nil, fmt.Errorf("error with dependencyproxy controller %w", err)
-	}
-
 	if !params.ArgoRolloutsEnabled {
 		log.Info("argo rollouts disabled")
 	}
