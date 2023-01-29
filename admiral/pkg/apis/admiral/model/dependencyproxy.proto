@@ -15,13 +15,32 @@ option go_package = "model";
 //          admiral.io/env: stage
 //    spec:
 //      destination:
-//          identity:
+//          identity: greeting
 //          dns_suffix: "xyz"
 //          dns_prefix:
 //              - "test0"
 //              - "test1"
 //      proxy:
 //          identity: nginx-gw
+//```
+// The above DependencyProxy will generate the following
+// VirtualService object
+//```yaml
+//  apiVersion: networking.istio.io/v1alpha3
+//  kind: VirtualService
+//  metadata:
+//      name: httpbin-vs
+//  spec:
+//      hosts:
+//       - test0.stage.greeting.xyz
+//       - test1.stage.greeting.xyz
+//       - stage.greeting.xyz
+//      http:
+//       - route:
+//          - destination:
+//              host: stage.gateway.global
+//              port:
+//                number: 80
 //```
 //
 message DependencyProxy {

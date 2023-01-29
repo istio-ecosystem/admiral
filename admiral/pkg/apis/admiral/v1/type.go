@@ -87,6 +87,7 @@ type RoutingPolicyList struct {
 // +k8s:openapi-gen=true
 // +kubebuilder:printcolumn:name="Destination",type="string",JSONPath=`.spec.destination.identity`
 // +kubebuilder:printcolumn:name="Proxy",type="string",JSONPath=`.spec.proxy.identity`
+// +kubebuilder:resource:shortName=dp
 type DependencyProxy struct {
 	meta_v1.TypeMeta   `json:",inline"`
 	meta_v1.ObjectMeta `json:"metadata"`
