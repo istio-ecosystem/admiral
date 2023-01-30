@@ -8,6 +8,8 @@ spec:
     kind: DependencyProxy
     listKind: DependencyProxyList
     plural: dependencyproxies
+    shortNames:
+      - dp
     singular: dependencyproxy
   scope: Namespaced
   versions:
@@ -38,8 +40,12 @@ spec:
               description: 'The below example of DependencyProxy ```yaml apiVersion:
               admiral.io/v1alpha1 kind: DependencyProxy metadata: name: dependency-proxy-example
               namespace: admiral annotations: admiral.io/env: stage spec: destination:
-              identity: dns_suffix: "xyz" dns_prefix: - "test0" - "test1" proxy: identity:
-              nginx-gw ```'
+              identity: greeting dns_suffix: "xyz" dns_prefix: - "test0" - "test1"
+              proxy: identity: nginx-gw ``` The above DependencyProxy will generate
+              the following VirtualService object ```yaml apiVersion: networking.istio.io/v1alpha3
+              kind: VirtualService metadata: name: httpbin-vs spec: hosts: - test0.stage.greeting.xyz
+              - test1.stage.greeting.xyz - stage.greeting.xyz http: - route: - destination:
+              host: stage.gateway.global port: number: 80 ```'
               properties:
                 destination:
                   description: Configuration of the destination identity for which the
