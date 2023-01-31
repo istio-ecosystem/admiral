@@ -54,6 +54,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&GlobalTrafficPolicyList{},
 		&RoutingPolicy{},
 		&RoutingPolicyList{},
+		&DependencyProxy{},
+		&DependencyProxyList{},
 	)
 
 	// register the type in the scheme
