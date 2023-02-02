@@ -97,8 +97,7 @@ type DependencyProxy struct {
 
 // DependencyProxyStatus is the status for a DependencyProxy resource
 type DependencyProxyStatus struct {
-	ClusterSynced int32  `json:"clustersSynced"`
-	State         string `json:"state"`
+	State string `json:"state"`
 }
 
 // DependencyProxyList is a list of DependencyProxy resources
