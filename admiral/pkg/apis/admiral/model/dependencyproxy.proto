@@ -68,5 +68,5 @@ message Destination {
 
 message Proxy {
     // Identifier of the proxy's workload
-    string identity = 3;
+    string identity = 1;
 }

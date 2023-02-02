@@ -14,100 +14,100 @@ import (
 	informerV1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/informers/externalversions/admiral/v1"
 )
 
-// DepProxyHandler interface contains the methods that are required
-type DepProxyHandler interface {
+// DependencyProxyHandler interface contains the methods that are required
+type DependencyProxyHandler interface {
 	Added(ctx context.Context, obj *v1.DependencyProxy)
 	Updated(ctx context.Context, obj *v1.DependencyProxy)
 	Deleted(ctx context.Context, obj *v1.DependencyProxy)
 }
 
 type DependencyProxyController struct {
-	K8sClient       kubernetes.Interface
-	DepCrdClient    clientset.Interface
-	DepProxyHandler DepProxyHandler
-	Cache           *depProxyCache
-	informer        cache.SharedIndexInformer
+	K8sClient              kubernetes.Interface
+	admiralCRDClient       clientset.Interface
+	DependencyProxyHandler DependencyProxyHandler
+	Cache                  *dependencyProxyCache
+	informer               cache.SharedIndexInformer
 }
 
-type depProxyCache struct {
+type dependencyProxyCache struct {
 	//map of dependencies key=identity value array of onboarded identitys
 	cache map[string]*v1.DependencyProxy
 	mutex *sync.Mutex
 }
 
-func (d *depProxyCache) Put(dep *v1.DependencyProxy) {
+func (d *dependencyProxyCache) Put(dep *v1.DependencyProxy) {
 	defer d.mutex.Unlock()
 	d.mutex.Lock()
 	key := d.getKey(dep)
 	d.cache[key] = dep
 }
 
-func (d *depProxyCache) getKey(dep *v1.DependencyProxy) string {
+func (d *dependencyProxyCache) getKey(dep *v1.DependencyProxy) string {
 	return dep.Name
 }
 
-func (d *depProxyCache) Get(identity string) *v1.DependencyProxy {
+func (d *dependencyProxyCache) Get(identity string) *v1.DependencyProxy {
 	defer d.mutex.Unlock()
 	d.mutex.Lock()
 	return d.cache[identity]
 }
 
-func (d *depProxyCache) Delete(dep *v1.DependencyProxy) {
+func (d *dependencyProxyCache) Delete(dep *v1.DependencyProxy) {
 	defer d.mutex.Unlock()
 	d.mutex.Lock()
 	delete(d.cache, d.getKey(dep))
 }
 
-func NewDependencyProxyController(stopCh <-chan struct{}, handler DepProxyHandler, configPath string, namespace string, resyncPeriod time.Duration) (*DependencyProxyController, error) {
+func NewDependencyProxyController(stopCh <-chan struct{}, handler DependencyProxyHandler, configPath string, namespace string, resyncPeriod time.Duration) (*DependencyProxyController, error) {
 
-	depProxyController := DependencyProxyController{}
-	depProxyController.DepProxyHandler = handler
+	controller := DependencyProxyController{}
+	controller.DependencyProxyHandler = handler
 
-	depProxyCache := depProxyCache{}
+	depProxyCache := dependencyProxyCache{}
 	depProxyCache.cache = make(map[string]*v1.DependencyProxy)
 	depProxyCache.mutex = &sync.Mutex{}
 
-	depProxyController.Cache = &depProxyCache
+	controller.Cache = &depProxyCache
 	var err error
 
-	depProxyController.K8sClient, err = K8sClientFromPath(configPath)
+	controller.K8sClient, err = K8sClientFromPath(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependency controller k8s client: %v", err)
 	}
 
-	depProxyController.DepCrdClient, err = AdmiralCrdClientFromPath(configPath)
+	controller.admiralCRDClient, err = AdmiralCrdClientFromPath(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependency controller crd client: %v", err)
 
 	}
 
-	depProxyController.informer = informerV1.NewDependencyProxyInformer(
-		depProxyController.DepCrdClient,
+	controller.informer = informerV1.NewDependencyProxyInformer(
+		controller.admiralCRDClient,
 		namespace,
 		resyncPeriod,
 		cache.Indexers{},
 	)
 
-	mcd := NewMonitoredDelegator(&depProxyController, "primary", "dependencyproxy")
-	NewController("dependencyproxy-ctrl-"+namespace, stopCh, mcd, depProxyController.informer)
+	mcd := NewMonitoredDelegator(&controller, "primary", "dependencyproxy")
+	NewController("dependencyproxy-ctrl-"+namespace, stopCh, mcd, controller.informer)
 
-	return &depProxyController, nil
+	return &controller, nil
 }
 
 func (d *DependencyProxyController) Added(ctx context.Context, ojb interface{}) {
 	dep := ojb.(*v1.DependencyProxy)
 	d.Cache.Put(dep)
-	d.DepProxyHandler.Added(ctx, dep)
+	d.DependencyProxyHandler.Added(ctx, dep)
 }
 
 func (d *DependencyProxyController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
 	dep := obj.(*v1.DependencyProxy)
 	d.Cache.Put(dep)
-	d.DepProxyHandler.Updated(ctx, dep)
+	d.DependencyProxyHandler.Updated(ctx, dep)
 }
 
 func (d *DependencyProxyController) Deleted(ctx context.Context, ojb interface{}) {
 	dep := ojb.(*v1.DependencyProxy)
 	d.Cache.Delete(dep)
-	d.DepProxyHandler.Deleted(ctx, dep)
+	d.DependencyProxyHandler.Deleted(ctx, dep)
 }
