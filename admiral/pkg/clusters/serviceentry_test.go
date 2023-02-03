@@ -448,19 +448,75 @@ func TestIsGeneratedByAdmiral(t *testing.T) {
 func TestAddServiceEntriesWithDr(t *testing.T) {
 	admiralCache := AdmiralCache{}
 
+	cacheWithNoEntry := ServiceEntryAddressStore{
+		EntryAddresses: map[string]string{"prefix.e2e.foo.global-se": "test"},
+		Addresses:      []string{},
+	}
+
 	admiralCache.SeClusterCache = common.NewMapOfMaps()
+	admiralCache.ServiceEntryAddressStore = &cacheWithNoEntry
 
 	cnameIdentityCache := sync.Map{}
 	cnameIdentityCache.Store("dev.bar.global", "bar")
+	cnameIdentityCache.Store("dev.newse.global", "newse")
+	cnameIdentityCache.Store("e2e.foo.global", "foo")
 	admiralCache.CnameIdentityCache = &cnameIdentityCache
+
+	trafficPolicyOverride := &model.TrafficPolicy{
+		LbType:    model.TrafficPolicy_FAILOVER,
+		DnsPrefix: common.Default,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-west-2",
+				Weight: 100,
+			},
+		},
+	}
+
+	defaultGtp := &v13.GlobalTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.dev.bar-gtp",
+		},
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{
+				trafficPolicyOverride,
+			},
+		},
+	}
+
+	prefixedTrafficPolicy := &model.TrafficPolicy{
+		LbType:    model.TrafficPolicy_TOPOLOGY,
+		DnsPrefix: "prefix",
+	}
+
+	prefixedGtp := &v13.GlobalTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.e2e.foo-gtp",
+		},
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{
+				prefixedTrafficPolicy,
+			},
+		},
+	}
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v13.GlobalTrafficPolicy)
+	gtpCache.identityCache["dev.bar"] = defaultGtp
+	gtpCache.identityCache["e2e.foo"] = prefixedGtp
 	gtpCache.mutex = &sync.Mutex{}
 	admiralCache.GlobalTrafficCache = gtpCache
 
 	newSE := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.newse.global"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+		},
+	}
+
+	newPrefixedSE := istioNetworkingV1Alpha3.ServiceEntry{
+		Addresses: []string{"240.10.1.0"},
+		Hosts:     []string{"e2e.foo.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
@@ -601,9 +657,14 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	rr.PutRemoteController("cl1", rc)
 	rr.AdmiralCache = &admiralCache
 
-	destinationRuleFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+	destinationRuleFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, dnsPrefix string) error {
 		for _, serviceEntry := range serviceEntries {
-			drName := getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
+			var drName string
+			if dnsPrefix != "" && dnsPrefix != "default" {
+				drName = getIstioResourceName(serviceEntry.Hosts[0], "-dr")
+			} else {
+				drName = getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
+			}
 			dr, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
 			if err != nil {
 				return err
@@ -618,7 +679,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		return nil
 	}
 
-	destinationRuleNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+	destinationRuleNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, dnsPrefix string) error {
 		for _, serviceEntry := range serviceEntries {
 			drName := getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
 			_, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
@@ -629,7 +690,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		return nil
 	}
 
-	serviceEntryFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+	serviceEntryFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error {
 		for _, serviceEntry := range serviceEntries {
 			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
 			se, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
@@ -642,10 +703,13 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			if !reflect.DeepEqual(expectedAnnotations, se.Annotations) {
 				return fmt.Errorf("expected SE annotations %v but got %v", expectedAnnotations, se.Annotations)
 			}
+			if !reflect.DeepEqual(expectedLabels, se.Labels) {
+				return fmt.Errorf("expected SE labels %v but got %v", expectedLabels, se.Labels)
+			}
 		}
 		return nil
 	}
-	serviceEntryNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error {
+	serviceEntryNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error {
 		for _, serviceEntry := range serviceEntries {
 			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
 			_, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
@@ -659,9 +723,11 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		serviceEntries           map[string]*istioNetworkingV1Alpha3.ServiceEntry
-		serviceEntryAssertion    func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error
-		destinationRuleAssertion func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string) error
+		dnsPrefix                string
+		serviceEntryAssertion    func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error
+		destinationRuleAssertion func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, dnsPrefix string) error
 		expectedAnnotations      map[string]string
+		expectedLabels           map[string]string
 	}{
 		{
 			name:                     "given a serviceEntry that does not exists, when AddServiceEntriesWithDr is called, then the se is created and the corresponding dr is created",
@@ -669,6 +735,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
 			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedLabels:           map[string]string{"env": "dev", "identity": "newse"},
 		},
 		{
 			name:                     "given a serviceEntry that already exists in the sync ns, when AddServiceEntriesWithDr is called, then the se is updated and the corresponding dr is updated as well",
@@ -676,6 +743,16 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
 			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedLabels:           map[string]string{"env": "dev", "identity": "bar", "associatedGTP": "test.dev.bar-gtp"},
+		},
+		{
+			name:                     "given a serviceEntry that does not exists and gtp with dnsPrefix is configured, when AddServiceEntriesWithDr is called, then the se is created and the corresponding dr is created as well",
+			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &newPrefixedSE},
+			serviceEntryAssertion:    serviceEntryFoundAssertion,
+			destinationRuleAssertion: destinationRuleFoundAssertion,
+			dnsPrefix:                "prefix",
+			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedLabels:           map[string]string{"env": "e2e", "identity": "foo", "dnsPrefix": "prefix", "associatedGTP": "test.e2e.foo-gtp"},
 		},
 		{
 			name:                     "given a serviceEntry that already exists in the sync ns and the serviceEntry does not have any valid endpoints, when AddServiceEntriesWithDr is called, then the se should be deleted along with the corresponding dr",
@@ -695,17 +772,21 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
 			expectedAnnotations:      nil,
+			expectedLabels:           nil,
 		},
 	}
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries)
-			err := tt.serviceEntryAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations)
+			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
+				tt.serviceEntries["se1"].Hosts = []string{tt.dnsPrefix + ".e2e.foo.global"}
+			}
+			err := tt.serviceEntryAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations, tt.expectedLabels)
 			if err != nil {
 				t.Error(err)
 			}
-			err = tt.destinationRuleAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations)
+			err = tt.destinationRuleAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations, tt.dnsPrefix)
 			if err != nil {
 				t.Error(err)
 			}
@@ -789,6 +870,9 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	}
 
 	gTPDefaultOverride := &v13.GlobalTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gTPDefaultOverrideName",
+		},
 		Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{
 				trafficPolicyDefaultOverride,
@@ -797,6 +881,9 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 	}
 
 	gTPMultipleDns := &v13.GlobalTrafficPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "gTPMultipleDnsName",
+		},
 		Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{
 				defaultPolicy, trafficPolicyWest, trafficPolicyEast,
@@ -818,7 +905,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			locality: "us-west-2",
 			se:       se,
 			gtp:      nil,
-			seDrSet:  map[string]*SeDrTuple{host: nil},
+			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{}},
 		},
 		{
 			name:     "Should handle a GTP with default overide",
@@ -826,7 +913,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			locality: "us-west-2",
 			se:       se,
 			gtp:      gTPDefaultOverride,
-			seDrSet:  map[string]*SeDrTuple{host: nil},
+			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{SeDnsPrefix: "default", SeDrGlobalTrafficPolicyName: "gTPDefaultOverrideName"}},
 		},
 		{
 			name:     "Should handle a GTP with multiple Dns",
@@ -834,8 +921,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			locality: "us-west-2",
 			se:       se,
 			gtp:      gTPMultipleDns,
-			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
-				common.GetCnameVal([]string{east, host}): nil},
+			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
+				common.GetCnameVal([]string{east, host}): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 		},
 		{
 			name:     "Should handle a GTP with Dns prefix with Caps",
@@ -843,8 +930,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			locality: "us-west-2",
 			se:       se,
 			gtp:      gTPMultipleDns,
-			seDrSet: map[string]*SeDrTuple{host: nil, common.GetCnameVal([]string{west, host}): nil,
-				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): nil},
+			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
+				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 		},
 	}
 	ctx := context.Background()
@@ -861,11 +948,14 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 					t.Fatalf("Generated hosts %v is missing the required host: %v", generatedHosts, host)
 				} else if !isLower(result[host].SeName) || !isLower(result[host].DrName) {
 					t.Fatalf("Generated istio resource names %v %v are not all lowercase", result[host].SeName, result[host].DrName)
+				} else if result[host].SeDnsPrefix != c.seDrSet[host].SeDnsPrefix {
+					t.Fatalf("Expected seDrSet entry dnsPrefix %s does not match the result %s", c.seDrSet[host].SeDnsPrefix, result[host].SeDnsPrefix)
+				} else if result[host].SeDrGlobalTrafficPolicyName != c.seDrSet[host].SeDrGlobalTrafficPolicyName {
+					t.Fatalf("Expected seDrSet entry global traffic policy name %s does not match the result %s", c.seDrSet[host].SeDrGlobalTrafficPolicyName, result[host].SeDrGlobalTrafficPolicyName)
 				}
 			}
 		})
 	}
-
 }
 
 func TestCreateServiceEntryForNewServiceOrPod(t *testing.T) {
