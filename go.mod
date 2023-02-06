@@ -26,13 +26,15 @@ require (
 	k8s.io/api v0.24.2
 	k8s.io/apimachinery v0.24.2
 	k8s.io/client-go v0.24.2
-	sigs.k8s.io/yaml v1.2.0 // indirect
+	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 require (
 	github.com/prometheus/common v0.32.1
 	google.golang.org/protobuf v1.28.1
 )
+
+require github.com/cheekybits/is v0.0.0-20150225183255-68e9c0620927 // indirect
 
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect

@@ -20,6 +20,8 @@ package v1
 
 type DependencyExpansion interface{}
 
+type DependencyProxyExpansion interface{}
+
 type GlobalTrafficPolicyExpansion interface{}
 
 type RoutingPolicyExpansion interface{}
