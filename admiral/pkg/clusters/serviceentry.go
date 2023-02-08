@@ -240,7 +240,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
-			modifySidecarForLocalClusterCommunication(ctx, serviceInstance.Namespace, remoteRegistry.AdmiralCache.DependencyNamespaceCache.Get(sourceIdentity), rc)
+			modifySidecarForLocalClusterCommunication(
+				ctx, serviceInstance.Namespace, sourceIdentity,
+				remoteRegistry.AdmiralCache.DependencyNamespaceCache, rc)
 		}
 
 		for _, val := range dependents {
@@ -373,50 +375,57 @@ func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, w
 	serviceEntry.Endpoints = endpoints
 }
 
-func modifySidecarForLocalClusterCommunication(ctx context.Context, sidecarNamespace string, sidecarEgressMap map[string]common.SidecarEgress, rc *RemoteController) {
+func modifySidecarForLocalClusterCommunication(
+	ctx context.Context, sidecarNamespace, sourceIdentity string,
+	sidecarEgressMap *common.SidecarEgressMap, rc *RemoteController) {
 
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
 
-	if sidecarConfig == nil || sidecarEgressMap == nil {
-		return
-	}
+	sidecarEgressMap.Range(func(k string, v map[string]common.SidecarEgress) {
+		if k == sourceIdentity {
+			sidecarEgress := v
+			if sidecarConfig == nil || sidecarEgress == nil {
+				return
+			}
 
-	sidecar, err := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
-	if err != nil {
-		return
-	}
-	if sidecar == nil || (sidecar.Spec.Egress == nil) {
-		return
-	}
+			sidecar, err := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+			if err != nil {
+				return
+			}
+			if sidecar == nil || (sidecar.Spec.Egress == nil) {
+				return
+			}
 
-	//copy and add our new local FQDN
-	newSidecar := copySidecar(sidecar)
+			//copy and add our new local FQDN
+			newSidecar := copySidecar(sidecar)
 
-	egressHosts := make(map[string]string)
+			egressHosts := make(map[string]string)
 
-	for _, sidecarEgress := range sidecarEgressMap {
-		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
-		egressHosts[egressHost] = egressHost
-		for cname := range sidecarEgress.CNAMEs {
-			scopedCname := sidecarEgress.Namespace + "/" + cname
-			egressHosts[scopedCname] = scopedCname
+			for _, sidecarEgress := range sidecarEgress {
+				egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
+				egressHosts[egressHost] = egressHost
+				for cname := range sidecarEgress.CNAMEs {
+					scopedCname := sidecarEgress.Namespace + "/" + cname
+					egressHosts[scopedCname] = scopedCname
+				}
+			}
+
+			for egressHost := range egressHosts {
+				if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
+					newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
+				}
+			}
+
+			//nolint
+			newSidecarConfig := createSidecarSkeleton(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
+
+			//insert into cluster
+			if newSidecarConfig != nil {
+				addUpdateSidecar(ctx, newSidecarConfig, sidecar, sidecarNamespace, rc)
+			}
 		}
-	}
-
-	for egressHost := range egressHosts {
-		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
-			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
-		}
-	}
-
-	//nolint
-	newSidecarConfig := createSidecarSkeletion(newSidecar.Spec, common.GetWorkloadSidecarName(), sidecarNamespace)
-
-	//insert into cluster
-	if newSidecarConfig != nil {
-		addUpdateSidecar(ctx, newSidecarConfig, sidecar, sidecarNamespace, rc)
-	}
+	})
 }
 
 func addUpdateSidecar(ctx context.Context, obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController) {

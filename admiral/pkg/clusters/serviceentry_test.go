@@ -1082,17 +1082,75 @@ func buildFakeConfigMapFromAddressStore(addressStore *ServiceEntryAddressStore, 
 }
 
 func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
+	setupForServiceEntryTests()
+	var (
+		assetIdentity     = "test-identity"
+		identityNamespace = "test-dependency-namespace"
+		assetFQDN         = "test-local-fqdn"
+		sidecar           = &v1alpha3.Sidecar{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "default",
+				Namespace: identityNamespace,
+			},
+			Spec: istioNetworkingV1Alpha3.Sidecar{
+				Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{
+					{
+						Hosts: []string{"a"},
+					},
+				},
+			},
+		}
+	)
 	sidecarController := &istio.SidecarController{}
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+	sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).
+		Create(context.TODO(), sidecar, v12.CreateOptions{})
 
 	remoteController := &RemoteController{}
 	remoteController.SidecarController = sidecarController
 
-	sidecarEgressMap := make(map[string]common.SidecarEgress)
-	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn"}
-	ctx := context.Background()
+	sidecarCacheEgressMap := common.NewSidecarEgressMap()
+	sidecarCacheEgressMap.Put(
+		assetIdentity,
+		identityNamespace,
+		assetFQDN,
+		nil,
+	)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				sidecarCacheEgressMap.Put(
+					assetIdentity,
+					identityNamespace,
+					assetFQDN,
+					nil,
+				)
+			}
+		}
+	}(ctx)
 
-	modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
+	go func(ctx context.Context) {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				modifySidecarForLocalClusterCommunication(
+					ctx, identityNamespace, assetIdentity,
+					sidecarCacheEgressMap, remoteController)
+			}
+		}
+	}(ctx)
+	wg.Wait()
 
 	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
 	if err == nil {
@@ -1105,35 +1163,52 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 }
 
 func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
+	setupForServiceEntryTests()
+	var (
+		assetIdentity     = "test-identity"
+		identityNamespace = "test-sidecar-namespace"
+		sidecarName       = "default"
+		assetHostsList    = []string{"test-host"}
+		sidecar           = &v1alpha3.Sidecar{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sidecarName,
+				Namespace: identityNamespace,
+			},
+			Spec: istioNetworkingV1Alpha3.Sidecar{
+				Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{
+					{
+						Hosts: assetHostsList,
+					},
+				},
+			},
+		}
 
-	sidecarController := &istio.SidecarController{}
-	sidecarController.IstioClient = istiofake.NewSimpleClientset()
-
-	remoteController := &RemoteController{}
+		sidecarController     = &istio.SidecarController{}
+		remoteController      = &RemoteController{}
+		sidecarCacheEgressMap = common.NewSidecarEgressMap()
+	)
+	sidecarCacheEgressMap.Put(
+		assetIdentity,
+		"test-dependency-namespace",
+		"test-local-fqdn",
+		map[string]string{
+			"test.myservice.global": "1",
+		},
+	)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer cancel()
 	remoteController.SidecarController = sidecarController
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).
+		Create(context.TODO(), sidecar, v12.CreateOptions{})
 
-	existingSidecarObj := &v1alpha3.Sidecar{}
-	existingSidecarObj.ObjectMeta.Namespace = "test-sidecar-namespace"
-	existingSidecarObj.ObjectMeta.Name = "default"
-
-	istioEgress := istioNetworkingV1Alpha3.IstioEgressListener{
-		Hosts: []string{"test-host"},
-	}
-
-	existingSidecarObj.Spec = istioNetworkingV1Alpha3.Sidecar{
-		Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{&istioEgress},
-	}
-
-	ctx := context.Background()
-	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Create(ctx, existingSidecarObj, v12.CreateOptions{})
 	if err != nil {
-		t.Error(err)
+		t.Errorf("unable to create sidecar using fake client, err: %v", err)
 	}
 	if createdSidecar != nil {
-
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
-		modifySidecarForLocalClusterCommunication(ctx, "test-sidecar-namespace", sidecarEgressMap, remoteController)
+		modifySidecarForLocalClusterCommunication(ctx, identityNamespace, assetIdentity, sidecarCacheEgressMap, remoteController)
 
 		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", v12.GetOptions{})
 
