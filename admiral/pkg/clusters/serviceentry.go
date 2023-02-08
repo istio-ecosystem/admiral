@@ -529,11 +529,14 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 								common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId),
 								common.GetEnvKey():             fmt.Sprintf("%v", env),
 							}
+							if newServiceEntry.Annotations == nil {
+								newServiceEntry.Annotations = map[string]string{}
+							}
 							if seDr.SeDnsPrefix != "" && seDr.SeDnsPrefix != common.Default {
-								newServiceEntry.Labels["dnsPrefix"] = seDr.SeDnsPrefix
+								newServiceEntry.Annotations["dns-prefix"] = seDr.SeDnsPrefix
 							}
 							if seDr.SeDrGlobalTrafficPolicyName != "" {
-								newServiceEntry.Labels["associatedGTP"] = seDr.SeDrGlobalTrafficPolicyName
+								newServiceEntry.Annotations["associated-gtp"] = seDr.SeDrGlobalTrafficPolicyName
 							}
 							addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -31,7 +32,6 @@ import (
 	v14 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -726,7 +726,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		dnsPrefix                string
 		serviceEntryAssertion    func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error
 		destinationRuleAssertion func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, dnsPrefix string) error
-		expectedAnnotations      map[string]string
+		expectedDRAnnotations    map[string]string
+		expectedSEAnnotations    map[string]string
 		expectedLabels           map[string]string
 	}{
 		{
@@ -734,7 +735,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &newSE},
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
-			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedDRAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedSEAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 			expectedLabels:           map[string]string{"env": "dev", "identity": "newse"},
 		},
 		{
@@ -742,8 +744,9 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"se1": &se},
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
-			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
-			expectedLabels:           map[string]string{"env": "dev", "identity": "bar", "associatedGTP": "test.dev.bar-gtp"},
+			expectedDRAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedSEAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue, "associated-gtp": "test.dev.bar-gtp"},
+			expectedLabels:           map[string]string{"env": "dev", "identity": "bar"},
 		},
 		{
 			name:                     "given a serviceEntry that does not exists and gtp with dnsPrefix is configured, when AddServiceEntriesWithDr is called, then the se is created and the corresponding dr is created as well",
@@ -751,8 +754,9 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
 			dnsPrefix:                "prefix",
-			expectedAnnotations:      map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
-			expectedLabels:           map[string]string{"env": "e2e", "identity": "foo", "dnsPrefix": "prefix", "associatedGTP": "test.e2e.foo-gtp"},
+			expectedDRAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			expectedSEAnnotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue, "dns-prefix": "prefix", "associated-gtp": "test.e2e.foo-gtp"},
+			expectedLabels:           map[string]string{"env": "e2e", "identity": "foo"},
 		},
 		{
 			name:                     "given a serviceEntry that already exists in the sync ns and the serviceEntry does not have any valid endpoints, when AddServiceEntriesWithDr is called, then the se should be deleted along with the corresponding dr",
@@ -771,7 +775,8 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			serviceEntries:           map[string]*istioNetworkingV1Alpha3.ServiceEntry{"admiralOverrideSE": &admiralOverrideSE.Spec},
 			serviceEntryAssertion:    serviceEntryFoundAssertion,
 			destinationRuleAssertion: destinationRuleFoundAssertion,
-			expectedAnnotations:      nil,
+			expectedDRAnnotations:    nil,
+			expectedSEAnnotations:    nil,
 			expectedLabels:           nil,
 		},
 	}
@@ -782,11 +787,11 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["se1"].Hosts = []string{tt.dnsPrefix + ".e2e.foo.global"}
 			}
-			err := tt.serviceEntryAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations, tt.expectedLabels)
+			err := tt.serviceEntryAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedSEAnnotations, tt.expectedLabels)
 			if err != nil {
 				t.Error(err)
 			}
-			err = tt.destinationRuleAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedAnnotations, tt.dnsPrefix)
+			err = tt.destinationRuleAssertion(context.Background(), fakeIstioClient, tt.serviceEntries, tt.expectedDRAnnotations, tt.dnsPrefix)
 			if err != nil {
 				t.Error(err)
 			}
