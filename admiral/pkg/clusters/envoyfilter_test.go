@@ -38,6 +38,7 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
 
+	common.ResetSync()
 	registry, _ := InitAdmiral(context.Background(), p)
 
 	handler := RoutingPolicyHandler{}

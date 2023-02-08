@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -52,22 +53,24 @@ type RemoteController struct {
 }
 
 type AdmiralCache struct {
-	CnameClusterCache               *common.MapOfMaps
-	CnameDependentClusterCache      *common.MapOfMaps
-	CnameIdentityCache              *sync.Map
-	IdentityClusterCache            *common.MapOfMaps
-	WorkloadSelectorCache           *common.MapOfMaps
-	ClusterLocalityCache            *common.MapOfMaps
-	IdentityDependencyCache         *common.MapOfMaps
-	SubsetServiceEntryIdentityCache *sync.Map
-	ServiceEntryAddressStore        *ServiceEntryAddressStore
-	ConfigMapController             admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
-	GlobalTrafficCache              *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
-	DependencyNamespaceCache        *common.SidecarEgressMap
-	SeClusterCache                  *common.MapOfMaps
-	RoutingPolicyFilterCache        *routingPolicyFilterCache
-	RoutingPolicyCache              *routingPolicyCache
-	argoRolloutsEnabled             bool
+	CnameClusterCache                  *common.MapOfMaps
+	CnameDependentClusterCache         *common.MapOfMaps
+	CnameIdentityCache                 *sync.Map
+	IdentityClusterCache               *common.MapOfMaps
+	WorkloadSelectorCache              *common.MapOfMaps
+	ClusterLocalityCache               *common.MapOfMaps
+	IdentityDependencyCache            *common.MapOfMaps
+	SubsetServiceEntryIdentityCache    *sync.Map
+	ServiceEntryAddressStore           *ServiceEntryAddressStore
+	ConfigMapController                admiral.ConfigMapControllerInterface //todo this should be in the remotecontrollers map once we expand it to have one configmap per cluster
+	GlobalTrafficCache                 *globalTrafficCache                  //The cache needs to live in the handler because it needs access to deployments
+	DependencyNamespaceCache           *common.SidecarEgressMap
+	SeClusterCache                     *common.MapOfMaps
+	RoutingPolicyFilterCache           *routingPolicyFilterCache
+	RoutingPolicyCache                 *routingPolicyCache
+	DependencyProxyVirtualServiceCache *dependencyProxyVirtualServiceCache
+	DependencyLookupCache              *dependencyLookupCache //This cache is to fetch list of all dependencies for a given source identity
+	argoRolloutsEnabled                bool
 }
 
 type RemoteRegistry struct {
@@ -109,6 +112,14 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		GlobalTrafficCache:              gtpCache,
 		SeClusterCache:                  common.NewMapOfMaps(),
 		argoRolloutsEnabled:             params.ArgoRolloutsEnabled,
+		DependencyProxyVirtualServiceCache: &dependencyProxyVirtualServiceCache{
+			identityVSCache: make(map[string]map[string]*v1alpha3.VirtualService),
+			mutex:           &sync.Mutex{},
+		},
+		DependencyLookupCache: &dependencyLookupCache{
+			sourceDestinations: make(map[string][]string),
+			mutex:              &sync.Mutex{},
+		},
 	}
 	if common.GetSecretResolver() == "" {
 		serviceEntryUpdateSuspender = NewDefaultServiceEntrySuspender(params.ExcludedIdentityList)
@@ -122,6 +133,32 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		AdmiralCache:                admiralCache,
 		ServiceEntryUpdateSuspender: serviceEntryUpdateSuspender,
 	}
+}
+
+type dependencyLookupCache struct {
+	sourceDestinations map[string][]string
+	mutex              *sync.Mutex
+}
+
+func (d *dependencyLookupCache) put(dependencyObj *v1.Dependency) {
+	if dependencyObj.Spec.Source == "" {
+		return
+	}
+	if dependencyObj.Spec.Destinations == nil {
+		return
+	}
+	if len(dependencyObj.Spec.Destinations) <= 0 {
+		return
+	}
+	d.mutex.Lock()
+	d.sourceDestinations[dependencyObj.Spec.Source] = dependencyObj.Spec.Destinations
+	defer d.mutex.Unlock()
+}
+
+func (d *dependencyLookupCache) Get(key string) []string {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	return d.sourceDestinations[key]
 }
 
 func (r *RemoteRegistry) GetRemoteController(clusterId string) *RemoteController {
@@ -180,6 +217,12 @@ type ServiceEntryAddressStore struct {
 type DependencyHandler struct {
 	RemoteRegistry *RemoteRegistry
 	DepController  *admiral.DependencyController
+}
+
+type DependencyProxyHandler struct {
+	RemoteRegistry           *RemoteRegistry
+	DepController            *admiral.DependencyProxyController
+	dependencyProxyConverter DependencyProxyConverter
 }
 
 type GlobalTrafficHandler struct {
@@ -525,6 +568,9 @@ func HandleDependencyRecord(ctx context.Context, obj *v1.Dependency, remoteRegit
 	}
 
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
+
+	remoteRegitry.AdmiralCache.DependencyLookupCache.put(obj)
+
 }
 
 func (dh *DependencyHandler) Deleted(ctx context.Context, obj *v1.Dependency) {
@@ -628,4 +674,24 @@ func HandleEventForGlobalTrafficPolicy(ctx context.Context, event admiral.EventT
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	modifyServiceEntryForNewServiceOrPod(ctx, admiral.Update, env, globalIdentifier, remoteRegistry)
 	return nil
+}
+
+func (dh *DependencyProxyHandler) Added(ctx context.Context, obj *v1.DependencyProxy) {
+	log.Infof(LogFormat, "Add", "dependencyproxy", obj.Name, "", "Received=true namespace="+obj.Namespace)
+	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyConverter)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Add", "dependencyproxy", obj.Name, "", err)
+	}
+}
+
+func (dh *DependencyProxyHandler) Updated(ctx context.Context, obj *v1.DependencyProxy) {
+	log.Infof(LogFormat, "Update", "dependencyproxy", obj.Name, "", "Received=true namespace="+obj.Namespace)
+	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyConverter)
+	if err != nil {
+		log.Errorf(LogErrFormat, "Add", "dependencyproxy", obj.Name, "", err)
+	}
+}
+
+func (dh *DependencyProxyHandler) Deleted(ctx context.Context, obj *v1.DependencyProxy) {
+	log.Infof(LogFormat, "Deleted", "dependencyproxy", obj.Name, "", "Skipping, not implemented")
 }
