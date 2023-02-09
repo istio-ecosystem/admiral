@@ -564,21 +564,25 @@ func addUpdateServiceEntry(ctx context.Context, obj *v1alpha3.ServiceEntry, exis
 		} else {
 			log.Errorf(LogFormat+" SE=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Creation of SE skipped as endpoints are not valid", obj.Spec.String())
 		}
-	} else if areEndpointsValid { //update will happen only when all the endpoints are valid
-		exist.Labels = obj.Labels
-		exist.Annotations = obj.Annotations
+	} else {
 		op = "Update"
-		skipUpdate, diff = skipDestructiveUpdate(rc, obj, exist)
-		if diff != "" {
-			log.Infof(LogFormat+" diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
-		}
-		if skipUpdate {
-			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
-			return
+		if areEndpointsValid { //update will happen only when all the endpoints are valid
+			exist.Labels = obj.Labels
+			exist.Annotations = obj.Annotations
+			skipUpdate, diff = skipDestructiveUpdate(rc, obj, exist)
+			if diff != "" {
+				log.Infof(LogFormat+" diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
+			}
+			if skipUpdate {
+				log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
+				return
+			} else {
+				//nolint
+				exist.Spec = obj.Spec
+				_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(ctx, exist, v12.UpdateOptions{})
+			}
 		} else {
-			//nolint
-			exist.Spec = obj.Spec
-			_, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Update(ctx, exist, v12.UpdateOptions{})
+			log.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "SE could not be updated as all the recived endpoints are not valid.")
 		}
 	}
 

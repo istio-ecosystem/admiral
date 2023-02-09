@@ -29,10 +29,12 @@ import (
 )
 
 type SeDrTuple struct {
-	SeName          string
-	DrName          string
-	ServiceEntry    *networking.ServiceEntry
-	DestinationRule *networking.DestinationRule
+	SeName                      string
+	DrName                      string
+	ServiceEntry                *networking.ServiceEntry
+	DestinationRule             *networking.DestinationRule
+	SeDnsPrefix                 string
+	SeDrGlobalTrafficPolicyName string
 }
 
 const (
@@ -523,7 +525,19 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 						//nolint
 						newServiceEntry := createServiceEntrySkeletion(*seDr.ServiceEntry, seDr.SeName, syncNamespace)
 						if newServiceEntry != nil {
-							newServiceEntry.Labels = map[string]string{common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId)}
+							newServiceEntry.Labels = map[string]string{
+								common.GetWorkloadIdentifier(): fmt.Sprintf("%v", identityId),
+								common.GetEnvKey():             fmt.Sprintf("%v", env),
+							}
+							if newServiceEntry.Annotations == nil {
+								newServiceEntry.Annotations = map[string]string{}
+							}
+							if seDr.SeDnsPrefix != "" && seDr.SeDnsPrefix != common.Default {
+								newServiceEntry.Annotations["dns-prefix"] = seDr.SeDnsPrefix
+							}
+							if seDr.SeDrGlobalTrafficPolicyName != "" {
+								newServiceEntry.Annotations["associated-gtp"] = seDr.SeDrGlobalTrafficPolicyName
+							}
 							addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 						}
@@ -572,10 +586,12 @@ func createSeAndDrSetFromGtp(ctx context.Context, env, region string, se *networ
 				modifiedSe.Addresses[0] = getUniqueAddress(ctx, cache, host)
 			}
 			var seDr = &SeDrTuple{
-				DrName:          drName,
-				SeName:          seName,
-				DestinationRule: getDestinationRule(modifiedSe, region, gtpTrafficPolicy),
-				ServiceEntry:    modifiedSe,
+				DrName:                      drName,
+				SeName:                      seName,
+				DestinationRule:             getDestinationRule(modifiedSe, region, gtpTrafficPolicy),
+				ServiceEntry:                modifiedSe,
+				SeDnsPrefix:                 gtpTrafficPolicy.DnsPrefix,
+				SeDrGlobalTrafficPolicyName: globalTrafficPolicy.Name,
 			}
 			seDrSet[host] = seDr
 		}
