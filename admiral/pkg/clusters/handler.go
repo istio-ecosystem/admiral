@@ -711,7 +711,7 @@ func createServiceEntrySkeletion(se v1alpha32.ServiceEntry, name string, namespa
 }
 
 //nolint
-func createSidecarSkeletion(sidecar v1alpha32.Sidecar, name string, namespace string) *v1alpha3.Sidecar {
+func createSidecarSkeleton(sidecar v1alpha32.Sidecar, name string, namespace string) *v1alpha3.Sidecar {
 	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: v12.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
