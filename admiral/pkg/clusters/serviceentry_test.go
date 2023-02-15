@@ -2343,7 +2343,7 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 
 	testcases := []struct {
 		name                               string
-		dependencyLookupCache              *dependencyLookupCache
+		sourceToDestinations               *sourceToDestinations
 		dependencyProxyVirtualServiceCache *dependencyProxyVirtualServiceCache
 		sourceIdentity                     string
 		remoteController                   *RemoteController
@@ -2351,18 +2351,18 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 		expectedVS                         *v1alpha3.VirtualService
 	}{
 		{
-			name:                  "Given dependency proxy to generate VS, when dependencylookipCache is nil, then the func should return an error",
-			dependencyLookupCache: nil,
-			expectedError:         fmt.Errorf("remoteRegistry.AdmiralCache.DependencyLookupCache is nil"),
+			name:                 "Given dependency proxy to generate VS, when dependencylookupCache is nil, then the func should return an error",
+			sourceToDestinations: nil,
+			expectedError:        fmt.Errorf("remoteRegistry.AdmiralCache.DependencyLookupCache is nil"),
 		},
 		{
-			name:                  "Given dependency proxy to generate VS, when dependencyProxyVirtualServiceCache is nil, then the func should return an error",
-			dependencyLookupCache: &dependencyLookupCache{},
-			expectedError:         fmt.Errorf("remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache is nil"),
+			name:                 "Given dependency proxy to generate VS, when dependencyProxyVirtualServiceCache is nil, then the func should return an error",
+			sourceToDestinations: &sourceToDestinations{},
+			expectedError:        fmt.Errorf("remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache is nil"),
 		},
 		{
-			name: "Given dependency proxy to generate VS, when the sourceIdentity is not in dependencylookipCache, then the func should not return an error",
-			dependencyLookupCache: &dependencyLookupCache{
+			name: "Given dependency proxy to generate VS, when the sourceIdentity is not in dependencylookupCache, then the func should not return an error",
+			sourceToDestinations: &sourceToDestinations{
 				sourceDestinations: map[string][]string{
 					"testSource": {"testDestination"},
 				},
@@ -2381,7 +2381,7 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 		},
 		{
 			name: "Given dependency proxy to generate VS, when the dependency is not in proxy virtual cache, then the func should not return an error",
-			dependencyLookupCache: &dependencyLookupCache{
+			sourceToDestinations: &sourceToDestinations{
 				sourceDestinations: map[string][]string{
 					"testSource": {"testDestination"},
 				},
@@ -2400,7 +2400,7 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 		},
 		{
 			name: "Given dependency proxy to generate VS, when the dependency is in proxy virtual cache and the VS does not already exists, then the func should create the VS and should not return an error",
-			dependencyLookupCache: &dependencyLookupCache{
+			sourceToDestinations: &sourceToDestinations{
 				sourceDestinations: map[string][]string{
 					"testSource": {"testDestination"},
 				},
@@ -2425,7 +2425,7 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 		},
 		{
 			name: "Given dependency proxy to generate VS, when the dependency is in proxy virtual cache and the VS does already exists, then the func should update the VS and should not return an error",
-			dependencyLookupCache: &dependencyLookupCache{
+			sourceToDestinations: &sourceToDestinations{
 				sourceDestinations: map[string][]string{
 					"testSource": {"testDestination"},
 				},
@@ -2452,7 +2452,7 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			remoteRegistry.AdmiralCache.DependencyLookupCache = tc.dependencyLookupCache
+			remoteRegistry.AdmiralCache.SourceToDestinations = tc.sourceToDestinations
 			remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache = tc.dependencyProxyVirtualServiceCache
 
 			err := generateProxyVirtualServiceForDependencies(context.Background(), remoteRegistry, tc.sourceIdentity, tc.remoteController)

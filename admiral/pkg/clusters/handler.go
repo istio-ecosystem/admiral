@@ -499,6 +499,8 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 		op  string
 	)
 
+	format := "virtualservice %s before: %v, after: %v;"
+
 	if obj.Annotations == nil {
 		obj.Annotations = map[string]string{}
 	}
@@ -509,11 +511,12 @@ func addUpdateVirtualService(ctx context.Context, obj *v1alpha3.VirtualService, 
 		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, obj, metav1.CreateOptions{})
 		op = "Add"
 	} else {
+		op = "Update"
+		log.Infof(format, op, exist.Spec.String(), obj.Spec.String())
 		exist.Labels = obj.Labels
 		exist.Annotations = obj.Annotations
 		//nolint
 		exist.Spec = obj.Spec
-		op = "Update"
 		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, exist, metav1.UpdateOptions{})
 	}
 

@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+## This test verifies if the DependencyProxy created for the httpbin service
+## to proxy the request through a "proxy" mesh service.
+## The curl should validate httpbin external service is reachable
+## through the proxy's virtualservice host
+
 [ $# -lt 3 ] && { echo "Usage: $0 <source_app> <source_ns> <destination_vs_host>" ; exit 1; }
 
 source=$1

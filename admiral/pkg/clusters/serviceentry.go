@@ -278,23 +278,20 @@ func modifyServiceEntryForNewServiceOrPod(
 }
 
 func generateProxyVirtualServiceForDependencies(ctx context.Context, remoteRegistry *RemoteRegistry, sourceIdentity string, rc *RemoteController) error {
-	if remoteRegistry.AdmiralCache.DependencyLookupCache == nil {
+	if remoteRegistry.AdmiralCache.SourceToDestinations == nil {
 		return fmt.Errorf("failed to generate proxy virtual service for sourceIdentity %s as remoteRegistry.AdmiralCache.DependencyLookupCache is nil", sourceIdentity)
 	}
 	if remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache == nil {
 		return fmt.Errorf("failed to generate proxy virtual service for sourceIdentity %s as remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache is nil", sourceIdentity)
 	}
-	dependencies := remoteRegistry.AdmiralCache.DependencyLookupCache.Get(sourceIdentity)
+	dependencies := remoteRegistry.AdmiralCache.SourceToDestinations.Get(sourceIdentity)
 	if dependencies == nil {
 		log.Infof("skipped generating proxy virtual service as there are no dependencies found for sourceIdentity %s", sourceIdentity)
 		return nil
 	}
 	for _, dependency := range dependencies {
 		vs := remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache.get(dependency)
-		if vs == nil {
-			continue
-		}
-		if len(vs) <= 0 {
+		if vs == nil || len(vs) == 0 {
 			continue
 		}
 		log.Infof("found dependency proxy virtual service for destination: %s, source: %s", dependency, sourceIdentity)

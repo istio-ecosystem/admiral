@@ -30,10 +30,10 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	startAdmiralStateChecker(ctx, params)
 	pauseForAdmiralToInitializeState()
 
-	w := NewRemoteRegistry(ctx, params)
+	rr := NewRemoteRegistry(ctx, params)
 
 	wd := DependencyHandler{
-		RemoteRegistry: w,
+		RemoteRegistry: rr,
 	}
 
 	var err error
@@ -43,11 +43,8 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	}
 
 	dependencyProxyHandler := DependencyProxyHandler{
-		RemoteRegistry: w,
-		dependencyProxyConverter: dependencyProxyConverter{
-			virtualServiceHostNameGenerator:            &virtualServiceHostNameGenerator{},
-			virtualServiceDestinationHostHostGenerator: &virtualServiceDestinationHostHostGenerator{},
-		},
+		RemoteRegistry:                          rr,
+		dependencyProxyDefaultHostNameGenerator: &dependencyProxyDefaultHostNameGenerator{},
 	}
 
 	dependencyProxyHandler.DepController, err = admiral.NewDependencyProxyController(ctx.Done(), &dependencyProxyHandler, params.KubeconfigPath, params.DependenciesNamespace, params.CacheRefreshDuration)
@@ -63,17 +60,17 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	if err != nil {
 		return nil, fmt.Errorf("error with configmap controller init: %v", err)
 	}
-	w.AdmiralCache.ConfigMapController = configMapController
-	loadServiceEntryCacheData(ctx, w.AdmiralCache.ConfigMapController, w.AdmiralCache)
+	rr.AdmiralCache.ConfigMapController = configMapController
+	loadServiceEntryCacheData(ctx, rr.AdmiralCache.ConfigMapController, rr.AdmiralCache)
 
-	err = createSecretController(ctx, w)
+	err = createSecretController(ctx, rr)
 	if err != nil {
 		return nil, fmt.Errorf("error with secret control init: %v", err)
 	}
 
-	go w.shutdown()
+	go rr.shutdown()
 
-	return w, nil
+	return rr, nil
 }
 
 func pauseForAdmiralToInitializeState() {

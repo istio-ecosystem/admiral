@@ -8,11 +8,10 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 )
 
-// DependencyProxyConverter provides functions that help convert
+// DependencyProxyDefaultHostNameGenerator provides functions that help convert
 // the given configuration to the corresponding VirtualService
-type DependencyProxyConverter interface {
-	VirtualServiceHostsGenerator
-	VirtualServiceDestinationHostGenerator
+type DependencyProxyDefaultHostNameGenerator interface {
+	defaultHostNameGenerator(dependencyProxyObj *v1.DependencyProxy) (string, error)
 }
 
 // VirtualServiceDestinationHostGenerator generates the hostname of the proxy
@@ -26,19 +25,12 @@ type VirtualServiceHostsGenerator interface {
 	GenerateVirtualServiceHostNames(dependencyProxyObj *v1.DependencyProxy) ([]string, error)
 }
 
-type dependencyProxyConverter struct {
-	*virtualServiceHostNameGenerator
-	*virtualServiceDestinationHostHostGenerator
-}
-
-type virtualServiceHostNameGenerator struct {
-}
-type virtualServiceDestinationHostHostGenerator struct {
+type dependencyProxyDefaultHostNameGenerator struct {
 }
 
 // GenerateProxyDestinationHostName generates the VirtualServices's destination host which in this case
 // would be the endpoint of the proxy identity
-func (*virtualServiceDestinationHostHostGenerator) GenerateProxyDestinationHostName(dependencyProxyObj *v1.DependencyProxy) (string, error) {
+func GenerateProxyDestinationHostName(dependencyProxyObj *v1.DependencyProxy) (string, error) {
 	err := validate(dependencyProxyObj)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate virtual service destination hostname due to error: %w", err)
@@ -48,20 +40,21 @@ func (*virtualServiceDestinationHostHostGenerator) GenerateProxyDestinationHostN
 	return strings.ToLower(common.GetCnameVal([]string{proxyEnv, proxyIdentity, common.GetHostnameSuffix()})), nil
 }
 
-// GenerateVirtualServiceHostNames generates all the VirtualService's hostnames using the informartion in the
+// GenerateVirtualServiceHostNames generates all the VirtualService's hostnames using the information in the
 //  *v1.DependencyProxy object. In addition it also generates a default hostname by concatenating the
 // admiral.io/env value with destinationServiceIdentity+dnsSuffix
-func (*virtualServiceHostNameGenerator) GenerateVirtualServiceHostNames(dependencyProxyObj *v1.DependencyProxy) ([]string, error) {
+func GenerateVirtualServiceHostNames(dependencyProxyObj *v1.DependencyProxy, hostnameGenerator DependencyProxyDefaultHostNameGenerator) ([]string, error) {
 	err := validate(dependencyProxyObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate virtual service hostnames due to error: %w", err)
 	}
 	destinationServiceIdentity := dependencyProxyObj.Spec.Destination.Identity
 	dnsSuffix := dependencyProxyObj.Spec.Destination.DnsSuffix
-	proxyEnv := dependencyProxyObj.ObjectMeta.Annotations[common.GetEnvKey()]
 
-	defaultVSHostName := strings.ToLower(common.GetCnameVal([]string{proxyEnv, destinationServiceIdentity, dnsSuffix}))
-
+	defaultVSHostName, err := hostnameGenerator.defaultHostNameGenerator(dependencyProxyObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate virtual service hostnames due to error: %w", err)
+	}
 	vsHostNames := make([]string, 0)
 	vsHostNames = append(vsHostNames, defaultVSHostName)
 	if dependencyProxyObj.Spec.Destination.DnsPrefixes == nil {
@@ -72,6 +65,19 @@ func (*virtualServiceHostNameGenerator) GenerateVirtualServiceHostNames(dependen
 		vsHostNames = append(vsHostNames, common.GetCnameVal([]string{prefix, destinationServiceIdentity, dnsSuffix}))
 	}
 	return vsHostNames, nil
+}
+
+func (*dependencyProxyDefaultHostNameGenerator) defaultHostNameGenerator(dependencyProxyObj *v1.DependencyProxy) (string, error) {
+	err := validate(dependencyProxyObj)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate default hostname due to error: %w", err)
+	}
+
+	destinationServiceIdentity := dependencyProxyObj.Spec.Destination.Identity
+	dnsSuffix := dependencyProxyObj.Spec.Destination.DnsSuffix
+	proxyEnv := dependencyProxyObj.ObjectMeta.Annotations[common.GetEnvKey()]
+
+	return strings.ToLower(common.GetCnameVal([]string{proxyEnv, destinationServiceIdentity, dnsSuffix})), nil
 }
 
 func validate(dependencyProxyObj *v1.DependencyProxy) error {

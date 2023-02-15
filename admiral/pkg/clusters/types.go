@@ -69,7 +69,7 @@ type AdmiralCache struct {
 	RoutingPolicyFilterCache           *routingPolicyFilterCache
 	RoutingPolicyCache                 *routingPolicyCache
 	DependencyProxyVirtualServiceCache *dependencyProxyVirtualServiceCache
-	DependencyLookupCache              *dependencyLookupCache //This cache is to fetch list of all dependencies for a given source identity
+	SourceToDestinations               *sourceToDestinations //This cache is to fetch list of all dependencies for a given source identity
 	argoRolloutsEnabled                bool
 }
 
@@ -116,7 +116,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 			identityVSCache: make(map[string]map[string]*v1alpha3.VirtualService),
 			mutex:           &sync.Mutex{},
 		},
-		DependencyLookupCache: &dependencyLookupCache{
+		SourceToDestinations: &sourceToDestinations{
 			sourceDestinations: make(map[string][]string),
 			mutex:              &sync.Mutex{},
 		},
@@ -135,12 +135,12 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	}
 }
 
-type dependencyLookupCache struct {
+type sourceToDestinations struct {
 	sourceDestinations map[string][]string
 	mutex              *sync.Mutex
 }
 
-func (d *dependencyLookupCache) put(dependencyObj *v1.Dependency) {
+func (d *sourceToDestinations) put(dependencyObj *v1.Dependency) {
 	if dependencyObj.Spec.Source == "" {
 		return
 	}
@@ -155,7 +155,7 @@ func (d *dependencyLookupCache) put(dependencyObj *v1.Dependency) {
 	defer d.mutex.Unlock()
 }
 
-func (d *dependencyLookupCache) Get(key string) []string {
+func (d *sourceToDestinations) Get(key string) []string {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	return d.sourceDestinations[key]
@@ -220,9 +220,9 @@ type DependencyHandler struct {
 }
 
 type DependencyProxyHandler struct {
-	RemoteRegistry           *RemoteRegistry
-	DepController            *admiral.DependencyProxyController
-	dependencyProxyConverter DependencyProxyConverter
+	RemoteRegistry                          *RemoteRegistry
+	DepController                           *admiral.DependencyProxyController
+	dependencyProxyDefaultHostNameGenerator DependencyProxyDefaultHostNameGenerator
 }
 
 type GlobalTrafficHandler struct {
@@ -569,7 +569,7 @@ func HandleDependencyRecord(ctx context.Context, obj *v1.Dependency, remoteRegit
 
 	updateIdentityDependencyCache(sourceIdentity, remoteRegitry.AdmiralCache.IdentityDependencyCache, obj)
 
-	remoteRegitry.AdmiralCache.DependencyLookupCache.put(obj)
+	remoteRegitry.AdmiralCache.SourceToDestinations.put(obj)
 
 }
 
@@ -678,7 +678,7 @@ func HandleEventForGlobalTrafficPolicy(ctx context.Context, event admiral.EventT
 
 func (dh *DependencyProxyHandler) Added(ctx context.Context, obj *v1.DependencyProxy) {
 	log.Infof(LogFormat, "Add", "dependencyproxy", obj.Name, "", "Received=true namespace="+obj.Namespace)
-	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyConverter)
+	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyDefaultHostNameGenerator)
 	if err != nil {
 		log.Errorf(LogErrFormat, "Add", "dependencyproxy", obj.Name, "", err)
 	}
@@ -686,7 +686,7 @@ func (dh *DependencyProxyHandler) Added(ctx context.Context, obj *v1.DependencyP
 
 func (dh *DependencyProxyHandler) Updated(ctx context.Context, obj *v1.DependencyProxy) {
 	log.Infof(LogFormat, "Update", "dependencyproxy", obj.Name, "", "Received=true namespace="+obj.Namespace)
-	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyConverter)
+	err := updateIdentityDependencyProxyCache(ctx, dh.RemoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache, obj, dh.dependencyProxyDefaultHostNameGenerator)
 	if err != nil {
 		log.Errorf(LogErrFormat, "Add", "dependencyproxy", obj.Name, "", err)
 	}

@@ -51,44 +51,38 @@ func TestGenerateVSFromDependencyProxy(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name                            string
-		expectedError                   error
-		dependencyProxyObj              *v1.DependencyProxy
-		dependencyProxyConverter        DependencyProxyConverter
-		expectedCacheKey                string
-		expectedCachedVSHosts           []string
-		expectedCachedVSDestinationHost string
+		name                                    string
+		expectedError                           error
+		dependencyProxyObj                      *v1.DependencyProxy
+		dependencyProxyDefaultHostNameGenerator DependencyProxyDefaultHostNameGenerator
+		expectedCacheKey                        string
+		expectedCachedVSHosts                   []string
+		expectedCachedVSDestinationHost         string
 	}{
 		{
-			name:          "Given dependency proxy, when dependencyProxyConverter is nil, func should return an error",
-			expectedError: fmt.Errorf("failed to generate proxy VirtualService due to error: dependencyProxyConverter is nil"),
+			name:          "Given dependency proxy, when dependencyProxyDefaultHostNameGenerator is nil, func should return an error",
+			expectedError: fmt.Errorf("failed to generate proxy VirtualService due to error: dependencyProxyDefaultHostNameGenerator is nil"),
 		},
 		{
-			name:          "Given dependency proxy, when dependencyProxyObj is nil, func should return an error",
-			expectedError: fmt.Errorf("dependencyProxyObj is nil"),
-			dependencyProxyConverter: &dependencyProxyConverter{
-				virtualServiceHostNameGenerator:            &virtualServiceHostNameGenerator{},
-				virtualServiceDestinationHostHostGenerator: &virtualServiceDestinationHostHostGenerator{},
-			},
+			name:                                    "Given dependency proxy, when dependencyProxyObj is nil, func should return an error",
+			expectedError:                           fmt.Errorf("dependencyProxyObj is nil"),
+			dependencyProxyDefaultHostNameGenerator: &dependencyProxyDefaultHostNameGenerator{},
 		},
 		{
-			name:               "Given dependency proxy, when valid dependencyProxy object is passed, func should add it to cache and not return an error",
-			expectedError:      nil,
-			dependencyProxyObj: validDependencyProxyObj,
-			dependencyProxyConverter: &dependencyProxyConverter{
-				virtualServiceHostNameGenerator:            &virtualServiceHostNameGenerator{},
-				virtualServiceDestinationHostHostGenerator: &virtualServiceDestinationHostHostGenerator{},
-			},
-			expectedCacheKey:                "test",
-			expectedCachedVSHosts:           []string{"stage.test.xyz", "prefix00.test.xyz", "prefix01.test.xyz"},
-			expectedCachedVSDestinationHost: "stage.testproxy.global",
+			name:                                    "Given dependency proxy, when valid dependencyProxy object is passed, func should add it to cache and not return an error",
+			expectedError:                           nil,
+			dependencyProxyObj:                      validDependencyProxyObj,
+			dependencyProxyDefaultHostNameGenerator: &dependencyProxyDefaultHostNameGenerator{},
+			expectedCacheKey:                        "test",
+			expectedCachedVSHosts:                   []string{"stage.test.xyz", "prefix00.test.xyz", "prefix01.test.xyz"},
+			expectedCachedVSDestinationHost:         "stage.testproxy.global",
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			vs, err := generateVSFromDependencyProxy(context.Background(), tc.dependencyProxyObj, tc.dependencyProxyConverter)
+			vs, err := generateVSFromDependencyProxy(context.Background(), tc.dependencyProxyObj, tc.dependencyProxyDefaultHostNameGenerator)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
@@ -153,14 +147,14 @@ func TestUpdateIdentityDependencyProxyCache(t *testing.T) {
 	}
 
 	testcases := []struct {
-		name                            string
-		expectedError                   error
-		cache                           *dependencyProxyVirtualServiceCache
-		dependencyProxyObj              *v1.DependencyProxy
-		dependencyProxyConverter        DependencyProxyConverter
-		expectedCacheKey                string
-		expectedCachedVSHosts           []string
-		expectedCachedVSDestinationHost string
+		name                                    string
+		expectedError                           error
+		cache                                   *dependencyProxyVirtualServiceCache
+		dependencyProxyObj                      *v1.DependencyProxy
+		dependencyProxyDefaultHostNameGenerator DependencyProxyDefaultHostNameGenerator
+		expectedCacheKey                        string
+		expectedCachedVSHosts                   []string
+		expectedCachedVSDestinationHost         string
 	}{
 		{
 			name:          "Given identityDependencyCache, when dependencyProxyVirtualServiceCache is nil, func should return an error",
@@ -231,21 +225,18 @@ func TestUpdateIdentityDependencyProxyCache(t *testing.T) {
 				identityVSCache: make(map[string]map[string]*v1alpha3.VirtualService),
 				mutex:           &sync.Mutex{},
 			},
-			dependencyProxyObj: validDependencyProxyObj,
-			dependencyProxyConverter: &dependencyProxyConverter{
-				virtualServiceHostNameGenerator:            &virtualServiceHostNameGenerator{},
-				virtualServiceDestinationHostHostGenerator: &virtualServiceDestinationHostHostGenerator{},
-			},
-			expectedCacheKey:                "test",
-			expectedCachedVSHosts:           []string{"stage.test.xyz", "prefix00.test.xyz", "prefix01.test.xyz"},
-			expectedCachedVSDestinationHost: "stage.testproxy.global",
+			dependencyProxyObj:                      validDependencyProxyObj,
+			dependencyProxyDefaultHostNameGenerator: &dependencyProxyDefaultHostNameGenerator{},
+			expectedCacheKey:                        "test",
+			expectedCachedVSHosts:                   []string{"stage.test.xyz", "prefix00.test.xyz", "prefix01.test.xyz"},
+			expectedCachedVSDestinationHost:         "stage.testproxy.global",
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			err := updateIdentityDependencyProxyCache(context.Background(), tc.cache, tc.dependencyProxyObj, tc.dependencyProxyConverter)
+			err := updateIdentityDependencyProxyCache(context.Background(), tc.cache, tc.dependencyProxyObj, tc.dependencyProxyDefaultHostNameGenerator)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {

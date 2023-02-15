@@ -28,12 +28,17 @@ func TestValidate(t *testing.T) {
 		expectedError      error
 	}{
 		{
-			name:               "Given a validating dependency proxy object, when passed dependency proxy obj is nil, the func should return an error",
+			name:               "Given a dependency proxy object, when passed dependency proxy obj is nil, the func should return an error",
 			dependencyProxyObj: nil,
 			expectedError:      fmt.Errorf("dependencyProxyObj is nil"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing annotation, the func should return an error",
+			name:               "Given a validating dependency proxy object, when passed dependency proxy obj is empty, the func should return an error and should not panic",
+			dependencyProxyObj: &v1.DependencyProxy{},
+			expectedError:      fmt.Errorf("dependencyProxyObj.ObjectMeta.Annotations is nil"),
+		},
+		{
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing annotation, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -42,7 +47,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.ObjectMeta.Annotations is nil"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing admiral.io/env annotation, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing admiral.io/env annotation, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -54,7 +59,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("admiral.io/env is empty"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing proxy config, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing proxy config, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -67,7 +72,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.Spec.Proxy is nil"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing proxy identity, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing proxy identity, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -84,7 +89,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.Spec.Proxy.Identity is empty"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing destination config, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing destination config, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -101,7 +106,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.Spec.Destination is nil"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing destination identity missing, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing destination identity missing, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -121,7 +126,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.Spec.Destination.Identity is empty"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when passed dependency proxy obj missing dns suffix, the func should return an error",
+			name: "Given a dependency proxy object, when passed dependency proxy obj missing dns suffix, the func should return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -142,7 +147,7 @@ func TestValidate(t *testing.T) {
 			expectedError: fmt.Errorf("dependencyProxyObj.Spec.Destination.DnsSuffix is empty"),
 		},
 		{
-			name: "Given a validating dependency proxy object, when valid dependency proxy obj is passed, the func should not return an error",
+			name: "Given a dependency proxy object, when valid dependency proxy obj is passed, the func should not return an error",
 			dependencyProxyObj: &v1.DependencyProxy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
@@ -182,7 +187,7 @@ func TestValidate(t *testing.T) {
 
 func TestGenerateVirtualServiceHostNames(t *testing.T) {
 
-	virtualServiceHostNameGenerator := &virtualServiceHostNameGenerator{}
+	hostnameGenerator := &dependencyProxyDefaultHostNameGenerator{}
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{},
@@ -252,7 +257,7 @@ func TestGenerateVirtualServiceHostNames(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualVSHostNames, err := virtualServiceHostNameGenerator.GenerateVirtualServiceHostNames(tc.dependencyProxyObj)
+			actualVSHostNames, err := GenerateVirtualServiceHostNames(tc.dependencyProxyObj, hostnameGenerator)
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
 					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
@@ -272,8 +277,6 @@ func TestGenerateVirtualServiceHostNames(t *testing.T) {
 }
 
 func TestGenerateProxyDestinationHostName(t *testing.T) {
-
-	virtualServiceDestinationHostHostGenerator := &virtualServiceDestinationHostHostGenerator{}
 
 	admiralParams := common.AdmiralParams{
 		LabelSet:       &common.LabelSet{},
@@ -321,7 +324,7 @@ func TestGenerateProxyDestinationHostName(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualDestHostName, err := virtualServiceDestinationHostHostGenerator.GenerateProxyDestinationHostName(tc.dependencyProxyObj)
+			actualDestHostName, err := GenerateProxyDestinationHostName(tc.dependencyProxyObj)
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
 					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
@@ -333,6 +336,77 @@ func TestGenerateProxyDestinationHostName(t *testing.T) {
 			if err == nil {
 				if actualDestHostName != tc.expectedDestHostName {
 					t.Errorf("expected %v, got %v", tc.expectedDestHostName, actualDestHostName)
+				}
+			}
+		})
+	}
+
+}
+
+func TestDefaultHostNameGenerator(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet:       &common.LabelSet{},
+		HostnameSuffix: "global",
+	}
+	admiralParams.LabelSet.EnvKey = "admiral.io/env"
+
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	hostnameGenerator := dependencyProxyDefaultHostNameGenerator{}
+
+	testcases := []struct {
+		name               string
+		dependencyProxyObj *v1.DependencyProxy
+		expectedError      error
+		expectedHostName   string
+	}{
+		{
+			name:               "Given a dependency proxy object, when dependency proxy object is nil, then func should return an error",
+			dependencyProxyObj: nil,
+			expectedError:      fmt.Errorf("failed to generate default hostname due to error"),
+		},
+		{
+			name: "Given a dependency proxy object, when valid dependency proxy object, then func should not return an error",
+			dependencyProxyObj: &v1.DependencyProxy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+					Annotations: map[string]string{
+						"admiral.io/env": "stage",
+					},
+				},
+				Spec: model.DependencyProxy{
+					Proxy: &model.Proxy{
+						Identity: "testproxy",
+					},
+					Destination: &model.Destination{
+						Identity:    "testdestination",
+						DnsSuffix:   "xyz",
+						DnsPrefixes: []string{"test00", "test01"},
+					},
+				},
+			},
+			expectedError:    nil,
+			expectedHostName: "stage.testdestination.xyz",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := hostnameGenerator.defaultHostNameGenerator(tc.dependencyProxyObj)
+
+			if err != nil && tc.expectedError != nil {
+				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
+					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
+				}
+			} else if err != tc.expectedError {
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
+			}
+
+			if err == nil {
+				if actual != tc.expectedHostName {
+					t.Errorf("expected %v, got %v", tc.expectedHostName, actual)
 				}
 			}
 		})

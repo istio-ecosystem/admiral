@@ -35,7 +35,7 @@ func (d *dependencyProxyVirtualServiceCache) get(key string) map[string]*v1alpha
 // and the admiral.io/env+destinationIdentity as the inner key with the value of generate virtualservice.
 // Example: <greeting>:{<stage-greeting>:*v1alpha1.VirtualService}
 func updateIdentityDependencyProxyCache(ctx context.Context, cache *dependencyProxyVirtualServiceCache,
-	dependencyProxyObj *v1.DependencyProxy, dependencyProxyConverter DependencyProxyConverter) error {
+	dependencyProxyObj *v1.DependencyProxy, dependencyProxyDefaultHostNameGenerator DependencyProxyDefaultHostNameGenerator) error {
 
 	if cache == nil {
 		return fmt.Errorf("update dependency proxy cache failed with error: dependencyProxyVirtualServiceCache is nil")
@@ -63,7 +63,7 @@ func updateIdentityDependencyProxyCache(ctx context.Context, cache *dependencyPr
 		return fmt.Errorf("update dependency proxy cache failed with error: dependencyProxyObj.Spec.Destination.Identity is empty")
 	}
 
-	vs, err := generateVSFromDependencyProxy(ctx, dependencyProxyObj, dependencyProxyConverter)
+	vs, err := generateVSFromDependencyProxy(ctx, dependencyProxyObj, dependencyProxyDefaultHostNameGenerator)
 	if err != nil {
 		return err
 	}
@@ -75,17 +75,17 @@ func updateIdentityDependencyProxyCache(ctx context.Context, cache *dependencyPr
 // generateVSFromDependencyProxy will generate VirtualServices from the configurations provided in the
 // *v1.DependencyProxy object
 func generateVSFromDependencyProxy(ctx context.Context, dependencyProxyObj *v1.DependencyProxy,
-	dependencyProxyConverter DependencyProxyConverter) (*v1alpha3.VirtualService, error) {
+	dependencyProxyDefaultHostNameGenerator DependencyProxyDefaultHostNameGenerator) (*v1alpha3.VirtualService, error) {
 
-	if dependencyProxyConverter == nil {
-		return nil, fmt.Errorf("failed to generate proxy VirtualService due to error: dependencyProxyConverter is nil")
+	if dependencyProxyDefaultHostNameGenerator == nil {
+		return nil, fmt.Errorf("failed to generate proxy VirtualService due to error: dependencyProxyDefaultHostNameGenerator is nil")
 	}
 
-	proxyCNAME, err := dependencyProxyConverter.GenerateProxyDestinationHostName(dependencyProxyObj)
+	proxyCNAME, err := GenerateProxyDestinationHostName(dependencyProxyObj)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proxy VirtualService due to error: %w", err)
 	}
-	virtualServiceHostnames, err := dependencyProxyConverter.GenerateVirtualServiceHostNames(dependencyProxyObj)
+	virtualServiceHostnames, err := GenerateVirtualServiceHostNames(dependencyProxyObj, dependencyProxyDefaultHostNameGenerator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate proxy VirtualService due to error: %w", err)
 	}
