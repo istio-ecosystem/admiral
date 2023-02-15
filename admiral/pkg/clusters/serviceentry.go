@@ -14,6 +14,7 @@ import (
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	"gopkg.in/yaml.v2"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	log "github.com/sirupsen/logrus"
@@ -239,6 +240,12 @@ func modifyServiceEntryForNewServiceOrPod(
 					}
 				}
 			}
+
+		}
+
+		err := generateProxyVirtualServiceForDependencies(ctx, remoteRegistry, sourceIdentity, rc)
+		if err != nil {
+			log.Error(err)
 		}
 
 		if common.GetWorkloadSidecarUpdate() == "enabled" {
@@ -268,6 +275,39 @@ func modifyServiceEntryForNewServiceOrPod(
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
 	return serviceEntries
+}
+
+func generateProxyVirtualServiceForDependencies(ctx context.Context, remoteRegistry *RemoteRegistry, sourceIdentity string, rc *RemoteController) error {
+	if remoteRegistry.AdmiralCache.SourceToDestinations == nil {
+		return fmt.Errorf("failed to generate proxy virtual service for sourceIdentity %s as remoteRegistry.AdmiralCache.DependencyLookupCache is nil", sourceIdentity)
+	}
+	if remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache == nil {
+		return fmt.Errorf("failed to generate proxy virtual service for sourceIdentity %s as remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache is nil", sourceIdentity)
+	}
+	dependencies := remoteRegistry.AdmiralCache.SourceToDestinations.Get(sourceIdentity)
+	if dependencies == nil {
+		log.Infof("skipped generating proxy virtual service as there are no dependencies found for sourceIdentity %s", sourceIdentity)
+		return nil
+	}
+	for _, dependency := range dependencies {
+		vs := remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache.get(dependency)
+		if len(vs) == 0 {
+			continue
+		}
+		log.Infof("found dependency proxy virtual service for destination: %s, source: %s", dependency, sourceIdentity)
+		for _, v := range vs {
+			existingVS, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(ctx, v.Name, v12.GetOptions{})
+			if err != nil && k8errors.IsNotFound(err) {
+				log.Infof("proxy VirtualService %s not found", v.Name)
+			}
+			err = addUpdateVirtualService(ctx, v, existingVS, common.GetSyncNamespace(), rc)
+			if err != nil {
+				return fmt.Errorf("failed generating proxy VirtualService %s due to error: %w", v.Name, err)
+			}
+			log.Infof("successfully generated proxy VirtualService %s", v.Name)
+		}
+	}
+	return nil
 }
 
 //Does two things;

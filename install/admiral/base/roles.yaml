@@ -45,3 +45,15 @@ rules:
   - apiGroups: ["networking.istio.io"]
     resources: ['envoyfilters']
     verbs: ["create", "update", "delete", "patch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: admiral-dependencyproxy-role
+  namespace: admiral
+rules:
+  - apiGroups: ["admiral.io"]
+    resources: ["dependencyproxies"]
+    verbs: ["get", "list", "watch"]

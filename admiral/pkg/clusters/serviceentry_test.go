@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
@@ -33,7 +34,6 @@ import (
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -98,7 +98,7 @@ func makeTestDeployment(name, namespace, identityLabelValue string) *k8sAppsV1.D
 				},
 				Spec: coreV1.PodSpec{},
 			},
-			Selector: &v12.LabelSelector{
+			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"identity": identityLabelValue,
 					"app":      identityLabelValue,
@@ -119,7 +119,7 @@ func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
 		},
 		Spec: argo.RolloutSpec{
 			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: v12.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{"identity": identityLabelValue},
 					Annotations: map[string]string{
 						"env": "test",
@@ -140,7 +140,7 @@ func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
 					StableService: name + "-stable",
 				},
 			},
-			Selector: &v12.LabelSelector{
+			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"identity": identityLabelValue,
 					"app":      identityLabelValue,
@@ -150,9 +150,9 @@ func makeTestRollout(name, namespace, identityLabelValue string) argo.Rollout {
 	}
 }
 
-func makeGTP(name, namespace, identity, env, dnsPrefix string, creationTimestamp v12.Time) *v13.GlobalTrafficPolicy {
+func makeGTP(name, namespace, identity, env, dnsPrefix string, creationTimestamp metav1.Time) *v13.GlobalTrafficPolicy {
 	return &v13.GlobalTrafficPolicy{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         namespace,
 			CreationTimestamp: creationTimestamp,
@@ -238,7 +238,7 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedIdentity(t *testing.T) {
 			Addresses: []string{},
 		}
 		serviceForRollout = &coreV1.Service{
-			ObjectMeta: v12.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      foobarMetadataName + "-stable",
 				Namespace: foobarMetadataNamespace,
 			},
@@ -253,7 +253,7 @@ func TestModifyServiceEntryForNewServiceOrPodForExcludedIdentity(t *testing.T) {
 			},
 		}
 		serviceForDeployment = &coreV1.Service{
-			ObjectMeta: v12.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      foobarMetadataName,
 				Namespace: foobarMetadataNamespace,
 			},
@@ -560,7 +560,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	userGeneratedSE.Namespace = "ns"
 
 	admiralOverrideSE := v1alpha3.ServiceEntry{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
@@ -579,7 +579,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	}
 
 	seConfig := v1alpha3.ServiceEntry{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
@@ -589,7 +589,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	seConfig.Namespace = "ns"
 
 	dummySeConfig := v1alpha3.ServiceEntry{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		//nolint
@@ -599,7 +599,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	dummySeConfig.Namespace = "ns"
 
 	dummyDRConfig := v1alpha3.DestinationRule{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: istioNetworkingV1Alpha3.DestinationRule{
@@ -610,7 +610,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	dummyDRConfig.Namespace = "ns"
 
 	emptyEndpointDR := v1alpha3.DestinationRule{
-		ObjectMeta: v12.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: istioNetworkingV1Alpha3.DestinationRule{
@@ -631,13 +631,13 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	ctx := context.Background()
 
 	fakeIstioClient := istiofake.NewSimpleClientset()
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &seConfig, v12.CreateOptions{})
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &dummySeConfig, v12.CreateOptions{})
-	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &userGeneratedSE, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &seConfig, metav1.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &dummySeConfig, metav1.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Create(ctx, &userGeneratedSE, metav1.CreateOptions{})
 
-	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &userGeneratedDestinationRule, v12.CreateOptions{})
-	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &dummyDRConfig, v12.CreateOptions{})
-	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &emptyEndpointDR, v12.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &userGeneratedDestinationRule, metav1.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &dummyDRConfig, metav1.CreateOptions{})
+	fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Create(ctx, &emptyEndpointDR, metav1.CreateOptions{})
 
 	rc := &RemoteController{
 		ServiceEntryController: &istio.ServiceEntryController{
@@ -665,7 +665,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 			} else {
 				drName = getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
 			}
-			dr, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
+			dr, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -682,7 +682,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	destinationRuleNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, dnsPrefix string) error {
 		for _, serviceEntry := range serviceEntries {
 			drName := getIstioResourceName(serviceEntry.Hosts[0], "-default-dr")
-			_, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, v12.GetOptions{})
+			_, err := fakeIstioClient.NetworkingV1alpha3().DestinationRules("ns").Get(ctx, drName, metav1.GetOptions{})
 			if err != nil && !k8sErrors.IsNotFound(err) {
 				return err
 			}
@@ -693,7 +693,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	serviceEntryFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error {
 		for _, serviceEntry := range serviceEntries {
 			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
-			se, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
+			se, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, metav1.GetOptions{})
 			if err != nil {
 				return err
 			}
@@ -712,7 +712,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	serviceEntryNotFoundAssertion := func(ctx context.Context, fakeIstioClient *istiofake.Clientset, serviceEntries map[string]*istioNetworkingV1Alpha3.ServiceEntry, expectedAnnotations map[string]string, expectedLabels map[string]string) error {
 		for _, serviceEntry := range serviceEntries {
 			seName := getIstioResourceName(serviceEntry.Hosts[0], "-se")
-			_, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, v12.GetOptions{})
+			_, err := fakeIstioClient.NetworkingV1alpha3().ServiceEntries("ns").Get(ctx, seName, metav1.GetOptions{})
 			if err != nil && !k8sErrors.IsNotFound(err) {
 				return err
 			}
@@ -1199,7 +1199,7 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	sidecarController := &istio.SidecarController{}
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 	sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).
-		Create(context.TODO(), sidecar, v12.CreateOptions{})
+		Create(context.TODO(), sidecar, metav1.CreateOptions{})
 
 	remoteController := &RemoteController{}
 	remoteController.SidecarController = sidecarController
@@ -1247,7 +1247,7 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	}(ctx)
 	wg.Wait()
 
-	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
+	sidecarObj, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, common.GetWorkloadSidecarName(), metav1.GetOptions{})
 	if err == nil {
 		t.Errorf("expected 404 not found error but got nil")
 	}
@@ -1295,7 +1295,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	remoteController.SidecarController = sidecarController
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 	createdSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).
-		Create(context.TODO(), sidecar, v12.CreateOptions{})
+		Create(context.TODO(), sidecar, metav1.CreateOptions{})
 
 	if err != nil {
 		t.Errorf("unable to create sidecar using fake client, err: %v", err)
@@ -1305,7 +1305,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: map[string]string{"test.myservice.global": "1"}}
 		modifySidecarForLocalClusterCommunication(ctx, identityNamespace, assetIdentity, sidecarCacheEgressMap, remoteController)
 
-		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", v12.GetOptions{})
+		updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", metav1.GetOptions{})
 
 		if err != nil || updatedSidecar == nil {
 			t.Fail()
@@ -1711,7 +1711,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 
 	rollout.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
-			ObjectMeta: v12.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{"identity": "test"},
 			},
 		},
@@ -1727,7 +1727,7 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 	matchLabel4 := make(map[string]string)
 	matchLabel4["app"] = "test"
 
-	labelSelector4 := v12.LabelSelector{
+	labelSelector4 := metav1.LabelSelector{
 		MatchLabels: matchLabel4,
 	}
 	rollout.Spec.Selector = &labelSelector4
@@ -1850,7 +1850,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 
 	rollout.Spec = argo.RolloutSpec{
 		Template: coreV1.PodTemplateSpec{
-			ObjectMeta: v12.ObjectMeta{
+			ObjectMeta: metav1.ObjectMeta{
 				Labels: map[string]string{"identity": "test"},
 			},
 		},
@@ -1866,7 +1866,7 @@ func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
 	matchLabel4 := make(map[string]string)
 	matchLabel4["app"] = "test"
 
-	labelSelector4 := v12.LabelSelector{
+	labelSelector4 := metav1.LabelSelector{
 		MatchLabels: matchLabel4,
 	}
 	rollout.Spec.Selector = &labelSelector4
@@ -1970,8 +1970,8 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	meshPorts := map[string]uint32{"http": 8080}
 
 	weightedServices := map[string]*WeightedService{
-		ACTIVE_SERVICE:  {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: ACTIVE_SERVICE, Namespace: NAMESPACE}}},
-		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
+		ACTIVE_SERVICE:  {Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: ACTIVE_SERVICE, Namespace: NAMESPACE}}},
+		PREVIEW_SERVICE: {Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: PREVIEW_SERVICE, Namespace: NAMESPACE}}},
 	}
 
 	activeWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
@@ -2041,12 +2041,12 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	meshPorts := map[string]uint32{"http": 8080}
 
 	weightedServices := map[string]*WeightedService{
-		CANARY_SERVICE: {Weight: 10, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
-		STABLE_SERVICE: {Weight: 90, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
+		CANARY_SERVICE: {Weight: 10, Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
+		STABLE_SERVICE: {Weight: 90, Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
 	}
 	weightedServicesZeroWeight := map[string]*WeightedService{
-		CANARY_SERVICE: {Weight: 0, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
-		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: v12.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
+		CANARY_SERVICE: {Weight: 0, Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: CANARY_SERVICE, Namespace: NAMESPACE}}},
+		STABLE_SERVICE: {Weight: 100, Service: &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: STABLE_SERVICE, Namespace: NAMESPACE}}},
 	}
 
 	wantedEndpoints := []*istioNetworkingV1Alpha3.WorkloadEntry{
@@ -2122,31 +2122,31 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 		identity1    = "identity1"
 		envStage     = "stage"
 
-		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
+		gtp = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp", Namespace: "namespace1", CreationTimestamp: metav1.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hello"}},
 		}}
 
-		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
+		gtp2 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp2", Namespace: "namespace1", CreationTimestamp: metav1.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp2"}},
 		}}
 
-		gtp7 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp7", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-45))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
+		gtp7 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp7", Namespace: "namespace1", CreationTimestamp: metav1.NewTime(time.Now().Add(time.Duration(-45))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp7"}},
 		}}
 
-		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
+		gtp3 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp3", Namespace: "namespace2", CreationTimestamp: metav1.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": envStage}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp3"}},
 		}}
 
-		gtp4 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp4", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "10"}}, Spec: model.GlobalTrafficPolicy{
+		gtp4 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp4", Namespace: "namespace1", CreationTimestamp: metav1.NewTime(time.Now().Add(time.Duration(-30))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "10"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp4"}},
 		}}
 
-		gtp5 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp5", Namespace: "namespace1", CreationTimestamp: v12.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
+		gtp5 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp5", Namespace: "namespace1", CreationTimestamp: metav1.NewTime(time.Now().Add(time.Duration(-15))), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "2"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp5"}},
 		}}
 
-		gtp6 = &v13.GlobalTrafficPolicy{ObjectMeta: v12.ObjectMeta{Name: "gtp6", Namespace: "namespace3", CreationTimestamp: v12.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "1000"}}, Spec: model.GlobalTrafficPolicy{
+		gtp6 = &v13.GlobalTrafficPolicy{ObjectMeta: metav1.ObjectMeta{Name: "gtp6", Namespace: "namespace3", CreationTimestamp: metav1.NewTime(time.Now()), Labels: map[string]string{"identity": identity1, "env": envStage, "priority": "1000"}}, Spec: model.GlobalTrafficPolicy{
 			Policy: []*model.TrafficPolicy{{DnsPrefix: "hellogtp6"}},
 		}}
 	)
@@ -2305,4 +2305,177 @@ func TestIsBlueGreenStrategy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
+
+	ctx := context.Background()
+	admiralParams := common.AdmiralParams{
+		LabelSet:      &common.LabelSet{},
+		SyncNamespace: "testns",
+	}
+	admiralParams.LabelSet.EnvKey = "admiral.io/env"
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	remoteRegistry := &RemoteRegistry{AdmiralCache: &AdmiralCache{}}
+	noVSIstioClient := istiofake.NewSimpleClientset()
+
+	newVS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "testvs",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test01.xyz"},
+		},
+	}
+	existingVS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "testvs",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.xyz"},
+		},
+	}
+
+	existingVSIstioClient := istiofake.NewSimpleClientset()
+	existingVSIstioClient.NetworkingV1alpha3().VirtualServices("testns").Create(ctx, &v1alpha3.VirtualService{Spec: istioNetworkingV1Alpha3.VirtualService{Hosts: []string{"old.host.xyz"}}, ObjectMeta: metav1.ObjectMeta{Name: "testvs"}}, metav1.CreateOptions{})
+
+	testcases := []struct {
+		name                               string
+		sourceToDestinations               *sourceToDestinations
+		dependencyProxyVirtualServiceCache *dependencyProxyVirtualServiceCache
+		sourceIdentity                     string
+		remoteController                   *RemoteController
+		expectedError                      error
+		expectedVS                         *v1alpha3.VirtualService
+	}{
+		{
+			name:                 "Given dependency proxy to generate VS, when dependencylookupCache is nil, then the func should return an error",
+			sourceToDestinations: nil,
+			expectedError:        fmt.Errorf("remoteRegistry.AdmiralCache.DependencyLookupCache is nil"),
+		},
+		{
+			name:                 "Given dependency proxy to generate VS, when dependencyProxyVirtualServiceCache is nil, then the func should return an error",
+			sourceToDestinations: &sourceToDestinations{},
+			expectedError:        fmt.Errorf("remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache is nil"),
+		},
+		{
+			name: "Given dependency proxy to generate VS, when the sourceIdentity is not in dependencylookupCache, then the func should not return an error",
+			sourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{
+					"testSource": {"testDestination"},
+				},
+				mutex: &sync.Mutex{},
+			},
+			dependencyProxyVirtualServiceCache: &dependencyProxyVirtualServiceCache{
+				identityVSCache: map[string]map[string]*v1alpha3.VirtualService{
+					"foobaz": {
+						"stage": newVS,
+					},
+				},
+				mutex: &sync.Mutex{},
+			},
+			sourceIdentity: "foobar",
+			expectedError:  nil,
+		},
+		{
+			name: "Given dependency proxy to generate VS, when the dependency is not in proxy virtual cache, then the func should not return an error",
+			sourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{
+					"testSource": {"testDestination"},
+				},
+				mutex: &sync.Mutex{},
+			},
+			dependencyProxyVirtualServiceCache: &dependencyProxyVirtualServiceCache{
+				identityVSCache: map[string]map[string]*v1alpha3.VirtualService{
+					"foobaz": {
+						"stage": newVS,
+					},
+				},
+				mutex: &sync.Mutex{},
+			},
+			sourceIdentity: "foobar",
+			expectedError:  nil,
+		},
+		{
+			name: "Given dependency proxy to generate VS, when the dependency is in proxy virtual cache and the VS does not already exists, then the func should create the VS and should not return an error",
+			sourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{
+					"testSource": {"testDestination"},
+				},
+				mutex: &sync.Mutex{},
+			},
+			dependencyProxyVirtualServiceCache: &dependencyProxyVirtualServiceCache{
+				identityVSCache: map[string]map[string]*v1alpha3.VirtualService{
+					"testDestination": {
+						"stage": newVS,
+					},
+				},
+				mutex: &sync.Mutex{},
+			},
+			remoteController: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: noVSIstioClient,
+				},
+			},
+			sourceIdentity: "testSource",
+			expectedError:  nil,
+			expectedVS:     newVS,
+		},
+		{
+			name: "Given dependency proxy to generate VS, when the dependency is in proxy virtual cache and the VS does already exists, then the func should update the VS and should not return an error",
+			sourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{
+					"testSource": {"testDestination"},
+				},
+				mutex: &sync.Mutex{},
+			},
+			dependencyProxyVirtualServiceCache: &dependencyProxyVirtualServiceCache{
+				identityVSCache: map[string]map[string]*v1alpha3.VirtualService{
+					"testDestination": {
+						"stage": existingVS,
+					},
+				},
+				mutex: &sync.Mutex{},
+			},
+			remoteController: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: existingVSIstioClient,
+				},
+			},
+			sourceIdentity: "testSource",
+			expectedError:  nil,
+			expectedVS:     existingVS,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.AdmiralCache.SourceToDestinations = tc.sourceToDestinations
+			remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache = tc.dependencyProxyVirtualServiceCache
+
+			err := generateProxyVirtualServiceForDependencies(context.Background(), remoteRegistry, tc.sourceIdentity, tc.remoteController)
+
+			if err != nil && tc.expectedError != nil {
+				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
+					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
+				}
+			} else if err != tc.expectedError {
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
+			}
+
+			if err == nil && tc.expectedVS != nil {
+				actualVS, err := tc.remoteController.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices("testns").Get(context.Background(), "testvs", metav1.GetOptions{})
+				if err != nil {
+					t.Errorf("test failed with error: %v", err)
+				}
+				if !reflect.DeepEqual(tc.expectedVS.Spec.Hosts, actualVS.Spec.Hosts) {
+					t.Errorf("expected %v, got %v", tc.expectedVS.Spec.Hosts, actualVS.Spec.Hosts)
+				}
+			}
+
+		})
+	}
+
 }

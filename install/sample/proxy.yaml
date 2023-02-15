@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    istio-injection: enabled
+  name: proxy
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-config
+  namespace: proxy
+data:
+  nginx.conf: |
+    events {
+      worker_connections  4096;  ## Default: 1024
+    }
+    http {
+      log_format upstreamlog '$server_name '
+                       'host - $host '
+                       '$scheme $proxy_add_x_forwarded_for '
+                       '$remote_addr [$time_local]'
+                       '"$request" $status $body_bytes_sent '
+                       '"$http_referer" "$http_user_agent"';
+      server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+
+        access_log /dev/stdout upstreamlog;
+
+        location /api/uuid {
+            proxy_pass 'https://httpbin.org/uuid';
+            proxy_buffering off;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-Host $host;
+            proxy_set_header X-Forwarded-Port $server_port;
+        }
+    
+      }
+    }
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-svc-stage
+  namespace: proxy
+spec:
+  selector:
+    app: proxy-deploy-stage
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: proxy-deploy-stage
+  name: proxy-deploy-stage
+  namespace: proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-deploy-stage
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        admiral.io/env: stage
+      labels:
+        app: proxy-deploy-stage
+        identity: proxy
+    spec:
+      volumes:
+        - name: proxy-config
+          configMap:
+            name: proxy-config
+      containers:
+        - image: nginx
+          name: nginx-gw
+          resources:
+            limits:
+              cpu: 20m
+              memory: 75Mi
+            requests:
+              cpu: 10m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /etc/nginx/nginx.conf
+              name: proxy-config
+              subPath: nginx.conf
+status: {}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-svc-qal
+  namespace: proxy
+spec:
+  selector:
+    app: proxy-deploy-qal
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: proxy-deploy-qal
+  name: proxy-deploy-qal
+  namespace: proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy-deploy-qal
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        admiral.io/env: qal
+      labels:
+        app: proxy-deploy-qal
+        identity: proxy
+    spec:
+      volumes:
+        - name: proxy-config
+          configMap:
+            name: proxy-config
+      containers:
+        - image: nginx
+          name: nginx-gw
+          resources:
+            limits:
+              cpu: 20m
+              memory: 75Mi
+            requests:
+              cpu: 10m
+              memory: 50Mi
+          volumeMounts:
+            - mountPath: /etc/nginx/nginx.conf
+              name: proxy-config
+              subPath: nginx.conf
+status: {}

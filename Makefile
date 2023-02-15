@@ -130,7 +130,9 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/rollout-canary > ./out/yaml/sample-greeting-rollout-canary.yaml
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
+	cp ./install/sample/proxy.yaml ./out/yaml/proxy.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
+	cp ./install/sample/depProxyExample.yaml ./out/yaml/depProxyExample.yaml
 	cp ./install/sample/greeting_preview.yaml ./out/yaml/greeting_preview.yaml
 	cp ./install/sample/gtp.yaml ./out/yaml/gtp.yaml
 	cp ./install/sample/gtp_failover.yaml ./out/yaml/gtp_failover.yaml

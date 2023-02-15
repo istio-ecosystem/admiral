@@ -1,0 +1,34 @@
+apiVersion: admiral.io/v1alpha1
+kind: DependencyProxy
+metadata:
+  name: dependency-proxy-httpbin-stage
+  namespace: admiral
+  annotations:
+    admiral.io/env: stage
+spec:
+  destination:
+    identity: httpbin
+    dns_suffix: "foo"
+    dns_prefixes:
+      - "test0"
+      - "test1"
+  proxy:
+    identity: proxy
+
+---
+apiVersion: admiral.io/v1alpha1
+kind: DependencyProxy
+metadata:
+  name: dependency-proxy-httpbin-qal
+  namespace: admiral
+  annotations:
+    admiral.io/env: qal
+spec:
+  destination:
+    identity: httpbin
+    dns_suffix: "foo"
+    dns_prefixes:
+      - "test2"
+      - "test3"
+  proxy:
+    identity: proxy

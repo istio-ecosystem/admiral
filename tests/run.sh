@@ -32,6 +32,10 @@ sleep 10
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
 ./test5.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
 ./test2.sh "webapp" "sample-rollout-canary" "greeting.canary"
+
+# Test Proxy VirtualService Call
+./test7.sh "webapp" "sample" "stage.httpbin.foo"
+
 #cleanup to fee up the pipeline minkube resources
 if [[ $IS_LOCAL == "false" ]]; then
   kubectl scale --replicas=0 deploy webapp -n sample
@@ -40,6 +44,7 @@ if [[ $IS_LOCAL == "false" ]]; then
   kubectl scale --replicas=0 rollout greeting -n sample-rollout-bluegreen
 fi
 ./test3.sh "grpc-client" "sample" "grpc-server" $install_dir
+
 ./test4.sh "webapp" "sample"
 # Testing routing policy
 ./test6.sh "sample" "1.13" $install_dir

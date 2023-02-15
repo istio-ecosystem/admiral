@@ -60,3 +60,19 @@ subjects:
   - kind: ServiceAccount
     name: admiral
     namespace: admiral-sync
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admiral-dependencyproxy-role-binding
+  namespace: admiral
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: admiral-dependencyproxy-role
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral
