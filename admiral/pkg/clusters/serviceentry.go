@@ -291,7 +291,7 @@ func generateProxyVirtualServiceForDependencies(ctx context.Context, remoteRegis
 	}
 	for _, dependency := range dependencies {
 		vs := remoteRegistry.AdmiralCache.DependencyProxyVirtualServiceCache.get(dependency)
-		if vs == nil || len(vs) == 0 {
+		if len(vs) == 0 {
 			continue
 		}
 		log.Infof("found dependency proxy virtual service for destination: %s, source: %s", dependency, sourceIdentity)
