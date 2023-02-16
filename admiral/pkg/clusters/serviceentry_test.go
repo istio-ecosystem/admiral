@@ -2479,3 +2479,265 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 	}
 
 }
+
+func TestReplaceEndpointSuffix(t *testing.T) {
+
+	testcases := []struct {
+		name              string
+		host              string
+		suffixes          []string
+		expectedEndpoints []string
+	}{
+		{
+			name:              "Given a host, if the host passed is empty, then the func should return an empty array",
+			host:              "",
+			suffixes:          []string{"foo"},
+			expectedEndpoints: []string{},
+		},
+		{
+			name:              "Given suffixes, if the suffixes passed are empty, then the func should return an empty array",
+			host:              "stage.foobar.global",
+			suffixes:          []string{},
+			expectedEndpoints: []string{},
+		},
+		{
+			name:              "Given a host and array of suffixes, if the hosts and suffixes passed are valid, then the func should return an array of endpoints with replaced suffix",
+			host:              "stage.foobar.global",
+			suffixes:          []string{"baz", "fuzz"},
+			expectedEndpoints: []string{"stage.foobar.baz", "stage.foobar.fuzz"},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := replaceEndpointSuffix(tc.host, tc.suffixes)
+			if !reflect.DeepEqual(actual, tc.expectedEndpoints) {
+				t.Errorf("expected %s, got %s", tc.expectedEndpoints, actual)
+			}
+		})
+	}
+
+}
+
+func TestCreateAdditionalEndpoints(t *testing.T) {
+
+	ctx := context.Background()
+	namespace := "testns"
+	admiralParams := common.AdmiralParams{
+		LabelSet:      &common.LabelSet{},
+		SyncNamespace: namespace,
+	}
+	admiralParams.LabelSet.EnvKey = "admiral.io/env"
+
+	vsRoutes := []*istioNetworkingV1Alpha3.HTTPRouteDestination{
+		{
+			Destination: &istioNetworkingV1Alpha3.Destination{
+				Host: "stage.test00.global",
+				Port: &istioNetworkingV1Alpha3.PortSelector{
+					Number: common.DefaultServiceEntryPort,
+				},
+			},
+		},
+	}
+
+	fooVS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "stage.test00.foo-vs",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
+			Http: []*istioNetworkingV1Alpha3.HTTPRoute{
+				{
+					Route: vsRoutes,
+				},
+			},
+		},
+	}
+
+	validIstioClient := istiofake.NewSimpleClientset()
+
+	testcases := []struct {
+		name                       string
+		serviceEntry               *istioNetworkingV1Alpha3.ServiceEntry
+		rc                         *RemoteController
+		additionalEndpointSuffixes []string
+		expectedError              error
+		expectedVS                 []*v1alpha3.VirtualService
+	}{
+		{
+			name:                       "Given SE and additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error and should not generate any additional endpoints",
+			additionalEndpointSuffixes: []string{},
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: istiofake.NewSimpleClientset(),
+				},
+			},
+			expectedError: nil,
+			expectedVS:    []*v1alpha3.VirtualService{},
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE is nil, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry object passed is nil"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is nil, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{},
+			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is nil"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is empty, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{}},
+			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is empty"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when valid SE and additional suffix params are passed, func should not return any error and create desired virtualservices",
+			additionalEndpointSuffixes: []string{"foo", "bar"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{"stage.test00.global"}},
+			expectedError:              nil,
+			expectedVS:                 []*v1alpha3.VirtualService{fooVS},
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: validIstioClient,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams.AdditionalEndpointSuffixes = tc.additionalEndpointSuffixes
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+
+			err := createAdditionalEndpoints(ctx, tc.serviceEntry, namespace, tc.rc)
+
+			if err != nil && tc.expectedError != nil {
+				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
+					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
+				}
+			} else if err != tc.expectedError {
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
+			}
+
+			if err == nil {
+				for _, vs := range tc.expectedVS {
+					actualVS, err := tc.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Get(context.Background(), vs.Name, metav1.GetOptions{})
+					if err != nil {
+						t.Errorf("test failed with error: %v", err)
+					}
+					if !reflect.DeepEqual(vs.Spec.Hosts, actualVS.Spec.Hosts) {
+						t.Errorf("expected %v, got %v", vs.Spec.Hosts, actualVS.Spec.Hosts)
+					}
+					if !reflect.DeepEqual(vs.Spec.Http, actualVS.Spec.Http) {
+						t.Errorf("expected %v, got %v", vs.Spec.Http, actualVS.Spec.Http)
+					}
+				}
+
+			}
+
+		})
+	}
+
+}
+
+func TestDeleteAdditionalEndpoints(t *testing.T) {
+
+	ctx := context.Background()
+	namespace := "testns"
+	admiralParams := common.AdmiralParams{
+		LabelSet:      &common.LabelSet{},
+		SyncNamespace: namespace,
+	}
+	admiralParams.LabelSet.EnvKey = "admiral.io/env"
+
+	fooVS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "stage.test00.foo-vs",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
+		},
+	}
+
+	validIstioClient := istiofake.NewSimpleClientset()
+	validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, fooVS, metav1.CreateOptions{})
+
+	testcases := []struct {
+		name                       string
+		serviceEntry               *istioNetworkingV1Alpha3.ServiceEntry
+		rc                         *RemoteController
+		additionalEndpointSuffixes []string
+		expectedError              error
+		expectedDeletedVSName      string
+	}{
+		{
+			name:                       "Given SE and additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error",
+			additionalEndpointSuffixes: []string{},
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: istiofake.NewSimpleClientset(),
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE is nil, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry object passed is nil"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is nil, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{},
+			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is nil"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is empty, func should return an error",
+			additionalEndpointSuffixes: []string{"foo"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{}},
+			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is empty"),
+		},
+		{
+			name:                       "Given SE and additional endpoint suffixes, when valid SE and additional suffix params are passed, func should not return any error and create desired virtualservices",
+			additionalEndpointSuffixes: []string{"foo", "bar"},
+			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{"stage.test00.global"}},
+			expectedError:              nil,
+			expectedDeletedVSName:      "stage.test00.foo-vs",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: validIstioClient,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams.AdditionalEndpointSuffixes = tc.additionalEndpointSuffixes
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+
+			err := deleteAdditionalEndpoints(ctx, tc.serviceEntry, namespace, tc.rc)
+
+			if err != nil && tc.expectedError != nil {
+				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
+					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
+				}
+			} else if err != tc.expectedError {
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
+			}
+
+			if err == nil && tc.expectedDeletedVSName != "" {
+				_, err := tc.rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Get(context.Background(), tc.expectedDeletedVSName, metav1.GetOptions{})
+				if err != nil && !k8sErrors.IsNotFound(err) {
+					t.Errorf("test failed as VS should have been deleted. error: %v", err)
+				}
+			}
+
+		})
+	}
+
+}

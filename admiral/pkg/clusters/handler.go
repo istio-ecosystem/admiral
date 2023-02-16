@@ -653,6 +653,20 @@ func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry)
 	return destructive, diff
 }
 
+func deleteVirtualService(ctx context.Context, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) error {
+	if exist == nil {
+		return fmt.Errorf("the VirtualService passed was nil")
+	}
+	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, exist.Name, metav1.DeleteOptions{})
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return fmt.Errorf("either VirtualService was already deleted, or it never existed")
+		}
+		return err
+	}
+	return nil
+}
+
 func deleteServiceEntry(ctx context.Context, exist *v1alpha3.ServiceEntry, namespace string, rc *RemoteController) {
 	if exist != nil {
 		err := rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(namespace).Delete(ctx, exist.Name, metav1.DeleteOptions{})

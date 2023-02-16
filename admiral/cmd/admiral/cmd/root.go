@@ -144,6 +144,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"If Routing Policy feature needs to be enabled")
 	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
 		"List of identities which should be excluded from getting processed")
+	rootCmd.PersistentFlags().StringArrayVar(&params.AdditionalEndpointSuffixes, "additional_endpoint_suffixes", []string{},
+		"Suffixes that Admiral should use to generate additional endpoints through VirtualServices")
 	return rootCmd
 }
 
