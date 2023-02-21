@@ -716,6 +716,7 @@ func createAdditionalEndpoints(ctx context.Context, serviceEntry *networking.Ser
 	}
 
 	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
+	//nolint
 	virtualService := createVirtualServiceSkeleton(vs, defaultVSName, namespace)
 	err := createOrUpdateVirtualService(ctx, rc, virtualService)
 	if err != nil {
