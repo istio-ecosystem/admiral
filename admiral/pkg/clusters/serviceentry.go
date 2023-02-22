@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	"gopkg.in/yaml.v2"
-	k8errors "k8s.io/apimachinery/pkg/api/errors"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -309,16 +309,29 @@ func generateProxyVirtualServiceForDependencies(ctx context.Context, remoteRegis
 	return nil
 }
 
-func createOrUpdateVirtualService(ctx context.Context, remoteController *RemoteController, virtualService *v1alpha3.VirtualService) error {
-	existingVS, err := remoteController.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(ctx, virtualService.Name, v12.GetOptions{})
-	if err != nil && k8errors.IsNotFound(err) {
-		log.Infof("virtualService %s not found", virtualService.Name)
-	}
-	err = addUpdateVirtualService(ctx, virtualService, existingVS, common.GetSyncNamespace(), remoteController)
+func getAdmiralGeneratedVirtualService(ctx context.Context, remoteController *RemoteController, listOptions v12.ListOptions,
+	namespace string) (*v1alpha3.VirtualService, error) {
+	existingVSList, err := remoteController.VirtualServiceController.IstioClient.NetworkingV1alpha3().
+		VirtualServices(namespace).List(ctx, listOptions)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	if existingVSList == nil {
+		return nil, fmt.Errorf("error fetching virtualservice with labels %s", listOptions.LabelSelector)
+	}
+	if len(existingVSList.Items) == 0 {
+		return nil, fmt.Errorf("no virtualservice found with labels %s", listOptions.LabelSelector)
+	}
+	var result *v1alpha3.VirtualService
+	for _, existingVS := range existingVSList.Items {
+		if isGeneratedByAdmiral(existingVS.Annotations) {
+			result = existingVS
+		}
+	}
+	if result == nil {
+		return nil, fmt.Errorf("no virtualservice found with labels %s and annotation %s=%s", listOptions.LabelSelector, resourceCreatedByAnnotationLabel, resourceCreatedByAnnotationValue)
+	}
+	return result, nil
 }
 
 //Does two things;
@@ -577,7 +590,7 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 						cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 
 						// Delete additional endpoints if any
-						err := deleteAdditionalEndpoints(ctx, seDr.ServiceEntry, syncNamespace, rc)
+						err := deleteAdditionalEndpoints(ctx, rc, identityId, env, syncNamespace)
 						if err != nil {
 							log.Error(err)
 						}
@@ -609,7 +622,7 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 
 							// Create additional endpoints if necessary
-							err := createAdditionalEndpoints(ctx, seDr.ServiceEntry, syncNamespace, rc)
+							err := createAdditionalEndpoints(ctx, rc, identityId, env, newServiceEntry.Spec.Hosts[0], syncNamespace)
 							if err != nil {
 								log.Error(err)
 							}
@@ -628,72 +641,87 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 	}
 }
 
+func getVirtualServiceListOptions(identity, env string) (v12.ListOptions, error) {
+	vsLabels := map[string]string{
+		common.GetWorkloadIdentifier(): identity,
+		common.GetEnvKey():             env,
+	}
+	labelSelector, err := labels.ValidatedSelectorFromSet(vsLabels)
+	if err != nil {
+		return v12.ListOptions{}, err
+	}
+	listOptions := v12.ListOptions{
+		LabelSelector: labelSelector.String(),
+	}
+	return listOptions, nil
+}
+
 // deleteAdditionalEndpoints deletes all the additional endpoints that were generated for this
 // ServiceEntry.
-func deleteAdditionalEndpoints(ctx context.Context, serviceEntry *networking.ServiceEntry, namespace string, rc *RemoteController) error {
+func deleteAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, namespace string) error {
 
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
 	if len(additionalEndpointSuffixes) <= 0 {
 		log.Debugf("no additional endpoints to delete as no additional endpoints suffixes were found")
 		return nil
 	}
-
-	if serviceEntry == nil {
-		return fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry object passed is nil")
+	if identity == "" {
+		return fmt.Errorf("failed deleting additional endpoints as identity passed is empty")
 	}
-	if serviceEntry.Hosts == nil {
-		return fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is nil")
-	}
-	if len(serviceEntry.Hosts) <= 0 {
-		return fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is empty")
+	if env == "" {
+		return fmt.Errorf("failed deleting additional endpoints as env passed is empty")
 	}
 
-	destinationHostName := serviceEntry.Hosts[0]
-
-	virtualServiceHostnames := replaceEndpointSuffix(destinationHostName, additionalEndpointSuffixes)
-	if len(virtualServiceHostnames) <= 0 {
-		return fmt.Errorf("failed deleting additional endpoints for serviceentry for SE host: '%s' and additional endpoint suffixes %s", destinationHostName, additionalEndpointSuffixes)
-	}
-
-	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
-	vsToDelete := &v1alpha3.VirtualService{
-		ObjectMeta: v12.ObjectMeta{
-			Name: defaultVSName,
-		},
-	}
-	err := deleteVirtualService(ctx, vsToDelete, namespace, rc)
+	listOptions, err := getVirtualServiceListOptions(identity, env)
 	if err != nil {
-		log.Infof(LogErrFormat, "Delete", "VirtualService", defaultVSName, rc.ClusterID, err)
+		return fmt.Errorf("failed deleting additional endpoints due to error %w", err)
+	}
+	vsToDelete, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
+	if err != nil {
 		return err
 	}
-	log.Infof(LogFormat, "Delete", "VirtualService", defaultVSName, rc.ClusterID, "Success")
+
+	err = deleteVirtualService(ctx, vsToDelete, namespace, rc)
+	if err != nil {
+		log.Infof(LogErrFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, err)
+		return err
+	}
+	log.Infof(LogFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, "Success")
 	return nil
 }
 
 // createAdditionalEndpoints creates additional endpoints of service defined in the ServiceEntry.
 // The list suffixes defined in admiralparams.AdditionalEndpointSuffixes will used to generate the endpoints
-func createAdditionalEndpoints(ctx context.Context, serviceEntry *networking.ServiceEntry, namespace string, rc *RemoteController) error {
+func createAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, destinationHostName, namespace string) error {
 
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
 	if len(additionalEndpointSuffixes) <= 0 {
 		log.Debugf("skipped generating additional endpoints as no additional endpoints suffixes were found")
 		return nil
 	}
-
-	if serviceEntry == nil {
-		return fmt.Errorf("failed generating additional endpoints from serviceentry as service entry object passed is nil")
+	if identity == "" {
+		return fmt.Errorf("failed generating additional endpoints as identity passed is empty")
 	}
-	if serviceEntry.Hosts == nil {
-		return fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is nil")
-	}
-	if len(serviceEntry.Hosts) <= 0 {
-		return fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is empty")
+	if env == "" {
+		return fmt.Errorf("failed generating additional endpoints as env passed is empty")
 	}
 
-	destinationHostName := serviceEntry.Hosts[0]
-	virtualServiceHostnames := replaceEndpointSuffix(destinationHostName, additionalEndpointSuffixes)
-	if len(virtualServiceHostnames) <= 0 {
-		return fmt.Errorf("failed generating additional endpoints from serviceentry for SE host: '%s' and additional endpoint suffixes %s", destinationHostName, additionalEndpointSuffixes)
+	listOptions, err := getVirtualServiceListOptions(identity, env)
+	if err != nil {
+		return fmt.Errorf("failed generating additional endpoints due to error %w", err)
+	}
+	existingVS, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
+	if err != nil {
+		log.Warn(err.Error())
+	}
+
+	virtualServiceHostnames := make([]string, 0)
+	for _, suffix := range additionalEndpointSuffixes {
+		hostName := common.GetCnameVal([]string{env, identity, suffix})
+		virtualServiceHostnames = append(virtualServiceHostnames, hostName)
+	}
+	if len(virtualServiceHostnames) == 0 {
+		return fmt.Errorf("failed generating additional endpoints for suffixes %s", additionalEndpointSuffixes)
 	}
 
 	vsRoutes := []*networking.HTTPRouteDestination{
@@ -718,30 +746,18 @@ func createAdditionalEndpoints(ctx context.Context, serviceEntry *networking.Ser
 	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
 	//nolint
 	virtualService := createVirtualServiceSkeleton(vs, defaultVSName, namespace)
-	err := createOrUpdateVirtualService(ctx, rc, virtualService)
+	// Add labels and create/update VS
+	vsLabels := map[string]string{
+		common.GetWorkloadIdentifier(): identity,
+		common.GetEnvKey():             env,
+	}
+	virtualService.Labels = vsLabels
+	err = addUpdateVirtualService(ctx, virtualService, existingVS, namespace, rc)
 	if err != nil {
 		return fmt.Errorf("failed generating additional endpoints from serviceentry due to error: %w", err)
 	}
 
 	return nil
-}
-
-func replaceEndpointSuffix(host string, suffixes []string) []string {
-	if host == "" {
-		return []string{}
-	}
-	if len(suffixes) <= 0 {
-		return []string{}
-	}
-
-	endpoints := make([]string, 0)
-	splits := strings.Split(host, ".")
-	for _, suffix := range suffixes {
-		splits[len(splits)-1] = suffix
-		endpoints = append(endpoints, strings.Join(splits, "."))
-	}
-
-	return endpoints
 }
 
 func isGeneratedByAdmiral(annotations map[string]string) bool {

@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/google/go-cmp/cmp"
@@ -2480,51 +2481,14 @@ func TestGenerateProxyVirtualServiceForDependencies(t *testing.T) {
 
 }
 
-func TestReplaceEndpointSuffix(t *testing.T) {
-
-	testcases := []struct {
-		name              string
-		host              string
-		suffixes          []string
-		expectedEndpoints []string
-	}{
-		{
-			name:              "Given a host, if the host passed is empty, then the func should return an empty array",
-			host:              "",
-			suffixes:          []string{"foo"},
-			expectedEndpoints: []string{},
-		},
-		{
-			name:              "Given suffixes, if the suffixes passed are empty, then the func should return an empty array",
-			host:              "stage.foobar.global",
-			suffixes:          []string{},
-			expectedEndpoints: []string{},
-		},
-		{
-			name:              "Given a host and array of suffixes, if the hosts and suffixes passed are valid, then the func should return an array of endpoints with replaced suffix",
-			host:              "stage.foobar.global",
-			suffixes:          []string{"baz", "fuzz"},
-			expectedEndpoints: []string{"stage.foobar.baz", "stage.foobar.fuzz"},
-		},
-	}
-
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual := replaceEndpointSuffix(tc.host, tc.suffixes)
-			if !reflect.DeepEqual(actual, tc.expectedEndpoints) {
-				t.Errorf("expected %s, got %s", tc.expectedEndpoints, actual)
-			}
-		})
-	}
-
-}
-
 func TestCreateAdditionalEndpoints(t *testing.T) {
 
 	ctx := context.Background()
 	namespace := "testns"
 	admiralParams := common.AdmiralParams{
-		LabelSet:      &common.LabelSet{},
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+		},
 		SyncNamespace: namespace,
 	}
 	admiralParams.LabelSet.EnvKey = "admiral.io/env"
@@ -2542,7 +2506,8 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 
 	fooVS := &v1alpha3.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "stage.test00.foo-vs",
+			Name:   "stage.test00.foo-vs",
+			Labels: map[string]string{"admiral.io/env": "stage", "identity": "test00"},
 		},
 		Spec: istioNetworkingV1Alpha3.VirtualService{
 			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
@@ -2558,8 +2523,10 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 
 	testcases := []struct {
 		name                       string
-		serviceEntry               *istioNetworkingV1Alpha3.ServiceEntry
 		rc                         *RemoteController
+		identity                   string
+		env                        string
+		destinationHostName        string
 		additionalEndpointSuffixes []string
 		expectedError              error
 		expectedVS                 []*v1alpha3.VirtualService
@@ -2576,26 +2543,24 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 			expectedVS:    []*v1alpha3.VirtualService{},
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE is nil, func should return an error",
+			name:                       "Given additional endpoint suffixes, when passed identity is empty, func should return an error",
+			identity:                   "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry object passed is nil"),
+			expectedError:              fmt.Errorf("failed generating additional endpoints as identity passed is empty"),
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is nil, func should return an error",
+			name:                       "Given additional endpoint suffixes, when passed env is empty, func should return an error",
+			identity:                   "test00",
+			env:                        "",
 			additionalEndpointSuffixes: []string{"foo"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{},
-			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is nil"),
+			expectedError:              fmt.Errorf("failed generating additional endpoints as env passed is empty"),
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is empty, func should return an error",
-			additionalEndpointSuffixes: []string{"foo"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{}},
-			expectedError:              fmt.Errorf("failed generating additional endpoints from serviceentry as service entry hosts is empty"),
-		},
-		{
-			name:                       "Given SE and additional endpoint suffixes, when valid SE and additional suffix params are passed, func should not return any error and create desired virtualservices",
+			name:                       "Given additional endpoint suffixes, when valid identity,env and additional suffix params are passed, func should not return any error and create desired virtualservices",
 			additionalEndpointSuffixes: []string{"foo", "bar"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{"stage.test00.global"}},
+			identity:                   "test00",
+			env:                        "stage",
+			destinationHostName:        "stage.test00.global",
 			expectedError:              nil,
 			expectedVS:                 []*v1alpha3.VirtualService{fooVS},
 			rc: &RemoteController{
@@ -2612,7 +2577,7 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
 
-			err := createAdditionalEndpoints(ctx, tc.serviceEntry, namespace, tc.rc)
+			err := createAdditionalEndpoints(ctx, tc.rc, tc.identity, tc.env, tc.destinationHostName, namespace)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
@@ -2634,6 +2599,9 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 					if !reflect.DeepEqual(vs.Spec.Http, actualVS.Spec.Http) {
 						t.Errorf("expected %v, got %v", vs.Spec.Http, actualVS.Spec.Http)
 					}
+					if !reflect.DeepEqual(vs.Labels, actualVS.Labels) {
+						t.Errorf("expected %v, got %v", vs.Labels, actualVS.Labels)
+					}
 				}
 
 			}
@@ -2648,14 +2616,18 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 	ctx := context.Background()
 	namespace := "testns"
 	admiralParams := common.AdmiralParams{
-		LabelSet:      &common.LabelSet{},
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+		},
 		SyncNamespace: namespace,
 	}
 	admiralParams.LabelSet.EnvKey = "admiral.io/env"
 
 	fooVS := &v1alpha3.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "stage.test00.foo-vs",
+			Name:        "stage.test00.foo-vs",
+			Labels:      map[string]string{"admiral.io/env": "stage", "identity": "test00"},
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: istioNetworkingV1Alpha3.VirtualService{
 			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
@@ -2667,14 +2639,15 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 
 	testcases := []struct {
 		name                       string
-		serviceEntry               *istioNetworkingV1Alpha3.ServiceEntry
+		identity                   string
+		env                        string
 		rc                         *RemoteController
 		additionalEndpointSuffixes []string
 		expectedError              error
 		expectedDeletedVSName      string
 	}{
 		{
-			name:                       "Given SE and additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error",
+			name:                       "Given additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error",
 			additionalEndpointSuffixes: []string{},
 			rc: &RemoteController{
 				VirtualServiceController: &istio.VirtualServiceController{
@@ -2684,26 +2657,35 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE is nil, func should return an error",
+			name:                       "Given additional endpoint suffixes, when passed identity is empty, func should return an error",
+			identity:                   "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry object passed is nil"),
+			expectedError:              fmt.Errorf("failed deleting additional endpoints as identity passed is empty"),
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is nil, func should return an error",
+			name:                       "Given additional endpoint suffixes, when passed env is empty, func should return an error",
+			identity:                   "test00",
+			env:                        "",
 			additionalEndpointSuffixes: []string{"foo"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{},
-			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is nil"),
+			expectedError:              fmt.Errorf("failed deleting additional endpoints as env passed is empty"),
 		},
 		{
-			name:                       "Given SE and additional endpoint suffixes, when passed SE's hosts is empty, func should return an error",
-			additionalEndpointSuffixes: []string{"foo"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{}},
-			expectedError:              fmt.Errorf("failed deleting additional endpoints for serviceentry as service entry hosts is empty"),
-		},
-		{
-			name:                       "Given SE and additional endpoint suffixes, when valid SE and additional suffix params are passed, func should not return any error and create desired virtualservices",
+			name:                       "Given additional endpoint suffixes, when valid identity,env and additional suffix params are passed and VS intended to be deleted does not exists, func should return an error",
+			identity:                   "test00",
+			env:                        "stage",
 			additionalEndpointSuffixes: []string{"foo", "bar"},
-			serviceEntry:               &istioNetworkingV1Alpha3.ServiceEntry{Hosts: []string{"stage.test00.global"}},
+			expectedError:              fmt.Errorf("no virtualservice found with labels admiral.io/env=stage,identity=test00"),
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: istiofake.NewSimpleClientset(),
+				},
+			},
+		},
+		{
+			name:                       "Given additional endpoint suffixes, when valid identity,env and additional suffix params are passed, func should not return any error and create desired virtualservices",
+			identity:                   "test00",
+			env:                        "stage",
+			additionalEndpointSuffixes: []string{"foo", "bar"},
 			expectedError:              nil,
 			expectedDeletedVSName:      "stage.test00.foo-vs",
 			rc: &RemoteController{
@@ -2720,7 +2702,7 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
 
-			err := deleteAdditionalEndpoints(ctx, tc.serviceEntry, namespace, tc.rc)
+			err := deleteAdditionalEndpoints(ctx, tc.rc, tc.identity, tc.env, namespace)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
@@ -2740,4 +2722,89 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetAdmiralGeneratedVirtualService(t *testing.T) {
+
+	ctx := context.Background()
+	namespace := "testns"
+
+	fooVS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "stage.test00.foo-vs",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
+		},
+	}
+
+	testcases := []struct {
+		name           string
+		labels         map[string]string
+		annotations    map[string]string
+		virtualService *v1alpha3.VirtualService
+		expectedError  error
+		expectedVS     *v1alpha3.VirtualService
+	}{
+		{
+			name:           "Given valid listOptions, when no VS match the listOption label, func should return an error",
+			labels:         make(map[string]string),
+			annotations:    make(map[string]string),
+			virtualService: fooVS,
+			expectedError:  fmt.Errorf("no virtualservice found with labels"),
+		},
+		{
+			name:           "Given valid listOptions, when VS matches the listOption labels and it is not created by admiral, func should return an error",
+			labels:         map[string]string{"admiral.io/env": "stage", "identity": "test00"},
+			virtualService: fooVS,
+			expectedError:  fmt.Errorf("no virtualservice found with labels admiral.io/env=stage,identity=test00 and annotation app.kubernetes.io/created-by=admiral"),
+		},
+		{
+			name:           "Given valid listOptions, when VS matches the listOption labels and it is created by admiral, func should not return an error and return the VS",
+			labels:         map[string]string{"admiral.io/env": "stage", "identity": "test00"},
+			annotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
+			virtualService: fooVS,
+			expectedError:  nil,
+			expectedVS: &v1alpha3.VirtualService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "stage.test00.foo-vs",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			tc.virtualService.Labels = tc.labels
+			tc.virtualService.Annotations = tc.annotations
+			validIstioClient := istiofake.NewSimpleClientset()
+			validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, tc.virtualService, metav1.CreateOptions{})
+			rc := &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: validIstioClient,
+				},
+			}
+			labelSelector, _ := labels.ValidatedSelectorFromSet(tc.labels)
+			listOptions := metav1.ListOptions{
+				LabelSelector: labelSelector.String(),
+			}
+
+			actualVS, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
+
+			if err != nil && tc.expectedError != nil {
+				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
+					t.Errorf("expected %s, got %s", tc.expectedError.Error(), err.Error())
+				}
+			} else if err != tc.expectedError {
+				t.Errorf("expected %v, got %v", tc.expectedError, err)
+			}
+
+			if err == nil && actualVS != nil {
+				if actualVS.Name != tc.expectedVS.Name {
+					t.Errorf("expected virtualservice %s got %s", tc.expectedVS.Name, actualVS.Name)
+				}
+			}
+		})
+	}
 }
