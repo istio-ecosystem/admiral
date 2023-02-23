@@ -328,9 +328,6 @@ func getAdmiralGeneratedVirtualService(ctx context.Context, remoteController *Re
 			result = existingVS
 		}
 	}
-	if result == nil {
-		return nil, fmt.Errorf("no virtualservice found with labels %s and annotation %s=%s", listOptions.LabelSelector, resourceCreatedByAnnotationLabel, resourceCreatedByAnnotationValue)
-	}
 	return result, nil
 }
 
@@ -679,6 +676,11 @@ func deleteAdditionalEndpoints(ctx context.Context, rc *RemoteController, identi
 	vsToDelete, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
 	if err != nil {
 		return err
+	}
+
+	if vsToDelete == nil {
+		log.Debug("skipped additional endpoints cleanup as no virtualservice was found to delete")
+		return nil
 	}
 
 	err = deleteVirtualService(ctx, vsToDelete, namespace, rc)
