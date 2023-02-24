@@ -587,9 +587,11 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 						cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 
 						// Delete additional endpoints if any
-						err := deleteAdditionalEndpoints(ctx, rc, identityId, env, syncNamespace)
-						if err != nil {
-							log.Error(err)
+						if isAdditionalEndpointsEnabled() {
+							err := deleteAdditionalEndpoints(ctx, rc, identityId, env, syncNamespace)
+							if err != nil {
+								log.Error(err)
+							}
 						}
 
 					}
@@ -619,9 +621,11 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 
 							// Create additional endpoints if necessary
-							err := createAdditionalEndpoints(ctx, rc, identityId, env, newServiceEntry.Spec.Hosts[0], syncNamespace)
-							if err != nil {
-								log.Error(err)
+							if isAdditionalEndpointsEnabled() {
+								err := createAdditionalEndpoints(ctx, rc, identityId, env, newServiceEntry.Spec.Hosts[0], syncNamespace)
+								if err != nil {
+									log.Error(err)
+								}
 							}
 						}
 					}
@@ -636,6 +640,25 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 			}
 		}
 	}
+}
+
+func isAdditionalEndpointsEnabled() bool {
+	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
+	if len(additionalEndpointSuffixes) <= 0 {
+		log.Debugf("no additional endpoints configured")
+		return false
+	}
+	return true
+}
+
+func validateAdditionalEndpointParams(identity, env string) error {
+	if identity == "" {
+		return fmt.Errorf("identity passed is empty")
+	}
+	if env == "" {
+		return fmt.Errorf("env passed is empty")
+	}
+	return nil
 }
 
 func getVirtualServiceListOptions(identity, env string) (v12.ListOptions, error) {
@@ -657,16 +680,9 @@ func getVirtualServiceListOptions(identity, env string) (v12.ListOptions, error)
 // ServiceEntry.
 func deleteAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, namespace string) error {
 
-	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
-	if len(additionalEndpointSuffixes) <= 0 {
-		log.Debugf("no additional endpoints to delete as no additional endpoints suffixes were found")
-		return nil
-	}
-	if identity == "" {
-		return fmt.Errorf("failed deleting additional endpoints as identity passed is empty")
-	}
-	if env == "" {
-		return fmt.Errorf("failed deleting additional endpoints as env passed is empty")
+	err := validateAdditionalEndpointParams(identity, env)
+	if err != nil {
+		return fmt.Errorf("failed deleting additional endpoints due to error %w", err)
 	}
 
 	listOptions, err := getVirtualServiceListOptions(identity, env)
@@ -697,15 +713,10 @@ func deleteAdditionalEndpoints(ctx context.Context, rc *RemoteController, identi
 func createAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, destinationHostName, namespace string) error {
 
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
-	if len(additionalEndpointSuffixes) <= 0 {
-		log.Debugf("skipped generating additional endpoints as no additional endpoints suffixes were found")
-		return nil
-	}
-	if identity == "" {
-		return fmt.Errorf("failed generating additional endpoints as identity passed is empty")
-	}
-	if env == "" {
-		return fmt.Errorf("failed generating additional endpoints as env passed is empty")
+
+	err := validateAdditionalEndpointParams(identity, env)
+	if err != nil {
+		return fmt.Errorf("ailed generating additional endpoints due to error %w", err)
 	}
 
 	listOptions, err := getVirtualServiceListOptions(identity, env)

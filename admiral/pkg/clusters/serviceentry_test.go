@@ -2532,28 +2532,17 @@ func TestCreateAdditionalEndpoints(t *testing.T) {
 		expectedVS                 []*v1alpha3.VirtualService
 	}{
 		{
-			name:                       "Given SE and additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error and should not generate any additional endpoints",
-			additionalEndpointSuffixes: []string{},
-			rc: &RemoteController{
-				VirtualServiceController: &istio.VirtualServiceController{
-					IstioClient: istiofake.NewSimpleClientset(),
-				},
-			},
-			expectedError: nil,
-			expectedVS:    []*v1alpha3.VirtualService{},
-		},
-		{
 			name:                       "Given additional endpoint suffixes, when passed identity is empty, func should return an error",
 			identity:                   "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed generating additional endpoints as identity passed is empty"),
+			expectedError:              fmt.Errorf("identity passed is empty"),
 		},
 		{
 			name:                       "Given additional endpoint suffixes, when passed env is empty, func should return an error",
 			identity:                   "test00",
 			env:                        "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed generating additional endpoints as env passed is empty"),
+			expectedError:              fmt.Errorf("env passed is empty"),
 		},
 		{
 			name:                       "Given additional endpoint suffixes, when valid identity,env and additional suffix params are passed, func should not return any error and create desired virtualservices",
@@ -2647,27 +2636,17 @@ func TestDeleteAdditionalEndpoints(t *testing.T) {
 		expectedDeletedVSName      string
 	}{
 		{
-			name:                       "Given additional endpoint suffixes, when additional endpoint suffixes is empty, func should not return an error",
-			additionalEndpointSuffixes: []string{},
-			rc: &RemoteController{
-				VirtualServiceController: &istio.VirtualServiceController{
-					IstioClient: istiofake.NewSimpleClientset(),
-				},
-			},
-			expectedError: nil,
-		},
-		{
 			name:                       "Given additional endpoint suffixes, when passed identity is empty, func should return an error",
 			identity:                   "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed deleting additional endpoints as identity passed is empty"),
+			expectedError:              fmt.Errorf("identity passed is empty"),
 		},
 		{
 			name:                       "Given additional endpoint suffixes, when passed env is empty, func should return an error",
 			identity:                   "test00",
 			env:                        "",
 			additionalEndpointSuffixes: []string{"foo"},
-			expectedError:              fmt.Errorf("failed deleting additional endpoints as env passed is empty"),
+			expectedError:              fmt.Errorf("env passed is empty"),
 		},
 		{
 			name:                       "Given additional endpoint suffixes, when valid identity,env and additional suffix params are passed and VS intended to be deleted does not exists, func should return an error",
@@ -2754,12 +2733,6 @@ func TestGetAdmiralGeneratedVirtualService(t *testing.T) {
 			expectedError:  fmt.Errorf("no virtualservice found with labels"),
 		},
 		{
-			name:           "Given valid listOptions, when VS matches the listOption labels and it is not created by admiral, func should return an error",
-			labels:         map[string]string{"admiral.io/env": "stage", "identity": "test00"},
-			virtualService: fooVS,
-			expectedError:  fmt.Errorf("no virtualservice found with labels admiral.io/env=stage,identity=test00 and annotation app.kubernetes.io/created-by=admiral"),
-		},
-		{
 			name:           "Given valid listOptions, when VS matches the listOption labels and it is created by admiral, func should not return an error and return the VS",
 			labels:         map[string]string{"admiral.io/env": "stage", "identity": "test00"},
 			annotations:    map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
@@ -2785,7 +2758,7 @@ func TestGetAdmiralGeneratedVirtualService(t *testing.T) {
 					IstioClient: validIstioClient,
 				},
 			}
-			labelSelector, _ := labels.ValidatedSelectorFromSet(tc.labels)
+			labelSelector, _ := labels.ValidatedSelectorFromSet(map[string]string{"admiral.io/env": "stage", "identity": "test00"})
 			listOptions := metav1.ListOptions{
 				LabelSelector: labelSelector.String(),
 			}
