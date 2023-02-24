@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	"gopkg.in/yaml.v2"
-	k8errors "k8s.io/apimachinery/pkg/api/errors"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+	k8errors "k8s.io/apimachinery/pkg/api/errors"
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -304,10 +304,31 @@ func generateProxyVirtualServiceForDependencies(ctx context.Context, remoteRegis
 			if err != nil {
 				return fmt.Errorf("failed generating proxy VirtualService %s due to error: %w", v.Name, err)
 			}
-			log.Infof("successfully generated proxy VirtualService %s", v.Name)
 		}
 	}
 	return nil
+}
+
+func getAdmiralGeneratedVirtualService(ctx context.Context, remoteController *RemoteController, listOptions v12.ListOptions,
+	namespace string) (*v1alpha3.VirtualService, error) {
+	existingVSList, err := remoteController.VirtualServiceController.IstioClient.NetworkingV1alpha3().
+		VirtualServices(namespace).List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+	if existingVSList == nil {
+		return nil, fmt.Errorf("error fetching virtualservice with labels %s", listOptions.LabelSelector)
+	}
+	if len(existingVSList.Items) == 0 {
+		return nil, fmt.Errorf("no virtualservice found with labels %s", listOptions.LabelSelector)
+	}
+	var result *v1alpha3.VirtualService
+	for _, existingVS := range existingVSList.Items {
+		if isGeneratedByAdmiral(existingVS.Annotations) {
+			result = existingVS
+		}
+	}
+	return result, nil
 }
 
 //Does two things;
@@ -564,6 +585,15 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 					if !skipSEUpdate {
 						deleteServiceEntry(ctx, oldServiceEntry, syncNamespace, rc)
 						cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
+
+						// Delete additional endpoints if any
+						if isAdditionalEndpointsEnabled() {
+							err := deleteAdditionalEndpoints(ctx, rc, identityId, env, syncNamespace)
+							if err != nil {
+								log.Error(err)
+							}
+						}
+
 					}
 					if !skipDRUpdate {
 						// after deleting the service entry, destination rule also need to be deleted if the service entry host no longer exists
@@ -589,6 +619,14 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 							}
 							addUpdateServiceEntry(ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
+
+							// Create additional endpoints if necessary
+							if isAdditionalEndpointsEnabled() {
+								err := createAdditionalEndpoints(ctx, rc, identityId, env, newServiceEntry.Spec.Hosts[0], syncNamespace)
+								if err != nil {
+									log.Error(err)
+								}
+							}
 						}
 					}
 
@@ -602,6 +640,137 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 			}
 		}
 	}
+}
+
+func isAdditionalEndpointsEnabled() bool {
+	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
+	if len(additionalEndpointSuffixes) <= 0 {
+		log.Debugf("no additional endpoints configured")
+		return false
+	}
+	return true
+}
+
+func validateAdditionalEndpointParams(identity, env string) error {
+	if identity == "" {
+		return fmt.Errorf("identity passed is empty")
+	}
+	if env == "" {
+		return fmt.Errorf("env passed is empty")
+	}
+	return nil
+}
+
+func getVirtualServiceListOptions(identity, env string) (v12.ListOptions, error) {
+	vsLabels := map[string]string{
+		common.GetWorkloadIdentifier(): identity,
+		common.GetEnvKey():             env,
+	}
+	labelSelector, err := labels.ValidatedSelectorFromSet(vsLabels)
+	if err != nil {
+		return v12.ListOptions{}, err
+	}
+	listOptions := v12.ListOptions{
+		LabelSelector: labelSelector.String(),
+	}
+	return listOptions, nil
+}
+
+// deleteAdditionalEndpoints deletes all the additional endpoints that were generated for this
+// ServiceEntry.
+func deleteAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, namespace string) error {
+
+	err := validateAdditionalEndpointParams(identity, env)
+	if err != nil {
+		return fmt.Errorf("failed deleting additional endpoints due to error %w", err)
+	}
+
+	listOptions, err := getVirtualServiceListOptions(identity, env)
+	if err != nil {
+		return fmt.Errorf("failed deleting additional endpoints due to error %w", err)
+	}
+	vsToDelete, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
+	if err != nil {
+		return err
+	}
+
+	if vsToDelete == nil {
+		log.Debug("skipped additional endpoints cleanup as no virtualservice was found to delete")
+		return nil
+	}
+
+	err = deleteVirtualService(ctx, vsToDelete, namespace, rc)
+	if err != nil {
+		log.Infof(LogErrFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, err)
+		return err
+	}
+	log.Infof(LogFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, "Success")
+	return nil
+}
+
+// createAdditionalEndpoints creates additional endpoints of service defined in the ServiceEntry.
+// The list suffixes defined in admiralparams.AdditionalEndpointSuffixes will used to generate the endpoints
+func createAdditionalEndpoints(ctx context.Context, rc *RemoteController, identity, env, destinationHostName, namespace string) error {
+
+	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
+
+	err := validateAdditionalEndpointParams(identity, env)
+	if err != nil {
+		return fmt.Errorf("ailed generating additional endpoints due to error %w", err)
+	}
+
+	listOptions, err := getVirtualServiceListOptions(identity, env)
+	if err != nil {
+		return fmt.Errorf("failed generating additional endpoints due to error %w", err)
+	}
+	existingVS, err := getAdmiralGeneratedVirtualService(ctx, rc, listOptions, namespace)
+	if err != nil {
+		log.Warn(err.Error())
+	}
+
+	virtualServiceHostnames := make([]string, 0)
+	for _, suffix := range additionalEndpointSuffixes {
+		hostName := common.GetCnameVal([]string{env, identity, suffix})
+		virtualServiceHostnames = append(virtualServiceHostnames, hostName)
+	}
+	if len(virtualServiceHostnames) == 0 {
+		return fmt.Errorf("failed generating additional endpoints for suffixes %s", additionalEndpointSuffixes)
+	}
+
+	vsRoutes := []*networking.HTTPRouteDestination{
+		{
+			Destination: &networking.Destination{
+				Host: destinationHostName,
+				Port: &networking.PortSelector{
+					Number: common.DefaultServiceEntryPort,
+				},
+			},
+		},
+	}
+	vs := networking.VirtualService{
+		Hosts: virtualServiceHostnames,
+		Http: []*networking.HTTPRoute{
+			{
+				Route: vsRoutes,
+			},
+		},
+	}
+
+	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
+	//nolint
+	virtualService := createVirtualServiceSkeleton(vs, defaultVSName, namespace)
+	// Add labels and create/update VS
+	vsLabels := map[string]string{
+		common.GetWorkloadIdentifier(): identity,
+		common.GetEnvKey():             env,
+	}
+	virtualService.Labels = vsLabels
+	err = addUpdateVirtualService(ctx, virtualService, existingVS, namespace, rc)
+	if err != nil {
+		return fmt.Errorf("failed generating additional endpoints from serviceentry due to error: %w", err)
+	}
+
+	return nil
 }
 
 func isGeneratedByAdmiral(annotations map[string]string) bool {

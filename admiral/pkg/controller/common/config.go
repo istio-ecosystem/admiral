@@ -75,6 +75,10 @@ func GetLabelSet() *LabelSet {
 	return admiralParams.LabelSet
 }
 
+func GetAdditionalEndpointSuffixes() []string {
+	return admiralParams.AdditionalEndpointSuffixes
+}
+
 func GetHostnameSuffix() string {
 	return admiralParams.HostnameSuffix
 }
