@@ -2810,14 +2810,14 @@ func TestDoGenerateAdditionalEndpoints(t *testing.T) {
 			expectedResult:                 true,
 		},
 		{
-			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains is not in the rollout/deployment annotation, then the func should return false",
+			name:                           "Given additional endpoint suffixes and labels, when additional endpoint label filters do not include any key in labels, then it should return false",
 			labels:                         map[string]string{"foo": "bar"},
 			additionalEndpointSuffixes:     []string{"fuzz"},
 			additionalEndpointLabelFilters: []string{"baz"},
 			expectedResult:                 false,
 		},
 		{
-			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains the rollout/deployment annotation, then the func should return true",
+			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains one of the keys in the labels, then it should return true",
 			labels:                         map[string]string{"foo": "bar"},
 			additionalEndpointSuffixes:     []string{"fuzz"},
 			additionalEndpointLabelFilters: []string{"foo"},
