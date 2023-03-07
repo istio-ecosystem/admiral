@@ -784,7 +784,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries)
+			AddServiceEntriesWithDr(ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries, false)
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["se1"].Hosts = []string{tt.dnsPrefix + ".e2e.foo.global"}
 			}
@@ -2777,6 +2777,68 @@ func TestGetAdmiralGeneratedVirtualService(t *testing.T) {
 				if actualVS.Name != tc.expectedVS.Name {
 					t.Errorf("expected virtualservice %s got %s", tc.expectedVS.Name, actualVS.Name)
 				}
+			}
+		})
+	}
+}
+
+func TestDoGenerateAdditionalEndpoints(t *testing.T) {
+
+	testcases := []struct {
+		name                           string
+		labels                         map[string]string
+		additionalEndpointSuffixes     []string
+		additionalEndpointLabelFilters []string
+		expectedResult                 bool
+	}{
+		{
+			name:           "Given additional endpoint suffixes and labels, when no additional endpoint suffixes are set, then the func should return false",
+			labels:         map[string]string{"foo": "bar"},
+			expectedResult: false,
+		},
+		{
+			name:                       "Given additional endpoint suffixes and labels, when no additional endpoint labels filters are set, then the func should return false",
+			labels:                     map[string]string{"foo": "bar"},
+			additionalEndpointSuffixes: []string{"fuzz"},
+			expectedResult:             false,
+		},
+		{
+			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains '*', then the func should return true",
+			labels:                         map[string]string{"foo": "bar"},
+			additionalEndpointSuffixes:     []string{"fuzz"},
+			additionalEndpointLabelFilters: []string{"*"},
+			expectedResult:                 true,
+		},
+		{
+			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains is not in the rollout/deployment annotation, then the func should return false",
+			labels:                         map[string]string{"foo": "bar"},
+			additionalEndpointSuffixes:     []string{"fuzz"},
+			additionalEndpointLabelFilters: []string{"baz"},
+			expectedResult:                 false,
+		},
+		{
+			name:                           "Given additional endpoint suffixes and labels, when additional endpoint labels filters contains the rollout/deployment annotation, then the func should return true",
+			labels:                         map[string]string{"foo": "bar"},
+			additionalEndpointSuffixes:     []string{"fuzz"},
+			additionalEndpointLabelFilters: []string{"foo"},
+			expectedResult:                 true,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			admiralParams := common.AdmiralParams{
+				AdditionalEndpointSuffixes:     tc.additionalEndpointSuffixes,
+				AdditionalEndpointLabelFilters: tc.additionalEndpointLabelFilters,
+			}
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+
+			actual := doGenerateAdditionalEndpoints(tc.labels)
+
+			if actual != tc.expectedResult {
+				t.Errorf("expected %t, got %t", tc.expectedResult, actual)
 			}
 		})
 	}

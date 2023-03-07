@@ -29,30 +29,31 @@ type SidecarEgressMap struct {
 }
 
 type AdmiralParams struct {
-	ArgoRolloutsEnabled         bool
-	KubeconfigPath              string
-	CacheRefreshDuration        time.Duration
-	ClusterRegistriesNamespace  string
-	DependenciesNamespace       string
-	SyncNamespace               string
-	EnableSAN                   bool
-	SANPrefix                   string
-	SecretResolver              string
-	LabelSet                    *LabelSet
-	LogLevel                    int
-	HostnameSuffix              string
-	PreviewHostnamePrefix       string
-	MetricsEnabled              bool
-	WorkloadSidecarUpdate       string
-	WorkloadSidecarName         string
-	AdmiralStateCheckerName     string
-	DRStateStoreConfigPath      string
-	ServiceEntryIPPrefix        string
-	EnvoyFilterVersion          string
-	EnvoyFilterAdditionalConfig string
-	EnableRoutingPolicy         bool
-	ExcludedIdentityList        []string
-	AdditionalEndpointSuffixes  []string
+	ArgoRolloutsEnabled            bool
+	KubeconfigPath                 string
+	CacheRefreshDuration           time.Duration
+	ClusterRegistriesNamespace     string
+	DependenciesNamespace          string
+	SyncNamespace                  string
+	EnableSAN                      bool
+	SANPrefix                      string
+	SecretResolver                 string
+	LabelSet                       *LabelSet
+	LogLevel                       int
+	HostnameSuffix                 string
+	PreviewHostnamePrefix          string
+	MetricsEnabled                 bool
+	WorkloadSidecarUpdate          string
+	WorkloadSidecarName            string
+	AdmiralStateCheckerName        string
+	DRStateStoreConfigPath         string
+	ServiceEntryIPPrefix           string
+	EnvoyFilterVersion             string
+	EnvoyFilterAdditionalConfig    string
+	EnableRoutingPolicy            bool
+	ExcludedIdentityList           []string
+	AdditionalEndpointSuffixes     []string
+	AdditionalEndpointLabelFilters []string
 }
 
 func (b AdmiralParams) String() string {
