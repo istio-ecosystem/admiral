@@ -79,6 +79,10 @@ func GetAdditionalEndpointSuffixes() []string {
 	return admiralParams.AdditionalEndpointSuffixes
 }
 
+func GetAdditionalEndpointLabelFilters() []string {
+	return admiralParams.AdditionalEndpointLabelFilters
+}
+
 func GetHostnameSuffix() string {
 	return admiralParams.HostnameSuffix
 }

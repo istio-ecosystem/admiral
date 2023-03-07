@@ -83,22 +83,23 @@ func modifyServiceEntryForNewServiceOrPod(
 	}
 
 	var (
-		cname                  string
-		namespace              string
-		serviceInstance        *k8sV1.Service
-		rollout                *argo.Rollout
-		deployment             *k8sAppsV1.Deployment
-		start                  = time.Now()
-		gtpKey                 = common.ConstructGtpKey(env, sourceIdentity)
-		clusters               = remoteRegistry.GetClusterIds()
-		gtps                   = make(map[string][]*v1.GlobalTrafficPolicy)
-		weightedServices       = make(map[string]*WeightedService)
-		cnames                 = make(map[string]string)
-		sourceServices         = make(map[string]*k8sV1.Service)
-		sourceWeightedServices = make(map[string]map[string]*WeightedService)
-		sourceDeployments      = make(map[string]*k8sAppsV1.Deployment)
-		sourceRollouts         = make(map[string]*argo.Rollout)
-		serviceEntries         = make(map[string]*networking.ServiceEntry)
+		cname                                 string
+		namespace                             string
+		serviceInstance                       *k8sV1.Service
+		rollout                               *argo.Rollout
+		deployment                            *k8sAppsV1.Deployment
+		start                                 = time.Now()
+		gtpKey                                = common.ConstructGtpKey(env, sourceIdentity)
+		clusters                              = remoteRegistry.GetClusterIds()
+		gtps                                  = make(map[string][]*v1.GlobalTrafficPolicy)
+		weightedServices                      = make(map[string]*WeightedService)
+		cnames                                = make(map[string]string)
+		sourceServices                        = make(map[string]*k8sV1.Service)
+		sourceWeightedServices                = make(map[string]map[string]*WeightedService)
+		sourceDeployments                     = make(map[string]*k8sAppsV1.Deployment)
+		sourceRollouts                        = make(map[string]*argo.Rollout)
+		serviceEntries                        = make(map[string]*networking.ServiceEntry)
+		isAdditionalEndpointGenerationEnabled bool
 	)
 
 	for _, clusterId := range clusters {
@@ -193,17 +194,25 @@ func modifyServiceEntryForNewServiceOrPod(
 		var meshPorts map[string]uint32
 		blueGreenStrategy := isBlueGreenStrategy(sourceRollouts[sourceCluster])
 
+		var deploymentRolloutLabels map[string]string
 		if len(sourceDeployments) > 0 {
 			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
+			deployment = sourceDeployments[sourceCluster]
+			deploymentRolloutLabels = deployment.Labels
 		} else {
 			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
+			rollout := sourceRollouts[sourceCluster]
+			deploymentRolloutLabels = rollout.Labels
 		}
+
+		// check if additional endpoint generation is required
+		isAdditionalEndpointGenerationEnabled = doGenerateAdditionalEndpoints(deploymentRolloutLabels)
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
 				AddServiceEntriesWithDr(
 					ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-					map[string]*networking.ServiceEntry{key: serviceEntry})
+					map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled)
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
@@ -215,7 +224,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						updateEndpointsForBlueGreen(sourceRollouts[sourceCluster], sourceWeightedServices[sourceCluster], cnames, ep, sourceCluster, key)
 						AddServiceEntriesWithDr(
 							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry})
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled)
 						//swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -226,14 +235,14 @@ func modifyServiceEntryForNewServiceOrPod(
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						AddServiceEntriesWithDr(
 							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: se})
+							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled)
 					} else {
 						ep.Address = localFqdn
 						oldPorts := ep.Ports
 						ep.Ports = meshPorts
 						AddServiceEntriesWithDr(
 							ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry})
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled)
 						// swap it back to use for next iteration
 						ep.Address = clusterIngress
 						ep.Ports = oldPorts
@@ -270,7 +279,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterId, clusterId)
 	}
 
-	AddServiceEntriesWithDr(ctx, remoteRegistry, dependentClusters, serviceEntries)
+	AddServiceEntriesWithDr(ctx, remoteRegistry, dependentClusters, serviceEntries, isAdditionalEndpointGenerationEnabled)
 
 	util.LogElapsedTimeSince("WriteServiceEntryToDependentClusters", sourceIdentity, env, "", start)
 
@@ -510,7 +519,9 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 }
 
 //AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
-func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string, serviceEntries map[string]*networking.ServiceEntry) {
+func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
+	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool) {
+
 	cache := rr.AdmiralCache
 	syncNamespace := common.GetSyncNamespace()
 	for _, se := range serviceEntries {
@@ -587,11 +598,13 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 						cache.SeClusterCache.Delete(seDr.ServiceEntry.Hosts[0])
 
 						// Delete additional endpoints if any
-						if isAdditionalEndpointsEnabled() {
+						if isAdditionalEndpointsEnabled {
 							err := deleteAdditionalEndpoints(ctx, rc, identityId, env, syncNamespace)
 							if err != nil {
 								log.Error(err)
 							}
+						} else {
+							log.Infof(LogFormat, "Delete", "VirtualService", env+"."+identityId, sourceCluster, "skipped deleting additional endpoints through VirtualService in "+syncNamespace+" namespace")
 						}
 
 					}
@@ -621,11 +634,13 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 							cache.SeClusterCache.Put(newServiceEntry.Spec.Hosts[0], rc.ClusterID, rc.ClusterID)
 
 							// Create additional endpoints if necessary
-							if isAdditionalEndpointsEnabled() {
+							if isAdditionalEndpointsEnabled {
 								err := createAdditionalEndpoints(ctx, rc, identityId, env, newServiceEntry.Spec.Hosts[0], syncNamespace)
 								if err != nil {
 									log.Error(err)
 								}
+							} else {
+								log.Infof(LogFormat, "Create", "VirtualService", env+"."+identityId, sourceCluster, "skipped creating additional endpoints through VirtualService in "+syncNamespace+" namespace")
 							}
 						}
 					}
@@ -642,13 +657,28 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 	}
 }
 
-func isAdditionalEndpointsEnabled() bool {
+// This func returns a bool to indicate if additional endpoints generation is needed
+// based on the following conditions.
+// 1. Additional endpoint suffixes have been configured in the admiral params
+// 2. The rollout/deployment labels passed contains any of the allowed labels
+//    configured in the admiral params 'additional_endpoint_label_filters'
+func doGenerateAdditionalEndpoints(labels map[string]string) bool {
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
 	if len(additionalEndpointSuffixes) <= 0 {
 		log.Debugf("no additional endpoints configured")
 		return false
 	}
-	return true
+	// Check if admiral configured allowed labels are in the passed labels map
+	additionalEndpointAnnotationFilters := common.GetAdditionalEndpointLabelFilters()
+	for _, filter := range additionalEndpointAnnotationFilters {
+		if filter == "*" {
+			return true
+		}
+		if _, ok := labels[filter]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func validateAdditionalEndpointParams(identity, env string) error {

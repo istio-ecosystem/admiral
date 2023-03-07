@@ -146,6 +146,8 @@ func GetRootCmd(args []string) *cobra.Command {
 		"List of identities which should be excluded from getting processed")
 	rootCmd.PersistentFlags().StringArrayVar(&params.AdditionalEndpointSuffixes, "additional_endpoint_suffixes", []string{},
 		"Suffixes that Admiral should use to generate additional endpoints through VirtualServices")
+	rootCmd.PersistentFlags().StringArrayVar(&params.AdditionalEndpointLabelFilters, "additional_endpoint_label_filters", []string{},
+		"Labels that admiral will check on deployment/rollout before creating additional endpoints. '*' would indicate generating additional endpoints for all deployment/rollouts")
 	return rootCmd
 }
 
