@@ -32,14 +32,20 @@ func GetMeshPortAndLabelsFromDeploymentOrRollout(
 
 func GetMeshPortsForDeployment(clusterName string, destService *k8sV1.Service,
 	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
-	var meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	var meshPorts string
+	if destDeployment != nil {
+		meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	}
 	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
 	return ports
 }
 
 func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	destRollout *argo.Rollout) map[string]uint32 {
-	var meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	var meshPorts string
+	if destRollout != nil {
+		meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	}
 	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
 	return ports
 }

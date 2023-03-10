@@ -32,15 +32,15 @@ func TestGetMeshPorts(t *testing.T) {
 		meshK8sSvcPort              = k8sV1.ServicePort{Name: "mesh", Port: int32(annotatedPort)}
 		serviceMeshPorts            = []k8sV1.ServicePort{defaultK8sSvcPort, meshK8sSvcPort}
 		serviceMeshPortsOnlyDefault = []k8sV1.ServicePort{defaultK8sSvcPortNoName}
-		service                     = k8sV1.Service{
+		service                     = &k8sV1.Service{
 			ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 			Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPorts},
 		}
-		deployment = k8sAppsV1.Deployment{
+		deployment = &k8sAppsV1.Deployment{
 			Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
 				ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 			}}}
-		deploymentWithMultipleMeshPorts = k8sAppsV1.Deployment{
+		deploymentWithMultipleMeshPorts = &k8sAppsV1.Deployment{
 			Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
 				ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort) + "," + strconv.Itoa(annotatedSecondPort)}},
 			}}}
@@ -49,8 +49,8 @@ func TestGetMeshPorts(t *testing.T) {
 	testCases := []struct {
 		name        string
 		clusterName string
-		service     k8sV1.Service
-		deployment  k8sAppsV1.Deployment
+		service     *k8sV1.Service
+		deployment  *k8sAppsV1.Deployment
 		expected    map[string]uint32
 	}{
 		{
@@ -61,7 +61,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a http port if no port name is specified",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Port: int32(80), TargetPort: intstr.FromInt(annotatedPort)}}},
 			},
@@ -70,7 +70,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a http port if the port name doesn't start with a protocol name",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "hello-grpc", Port: int32(annotatedPort)}}},
 			},
@@ -79,7 +79,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a grpc port based on annotation",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc-service", Port: int32(annotatedPort)}}},
 			},
@@ -88,7 +88,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a grpc-web port based on annotation",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "grpc-web", Port: int32(annotatedPort)}}},
 			},
@@ -97,7 +97,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a http2 port based on annotation",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "http2", Port: int32(annotatedPort)}}},
 			},
@@ -106,11 +106,11 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a default port",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
 			},
-			deployment: k8sAppsV1.Deployment{
+			deployment: &k8sAppsV1.Deployment{
 				Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
@@ -118,11 +118,11 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return empty ports",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: nil},
 			},
-			deployment: k8sAppsV1.Deployment{
+			deployment: &k8sAppsV1.Deployment{
 				Spec: k8sAppsV1.DeploymentSpec{Template: coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
@@ -130,7 +130,7 @@ func TestGetMeshPorts(t *testing.T) {
 		},
 		{
 			name: "should return a http port if the port name doesn't start with a protocol name",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec: k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "http", Port: int32(annotatedPort)},
 					{Name: "grpc", Port: int32(annotatedSecondPort)}}},
@@ -138,11 +138,21 @@ func TestGetMeshPorts(t *testing.T) {
 			deployment: deploymentWithMultipleMeshPorts,
 			expected:   ports,
 		},
+		{
+			name: "should not panic when deployment is empty",
+			service: &k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec: k8sV1.ServiceSpec{Ports: []k8sV1.ServicePort{{Name: "http", Port: int32(annotatedPort)},
+					{Name: "grpc", Port: int32(annotatedSecondPort)}}},
+			},
+			deployment: nil,
+			expected:   ports,
+		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			meshPorts := GetMeshPortsForDeployment(c.clusterName, &c.service, &c.deployment)
+			meshPorts := GetMeshPortsForDeployment(c.clusterName, c.service, c.deployment)
 			if !reflect.DeepEqual(meshPorts, c.expected) {
 				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
 			}
@@ -273,11 +283,11 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 
 	serviceMeshPortsOnlyDefault := []k8sV1.ServicePort{defaultK8sSvcPortNoName}
 
-	service := k8sV1.Service{
+	service := &k8sV1.Service{
 		ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 		Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPorts},
 	}
-	rollout := argo.Rollout{
+	rollout := &argo.Rollout{
 		Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
 		}}}
@@ -291,8 +301,8 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 	testCases := []struct {
 		name        string
 		clusterName string
-		service     k8sV1.Service
-		rollout     argo.Rollout
+		service     *k8sV1.Service
+		rollout     *argo.Rollout
 		expected    map[string]uint32
 	}{
 		{
@@ -303,11 +313,11 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 		},
 		{
 			name: "should return a default port",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
 			},
-			rollout: argo.Rollout{
+			rollout: &argo.Rollout{
 				Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
@@ -315,21 +325,30 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 		},
 		{
 			name: "should return empty ports",
-			service: k8sV1.Service{
+			service: &k8sV1.Service{
 				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
 				Spec:       k8sV1.ServiceSpec{Ports: nil},
 			},
-			rollout: argo.Rollout{
+			rollout: &argo.Rollout{
 				Spec: argo.RolloutSpec{Template: coreV1.PodTemplateSpec{
 					ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}},
 				}}},
+			expected: emptyPorts,
+		},
+		{
+			name: "should not panic when rollout is nil",
+			service: &k8sV1.Service{
+				ObjectMeta: v1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sV1.ServiceSpec{Ports: nil},
+			},
+			rollout:  nil,
 			expected: emptyPorts,
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			meshPorts := GetMeshPortsForRollout(c.clusterName, &c.service, &c.rollout)
+			meshPorts := GetMeshPortsForRollout(c.clusterName, c.service, c.rollout)
 			if !reflect.DeepEqual(meshPorts, c.expected) {
 				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
 			}
