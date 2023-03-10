@@ -142,7 +142,7 @@ func TestGetMeshPorts(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			meshPorts := GetMeshPorts(c.clusterName, &c.service, &c.deployment)
+			meshPorts := GetMeshPortsForDeployment(c.clusterName, &c.service, &c.deployment)
 			if !reflect.DeepEqual(meshPorts, c.expected) {
 				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
 			}
@@ -334,5 +334,119 @@ func TestGetMeshPortsForRollout(t *testing.T) {
 				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
 			}
 		})
+	}
+}
+
+func TestGetMeshPortAndLabelsFromDeploymentOrRollout(t *testing.T) {
+	var (
+		service = &k8sV1.Service{
+			Spec: k8sV1.ServiceSpec{
+				Ports: []k8sV1.ServicePort{
+					{
+						Name: common.Http,
+						Port: 8090,
+					},
+				},
+			},
+		}
+		clusterNameWithExistingDeployment                       = "cluster_with_deployment-ppd-k8s"
+		clusterNameWithExistingRollout                          = "cluster_with_rollout-ppd-k8s"
+		clusterNameWithoutExistingRolloutOrDeployment           = "cluster_without_deployment_rollout-ppd-k8s"
+		deploymentByClusterNameForExistingClusterWithDeployment = map[string]*k8sAppsV1.Deployment{
+			clusterNameWithExistingDeployment: {
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{
+						"key": "value",
+					},
+				},
+			},
+		}
+		rolloutByClusterNameForExistingClusterWithRollout = map[string]*argo.Rollout{
+			clusterNameWithExistingRollout: {
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{
+						"key": "value",
+					},
+				},
+			},
+		}
+	)
+	cases := []struct {
+		name                string
+		cluster             string
+		serviceInstance     *k8sV1.Service
+		deploymentByCluster map[string]*k8sAppsV1.Deployment
+		rolloutsByCluster   map[string]*argo.Rollout
+		expectedMeshPort    map[string]uint32
+		expectedLabels      map[string]string
+	}{
+		{
+			name: "Given a deployment with labels exists in a cluster, " +
+				"When GetMeshPortAndLabelsFromDeploymentOrRollout is called with," +
+				"this cluster, with a valid service, " +
+				"Then, it should return mesh ports and labels",
+			cluster:             clusterNameWithExistingDeployment,
+			serviceInstance:     service,
+			deploymentByCluster: deploymentByClusterNameForExistingClusterWithDeployment,
+			rolloutsByCluster:   rolloutByClusterNameForExistingClusterWithRollout,
+			expectedMeshPort: map[string]uint32{
+				common.Http: 8090,
+			},
+			expectedLabels: map[string]string{
+				"key": "value",
+			},
+		},
+		{
+			name: "Given a rollout with labels exists in a cluster, " +
+				"When GetMeshPortAndLabelsFromDeploymentOrRollout is called with," +
+				"this cluster, with a valid service, " +
+				"Then, it should return mesh ports and labels",
+			cluster:             clusterNameWithExistingRollout,
+			serviceInstance:     service,
+			deploymentByCluster: deploymentByClusterNameForExistingClusterWithDeployment,
+			rolloutsByCluster:   rolloutByClusterNameForExistingClusterWithRollout,
+			expectedMeshPort: map[string]uint32{
+				common.Http: 8090,
+			},
+			expectedLabels: map[string]string{
+				"key": "value",
+			},
+		},
+		{
+			name: "Given neither a deployment nor a rollout with labels exists in a cluster, " +
+				"When GetMeshPortAndLabelsFromDeploymentOrRollout is called with," +
+				"this cluster, with a valid service, " +
+				"Then, it should return nil for mesh ports, and nil for labels",
+			cluster:             clusterNameWithoutExistingRolloutOrDeployment,
+			serviceInstance:     service,
+			deploymentByCluster: deploymentByClusterNameForExistingClusterWithDeployment,
+			rolloutsByCluster:   rolloutByClusterNameForExistingClusterWithRollout,
+			expectedMeshPort:    nil,
+			expectedLabels:      nil,
+		},
+		{
+			name: "Given neither a deployment nor a rollout with labels exists in a cluster, " +
+				"When GetMeshPortAndLabelsFromDeploymentOrRollout is called with," +
+				"this cluster, with a valid service, but empty deployment by cluster and rollout by cluster maps " +
+				"Then, it should return nil for mesh ports, and nil for labels",
+			cluster:             clusterNameWithoutExistingRolloutOrDeployment,
+			serviceInstance:     service,
+			deploymentByCluster: nil,
+			rolloutsByCluster:   nil,
+			expectedMeshPort:    nil,
+			expectedLabels:      nil,
+		},
+	}
+
+	for _, c := range cases {
+		meshPort, labels := GetMeshPortAndLabelsFromDeploymentOrRollout(
+			c.cluster, c.serviceInstance, c.deploymentByCluster, c.rolloutsByCluster,
+		)
+		if !reflect.DeepEqual(meshPort, c.expectedMeshPort) {
+			t.Errorf("expected: %v, got: %v", c.expectedMeshPort, meshPort)
+		}
+		if !reflect.DeepEqual(labels, c.expectedLabels) {
+			t.Errorf("expected: %v, got: %v", c.expectedLabels, labels)
+		}
 	}
 }

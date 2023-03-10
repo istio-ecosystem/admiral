@@ -125,7 +125,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				continue
 			}
 			namespace = deployment.Namespace
-			localMeshPorts := GetMeshPorts(rc.ClusterID, serviceInstance, deployment)
+			localMeshPorts := GetMeshPortsForDeployment(rc.ClusterID, serviceInstance, deployment)
 
 			cname = common.GetCname(deployment, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 			sourceDeployments[rc.ClusterID] = deployment
@@ -189,24 +189,24 @@ func modifyServiceEntryForNewServiceOrPod(
 	start = time.Now()
 
 	for sourceCluster, serviceInstance := range sourceServices {
-		localFqdn := serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
-		rc := remoteRegistry.GetRemoteController(sourceCluster)
-		var meshPorts map[string]uint32
-		blueGreenStrategy := isBlueGreenStrategy(sourceRollouts[sourceCluster])
+		var (
+			meshPorts         map[string]uint32
+			localFqdn         = serviceInstance.Name + common.Sep + serviceInstance.Namespace + common.DotLocalDomainSuffix
+			rc                = remoteRegistry.GetRemoteController(sourceCluster)
+			blueGreenStrategy = isBlueGreenStrategy(sourceRollouts[sourceCluster])
+		)
 
-		var deploymentRolloutLabels map[string]string
-		if len(sourceDeployments) > 0 {
-			meshPorts = GetMeshPorts(sourceCluster, serviceInstance, sourceDeployments[sourceCluster])
-			deployment = sourceDeployments[sourceCluster]
-			deploymentRolloutLabels = deployment.Labels
-		} else {
-			meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance, sourceRollouts[sourceCluster])
-			rollout := sourceRollouts[sourceCluster]
-			deploymentRolloutLabels = rollout.Labels
+		meshPorts, labels := GetMeshPortAndLabelsFromDeploymentOrRollout(
+			sourceCluster, serviceInstance, sourceDeployments, sourceRollouts,
+		)
+		if meshPorts == nil {
+			log.Infof("Unable to determine mesh ports for service=%s in cluster=%s", serviceInstance.Name, sourceCluster)
+			continue
 		}
-
-		// check if additional endpoint generation is required
-		isAdditionalEndpointGenerationEnabled = doGenerateAdditionalEndpoints(deploymentRolloutLabels)
+		if labels != nil {
+			// check if additional endpoint generation is required
+			isAdditionalEndpointGenerationEnabled = doGenerateAdditionalEndpoints(labels)
+		}
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 {
@@ -216,7 +216,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			}
 			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 			for _, ep := range serviceEntry.Endpoints {
-				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisoned, or is not up)
+				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisioned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
 					// Update endpoints with locafqdn for active and preview se of bluegreen rollout
 					if blueGreenStrategy {
