@@ -14,16 +14,38 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 )
 
-func GetMeshPorts(clusterName string, destService *k8sV1.Service,
+func GetMeshPortAndLabelsFromDeploymentOrRollout(
+	cluster string, serviceInstance *k8sV1.Service,
+	deploymentsByCluster map[string]*k8sAppsV1.Deployment,
+	rolloutsByCluster map[string]*argo.Rollout,
+) (portsByProtocol map[string]uint32, labels map[string]string) {
+	if len(deploymentsByCluster) > 0 && deploymentsByCluster[cluster] != nil {
+		deployment := deploymentsByCluster[cluster]
+		return GetMeshPortsForDeployment(cluster, serviceInstance, deployment), deployment.Labels
+	}
+	if len(rolloutsByCluster) > 0 && rolloutsByCluster[cluster] != nil {
+		rollout := rolloutsByCluster[cluster]
+		return GetMeshPortsForRollout(cluster, serviceInstance, rollout), rollout.Labels
+	}
+	return nil, nil
+}
+
+func GetMeshPortsForDeployment(clusterName string, destService *k8sV1.Service,
 	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
-	var meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	var meshPorts string
+	if destDeployment != nil {
+		meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	}
 	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
 	return ports
 }
 
 func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	destRollout *argo.Rollout) map[string]uint32 {
-	var meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	var meshPorts string
+	if destRollout != nil {
+		meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
+	}
 	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
 	return ports
 }
