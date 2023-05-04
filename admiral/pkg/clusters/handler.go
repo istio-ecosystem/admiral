@@ -30,6 +30,7 @@ import (
 const (
 	DefaultBaseEjectionTime         int64  = 300
 	DefaultConsecutiveGatewayErrors uint32 = 50
+	DefaultConsecutive5xxErrors     uint32 = 0
 	DefaultInterval                 int64  = 60
 	DefaultHTTP2MaxRequests         int32  = 1000
 	DefaultMaxRequestsPerConnection int32  = 100
@@ -142,7 +143,9 @@ func getOutlierDetection(se *networkingv1alpha3.ServiceEntry, locality string, g
 	outlierDetection := &networkingv1alpha3.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
-		Interval:                 &duration.Duration{Seconds: DefaultInterval},
+		// The default Consecutive5XXErrors is set to 5 in envoy, setting to 0 disables 5XX error outlier detection so that ConsecutiveGatewayErrors rule can get evaluated
+		Consecutive_5XxErrors: &wrappers.UInt32Value{Value: DefaultConsecutive5xxErrors},
+		Interval:              &duration.Duration{Seconds: DefaultInterval},
 	}
 
 	if gtpTrafficPolicy != nil && gtpTrafficPolicy.OutlierDetection != nil {

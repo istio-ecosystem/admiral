@@ -179,6 +179,7 @@ func TestGetDestinationRule(t *testing.T) {
 	outlierDetection := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: 300},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+		Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 		Interval:                 &duration.Duration{Seconds: 60},
 		MaxEjectionPercent:       100,
 	}
