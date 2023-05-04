@@ -109,10 +109,11 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 			"value": {Kind: &structpb.Value_StringValue{StringValue: envoyFilterStringConfig}},
 		},
 	}
-
+	
 	vmConfig := structpb.Struct{
 		Fields: map[string]*structpb.Value{
 			"runtime": {Kind: &structpb.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
+			"vm_id":   {Kind: &structpb.Value_StringValue{StringValue: routingPolicy.Spec.Plugin}},
 			"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
 				"local": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
 					"filename": {Kind: &structpb.Value_StringValue{StringValue: wasmPath}},

@@ -114,6 +114,10 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, envoyfilter3)
 
+	//TODO: Convert to table tests
+	envoyfiltervmid, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache, selectors)
+	vm_id := envoyfiltervmid.Spec.ConfigPatches[0].Patch.Value.Fields["typed_config"].GetStructValue().Fields["value"].GetStructValue().Fields["config"].GetStructValue().Fields["vm_config"].GetStructValue().Fields["vm_id"].GetStringValue()
+	assert.Equal(t, "test", vm_id)
 }
 
 func getSha1Error(key interface{}) (string, error) {
