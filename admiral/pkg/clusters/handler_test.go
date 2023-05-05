@@ -179,6 +179,7 @@ func TestGetDestinationRule(t *testing.T) {
 	outlierDetection := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: 300},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+		Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 		Interval:                 &duration.Duration{Seconds: 60},
 		MaxEjectionPercent:       100,
 	}
@@ -329,6 +330,7 @@ func TestGetOutlierDetection(t *testing.T) {
 	outlierDetection := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: DefaultConsecutive5xxErrors},
 		Interval:                 &duration.Duration{Seconds: DefaultInterval},
 		MaxEjectionPercent:       100,
 	}
@@ -336,6 +338,7 @@ func TestGetOutlierDetection(t *testing.T) {
 	outlierDetectionOneHostRemote := &v1alpha3.OutlierDetection{
 		BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
 		ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+		Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: DefaultConsecutive5xxErrors},
 		Interval:                 &duration.Duration{Seconds: DefaultInterval},
 		MaxEjectionPercent:       34,
 	}
@@ -437,6 +440,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			outlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
 				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 10},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
@@ -461,6 +465,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			outlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: 600},
 				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: DefaultConsecutiveGatewayErrors},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: DefaultConsecutive5xxErrors},
 				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
@@ -485,6 +490,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			outlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: 600},
 				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 				Interval:                 &duration.Duration{Seconds: DefaultInterval},
 				MaxEjectionPercent:       100,
 			},
@@ -510,6 +516,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			outlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: 600},
 				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 10},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 				Interval:                 &duration.Duration{Seconds: 60},
 				MaxEjectionPercent:       100,
 			},
