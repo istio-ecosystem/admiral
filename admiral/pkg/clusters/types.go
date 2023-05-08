@@ -643,6 +643,7 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 // helper function to handle add and delete for DeploymentHandler
 func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj *k8sAppsV1.Deployment, remoteRegistry *RemoteRegistry, clusterName string) {
 
+	log.Infof(LogFormat, event, "deployment", obj.Name, clusterName, "Received")
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
 
 	if len(globalIdentifier) == 0 {
