@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package admiral.global.v1alpha;
+package admiral.global.v1alpha1;
 
 option go_package = "model";
 

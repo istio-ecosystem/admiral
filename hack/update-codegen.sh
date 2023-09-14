@@ -30,7 +30,7 @@ chmod +x ${CODEGEN_PKG}/generate-groups.sh ##If you get a `no file or directory`
 
 ${CODEGEN_PKG}/generate-groups.sh all \
     github.com/istio-ecosystem/admiral/admiral/pkg/client github.com/istio-ecosystem/admiral/admiral/pkg/apis \
-    "admiral:v1" \
+    "admiral:v1,v1alpha1" \
     --output-base "${TEMP_DIR}" \
     --go-header-file ${SCRIPT_ROOT}/hack/boilerplate.go.txt
 

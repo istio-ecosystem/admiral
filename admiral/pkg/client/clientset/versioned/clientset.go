@@ -20,10 +20,10 @@ package versioned
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -32,18 +32,25 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	AdmiralV1() admiralv1.AdmiralV1Interface
+	AdmiralV1alpha1() admiralv1alpha1.AdmiralV1alpha1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	admiralV1 *admiralv1.AdmiralV1Client
+	admiralV1       *admiralv1.AdmiralV1Client
+	admiralV1alpha1 *admiralv1alpha1.AdmiralV1alpha1Client
 }
 
 // AdmiralV1 retrieves the AdmiralV1Client
 func (c *Clientset) AdmiralV1() admiralv1.AdmiralV1Interface {
 	return c.admiralV1
+}
+
+// AdmiralV1alpha1 retrieves the AdmiralV1alpha1Client
+func (c *Clientset) AdmiralV1alpha1() admiralv1alpha1.AdmiralV1alpha1Interface {
+	return c.admiralV1alpha1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -94,6 +101,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.admiralV1alpha1, err = admiralv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
@@ -107,7 +118,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	cs, err := NewForConfig(c)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	return cs
 }
@@ -116,6 +127,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.admiralV1 = admiralv1.New(c)
+	cs.admiralV1alpha1 = admiralv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
