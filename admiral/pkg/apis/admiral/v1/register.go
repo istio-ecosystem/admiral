@@ -13,7 +13,7 @@ import (
 // the name of the group and the version of the API
 var SchemeGroupVersion = schema.GroupVersion{
 	Group:   admiral.GroupName,
-	Version: "v1alpha1",
+	Version: "v1",
 }
 
 // create a SchemeBuilder which uses functions to add types to
