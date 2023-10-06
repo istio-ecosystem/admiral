@@ -32,10 +32,6 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 
 * [Scaling Service Mesh to an Enterprise Microservices Ecosystem](https://apiworld2019aidevworld2019.sched.com/event/SLIQ/pro-talk-scaling-service-mesh-to-an-enterprise-microservices-ecosystem)
 
-* [Admiral – Enabling Multi-Cluster Mesh](https://www.meetup.com/San-Diego-Cloud-Native-Computing-Meetup/events/262826967/)
-
-
-
 ## Collaboration and Communication
 
 [Admiral Slack Channel](https://istio.slack.com/archives/CT3F18T08) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
