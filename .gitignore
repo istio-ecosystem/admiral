@@ -1,7 +1,7 @@
 .idea
 .idea/vcs.xml
 
-out*
+out/*
 *.tar.gz
 *.out
 istio-*

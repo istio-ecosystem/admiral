@@ -24,4 +24,6 @@ type DependencyProxyExpansion interface{}
 
 type GlobalTrafficPolicyExpansion interface{}
 
+type OutlierDetectionExpansion interface{}
+
 type RoutingPolicyExpansion interface{}

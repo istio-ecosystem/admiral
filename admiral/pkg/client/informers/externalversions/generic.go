@@ -60,6 +60,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().DependencyProxies().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().GlobalTrafficPolicies().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("outlierdetections"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().OutlierDetections().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("routingpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().RoutingPolicies().Informer()}, nil
 
@@ -70,6 +72,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().DependencyProxies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().GlobalTrafficPolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("outlierdetections"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().OutlierDetections().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("routingpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().RoutingPolicies().Informer()}, nil
 

@@ -30,6 +30,8 @@ type Interface interface {
 	DependencyProxies() DependencyProxyInformer
 	// GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 	GlobalTrafficPolicies() GlobalTrafficPolicyInformer
+	// OutlierDetections returns a OutlierDetectionInformer.
+	OutlierDetections() OutlierDetectionInformer
 	// RoutingPolicies returns a RoutingPolicyInformer.
 	RoutingPolicies() RoutingPolicyInformer
 }
@@ -58,6 +60,11 @@ func (v *version) DependencyProxies() DependencyProxyInformer {
 // GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 func (v *version) GlobalTrafficPolicies() GlobalTrafficPolicyInformer {
 	return &globalTrafficPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// OutlierDetections returns a OutlierDetectionInformer.
+func (v *version) OutlierDetections() OutlierDetectionInformer {
+	return &outlierDetectionInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // RoutingPolicies returns a RoutingPolicyInformer.

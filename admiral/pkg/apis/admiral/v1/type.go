@@ -108,3 +108,29 @@ type DependencyProxyList struct {
 
 	Items []DependencyProxy `json:"items"`
 }
+
+// generic cdr object to wrap the OutlierDetection api
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type OutlierDetection struct {
+	meta_v1.TypeMeta   `json:",inline"`
+	meta_v1.ObjectMeta `json:"metadata"`
+	Spec               model.OutlierDetection `json:"spec"`
+	Status             OutlierDetectionStatus `json:"status"`
+}
+
+// FooStatus is the status for a Foo resource
+
+type OutlierDetectionStatus struct {
+	ClusterSynced int32  `json:"clustersSynced"`
+	State         string `json:"state"`
+}
+
+// OutlierDetectionList is a list of OutlierDetection resources
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type OutlierDetectionList struct {
+	meta_v1.TypeMeta `json:",inline"`
+	meta_v1.ListMeta `json:"metadata"`
+
+	Items []OutlierDetection `json:"items"`
+}

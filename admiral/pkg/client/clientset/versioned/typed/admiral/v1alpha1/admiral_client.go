@@ -31,6 +31,7 @@ type AdmiralV1alpha1Interface interface {
 	DependenciesGetter
 	DependencyProxiesGetter
 	GlobalTrafficPoliciesGetter
+	OutlierDetectionsGetter
 	RoutingPoliciesGetter
 }
 
@@ -49,6 +50,10 @@ func (c *AdmiralV1alpha1Client) DependencyProxies(namespace string) DependencyPr
 
 func (c *AdmiralV1alpha1Client) GlobalTrafficPolicies(namespace string) GlobalTrafficPolicyInterface {
 	return newGlobalTrafficPolicies(c, namespace)
+}
+
+func (c *AdmiralV1alpha1Client) OutlierDetections(namespace string) OutlierDetectionInterface {
+	return newOutlierDetections(c, namespace)
 }
 
 func (c *AdmiralV1alpha1Client) RoutingPolicies(namespace string) RoutingPolicyInterface {

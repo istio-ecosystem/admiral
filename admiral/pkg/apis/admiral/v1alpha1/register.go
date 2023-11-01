@@ -56,6 +56,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RoutingPolicyList{},
 		&DependencyProxy{},
 		&DependencyProxyList{},
+		&OutlierDetectionList{},
 	)
 
 	// register the type in the scheme

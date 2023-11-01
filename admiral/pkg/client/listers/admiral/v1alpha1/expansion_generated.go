@@ -42,6 +42,14 @@ type GlobalTrafficPolicyListerExpansion interface{}
 // GlobalTrafficPolicyNamespaceLister.
 type GlobalTrafficPolicyNamespaceListerExpansion interface{}
 
+// OutlierDetectionListerExpansion allows custom methods to be added to
+// OutlierDetectionLister.
+type OutlierDetectionListerExpansion interface{}
+
+// OutlierDetectionNamespaceListerExpansion allows custom methods to be added to
+// OutlierDetectionNamespaceLister.
+type OutlierDetectionNamespaceListerExpansion interface{}
+
 // RoutingPolicyListerExpansion allows custom methods to be added to
 // RoutingPolicyLister.
 type RoutingPolicyListerExpansion interface{}

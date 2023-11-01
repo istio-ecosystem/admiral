@@ -40,6 +40,10 @@ func (c *FakeAdmiralV1alpha1) GlobalTrafficPolicies(namespace string) v1alpha1.G
 	return &FakeGlobalTrafficPolicies{c, namespace}
 }
 
+func (c *FakeAdmiralV1alpha1) OutlierDetections(namespace string) v1alpha1.OutlierDetectionInterface {
+	return &FakeOutlierDetections{c, namespace}
+}
+
 func (c *FakeAdmiralV1alpha1) RoutingPolicies(namespace string) v1alpha1.RoutingPolicyInterface {
 	return &FakeRoutingPolicies{c, namespace}
 }
