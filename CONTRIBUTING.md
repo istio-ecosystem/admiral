@@ -14,18 +14,19 @@ cd admiral
 export ADMIRAL_HOME=$(pwd)
 ```
 * Run a [minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) k8s cluster using existing script (you can use any k8s cluster if one exists already)
-* Note: Recommend using k8s version 1.16.8 or above to work with recent istio version
+> **_NOTE:_** Recommend using k8s version 1.20.x or above to work with recent istio version
 ```bash
-$ADMIRAL_HOME/tests/create_cluster.sh 1.16.8
+$ADMIRAL_HOME/tests/create_cluster.sh 1.20.0
 export KUBECONFIG=~/.kube/config
 ```
 * Install [Prerequisites](./docs/Examples.md#Prerequisite) and make sure to install istio control plane in cluster. Alternatively, you can use the script to install istio control plane on the cluster created in previous step:
-                                                                                                   
-Mac: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 osx` 
+> **_NOTE:_** Please refer to the [following link](https://istio.io/latest/docs/releases/supported-releases/#support-status-of-istio-releases) to ensure you install the appropriate Istio version for your Kubernetes cluster version.
 
-Mac (Apple Silicon): `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 osx-arm64`
+Mac: `$ADMIRAL_HOME/tests/install_istio.sh 1.13.5 osx` 
 
-Linux: `$ADMIRAL_HOME/tests/install_istio.sh 1.7.4 linux`                                                                                            
+Mac (Apple Silicon): `$ADMIRAL_HOME/tests/install_istio.sh 1.13.5 osx-arm64`
+
+Linux: `$ADMIRAL_HOME/tests/install_istio.sh 1.13.5 linux`                                                                                            
 
 * Set up necessary permissions and configurations for Admiral
 
@@ -81,7 +82,7 @@ Single cluster integration tests can be run locally using minikube. By default i
 ```
 make gen-yaml
 cd $ADMIRAL_HOME/tests
-./run.sh "1.16.8" "1.7.4" "../out"
+./run.sh "1.20.0" "1.13.5" "../out"
 ```
 * Multi-cluster 
 ```
