@@ -5,6 +5,6 @@ package registry
 // or if given a cluster name, it will provide the configurations for all
 // the identities present in that cluster.
 type IdentityConfiguration interface {
-	GetByIdentity(identityAlias string) error
-	GetByCluster(clusterName string) error
+	GetByIdentityByName(identityAlias string) error
+	GetByClusterName(clusterName string) error
 }
