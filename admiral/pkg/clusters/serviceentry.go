@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	api "go.opentelemetry.io/otel/metric"
 	"math"
 	"math/rand"
 	"reflect"
@@ -81,7 +83,10 @@ func modifyServiceEntryForNewServiceOrPod(
 		log.Infof(LogFormat, event, env, sourceIdentity, "", "Processing skipped during cache warm up state")
 		return nil
 	}
-
+	totalConfigWriterEvents.Increment(api.WithAttributes(
+		attribute.Key("identity").String(sourceIdentity),
+		attribute.Key("environment").String(env),
+	))
 	var (
 		cname                                 string
 		namespace                             string
@@ -340,9 +345,9 @@ func getAdmiralGeneratedVirtualService(ctx context.Context, remoteController *Re
 	return result, nil
 }
 
-//Does two things;
-//i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
-//ii) Updates the global GTP cache with the selected GTP in i)
+// Does two things;
+// i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
+// ii) Updates the global GTP cache with the selected GTP in i)
 func updateGlobalGtpCache(cache *AdmiralCache, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy) {
 	defer util.LogElapsedTime("updateGlobalGtpCache", identity, env, "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
@@ -414,7 +419,7 @@ func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[str
 	}
 }
 
-//update endpoints for Argo rollouts specific Service Entries to account for traffic splitting (Canary strategy)
+// update endpoints for Argo rollouts specific Service Entries to account for traffic splitting (Canary strategy)
 func updateEndpointsForWeightedServices(serviceEntry *networking.ServiceEntry, weightedServices map[string]*WeightedService, clusterIngress string, meshPorts map[string]uint32) {
 	var endpoints = make([]*networking.WorkloadEntry, 0)
 	var endpointToReplace *networking.WorkloadEntry
@@ -518,7 +523,7 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 	return newSidecarObj
 }
 
-//AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
+// AddServiceEntriesWithDr will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool) {
 
@@ -659,9 +664,9 @@ func AddServiceEntriesWithDr(ctx context.Context, rr *RemoteRegistry, sourceClus
 
 // This func returns a bool to indicate if additional endpoints generation is needed
 // based on the following conditions.
-// 1. Additional endpoint suffixes have been configured in the admiral params
-// 2. The rollout/deployment labels passed contains any of the allowed labels
-//    configured in the admiral params 'additional_endpoint_label_filters'
+//  1. Additional endpoint suffixes have been configured in the admiral params
+//  2. The rollout/deployment labels passed contains any of the allowed labels
+//     configured in the admiral params 'additional_endpoint_label_filters'
 func doGenerateAdditionalEndpoints(labels map[string]string) bool {
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
 	if len(additionalEndpointSuffixes) <= 0 {
@@ -885,8 +890,8 @@ func loadServiceEntryCacheData(ctx context.Context, c admiral.ConfigMapControlle
 
 }
 
-//GetLocalAddressForSe gets a guarenteed unique local address for a serviceentry. Returns the address, True iff the configmap was updated false otherwise, and an error if any
-//Any error coupled with an empty string address means the method should be retried
+// GetLocalAddressForSe gets a guarenteed unique local address for a serviceentry. Returns the address, True iff the configmap was updated false otherwise, and an error if any
+// Any error coupled with an empty string address means the method should be retried
 func GetLocalAddressForSe(ctx context.Context, seName string, seAddressCache *ServiceEntryAddressStore, configMapController admiral.ConfigMapControllerInterface) (string, bool, error) {
 	var address = seAddressCache.EntryAddresses[seName]
 	if len(address) == 0 {
@@ -914,7 +919,7 @@ func GetServiceEntriesByCluster(ctx context.Context, clusterID string, remoteReg
 	}
 }
 
-//GenerateNewAddressAndAddToConfigMap an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
+// GenerateNewAddressAndAddToConfigMap an atomic fetch and update operation against the configmap (using K8s built in optimistic consistency mechanism via resource version)
 func GenerateNewAddressAndAddToConfigMap(ctx context.Context, seName string, configMapController admiral.ConfigMapControllerInterface) (string, error) {
 	//1. get cm, see if there. 2. gen new uq address. 3. put configmap. RETURN SUCCESSFULLY IFF CONFIGMAP PUT SUCCEEDS
 	cm, err := configMapController.GetConfigMap(ctx)
@@ -956,7 +961,7 @@ func GenerateNewAddressAndAddToConfigMap(ctx context.Context, seName string, con
 	return address, nil
 }
 
-//puts new data into an existing configmap. Providing the original is necessary to prevent fetch and update race conditions
+// puts new data into an existing configmap. Providing the original is necessary to prevent fetch and update race conditions
 func putServiceEntryStateFromConfigmap(ctx context.Context, c admiral.ConfigMapControllerInterface, originalConfigmap *k8sV1.ConfigMap, data *ServiceEntryAddressStore) error {
 	if originalConfigmap == nil {
 		return errors.New("configmap must not be nil")
