@@ -7,7 +7,7 @@ jobs:
   build:
     working_directory: /go/pkg/mod/github.com/admiral
     docker:
-    - image: circleci/golang:1.21
+    - image: cimg/go:1.21
     steps:
     - checkout
     - run:
