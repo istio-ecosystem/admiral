@@ -1,11 +1,6 @@
 module github.com/istio-ecosystem/admiral
 
 go 1.21
-<<<<<<< HEAD
-=======
-
-toolchain go1.22.3
->>>>>>> f40c681f880cad1a303206c1b03de536ca372db7
 
 require (
 	github.com/argoproj/argo-rollouts v1.2.1
