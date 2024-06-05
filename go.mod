@@ -33,6 +33,7 @@ require (
 	github.com/prometheus/common v0.53.0
 	go.opentelemetry.io/otel v1.27.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.49.0
+	go.opentelemetry.io/otel/metric v1.27.0
 	go.opentelemetry.io/otel/sdk/metric v1.27.0
 	google.golang.org/protobuf v1.34.1
 )
@@ -40,7 +41,6 @@ require (
 require (
 	github.com/cheekybits/is v0.0.0-20150225183255-68e9c0620927 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	go.opentelemetry.io/otel/metric v1.27.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.27.0 // indirect
 	go.opentelemetry.io/otel/trace v1.27.0 // indirect
 )
