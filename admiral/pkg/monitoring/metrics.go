@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"log"
+	"reflect"
 
 	api "go.opentelemetry.io/otel/metric"
 )
@@ -40,7 +41,7 @@ func (c *counter) Name() string {
 func newFloat64Counter(name, description string, opts *options) *counter {
 	ctx := context.TODO()
 	meter := defaultMeter
-	if opts.meter != nil {
+	if reflect.ValueOf(opts.meter).IsValid() {
 		meter = opts.meter
 	}
 	int64Counter, err := meter.Int64Counter(
