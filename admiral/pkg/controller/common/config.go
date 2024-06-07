@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/istio-ecosystem/admiral/admiral/pkg/monitoring"
 	"time"
 
 	"github.com/matryer/resync"
@@ -23,6 +24,10 @@ func InitializeConfig(params AdmiralParams) {
 		admiralParams = params
 		initHappened = true
 		InitializeMetrics()
+		err := monitoring.InitializeMonitoring()
+		if err != nil {
+			log.Errorf("failed to setup monitoring: %v", err)
+		}
 	})
 	if initHappened {
 		log.Info("InitializeConfig was called.")

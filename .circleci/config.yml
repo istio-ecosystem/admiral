@@ -5,9 +5,9 @@ orbs:
 
 jobs:
   build:
-    working_directory: /go/pkg/mod/github.com/admiral
+    working_directory: admiral
     docker:
-    - image: circleci/golang:1.17
+    - image: cimg/go:1.21
     steps:
     - checkout
     - run:
