@@ -6,8 +6,9 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
+
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
@@ -15,34 +16,96 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 )
 
+var (
+	CtxLogFormat         = "task=%v name=%v namespace=%s cluster=%s message=%v"
+	CtxLogFormatWithTime = "task=%v name=%v namespace=%s cluster=%s message=%v txTime=%v"
+	ConfigWriter         = "ConfigWriter"
+)
+
 const (
-	NamespaceKubeSystem           = "kube-system"
-	NamespaceIstioSystem          = "istio-system"
-	Env                           = "env"
-	Http                          = "http"
-	Grpc                          = "grpc"
-	GrpcWeb                       = "grpc-web"
-	Http2                         = "http2"
-	DefaultMtlsPort               = 15443
-	DefaultServiceEntryPort       = 80
-	Sep                           = "."
-	Dash                          = "-"
-	Slash                         = "/"
-	DotLocalDomainSuffix          = ".svc.cluster.local"
-	Mesh                          = "mesh"
-	MulticlusterIngressGateway    = "istio-multicluster-ingressgateway"
-	LocalAddressPrefix            = "240.0"
-	NodeRegionLabel               = "failure-domain.beta.kubernetes.io/region"
-	SpiffePrefix                  = "spiffe://"
-	SidecarEnabledPorts           = "traffic.sidecar.istio.io/includeInboundPorts"
-	Default                       = "default"
-	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
-	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
-	BlueGreenRolloutPreviewPrefix = "preview"
-	RolloutPodHashLabel           = "rollouts-pod-template-hash"
-	RolloutActiveServiceSuffix    = "active-service"
-	RolloutStableServiceSuffix    = "stable-service"
-	WASMPath                      = "wasmPath"
+	NamespaceKubeSystem            = "kube-system"
+	NamespaceIstioSystem           = "istio-system"
+	IstioIngressGatewayServiceName = "istio-ingressgateway"
+	Env                            = "env"
+	Http                           = "http"
+	Grpc                           = "grpc"
+	GrpcWeb                        = "grpc-web"
+	Http2                          = "http2"
+	DefaultMtlsPort                = 15443
+	DefaultServiceEntryPort        = 80
+	Sep                            = "."
+	Dash                           = "-"
+	Slash                          = "/"
+	DotLocalDomainSuffix           = ".svc.cluster.local"
+	AssetAlias                     = "assetAlias"
+	Mesh                           = "mesh"
+	MulticlusterIngressGateway     = "istio-multicluster-ingressgateway"
+	LocalAddressPrefix             = "240.0"
+	NodeRegionLabel                = "failure-domain.beta.kubernetes.io/region"
+	SpiffePrefix                   = "spiffe://"
+	SidecarEnabledPorts            = "traffic.sidecar.istio.io/includeInboundPorts"
+	Default                        = "default"
+	SidecarInjectAnnotation        = "sidecar.istio.io/inject"
+	AdmiralIgnoreAnnotation        = "admiral.io/ignore"
+	AdmiralEnvAnnotation           = "admiral.io/env"
+	AdmiralCnameCaseSensitive      = "admiral.io/cname-case-sensitive"
+	BlueGreenRolloutPreviewPrefix  = "preview"
+	RolloutPodHashLabel            = "rollouts-pod-template-hash"
+	RolloutActiveServiceSuffix     = "active-service"
+	RolloutStableServiceSuffix     = "stable-service"
+	RolloutRootServiceSuffix       = "root-service"
+	CanaryRolloutCanaryPrefix      = "canary"
+	WASMPath                       = "wasmPath"
+	AdmiralProfileDefault          = "default"
+	AdmiralProfilePerf             = "perf"
+	Cartographer                   = "cartographer"
+	CreatedBy                      = "createdBy"
+	CreatedFor                     = "createdFor"
+	CreatedType                    = "createdType"
+	CreatedForEnv                  = "createdForEnv"
+	IsDisabled                     = "isDisabled"
+	TransactionID                  = "transactionID"
+	RevisionNumber                 = "revisionNumber"
+	EnvoyKind                      = "EnvoyFilter"
+	EnvoyApiVersion                = "networking.istio.io/v1alpha3"
+	SlashSTARRule                  = "/*"
+	AppThrottleConfigVersion       = "v1"
+	EnvoyFilterLogLevel            = "info"
+	EnvoyFilterLogLocation         = "proxy"
+	EnvoyFilterLogFormat           = "json"
+	ADD                            = "Add"
+	UPDATE                         = "Update"
+	DELETE                         = "Delete"
+	AssetLabel                     = "asset"
+
+	RollingWindow = "ROLLING_WINDOW"
+
+	MeshService              = "MESH_SERVICE"
+	Deployment               = "deployment"
+	Rollout                  = "rollout"
+	GTP                      = "gtp"
+	HAController             = "ha-controller"
+	EventType                = "eventType"
+	ProcessingInProgress     = "ProcessingInProgress"
+	NotProcessed             = "NotProcessed"
+	Processed                = "Processed"
+	DependentClusterOverride = "dependentClusterOverride"
+	Received                 = "Received"
+	Retry                    = "Retry"
+	Forget                   = "Forget"
+
+	ClusterName            = "clusterName"
+	EventResourceType      = "eventResourceType"
+	OutlierDetection       = "OutlierDetection"
+	ClientConnectionConfig = "ClientConnectionConfig"
+
+	WasmPathValue = "/etc/istio/extensions/dynamicrouter.wasm"
+	AIREnvSuffix  = "-air"
+	MESHSUFFIX    = ".mesh"
+
+	LastUpdatedAt = "lastUpdatedAt"
+	IntuitTID     = "intuit_tid"
+	GTPCtrl       = "gtp-ctrl"
 )
 
 type Event int
@@ -56,9 +119,29 @@ const (
 type ResourceType string
 
 const (
-	VirtualService  ResourceType = "VirtualService"
-	DestinationRule ResourceType = "DestinationRule"
-	ServiceEntry    ResourceType = "ServiceEntry"
+	// Kubernetes/ARGO Resource Types
+	DeploymentResourceType ResourceType = "Deployment"
+	RolloutResourceType    ResourceType = "Rollout"
+	ServiceResourceType    ResourceType = "Service"
+	ConfigMapResourceType  ResourceType = "ConfigMap"
+	SecretResourceType     ResourceType = "Secret"
+	NodeResourceType       ResourceType = "Node"
+
+	// Admiral Resource Types
+	DependencyResourceType          ResourceType = "Dependency"
+	DependencyProxyResourceType     ResourceType = "DependencyProxy"
+	GlobalTrafficPolicyResourceType ResourceType = "GlobalTrafficPolicy"
+	RoutingPolicyResourceType       ResourceType = "RoutingPolicy"
+
+	// Istio Resource Types
+	VirtualServiceResourceType  ResourceType = "VirtualService"
+	DestinationRuleResourceType ResourceType = "DestinationRule"
+	ServiceEntryResourceType    ResourceType = "ServiceEntry"
+	EnvoyFilterResourceType     ResourceType = "EnvoyFilter"
+	SidecarResourceType         ResourceType = "Sidecar"
+
+	// Status
+	ReceivedStatus = "Received"
 )
 
 func GetPodGlobalIdentifier(pod *k8sV1.Pod) string {
@@ -190,9 +273,8 @@ func ConstructGtpKey(env, identity string) string {
 }
 
 func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
-	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
+	return metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
 }
-
 
 func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelector) bool {
 	if selector == nil || len(selector.MatchLabels) == 0 || len(serviceSelector) == 0 {
@@ -233,13 +315,14 @@ func GetRoutingPolicyIdentity(rp *v1.RoutingPolicy) string {
 func GetRoutingPolicyKey(rp *v1.RoutingPolicy) string {
 	return ConstructRoutingPolicyKey(GetRoutingPolicyEnv(rp), GetRoutingPolicyIdentity(rp))
 }
+
 // this function is exactly same as ConstructGtpKey.
 // Not reusing the same function to keep the methods associated with these two objects separate.
 func ConstructRoutingPolicyKey(env, identity string) string {
 	return fmt.Sprintf("%s.%s", env, identity)
 }
 
-func GetSha1 (key interface{}) (string, error) {
+func GetSha1(key interface{}) (string, error) {
 	bv, err := GetBytes(key)
 	if err != nil {
 		return "", err
@@ -250,7 +333,6 @@ func GetSha1 (key interface{}) (string, error) {
 	return sha[0:5], nil
 }
 
-
 func GetBytes(key interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -260,4 +342,3 @@ func GetBytes(key interface{}) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
-
