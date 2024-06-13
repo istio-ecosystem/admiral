@@ -702,7 +702,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			err := handleVirtualServiceEvent(ctx, c.vs, c.handler, c.event, common.VirtualService)
+			err := handleVirtualServiceEvent(ctx, c.vs, c.handler, c.event, common.VirtualServiceResourceType)
 			if err != c.expectedError {
 				t.Fatalf("Error mismatch, expected %v but got %v", c.expectedError, err)
 			}
