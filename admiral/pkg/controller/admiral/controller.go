@@ -105,7 +105,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	log.Infof("Informer caches synced for controller=%v, current keys=%v", c.name, c.informer.GetStore().ListKeys())
 
-	wait.Until(c.runWorker, 5 * time.Second, stopCh)
+	wait.Until(c.runWorker, 5*time.Second, stopCh)
 }
 
 func (c *Controller) runWorker() {
