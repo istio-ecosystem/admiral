@@ -223,7 +223,7 @@ func (dh *DestinationRuleHandler) Added(ctx context.Context, obj *v1alpha3.Desti
 		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(ctx, obj, dh, common.Add, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Add, common.DestinationRuleResourceType)
 }
 
 func (dh *DestinationRuleHandler) Updated(ctx context.Context, obj *v1alpha3.DestinationRule) {
@@ -235,7 +235,7 @@ func (dh *DestinationRuleHandler) Updated(ctx context.Context, obj *v1alpha3.Des
 		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(ctx, obj, dh, common.Update, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Update, common.DestinationRuleResourceType)
 }
 
 func (dh *DestinationRuleHandler) Deleted(ctx context.Context, obj *v1alpha3.DestinationRule) {
@@ -247,7 +247,7 @@ func (dh *DestinationRuleHandler) Deleted(ctx context.Context, obj *v1alpha3.Des
 		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	handleDestinationRuleEvent(ctx, obj, dh, common.Delete, common.DestinationRule)
+	handleDestinationRuleEvent(ctx, obj, dh, common.Delete, common.DestinationRuleResourceType)
 }
 
 func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) {
@@ -259,7 +259,7 @@ func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.Virtua
 		log.Infof(LogFormat, "Add", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(ctx, obj, vh, common.Add, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Add, common.VirtualServiceResourceType)
 	if err != nil {
 		log.Error(err)
 	}
@@ -274,7 +274,7 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 		log.Infof(LogFormat, "Update", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(ctx, obj, vh, common.Update, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Update, common.VirtualServiceResourceType)
 	if err != nil {
 		log.Error(err)
 	}
@@ -289,7 +289,7 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 		log.Infof(LogFormat, "Delete", "VirtualService", obj.Name, vh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
 		return
 	}
-	err := handleVirtualServiceEvent(ctx, obj, vh, common.Delete, common.VirtualService)
+	err := handleVirtualServiceEvent(ctx, obj, vh, common.Delete, common.VirtualServiceResourceType)
 	if err != nil {
 		log.Error(err)
 	}
@@ -614,7 +614,7 @@ func skipDestructiveUpdate(rc *RemoteController, new *v1alpha3.ServiceEntry, old
 	return skipDestructive, diff
 }
 
-//Diffs only endpoints
+// Diffs only endpoints
 func getServiceEntryDiff(new *v1alpha3.ServiceEntry, old *v1alpha3.ServiceEntry) (destructive bool, diff string) {
 	//we diff only if both objects exist
 	if old == nil || new == nil {
@@ -728,22 +728,22 @@ func deleteDestinationRule(ctx context.Context, exist *v1alpha3.DestinationRule,
 	}
 }
 
-//nolint
+// nolint
 func createServiceEntrySkeletion(se networkingv1alpha3.ServiceEntry, name string, namespace string) *v1alpha3.ServiceEntry {
 	return &v1alpha3.ServiceEntry{Spec: se, ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-//nolint
+// nolint
 func createSidecarSkeleton(sidecar networkingv1alpha3.Sidecar, name string, namespace string) *v1alpha3.Sidecar {
 	return &v1alpha3.Sidecar{Spec: sidecar, ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-//nolint
+// nolint
 func createDestinationRuleSkeletion(dr networkingv1alpha3.DestinationRule, name string, namespace string) *v1alpha3.DestinationRule {
 	return &v1alpha3.DestinationRule{Spec: dr, ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-//nolint
+// nolint
 func createVirtualServiceSkeleton(vs networkingv1alpha3.VirtualService, name string, namespace string) *v1alpha3.VirtualService {
 	return &v1alpha3.VirtualService{Spec: vs, ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 }
