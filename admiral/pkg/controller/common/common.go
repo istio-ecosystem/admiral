@@ -6,13 +6,20 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
+
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
 	log "github.com/sirupsen/logrus"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
+)
+
+var (
+	CtxLogFormat         = "task=%v name=%v namespace=%s cluster=%s message=%v"
+	CtxLogFormatWithTime = "task=%v name=%v namespace=%s cluster=%s message=%v txTime=%v"
+	ConfigWriter         = "ConfigWriter"
 )
 
 const (
@@ -190,9 +197,8 @@ func ConstructGtpKey(env, identity string) string {
 }
 
 func ShouldIgnoreResource(metadata v12.ObjectMeta) bool {
-	return  metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
+	return metadata.Annotations[AdmiralIgnoreAnnotation] == "true" || metadata.Labels[AdmiralIgnoreAnnotation] == "true"
 }
-
 
 func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelector) bool {
 	if selector == nil || len(selector.MatchLabels) == 0 || len(serviceSelector) == 0 {
@@ -233,13 +239,14 @@ func GetRoutingPolicyIdentity(rp *v1.RoutingPolicy) string {
 func GetRoutingPolicyKey(rp *v1.RoutingPolicy) string {
 	return ConstructRoutingPolicyKey(GetRoutingPolicyEnv(rp), GetRoutingPolicyIdentity(rp))
 }
+
 // this function is exactly same as ConstructGtpKey.
 // Not reusing the same function to keep the methods associated with these two objects separate.
 func ConstructRoutingPolicyKey(env, identity string) string {
 	return fmt.Sprintf("%s.%s", env, identity)
 }
 
-func GetSha1 (key interface{}) (string, error) {
+func GetSha1(key interface{}) (string, error) {
 	bv, err := GetBytes(key)
 	if err != nil {
 		return "", err
@@ -250,7 +257,6 @@ func GetSha1 (key interface{}) (string, error) {
 	return sha[0:5], nil
 }
 
-
 func GetBytes(key interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -260,4 +266,3 @@ func GetBytes(key interface{}) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
-
