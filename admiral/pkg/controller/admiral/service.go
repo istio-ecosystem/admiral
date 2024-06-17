@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/prometheus/common/log"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
