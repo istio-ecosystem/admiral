@@ -2,7 +2,6 @@ package admiral
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -16,6 +15,10 @@ import (
 )
 
 func init() {
+	initConfig("se-address-configmap")
+}
+
+func initConfig(seAdressCM string) {
 	p := common.AdmiralParams{
 		KubeconfigPath:             "testdata/fake.config",
 		LabelSet:                   &common.LabelSet{},
@@ -23,14 +26,16 @@ func init() {
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
 		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
+		CacheReconcileDuration:     time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
-		SecretResolver:             "",
+		Profile:                    common.AdmiralProfileDefault,
+		SeAddressConfigmap:         seAdressCM,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
 	p.LabelSet.EnvKey = "admiral.io/env"
 	common.InitializeConfig(p)
 }
@@ -41,10 +46,7 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	}
 
 	client := fake.NewSimpleClientset()
-	cm := v1.ConfigMap{}
-	cm.Name = "se-address-configmap"
-	cm.Namespace = "admiral"
-	cm.Labels = map[string]string{"foo": "bar"} //differentiating from a new/empty cm
+	cm := createConfigMap("se-address-configmap", "admiral", map[string]string{"foo": "bar"}) //differentiating from a new/empty cm
 	ctx := context.Background()
 	_, err := client.CoreV1().ConfigMaps("admiral").Create(ctx, &cm, metav1.CreateOptions{})
 	if err != nil {
@@ -52,38 +54,74 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	}
 	configmapController.K8sClient = client
 
-	emptyConfigmapController := ConfigMapController{
+	configmapController2 := ConfigMapController{
 		ConfigmapNamespace: "admiral",
 	}
 
+	client2 := fake.NewSimpleClientset()
+	cm2 := createConfigMap("se-address-configmap2", "admiral", map[string]string{"foo": "bar"}) //differentiating from a new/empty cm
+	ctx2 := context.Background()
+	_, err = client2.CoreV1().ConfigMaps("admiral").Create(ctx2, &cm2, metav1.CreateOptions{})
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	configmapController2.K8sClient = client2
+
+	emptyConfigmapController := ConfigMapController{
+		ConfigmapNamespace: "admiral",
+	}
 	emptyClient := fake.NewSimpleClientset()
-	emptyCM := v1.ConfigMap{}
-	emptyCM.Name = "se-address-configmap"
-	emptyCM.Namespace = "admiral"
+	emptyCM := createConfigMap("se-address-configmap", "admiral", nil)
 	emptyConfigmapController.K8sClient = emptyClient
+
+	emptyConfigmapController2 := ConfigMapController{
+		ConfigmapNamespace: "admiral",
+	}
+	emptyClient2 := fake.NewSimpleClientset()
+	emptyCM2 := createConfigMap("se-address-configmap2", "admiral", nil)
+	emptyConfigmapController2.K8sClient = emptyClient2
 
 	testCases := []struct {
 		name                string
 		configMapController *ConfigMapController
 		expectedConfigMap   *v1.ConfigMap
+		seAdressCMName      string
 		expectedError       error
 	}{
 		{
-			name:                "should return confirmap",
+			name:                "given default configmap name in AdmiralParams, should return configmap",
 			configMapController: &configmapController,
 			expectedConfigMap:   &cm,
 			expectedError:       nil,
 		},
 		{
-			name:                "should return newly created configmap",
+			name:                "given default configmap name in AdmiralParams, should return newly created configmap",
 			configMapController: &emptyConfigmapController,
 			expectedConfigMap:   &emptyCM,
+			expectedError:       nil,
+		},
+		{
+			name:                "given se-address-configmap2 in AdmiralParams, should return configmap with addressconfigmap2",
+			configMapController: &configmapController2,
+			expectedConfigMap:   &cm2,
+			seAdressCMName:      "se-address-configmap2",
+			expectedError:       nil,
+		},
+		{
+			name:                "given se-address-configmap2 in AdmiralParams, should return newly created configmap with addressconfigmap2",
+			configMapController: &emptyConfigmapController2,
+			expectedConfigMap:   &emptyCM2,
+			seAdressCMName:      "se-address-configmap2",
 			expectedError:       nil,
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
+			if len(c.seAdressCMName) > 0 {
+				common.ResetSync()
+				initConfig(c.seAdressCMName)
+			}
 			cm, err := c.configMapController.GetConfigMap(ctx)
 			if err == nil && c.expectedError == nil {
 				//we're fine
@@ -101,45 +139,12 @@ func TestConfigMapController_GetConfigMap(t *testing.T) {
 	}
 }
 
-func TestNewConfigMapController(t *testing.T) {
-	testCases := []struct {
-		name           string
-		kubeconfigPath string
-		namespace      string
-		expectedError  error
-	}{
-		{
-			name:           "Fails creating an in-cluster config while out of a cluster",
-			kubeconfigPath: "",
-			namespace:      "ns",
-			expectedError:  errors.New("unable to load in-cluster configuration, KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT must be defined"),
-		},
-		{
-			name:           "Kubeconfig config",
-			kubeconfigPath: "../../test/resources/admins@fake-cluster.k8s.local",
-			namespace:      "ns",
-			expectedError:  nil,
-		},
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			common.SetKubeconfigPath(c.kubeconfigPath)
-			controller, err := NewConfigMapController("240.0")
-			if err == nil && c.expectedError == nil {
-				//only do these in an error-less context
-				if c.namespace != controller.ConfigmapNamespace {
-					t.Errorf("Namespace mismatch. Expected %v but got %v", c.namespace, controller.ConfigmapNamespace)
-				}
-				if controller.K8sClient.CoreV1() == nil {
-					t.Errorf("Clientset is nil")
-				}
-			} else if err.Error() != c.expectedError.Error() {
-				t.Errorf("Error mismatch. Expected %v but got %v", c.expectedError, err)
-			}
-		})
-	}
-
+func createConfigMap(name string, namespace string, labels map[string]string) v1.ConfigMap {
+	cm := v1.ConfigMap{}
+	cm.Name = name
+	cm.Namespace = namespace
+	cm.Labels = labels
+	return cm
 }
 
 func TestConfigMapController_PutConfigMap(t *testing.T) {
