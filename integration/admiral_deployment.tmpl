@@ -1,0 +1,261 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: pr-build-{{ .AdmiralLabel }}
+    applications.argoproj.io/app-name: services-admiral-usw2-qal
+    assetId: "8287766806579881856"
+    buildType: maven
+    l1: services
+    l2: mesh
+  name: pr-build-{{ .AdmiralLabel }}
+  namespace: services-admiral-usw2-qal
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: pr-build-{{ .AdmiralLabel }}
+  template:
+    metadata:
+      annotations:
+        iam.amazonaws.com/role: arn:aws:iam::857109464775:role/k8s-services-admiral-usw2-qal
+      labels:
+        app: pr-build-{{ .AdmiralLabel }}
+        applications.argoproj.io/app-name: services-admiral-usw2-qal
+        assetId: "8287766806579881856"
+        l1: services
+        l2: mesh
+        splunk-index: iks
+    spec:
+      containers:
+      - args:
+        - --dependency_namespace
+        - services-admiral-usw2-qal
+        - --secret_namespace
+        - services-admiral-usw2-qal
+        - --sync_namespace
+        - admiral-sync
+        - --secret_filter_tags
+        - {{ .SecretFilterTag }}
+        - --san_prefix
+        - pre-prod.api.intuit.com
+        - --secret_resolver
+        - intuit
+        - --secret_resolver_config_path
+        - /etc/admiral/config.yaml
+        - --hostname_suffix
+        - mesh
+        - --workload_identity_key
+        - alpha.istio.io/identity
+        - --admiral_crd_identity_label
+        - assetAlias
+        - --workload_sidecar_update
+        - enabled
+        - --workload_sidecar_name
+        - default
+        - --argo_rollouts=true
+        - --enable_san=true
+        - --sync_period
+        - 60s
+        - --log_level
+        - "5"
+        - --admiral_state_checker_name
+        - dynamodbbasedstatechecker
+        - --dr_state_store_config_path
+        - /etc/admiral/config.yaml
+        - --envoy_filter_version
+        - 1.13,1.17
+        - --enable_routing_policy=true
+        - --envoy_filter_additional_config
+        - 'dynamicRouterHost: internal.intuit.services.mesh.dynamicroutingservice.mesh'
+        - --additional_endpoint_suffixes
+        - intuit
+        - --additional_endpoint_label_filters
+        - iks.intuit.com/express-version
+        - --enable_workload_data_storage
+        - --enable_dependency_processing=true
+        - --se_ip_prefix
+        - "244.0"
+        - --se_address_configmap
+        - se-address-configmap-qal
+        - --max_requests_per_connection=5
+        - --disable_default_automatic_failover=true
+        - --log_to_file=true
+        - --log_file_path=/app/logs/admiral.log
+        - --enable_serviceentry_cache=true
+        - --enable_destinationrule_cache=true
+        - --enable_absolute_fqdn=true
+        - --alpha_identity_list=*
+        - --enable_absolute_fqdn_for_local_endpoints=true
+        - --enable_active_passive=true
+        - --disable_ip_generation=true
+        - --enable_client_connection_config_processing=true
+        - --enable_sw_aware_ns_caches=true
+        image: {{ .BuildImage }}
+        imagePullPolicy: IfNotPresent
+        name: admiral
+        ports:
+        - containerPort: 8082
+          name: debug
+          protocol: TCP
+        - containerPort: 8080
+          name: admiral
+          protocol: TCP
+        - containerPort: 6900
+          name: admiral-metrics
+          protocol: TCP
+        resources:
+          limits:
+            cpu: "4"
+            memory: 12288M
+          requests:
+            cpu: "2"
+            memory: 10240M
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/admiral
+          name: admiral-config-vol
+        - mountPath: /app/logs/
+          name: logdir
+      - env:
+        - name: SPLUNK_SECRET_PATH
+          value: /etc/secrets/splunk
+        - name: SERVICE_LOG_CONTAINER_NAME
+          value: admiral
+        image: docker.intuit.com/cloud/logging/k8ssplunkforwarder/service/base_splunk_forwarder:9.0.16
+        imagePullPolicy: IfNotPresent
+        name: splunk-forwarder
+        resources:
+          requests:
+            cpu: 300m
+            memory: 300M
+        startupProbe:
+          exec:
+            command:
+            - /opt/splunkforwarder/health.sh
+          failureThreshold: 30
+          initialDelaySeconds: 2
+          periodSeconds: 2
+          successThreshold: 1
+          timeoutSeconds: 1
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /app/logs/
+          name: logdir
+        - mountPath: /etc/secrets/splunk
+          name: splunk-secrets
+        - mountPath: /etc/podinfo
+          name: podinfo
+        - mountPath: /etc/splunk
+          name: splunk-indexers-volume
+        - mountPath: /opt/splunkforwarder/etc/system/local/inputs.conf
+          name: splunk-inputs-conf
+          subPath: splunk.conf
+      - args:
+        - /usr/bin/envoy
+        - -c
+        - /etc/envoy/envoy.yaml
+        - --log-level
+        - info
+        command:
+        - sudo
+        image: docker.intuit.com/oicp/standard/envoy/debian11-envoy1:1.0.31
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /health/ready
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 50
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: envoy
+        ports:
+        - containerPort: 443
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health/ready
+            port: 443
+            scheme: HTTPS
+          initialDelaySeconds: 50
+          periodSeconds: 5
+          successThreshold: 3
+          timeoutSeconds: 1
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/envoy
+          name: envoy-config-vol
+        - mountPath: /etc/envoy/ssl
+          name: envoy-tls-cert-vol
+      dnsPolicy: ClusterFirst
+      initContainers:
+      - env:
+        - name: MYSTIKO_CONFIG
+          value: /mystiko/config.yaml
+        image: docker.intuit.com/intgctls-platctls/mystiko-cli/service/mystiko:1.4.0
+        imagePullPolicy: IfNotPresent
+        name: mystiko-splunk-certs
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/secrets/splunk
+          name: splunk-secrets
+        - mountPath: /mystiko
+          name: mystiko-config
+      nodeSelector:
+        node.kubernetes.io/instancegroup: services-admiral-usw2-qal-default
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: admiral
+      serviceAccountName: admiral
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: admiral-config-configmap
+        name: admiral-config-vol
+      - configMap:
+          defaultMode: 420
+          name: envoy-config-configmap
+        name: envoy-config-vol
+      - name: envoy-tls-cert-vol
+        secret:
+          defaultMode: 438
+          secretName: admiral-envoy-tls-cert
+      - configMap:
+          defaultMode: 420
+          name: mystiko-config
+        name: mystiko-config
+      - emptyDir: {}
+        name: logdir
+      - configMap:
+          defaultMode: 420
+          name: splunk-inputs-conf
+        name: splunk-inputs-conf
+      - configMap:
+          defaultMode: 420
+          name: splunk-indexers
+        name: splunk-indexers-volume
+      - emptyDir:
+          medium: Memory
+        name: splunk-secrets
+      - downwardAPI:
+          defaultMode: 420
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.labels
+            path: labels
+        name: podinfo
