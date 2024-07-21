@@ -20,7 +20,6 @@ spec:
       containers:
       - name: grpc-server
         image: buoyantio/strest-grpc:latest
-        imagePullPolicy: IfNotPresent
         args:
         - "server"
         - "--address=:11111"
