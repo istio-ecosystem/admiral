@@ -1,0 +1,15 @@
+apiVersion: admiral.io/v1alpha1
+kind: OutlierDetection
+metadata:
+  name: sample-configuration
+  namespace: sample
+  annotations:
+    admiral.io/env: stage
+spec:
+  selector:
+    identity: greeting
+    env: stage
+  outlier_config: #TODO : How to disable it
+    base_ejection_time: 180
+    consecutive_gateway_errors: 10
+    interval: 28
