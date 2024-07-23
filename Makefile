@@ -10,10 +10,10 @@ SHELL := /bin/bash
 GOCMD?=go
 GOBUILD?=$(GOCMD) build
 GOCLEAN?=$(GOCMD) clean
-GOTEST?=$(GOCMD) test -race
+GOTEST?=$(GOCMD) test
 GOGET?=$(GOCMD) get
-GOBIN?=$(GOPATH)/bin
 OUT?=./out/
+GOLINTER_VERSION=v1.58.1
 
 BINARY_NAME?=$(OUT)admiral
 BINARY_DARWIN?=$(BINARY_NAME)_darwin
@@ -45,7 +45,9 @@ build-mac:
 	$(GOBUILD) -o $(BINARY_DARWIN) -v $(MAIN_PATH_ADMIRAL)
 
 test:
-	$(GOTEST) -v `go list ./... | grep -v client` -coverprofile=c.out
+	$(GOTEST) -v -failfast -race -timeout 0 `go list ./... | grep -v client | grep -v fmeatests | grep -v tests` -coverprofile=c.out
+	$(GOCMD) install github.com/boumenot/gocover-cobertura@latest
+	$(GOPATH)/bin/gocover-cobertura < c.out > cobertura-coverage.xml
 
 clean:
 	$(GOCLEAN)
@@ -95,9 +97,15 @@ docker-build: set-tag
     #NOTE: Assumes binary has already been built (admiral)
 	docker build -t $(IMAGE):$(TAG) -f ./admiral/docker/$(DOCKERFILE) .
 
+podman-build: set-tag
+    #NOTE: Assumes binary has already been built (admiral)
+	podman build --storage-driver=overlay --isolation=chroot --ulimit=nofile=1048576:1048576 --cgroup-manager=cgroupfs --events-backend=file -t $(IMAGE):$(TAG) -f ./admiral/docker/$(DOCKERFILE) .
+
 docker-publish:
 ifndef DO_NOT_PUBLISH
+ifndef PIPELINE_BUILD
 	echo "$(DOCKER_PASS)" | docker login -u $(DOCKER_USER) --password-stdin
+endif
 endif
 ifeq ($(TAG),)
 	echo "This is not a Tag/Release, skipping docker publish"
@@ -110,6 +118,30 @@ endif
 ifeq ($(TAG),)
 ifeq ($(BRANCH),master)
 	docker push $(IMAGE):latest
+else
+	echo "This is not master branch, skipping to publish 'latest' tag"
+endif
+endif
+
+podman-publish:
+ifndef DO_NOT_PUBLISH
+ifndef PIPELINE_BUILD
+	echo "$(DOCKER_PASS)" | podman login -u ${DOCKER_USERNAME} --password-stdin --storage-driver=overlay
+endif
+endif
+ifeq ($(TAG),)
+	echo "This is not a Tag/Release, skipping docker publish"
+else
+ifndef DO_NOT_PUBLISH
+	podman push $(IMAGE):$(TAG) --storage-driver=overlay --cgroup-manager=cgroupfs --events-backend=file
+	podman pull $(IMAGE):$(TAG) --storage-driver=overlay --cgroup-manager=cgroupfs --events-backend=file
+endif
+endif
+#no tag set and its master branch, in this case publish `latest` tag
+ifeq ($(TAG),)
+ifeq ($(BRANCH),master)
+	podman push $(IMAGE):latest --storage-driver=overlay --cgroup-manager=cgroupfs --events-backend=file
+	podman pull $(IMAGE):$(TAG) --storage-driver=overlay --cgroup-manager=cgroupfs --events-backend=file
 else
 	echo "This is not master branch, skipping to publish 'latest' tag"
 endif
@@ -141,3 +173,14 @@ gen-yaml:
 	cp ./install/prometheus/prometheus.yaml ./out/yaml/prometheus.yaml
 	cp ./install/sample/rp.yaml ./out/yaml/rp.yaml
 	cp ./install/scripts/*.sh ./out/scripts/
+
+install_linter:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLINTER_VERSION}
+
+lint:
+	golangci-lint run --fast -c .golangci.yml
+
+perf:
+	go install github.com/onsi/ginkgo/v2/ginkgo
+	TOTAL_ASSETS=10 API_SERVER_DELAY_MULTIPLIER=1ms ginkgo -v --fail-fast ./tests/perf
+	TOTAL_ASSETS=25 API_SERVER_DELAY_MULTIPLIER=1ms ginkgo -v --fail-fast ./tests/perf
