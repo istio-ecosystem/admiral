@@ -112,3 +112,15 @@ sequenceDiagram
 			end
 		end
 ```
+
+# Core contributors
+- [Anil Attuluri](https://github.com/aattuluri)
+- [Anubhav Aeron](https://github.com/nirvanagit)
+- [Shriram Sharma](https://github.com/shriramsharma)
+- [Kartikeya Pharasi](https://github.com/kpharasi)
+- [Vinay Gonuguntla](https://github.com/vinay-g)
+- [Vrushali Joshi](https://github.com/vrushalijoshi)
+- [Viraj Kulkarni](https://github.com/virajrk)
+- [Ryan Tay](https://github.com/rtay1188)
+- [Punakshi Chaand](https://github.com/Punakshi)
+- [Pankaj Sikka](https://github.com/psikka1)
