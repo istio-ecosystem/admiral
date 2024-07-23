@@ -20,52 +20,59 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	idps_sdk "github.intuit.com/idps/idps-go-sdk/v3/idps-sdk"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/workqueue"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/client-go/rest"
-
 	corev1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/workqueue"
 )
 
 const (
-	filterLabel = "admiral/sync"
-	maxRetries  = 5
+	maxRetries = 5
 )
 
 // LoadKubeConfig is a unit test override variable for loading the k8s config.
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
+var remoteClustersMetric common.Gauge
+
 // addSecretCallback prototype for the add secret callback function.
-type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
+type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error
 
 // updateSecretCallback prototype for the update secret callback function.
-type updateSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
+type updateSecretCallback func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error
 
 // removeSecretCallback prototype for the remove secret callback function.
 type removeSecretCallback func(dataKey string) error
 
 // Controller is the controller implementation for Secret resources
 type Controller struct {
-	kubeclientset  kubernetes.Interface
-	namespace      string
-	Cs             *ClusterStore
-	queue          workqueue.RateLimitingInterface
-	informer       cache.SharedIndexInformer
-	addCallback    addSecretCallback
-	updateCallback updateSecretCallback
-	removeCallback removeSecretCallback
-	secretResolver resolver.SecretResolver
+	kubeclientset            kubernetes.Interface
+	namespace                string
+	Cs                       *ClusterStore
+	queue                    workqueue.RateLimitingInterface
+	informer                 cache.SharedIndexInformer
+	addCallback              addSecretCallback
+	updateCallback           updateSecretCallback
+	removeCallback           removeSecretCallback
+	secretResolver           resolver.SecretResolver
+	clusterShardStoreHandler registry.ClusterShardStore
 }
 
 // RemoteCluster defines cluster structZZ
@@ -86,6 +93,12 @@ func newClustersStore() *ClusterStore {
 	}
 }
 
+type IdpsSdkWrapper struct{}
+
+func (c *IdpsSdkWrapper) IdpsClientInstanceFromMap(props map[string]string) (client.IdpsClientInterface, error) {
+	return idps_sdk.IdpsClientInstanceFromMap(props)
+}
+
 // NewController returns a new secret controller
 func NewController(
 	kubeclientset kubernetes.Interface,
@@ -94,17 +107,18 @@ func NewController(
 	addCallback addSecretCallback,
 	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
-	secretResolverType string) *Controller {
+	admiralProfile string,
+	secretResolverConfig string) *Controller {
 
 	ctx := context.Background()
 	secretsInformer := cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(opts meta_v1.ListOptions) (runtime.Object, error) {
-				opts.LabelSelector = filterLabel + "=true"
+				opts.LabelSelector = common.GetSecretFilterTags() + "=true"
 				return kubeclientset.CoreV1().Secrets(namespace).List(ctx, opts)
 			},
 			WatchFunc: func(opts meta_v1.ListOptions) (watch.Interface, error) {
-				opts.LabelSelector = filterLabel + "=true"
+				opts.LabelSelector = common.GetSecretFilterTags() + "=true"
 				return kubeclientset.CoreV1().Secrets(namespace).Watch(ctx, opts)
 			},
 		},
@@ -115,11 +129,16 @@ func NewController(
 
 	var secretResolver resolver.SecretResolver
 	var err error
-	if len(secretResolverType) == 0 {
+
+	if admiralProfile == common.AdmiralProfileIntuit {
+		log.Info("Initializing Intuit secret resolver")
+		idpsClientProviderWrapper := &IdpsSdkWrapper{}
+		secretResolver, err = resolver.NewIDPSResolver(secretResolverConfig, idpsClientProviderWrapper)
+	} else if admiralProfile == common.AdmiralProfileDefault || admiralProfile == common.AdmiralProfilePerf {
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
-		err = fmt.Errorf("unrecognized secret resolver type %v specified", secretResolverType)
+		err = fmt.Errorf("unrecognized secret resolver type %v specified", admiralProfile)
 	}
 
 	if err != nil {
@@ -128,15 +147,16 @@ func NewController(
 	}
 
 	controller := &Controller{
-		kubeclientset:  kubeclientset,
-		namespace:      namespace,
-		Cs:             cs,
-		informer:       secretsInformer,
-		queue:          queue,
-		addCallback:    addCallback,
-		updateCallback: updateCallback,
-		removeCallback: removeCallback,
-		secretResolver: secretResolver,
+		kubeclientset:            kubeclientset,
+		namespace:                namespace,
+		Cs:                       cs,
+		informer:                 secretsInformer,
+		queue:                    queue,
+		addCallback:              addCallback,
+		updateCallback:           updateCallback,
+		removeCallback:           removeCallback,
+		secretResolver:           secretResolver,
+		clusterShardStoreHandler: registry.NewClusterShardStoreHandler(),
 	}
 
 	log.Info("Setting up event handlers")
@@ -163,12 +183,17 @@ func NewController(
 			}
 		},
 	})
+
+	remoteClustersMetric = common.NewGaugeFrom(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
 // Run starts the controller until it receives a message over stopCh
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+	if c == nil {
+		return
+	}
 	defer c.queue.ShutDown()
 
 	log.Info("Starting Secrets controller")
@@ -188,16 +213,12 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 // StartSecretController creates the secret controller.
 func StartSecretController(
-	ctx context.Context,
-	k8s kubernetes.Interface,
-	addCallback addSecretCallback,
-	updateCallback updateSecretCallback,
-	removeCallback removeSecretCallback,
-	namespace string,
-	secretResolverType string) (*Controller, error) {
+	ctx context.Context, k8s kubernetes.Interface, addCallback addSecretCallback,
+	updateCallback updateSecretCallback, removeCallback removeSecretCallback,
+	namespace, admiralProfile, secretResolverConfig string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverConfig)
 
 	go controller.Run(ctx.Done())
 
@@ -289,6 +310,10 @@ func (c *Controller) createRemoteCluster(kubeConfig []byte, secretName string, c
 }
 
 func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
+	shard, err := getShardNameFromClusterSecret(s)
+	if err != nil {
+		log.Errorf("unable to find shard information from secret")
+	}
 	for clusterID, kubeConfig := range s.Data {
 		// clusterID must be unique even across multiple secrets
 		if prev, ok := c.Cs.RemoteClusters[clusterID]; !ok {
@@ -304,11 +329,15 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
 
-			if err := c.addCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
+			if err := c.addCallback(restConfig, clusterID, common.GetResyncIntervals()); err != nil {
 				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
 				continue
 			}
-
+			err = c.addClusterToShard(clusterID, shard)
+			if err != nil {
+				log.Errorf("error adding cluster=%s to shard=%s", clusterID, shard)
+				continue
+			}
 			log.Infof("Secret loaded for cluster %s in the secret %s in namespace %s.", clusterID, c.Cs.RemoteClusters[clusterID].secretName, s.ObjectMeta.Namespace)
 
 		} else {
@@ -328,14 +357,19 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			}
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
-			if err := c.updateCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
+			if err := c.updateCallback(restConfig, clusterID, common.GetResyncIntervals()); err != nil {
 				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
 					clusterID, secretName, err)
 			}
+			err = c.addClusterToShard(clusterID, shard)
+			if err != nil {
+				log.Errorf("error adding cluster=%s to shard=%s", clusterID, shard)
+				continue
+			}
 		}
-
 	}
-	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -350,6 +384,38 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
-	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
+}
+
+func getShardNameFromClusterSecret(secret *corev1.Secret) (string, error) {
+	if !common.IsAdmiralStateSyncerMode() {
+		return "", nil
+	}
+	if secret == nil {
+		return "", fmt.Errorf("nil secret passed")
+	}
+	annotation := secret.GetAnnotations()
+	if len(annotation) == 0 {
+		return "", fmt.Errorf("no annotations found on secret=%s", secret.GetName())
+	}
+	shard, ok := annotation[util.SecretShardKey]
+	if ok {
+		return shard, nil
+	}
+	return "", fmt.Errorf("shard not found")
+}
+func (c *Controller) addClusterToShard(cluster, shard string) error {
+	if !common.IsAdmiralStateSyncerMode() {
+		return nil
+	}
+	return c.clusterShardStoreHandler.AddClusterToShard(cluster, shard)
+}
+
+// TODO: invoke function in delete workflow
+func (c *Controller) removeClusterFromShard(cluster, shard string) error {
+	if !common.IsAdmiralStateSyncerMode() {
+		return nil
+	}
+	return c.clusterShardStoreHandler.RemoveClusterFromShard(cluster, shard)
 }
