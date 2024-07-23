@@ -31,4 +31,4 @@ v1.0                | AWS, GCP, Azure
 v1.1                | AWS, GCP, Azure
 v1.2                | AWS, GCP, Azure
 
-`Note`: Please submit a PR if admiral was tested on other cloud vendors       
+`Note`: Please submit a PR if admiral was tested on other cloud vendors
