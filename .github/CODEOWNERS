@@ -1,0 +1,10 @@
+# List of source code paths and code owners
+# For more information on the CODEOWNERS file go to:
+# https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners#codeowners-syntax
+
+# Uncomment line 10 and add the correct owners's usernames.
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+# @global-owner1 and @global-owner2 will be requested for
+# review when someone opens a pull request.
+*      @services-mesh/service-mesh
