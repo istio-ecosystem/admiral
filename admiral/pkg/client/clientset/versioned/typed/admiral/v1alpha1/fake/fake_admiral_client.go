@@ -36,10 +36,6 @@ func (c *FakeAdmiralV1alpha1) Dependencies(namespace string) v1alpha1.Dependency
 	return &FakeDependencies{c, namespace}
 }
 
-func (c *FakeAdmiralV1alpha1) DependencyProxies(namespace string) v1alpha1.DependencyProxyInterface {
-	return &FakeDependencyProxies{c, namespace}
-}
-
 func (c *FakeAdmiralV1alpha1) GlobalTrafficPolicies(namespace string) v1alpha1.GlobalTrafficPolicyInterface {
 	return &FakeGlobalTrafficPolicies{c, namespace}
 }
