@@ -71,7 +71,7 @@ $ADMIRAL_HOME/scripts/cluster-secret.sh $MAIN_CLUSTER $MAIN_CLUSTER admiral
 4\. Install/Run Admiral-Sync in the remote clusters that admiral monitors
 ```
 # Create admiral role and bindings on remote cluster
-kubectl apply --kubeconfig=$REMOTE_CLUSTER -f $ADMIRAL_HOME/yaml/remotecluster.yaml
+kubectl apply --context=$REMOTE_CLUSTER -f $ADMIRAL_HOME/yaml/remotecluster.yaml
 ```
 5\. Add Remote Cluster to Admiral's watcher
 ```

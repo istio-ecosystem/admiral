@@ -45,6 +45,72 @@ func TestMapOfMaps(t *testing.T) {
 	if map3 != nil {
 		t.Fail()
 	}
+
+}
+
+func TestDeleteMapOfMaps(t *testing.T) {
+	t.Parallel()
+	mapOfMaps := NewMapOfMaps()
+	mapOfMaps.Put("pkey1", "dev.a.global1", "127.0.10.1")
+	mapOfMaps.Put("pkey1", "dev.a.global2", "127.0.10.2")
+	mapOfMaps.DeleteMap("pkey1", "dev.a.global1")
+
+	mapValue := mapOfMaps.Get("pkey1")
+	if len(mapValue.Get("dev.a.global1")) > 0 {
+		t.Errorf("expected=nil, got=%v", mapValue.Get("dev.a.global1"))
+	}
+	if mapValue.Get("dev.a.global2") != "127.0.10.2" {
+		t.Errorf("expected=%v, got=%v", "127.0.10.2", mapValue.Get("dev.a.global2"))
+	}
+}
+
+func TestMapOfMapOfMaps(t *testing.T) {
+	t.Parallel()
+	mapOfMapOfMaps := NewMapOfMapOfMaps()
+	mapOfMapOfMaps.Put("pkey1", "dev.a.global1", "127.0.10.1", "ns1")
+	mapOfMapOfMaps.Put("pkey1", "dev.a.global2", "127.0.10.2", "ns2")
+	mapOfMapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.1", "ns3")
+	mapOfMapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.2", "ns4")
+
+	mapOfMaps1 := mapOfMapOfMaps.Get("pkey1")
+	if mapOfMaps1 == nil || mapOfMaps1.Get("dev.a.global1").Get("127.0.10.1") != "ns1" {
+		t.Fail()
+	}
+	if mapOfMapOfMaps.Len() != 2 {
+		t.Fail()
+	}
+
+	mapOfMaps1.Delete("dev.a.global2")
+
+	mapOfMaps2 := mapOfMapOfMaps.Get("pkey1")
+	if mapOfMaps2.Get("dev.a.global2") != nil {
+		t.Fail()
+	}
+
+	keyList := mapOfMapOfMaps.Get("pkey2").Get("qa.a.global").GetKeys()
+	if len(keyList) != 2 {
+		t.Fail()
+	}
+
+	mapOfMapOfMaps.Put("pkey3", "prod.a.global", "127.0.10.1", "ns5")
+
+	mapOfMaps3 := mapOfMapOfMaps.Get("pkey3")
+	if mapOfMaps3 == nil || mapOfMaps3.Get("prod.a.global").Get("127.0.10.1") != "ns5" {
+		t.Fail()
+	}
+
+	mapOfMaps4 := mapOfMapOfMaps.Get("pkey4")
+	if mapOfMaps4 != nil {
+		t.Fail()
+	}
+
+	mapOfMaps5 := NewMapOfMaps()
+	mapOfMaps5.Put("dev.b.global", "ns6", "ns6")
+	mapOfMapOfMaps.PutMapofMaps("pkey5", mapOfMaps5)
+	if mapOfMapOfMaps.Get("pkey5") == nil || mapOfMapOfMaps.Get("pkey5").Get("dev.b.global").Get("ns6") != "ns6" {
+		t.Fail()
+	}
+
 }
 
 func TestAdmiralParams(t *testing.T) {
@@ -92,7 +158,7 @@ func TestMapOfMapsRange(t *testing.T) {
 	mapOfMaps.Put("pkey2", "qa.a.global", "127.0.10.1")
 	mapOfMaps.Put("pkey3", "stage.a.global", "127.0.10.1")
 
-	keys := make(map[string]string, len(mapOfMaps.Map()))
+	keys := make(map[string]string, len(mapOfMaps.cache))
 	for _, k := range keys {
 		keys[k] = k
 	}

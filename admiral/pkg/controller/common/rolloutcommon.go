@@ -1,11 +1,12 @@
 package common
 
 import (
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	log "github.com/sirupsen/logrus"
 	"sort"
 	"strings"
+
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	log "github.com/sirupsen/logrus"
 )
 
 // GetCname returns cname in the format <env>.<service identity>.global, Ex: stage.Admiral.services.registry.global
@@ -13,11 +14,11 @@ func GetCnameForRollout(rollout *argo.Rollout, identifier string, nameSuffix str
 	var environment = GetEnvForRollout(rollout)
 	alias := GetValueForKeyFromRollout(identifier, rollout)
 	if len(alias) == 0 {
-		log.Warnf("%v label missing on deployment %v in namespace %v. Falling back to annotation to create cname.", identifier, rollout.Name, rollout.Namespace)
+		log.Warnf("%v label missing on rollout %v in namespace %v. Falling back to annotation to create cname.", identifier, rollout.Name, rollout.Namespace)
 		alias = rollout.Spec.Template.Annotations[identifier]
 	}
 	if len(alias) == 0 {
-		log.Errorf("Unable to get cname for deployment with name %v in namespace %v as it doesn't have the %v annotation", rollout.Name, rollout.Namespace, identifier)
+		log.Errorf("Unable to get cname for rollout with name %v in namespace %v as it doesn't have the %v annotation", rollout.Name, rollout.Namespace, identifier)
 		return ""
 	}
 	cname := environment + Sep + alias + Sep + nameSuffix
@@ -45,16 +46,16 @@ func GetSANForRollout(domain string, rollout *argo.Rollout, identifier string) s
 func GetValueForKeyFromRollout(key string, rollout *argo.Rollout) string {
 	value := rollout.Spec.Template.Labels[key]
 	if len(value) == 0 {
-		log.Warnf("%v label missing on deployment %v in namespace %v. Falling back to annotation.", key, rollout.Name, rollout.Namespace)
+		log.Warnf("%v label missing on rollout %v in namespace %v. Falling back to annotation.", key, rollout.Name, rollout.Namespace)
 		value = rollout.Spec.Template.Annotations[key]
 	}
 	return value
 }
 
-//Returns the list of rollouts to which this GTP should apply. It is assumed that all inputs already are an identity match
-//If the GTP has an identity label, it should match all rollouts which share that label
-//If the GTP does not have an identity label, it should return all rollouts without an identity label
-//IMPORTANT: If an environment label is specified on either the GTP or the rollout, the same value must be specified on the other for them to match
+// Returns the list of rollouts to which this GTP should apply. It is assumed that all inputs already are an identity match
+// If the GTP has an identity label, it should match all rollouts which share that label
+// If the GTP does not have an identity label, it should return all rollouts without an identity label
+// IMPORTANT: If an environment label is specified on either the GTP or the rollout, the same value must be specified on the other for them to match
 func MatchRolloutsToGTP(gtp *v1.GlobalTrafficPolicy, rollouts []argo.Rollout) []argo.Rollout {
 	if gtp == nil || gtp.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for rollout match. Returning nil.")
@@ -92,15 +93,36 @@ func GetRolloutGlobalIdentifier(rollout *argo.Rollout) string {
 		//TODO can this be removed now? This was for backward compatibility
 		identity = rollout.Spec.Template.Annotations[GetWorkloadIdentifier()]
 	}
+	if EnableSWAwareNSCaches() && len(identity) > 0 && len(GetRolloutIdentityPartition(rollout)) > 0 {
+		identity = GetRolloutIdentityPartition(rollout) + Sep + strings.ToLower(identity)
+	}
 	return identity
 }
 
-//Find the GTP that best matches the rollout.
-//It's assumed that the set of GTPs passed in has already been matched via the GtprolloutLabel. Now it's our job to choose the best one.
-//In order:
+func GetRolloutOriginalIdentifier(rollout *argo.Rollout) string {
+	identity := rollout.Spec.Template.Labels[GetWorkloadIdentifier()]
+	if len(identity) == 0 {
+		//TODO can this be removed now? This was for backward compatibility
+		identity = rollout.Spec.Template.Annotations[GetWorkloadIdentifier()]
+	}
+	return identity
+}
+
+func GetRolloutIdentityPartition(rollout *argo.Rollout) string {
+	identityPartition := rollout.Spec.Template.Annotations[GetPartitionIdentifier()]
+	if len(identityPartition) == 0 {
+		//In case partition is accidentally applied as Label
+		identityPartition = rollout.Spec.Template.Labels[GetPartitionIdentifier()]
+	}
+	return identityPartition
+}
+
+// Find the GTP that best matches the rollout.
+// It's assumed that the set of GTPs passed in has already been matched via the GtprolloutLabel. Now it's our job to choose the best one.
+// In order:
 // - If one and only one GTP matches the env label of the rollout - use that one. Use "default" as the default env label for all GTPs and rollout.
 // - If multiple GTPs match the rollout label, use the oldest one (Using an old one has less chance of new behavior which could impact workflows)
-//IMPORTANT: If an environment label is specified on either the GTP or the rollout, the same value must be specified on the other for them to match
+// IMPORTANT: If an environment label is specified on either the GTP or the rollout, the same value must be specified on the other for them to match
 func MatchGTPsToRollout(gtpList []v1.GlobalTrafficPolicy, rollout *argo.Rollout) *v1.GlobalTrafficPolicy {
 	if rollout == nil || rollout.Name == "" {
 		log.Warn("Nil or empty GlobalTrafficPolicy provided for rollout match. Returning nil.")

@@ -1,8 +1,12 @@
 package util
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCopyMap(t *testing.T) {
@@ -81,6 +85,12 @@ func TestSubset(t *testing.T) {
 			m2:     m2,
 			result: false,
 		},
+		{
+			name:   "non-empty m1 is not a subset of non-empty m2 due to value mis-match",
+			m1:     map[string]string{"env": "e2e", "version": "v1"},
+			m2:     map[string]string{"env": "stage", "version": "v1"},
+			result: false,
+		},
 	}
 
 	for _, c := range testCases {
@@ -127,4 +137,15 @@ func TestContains(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLogElapsedTime(t *testing.T) {
+	logFunc := LogElapsedTime("test_op", "test_identity", "test_env", "test_clusterId")
+	oldOut := log.StandardLogger().Out
+	buf := bytes.Buffer{}
+	log.SetOutput(&buf)
+	logFunc()
+
+	assert.Contains(t, buf.String(), "op=test_op identity=test_identity env=test_env cluster=test_clusterId txTime=")
+	log.SetOutput(oldOut)
 }
