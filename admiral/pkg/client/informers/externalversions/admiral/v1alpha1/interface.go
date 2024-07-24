@@ -28,8 +28,6 @@ type Interface interface {
 	ClientConnectionConfigs() ClientConnectionConfigInformer
 	// Dependencies returns a DependencyInformer.
 	Dependencies() DependencyInformer
-	// DependencyProxies returns a DependencyProxyInformer.
-	DependencyProxies() DependencyProxyInformer
 	// GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
 	GlobalTrafficPolicies() GlobalTrafficPolicyInformer
 	// OutlierDetections returns a OutlierDetectionInformer.
@@ -59,11 +57,6 @@ func (v *version) ClientConnectionConfigs() ClientConnectionConfigInformer {
 // Dependencies returns a DependencyInformer.
 func (v *version) Dependencies() DependencyInformer {
 	return &dependencyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// DependencyProxies returns a DependencyProxyInformer.
-func (v *version) DependencyProxies() DependencyProxyInformer {
-	return &dependencyProxyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // GlobalTrafficPolicies returns a GlobalTrafficPolicyInformer.
