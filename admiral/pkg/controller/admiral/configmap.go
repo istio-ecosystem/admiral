@@ -4,15 +4,12 @@ import (
 	"context"
 	"strings"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	v1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
-
-const configmapName = "se-address-configmap"
 
 type ConfigMapControllerInterface interface {
 	GetConfigMap(ctx context.Context) (*v1.ConfigMap, error)
@@ -26,52 +23,28 @@ type ConfigMapController struct {
 	ServiceEntryIPPrefix string
 }
 
-//todo this is a temp state, eventually changes will have to be made to give each cluster it's own configmap
-
-func NewConfigMapController(seIPPrefix string) (*ConfigMapController, error) {
+// todo this is a temp state, eventually changes will have to be made to give each cluster it's own configmap
+func NewConfigMapController(seIPPrefix string, clientLoader loader.ClientLoader) (*ConfigMapController, error) {
 	kubeconfigPath := common.GetKubeconfigPath()
 	namespaceToUse := common.GetSyncNamespace()
 
-	if kubeconfigPath == "" {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-		client, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			return nil, err
-		}
-		controller := ConfigMapController{
-			K8sClient:            client,
-			ConfigmapNamespace:   namespaceToUse,
-			ServiceEntryIPPrefix: seIPPrefix,
-		}
-		return &controller, nil
-	} else {
-		// use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-		if err != nil {
-			return nil, err
-		}
-
-		// create the clientset
-		client, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			return nil, err
-		}
-		controller := ConfigMapController{
-			K8sClient:            client,
-			ConfigmapNamespace:   namespaceToUse,
-			ServiceEntryIPPrefix: seIPPrefix,
-		}
-		return &controller, nil
+	client, err := clientLoader.LoadKubeClientFromPath(kubeconfigPath)
+	if err != nil {
+		return nil, err
 	}
 
+	controller := ConfigMapController{
+		K8sClient:            client,
+		ConfigmapNamespace:   namespaceToUse,
+		ServiceEntryIPPrefix: seIPPrefix,
+	}
+
+	return &controller, nil
 }
 
 func (c *ConfigMapController) GetConfigMap(ctx context.Context) (*v1.ConfigMap, error) {
 	getOpts := metaV1.GetOptions{}
-	configMap, err := c.K8sClient.CoreV1().ConfigMaps(c.ConfigmapNamespace).Get(ctx, configmapName, getOpts)
+	configMap, err := c.K8sClient.CoreV1().ConfigMaps(c.ConfigmapNamespace).Get(ctx, common.GetSeAddressConfigMap(), getOpts)
 
 	if err == nil {
 		return configMap, err
@@ -79,7 +52,7 @@ func (c *ConfigMapController) GetConfigMap(ctx context.Context) (*v1.ConfigMap, 
 
 	if strings.Contains(err.Error(), "not found") {
 		cm := v1.ConfigMap{}
-		cm.Name = configmapName
+		cm.Name = common.GetSeAddressConfigMap()
 		cm.Namespace = c.ConfigmapNamespace
 		configMap, err = c.K8sClient.CoreV1().ConfigMaps(c.ConfigmapNamespace).Create(ctx, &cm, metaV1.CreateOptions{})
 	}

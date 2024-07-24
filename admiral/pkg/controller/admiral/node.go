@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	k8sV1Informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/rest"
@@ -28,14 +29,14 @@ type Locality struct {
 	Region string
 }
 
-func NewNodeController(clusterID string, stopCh <-chan struct{}, handler NodeHandler, config *rest.Config) (*NodeController, error) {
+func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest.Config, clientLoader loader.ClientLoader) (*NodeController, error) {
 
 	nodeController := NodeController{}
 	nodeController.NodeHandler = handler
 
 	var err error
 
-	nodeController.K8sClient, err = K8sClientFromConfig(config)
+	nodeController.K8sClient, err = clientLoader.LoadKubeClientFromConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependency controller k8s client: %v", err)
 	}
@@ -46,23 +47,47 @@ func NewNodeController(clusterID string, stopCh <-chan struct{}, handler NodeHan
 		cache.Indexers{},
 	)
 
-	mcd := NewMonitoredDelegator(&nodeController, clusterID, "node")
-	NewController("node-ctrl-"+config.Host, stopCh, mcd, nodeController.informer)
+	NewController("node-ctrl", config.Host, stopCh, &nodeController, nodeController.informer)
 
 	return &nodeController, nil
 }
 
-func (p *NodeController) Added(ctx context.Context, obj interface{}) {
-	node := obj.(*k8sV1.Node)
+func (p *NodeController) Added(ctx context.Context, obj interface{}) error {
+	node, ok := obj.(*k8sV1.Node)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Node", obj)
+	}
 	if p.Locality == nil {
 		p.Locality = &Locality{Region: common.GetNodeLocality(node)}
 	}
+	return nil
 }
 
-func (p *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
+func (p *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
 	//ignore
+	return nil
 }
 
-func (p *NodeController) Deleted(ctx context.Context, obj interface{}) {
+func (p *NodeController) Deleted(ctx context.Context, obj interface{}) error {
 	//ignore
+	return nil
+}
+
+func (d *NodeController) GetProcessItemStatus(obj interface{}) (string, error) {
+	return common.NotProcessed, nil
+}
+
+func (d *NodeController) UpdateProcessItemStatus(obj interface{}, status string) error {
+	return nil
+}
+
+func (d *NodeController) LogValueOfAdmiralIoIgnore(obj interface{}) {
+}
+
+func (d *NodeController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
+	/*node, ok := obj.(*k8sV1.Node)
+	if ok && d.K8sClient != nil {
+		return d.K8sClient.CoreV1().Nodes().Get(ctx, node.Name, meta_v1.GetOptions{})
+	}*/
+	return nil, fmt.Errorf("kubernetes client is not initialized, txId=%s", ctx.Value("txId"))
 }

@@ -6,8 +6,9 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/prometheus/common/log"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -23,14 +24,19 @@ import (
 
 // ServiceHandler interface contains the methods that are required
 type ServiceHandler interface {
-	Added(ctx context.Context, obj *k8sV1.Service)
-	Updated(ctx context.Context, obj *k8sV1.Service)
-	Deleted(ctx context.Context, obj *k8sV1.Service)
+	Added(ctx context.Context, obj *k8sV1.Service) error
+	Updated(ctx context.Context, obj *k8sV1.Service) error
+	Deleted(ctx context.Context, obj *k8sV1.Service) error
+}
+
+type ServiceItem struct {
+	Service *k8sV1.Service
+	Status  string
 }
 
 type ServiceClusterEntry struct {
 	Identity string
-	Service  map[string]map[string]*k8sV1.Service //maps namespace to a map of service name:service object
+	Service  map[string]map[string]*ServiceItem //maps namespace to a map of service name:service object
 }
 
 type ServiceController struct {
@@ -52,6 +58,8 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	identity := s.getKey(service)
 	existing := s.cache[identity]
 	if s.shouldIgnoreBasedOnLabels(service) {
+		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.ServiceResourceType,
+			service.Name, service.Namespace, "", "Value=true")
 		if existing != nil {
 			delete(existing.Service[identity], service.Name)
 		}
@@ -59,15 +67,15 @@ func (s *serviceCache) Put(service *k8sV1.Service) {
 	}
 	if existing == nil {
 		existing = &ServiceClusterEntry{
-			Service:  make(map[string]map[string]*k8sV1.Service),
+			Service:  make(map[string]map[string]*ServiceItem),
 			Identity: s.getKey(service),
 		}
 	}
 	namespaceServices := existing.Service[service.Namespace]
 	if namespaceServices == nil {
-		namespaceServices = make(map[string]*k8sV1.Service)
+		namespaceServices = make(map[string]*ServiceItem)
 	}
-	namespaceServices[service.Name] = service
+	namespaceServices[service.Name] = &ServiceItem{Service: service, Status: common.ProcessingInProgress}
 	existing.Service[service.Namespace] = namespaceServices
 	s.cache[identity] = existing
 
@@ -88,10 +96,53 @@ func (s *serviceCache) Get(key string) []*k8sV1.Service {
 	}
 }
 
-func getOrderedServices(serviceMap map[string]*k8sV1.Service) []*k8sV1.Service {
+func (p *serviceCache) GetSvcProcessStatus(service *k8sV1.Service) string {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	identity := p.getKey(service)
+
+	svcNamespaceMap, ok := p.cache[identity]
+	if ok {
+		svcNameMap, ok := svcNamespaceMap.Service[service.Namespace]
+		if ok {
+			svc, ok := svcNameMap[service.Name]
+			if ok {
+				return svc.Status
+			}
+		}
+	}
+
+	return common.NotProcessed
+}
+
+func (p *serviceCache) UpdateSvcProcessStatus(service *k8sV1.Service, status string) error {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	identity := p.getKey(service)
+
+	svcNamespaceMap, ok := p.cache[identity]
+	if ok {
+		svcNameMap, ok := svcNamespaceMap.Service[service.Namespace]
+		if ok {
+			svc, ok := svcNameMap[service.Name]
+			if ok {
+				svc.Status = status
+				p.cache[identity] = svcNamespaceMap
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf(LogCacheFormat, "Update", "Service",
+		service.Name, service.Namespace, "", "nothing to update, service not found in cache")
+}
+
+func getOrderedServices(serviceMap map[string]*ServiceItem) []*k8sV1.Service {
 	orderedServices := make([]*k8sV1.Service, 0, len(serviceMap))
 	for _, value := range serviceMap {
-		orderedServices = append(orderedServices, value)
+		orderedServices = append(orderedServices, value.Service)
 	}
 	if len(orderedServices) > 1 {
 		sort.Slice(orderedServices, func(i, j int) bool {
@@ -123,6 +174,7 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 		lbPort = common.DefaultMtlsPort
 	)
 	services := s.Get(namespace)
+
 	if len(services) == 0 {
 		return lb, 0
 	}
@@ -131,25 +183,30 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
 				if len(loadBalancerStatus[0].Hostname) > 0 {
+					//Add "." at the end of the address to prevent additional DNS calls via search domains
+					if common.IsAbsoluteFQDNEnabled() {
+						return loadBalancerStatus[0].Hostname + common.Sep, common.DefaultMtlsPort
+					}
 					return loadBalancerStatus[0].Hostname, common.DefaultMtlsPort
 				} else {
 					return loadBalancerStatus[0].IP, common.DefaultMtlsPort
 				}
 			} else if len(service.Spec.ExternalIPs) > 0 {
-				lb = service.Spec.ExternalIPs[0]
+				externalIp := service.Spec.ExternalIPs[0]
 				for _, port := range service.Spec.Ports {
 					if port.Port == common.DefaultMtlsPort {
 						lbPort = int(port.NodePort)
-						return lb, lbPort
+						return externalIp, lbPort
 					}
 				}
 			}
 		}
 	}
+
 	return lb, lbPort
 }
 
-func NewServiceController(clusterID string, stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration) (*ServiceController, error) {
+func NewServiceController(stopCh <-chan struct{}, handler ServiceHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*ServiceController, error) {
 
 	serviceController := ServiceController{}
 	serviceController.ServiceHandler = handler
@@ -161,7 +218,7 @@ func NewServiceController(clusterID string, stopCh <-chan struct{}, handler Serv
 	serviceController.Cache = &podCache
 	var err error
 
-	serviceController.K8sClient, err = K8sClientFromConfig(config)
+	serviceController.K8sClient, err = clientLoader.LoadKubeClientFromConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ingress service controller k8s client: %v", err)
 	}
@@ -180,31 +237,79 @@ func NewServiceController(clusterID string, stopCh <-chan struct{}, handler Serv
 		&k8sV1.Service{}, resyncPeriod, cache.Indexers{},
 	)
 
-	mcd := NewMonitoredDelegator(&serviceController, clusterID, "service")
-	NewController("service-ctrl-"+config.Host, stopCh, mcd, serviceController.informer)
+	NewController("service-ctrl", config.Host, stopCh, &serviceController, serviceController.informer)
 
 	return &serviceController, nil
 }
 
-func (s *ServiceController) Added(ctx context.Context, obj interface{}) {
-	service := obj.(*k8sV1.Service)
+func (s *ServiceController) Added(ctx context.Context, obj interface{}) error {
+	service, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Service", obj)
+	}
 	s.Cache.Put(service)
-	s.ServiceHandler.Added(ctx, service)
+	return s.ServiceHandler.Added(ctx, service)
 }
 
-func (s *ServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) {
-
-	service := obj.(*k8sV1.Service)
+func (s *ServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
+	service, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Service", obj)
+	}
 	s.Cache.Put(service)
-	s.ServiceHandler.Updated(ctx, service)
+	return s.ServiceHandler.Updated(ctx, service)
 }
 
-func (s *ServiceController) Deleted(ctx context.Context, obj interface{}) {
-	service := obj.(*k8sV1.Service)
-	s.Cache.Delete(service)
-	s.ServiceHandler.Deleted(ctx, service)
+func (s *ServiceController) Deleted(ctx context.Context, obj interface{}) error {
+	service, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Service", obj)
+	}
+	err := s.ServiceHandler.Deleted(ctx, service)
+	if err == nil {
+		s.Cache.Delete(service)
+	}
+	return err
+}
+
+func (d *ServiceController) GetProcessItemStatus(obj interface{}) (string, error) {
+	service, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *v1.Service", obj)
+	}
+	return d.Cache.GetSvcProcessStatus(service), nil
+}
+
+func (d *ServiceController) UpdateProcessItemStatus(obj interface{}, status string) error {
+	service, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.Service", obj)
+	}
+	return d.Cache.UpdateSvcProcessStatus(service, status)
 }
 
 func (s *serviceCache) shouldIgnoreBasedOnLabels(service *k8sV1.Service) bool {
 	return service.Annotations[common.AdmiralIgnoreAnnotation] == "true" || service.Labels[common.AdmiralIgnoreAnnotation] == "true"
+}
+
+func (d *ServiceController) LogValueOfAdmiralIoIgnore(obj interface{}) {
+	s, ok := obj.(*k8sV1.Service)
+	if !ok {
+		return
+	}
+	if s.Annotations[common.AdmiralIgnoreAnnotation] == "true" || s.Labels[common.AdmiralIgnoreAnnotation] == "true" {
+		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.DeploymentResourceType,
+			s.Name, s.Namespace, "", "Value=true")
+	}
+}
+
+func (sec *ServiceController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
+	service, ok := obj.(*k8sV1.Service)
+	if ok && isRetry {
+		return sec.Cache.Get(service.Namespace), nil
+	}
+	if ok && sec.K8sClient != nil {
+		return sec.K8sClient.CoreV1().Services(service.Namespace).Get(ctx, service.Name, meta_v1.GetOptions{})
+	}
+	return nil, fmt.Errorf("kubernetes client is not initialized, txId=%s", ctx.Value("txId"))
 }
