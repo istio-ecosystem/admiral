@@ -22,6 +22,7 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 
@@ -46,11 +47,13 @@ const (
 // DO NOT USE - TEST ONLY.
 var LoadKubeConfig = clientcmd.Load
 
+var remoteClustersMetric common.Gauge
+
 // addSecretCallback prototype for the add secret callback function.
-type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
+type addSecretCallback func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error
 
 // updateSecretCallback prototype for the update secret callback function.
-type updateSecretCallback func(config *rest.Config, dataKey string, resyncPeriod time.Duration) error
+type updateSecretCallback func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error
 
 // removeSecretCallback prototype for the remove secret callback function.
 type removeSecretCallback func(dataKey string) error
@@ -94,6 +97,7 @@ func NewController(
 	addCallback addSecretCallback,
 	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
+	admiralProfile string,
 	secretResolverType string) *Controller {
 
 	ctx := context.Background()
@@ -163,6 +167,7 @@ func NewController(
 			}
 		},
 	})
+	remoteClustersMetric = common.NewGaugeFrom(common.ClustersMonitoredMetricName, "Gauge for the clusters monitored by Admiral")
 	return controller
 }
 
@@ -194,10 +199,11 @@ func StartSecretController(
 	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
 	namespace string,
+	admiralProfile string,
 	secretResolverType string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, secretResolverType)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverType)
 
 	go controller.Run(ctx.Done())
 
@@ -304,7 +310,7 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
 
-			if err := c.addCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
+			if err := c.addCallback(restConfig, clusterID, common.GetResyncIntervals()); err != nil {
 				log.Errorf("error during secret loading for clusterID: %s %v", clusterID, err)
 				continue
 			}
@@ -328,14 +334,13 @@ func (c *Controller) addMemberCluster(secretName string, s *corev1.Secret) {
 			}
 
 			c.Cs.RemoteClusters[clusterID] = remoteCluster
-			if err := c.updateCallback(restConfig, clusterID, common.GetAdmiralParams().CacheRefreshDuration); err != nil {
+			if err := c.updateCallback(restConfig, clusterID, common.GetResyncIntervals()); err != nil {
 				log.Errorf("Error updating cluster_id from secret=%v: %s %v",
 					clusterID, secretName, err)
 			}
 		}
-
 	}
-	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
 
@@ -350,6 +355,6 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 			delete(c.Cs.RemoteClusters, clusterID)
 		}
 	}
-	common.RemoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
+	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
 	log.Infof("Number of remote clusters: %d", len(c.Cs.RemoteClusters))
 }
