@@ -34,7 +34,6 @@ require (
 	github.com/jamiealquiza/tachymeter v2.0.0+incompatible
 	github.com/jedib0t/go-pretty/v6 v6.5.3
 	github.com/prometheus/common v0.53.0
-	github.intuit.com/idps/idps-go-sdk/v3 v3.9909.0
 	go.opentelemetry.io/otel v1.27.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.49.0
 	go.opentelemetry.io/otel/metric v1.27.0
@@ -103,9 +102,6 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tevino/abool v1.2.0 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
-	github.intuit.com/idps/device-grant-flow/go/dgfsdk v0.0.0-20220428022612-cf054cda65f7 // indirect
-	github.intuit.com/idps/idps-go-commons/v3 v3.4.4 // indirect
-	github.intuit.com/idps/idps-go-swagger-clients v1.8.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
