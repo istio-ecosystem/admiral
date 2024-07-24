@@ -161,3 +161,14 @@ kind: ServiceAccount
 metadata:
   name: admiral
   namespace: admiral-sync
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admiral-token
+  namespace: admiral-sync
+  annotations:
+    kubernetes.io/service-account.name: admiral
+type: kubernetes.io/service-account-token
