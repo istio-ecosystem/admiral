@@ -59,7 +59,7 @@ func getSampleIdentityConfig() IdentityConfig {
 	cluster := IdentityConfigCluster{
 		Name:            "cg-tax-ppd-usw2-k8s",
 		Locality:        "us-west-2",
-		IngressEndpoint: "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		IngressEndpoint: "a-elb.us-west-2.elb.amazonaws.com.",
 		IngressPort:     "15443",
 		IngressPortName: "http",
 		Environment:     environments,

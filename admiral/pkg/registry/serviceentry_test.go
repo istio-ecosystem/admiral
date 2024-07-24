@@ -63,7 +63,7 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 func TestGetIngressEndpoints(t *testing.T) {
 	identityConfig := getSampleIdentityConfig()
 	expectedIngressEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
@@ -127,13 +127,13 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	common.InitializeConfig(admiralParams)
 	e2eEnv := getSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
 	ingressEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	remoteEndpoint := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
@@ -163,7 +163,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			ingressEndpoints:          ingressEndpoints,
 			operatorCluster:           "cg-tax-ppd-usw2-k8s",
 			sourceCluster:             "apigw-cx-ppd-usw2-k8s",
-			remoteEndpointAddress:     "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
 			expectedSEEndpoints:       remoteEndpoint,
 		},
 		{
@@ -174,7 +174,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			ingressEndpoints:          ingressEndpoints,
 			operatorCluster:           "cg-tax-ppd-usw2-k8s",
 			sourceCluster:             "cg-tax-ppd-usw2-k8s",
-			remoteEndpointAddress:     "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
 			expectedSEEndpoints:       localEndpoint,
 		},
 	}
@@ -252,10 +252,10 @@ func TestBuildServiceEntryForClusterByEnv(t *testing.T) {
 	ctx := context.Background()
 	ctxLogger := common.GetCtxLogger(ctx, "ctg-taxprep-partnerdatatotax", "")
 	expectedLocalServiceEntry := createMockServiceEntry("e2e", "Intuit.ctg.taxprep.partnerdatatotax", "partner-data-to-tax-spk-root-service.ctg-taxprep-partnerdatatotax-usw2-e2e.svc.cluster.local.", 8090, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "istio-system"})
-	expectedRemoteServiceEntry := createMockServiceEntry("e2e", "Intuit.ctg.taxprep.partnerdatatotax", "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.", 15443, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e"})
+	expectedRemoteServiceEntry := createMockServiceEntry("e2e", "Intuit.ctg.taxprep.partnerdatatotax", "a-elb.us-west-2.elb.amazonaws.com.", 15443, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e"})
 	e2eEnv := getSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
 	ingressEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
@@ -280,7 +280,7 @@ func TestBuildServiceEntryForClusterByEnv(t *testing.T) {
 			identity:                  "Intuit.ctg.taxprep.partnerdatatotax",
 			clientAssets:              []map[string]string{{"name": "sample"}},
 			ingressEndpoints:          ingressEndpoints,
-			remoteEndpointAddress:     "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
 			identityConfigEnvironment: e2eEnv,
 			expectedServiceEntry:      &expectedRemoteServiceEntry,
 		},
@@ -293,7 +293,7 @@ func TestBuildServiceEntryForClusterByEnv(t *testing.T) {
 			identity:                  "Intuit.ctg.taxprep.partnerdatatotax",
 			clientAssets:              []map[string]string{{"name": "sample"}},
 			ingressEndpoints:          ingressEndpoints,
-			remoteEndpointAddress:     "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
 			identityConfigEnvironment: e2eEnv,
 			expectedServiceEntry:      &expectedLocalServiceEntry,
 		},
