@@ -16,6 +16,15 @@ fi
 
 #TBD make sure you have context switched
 export KUBECONFIG=$remote_cluster
+if [ -z "$KUBECONFIG" ]
+then
+    echo "\$KUBECONFIG is not set"
+    exit 1
+elif [[ $KUBECONFIG == *"ppd"* || $KUBECONFIG == *"prd"* || $KUBECONFIG == *"prod"* ]]
+then
+    echo "\$KUBECONFIG is not for a dev cluster"
+    exit 1
+fi
 
 #prep for creating kubeconfig of remote cluster
 export WORK_DIR=$(pwd)
@@ -68,6 +77,15 @@ source remote_cluster_env_vars
 #export KUBECONFIG=~/.kube/config
 #kubectx minikube
 export KUBECONFIG=$local_cluster
+if [ -z "$KUBECONFIG" ]
+then
+    echo "\$KUBECONFIG is not set"
+    exit 1
+elif [[ $KUBECONFIG == *"ppd"* || $KUBECONFIG == *"prd"* || $KUBECONFIG == *"prod"* ]]
+then
+    echo "\$KUBECONFIG is not for a dev cluster"
+    exit 1
+fi
 
 kubectl delete secret ${CLUSTER_NAME} -n $namespace_secrets
 kubectl create secret generic ${CLUSTER_NAME} --from-file ${KUBECFG_FILE} -n $namespace_secrets
