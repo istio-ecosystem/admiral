@@ -52,8 +52,6 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ClientConnectionConfigList{},
 		&Dependency{},
 		&DependencyList{},
-		&DependencyProxy{},
-		&DependencyProxyList{},
 		&GlobalTrafficPolicy{},
 		&GlobalTrafficPolicyList{},
 		&OutlierDetection{},
