@@ -57,8 +57,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().ClientConnectionConfigs().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("dependencies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().Dependencies().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("dependencyproxies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().DependencyProxies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().GlobalTrafficPolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("outlierdetections"):
