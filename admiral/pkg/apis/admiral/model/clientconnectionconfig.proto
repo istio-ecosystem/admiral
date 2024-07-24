@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package admiral.global.v1alpha;
+
+option go_package = "model";
+
+message ClientConnectionConfig {
+
+    ConnectionPool connectionPool = 1;
+
+    Tunnel tunnel = 2;
+}
+
+message ConnectionPool {
+
+    message TcpKeepalive {
+
+        uint32 probes = 1;
+
+        string time = 2;
+
+        string interval = 3;
+
+    }
+
+    message TCP {
+
+        // Maximum number of HTTP1 /TCP connections to a destination host.
+        int32 maxConnections = 1;
+
+        string connectTimeout = 2;
+
+        TcpKeepalive tcpKeepalive = 3;
+
+        // The maximum duration of a connection
+        string maxConnectionDuration = 4;
+    }
+
+    // HTTP connection pool settings
+    message HTTP {
+
+        // Maximum number of pending HTTP requests to a destination.
+        int32 http1MaxPendingRequests = 1;
+
+        // Maximum number of requests to a backend
+        int32 http2MaxRequests = 2;
+
+        // Maximum number of requests per connection to a backend.
+        int32 maxRequestsPerConnection = 3;
+
+        int32 maxRetries = 4;
+
+        string idleTimeout = 5;
+
+        enum H2UpgradePolicy {
+            DEFAULT = 0;
+            DO_NOT_UPGRADE = 1;
+            UPGRADE = 2;
+        };
+        H2UpgradePolicy h2UpgradePolicy = 6;
+
+        bool useClientProtocol = 7;
+    };
+
+
+    TCP tcp = 1;
+
+    HTTP http = 2;
+
+}
+
+message Tunnel {
+    string protocol = 1;
+
+    string targetHost = 2;
+
+    uint32 targetPort = 3;
+}

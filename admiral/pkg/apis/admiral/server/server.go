@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
-	"github.com/gorilla/mux"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
+
+	_ "net/http/pprof"
 )
 
 type Service struct {
@@ -20,7 +23,7 @@ type Service struct {
 // filter definition as a func
 type FilterHandlerFunc func(inner http.Handler, name string) http.Handler
 
-//structs used to collect routes and filters
+// structs used to collect routes and filters
 type Filter struct {
 	HandlerFunc FilterHandlerFunc
 }
@@ -47,6 +50,9 @@ func (s *Service) Start(ctx context.Context, port int, routes Routes, filter []F
 	go waitForStop(s)
 
 	router := s.newRouter(routes, filter)
+	if port == 8080 {
+		router.PathPrefix("/debug/").Handler(http.DefaultServeMux)
+	}
 
 	s.server = http.Server{Addr: ":" + strconv.Itoa(port), Handler: router}
 

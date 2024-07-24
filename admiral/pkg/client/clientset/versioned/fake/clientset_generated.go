@@ -20,8 +20,8 @@ package fake
 
 import (
 	clientset "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
-	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1"
-	fakeadmiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1/fake"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1alpha1"
+	fakeadmiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/typed/admiral/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -79,7 +79,7 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// AdmiralV1 retrieves the AdmiralV1Client
-func (c *Clientset) AdmiralV1() admiralv1.AdmiralV1Interface {
-	return &fakeadmiralv1.FakeAdmiralV1{Fake: &c.Fake}
+// AdmiralV1alpha1 retrieves the AdmiralV1alpha1Client
+func (c *Clientset) AdmiralV1alpha1() admiralv1alpha1.AdmiralV1alpha1Interface {
+	return &fakeadmiralv1alpha1.FakeAdmiralV1alpha1{Fake: &c.Fake}
 }

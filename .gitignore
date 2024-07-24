@@ -1,8 +1,11 @@
 .idea
 .idea/vcs.xml
 
-out*
+out/*
+out.yaml
 *.tar.gz
 *.out
+*.prof
 istio-*
 .DS_Store
+cobertura-coverage.xml

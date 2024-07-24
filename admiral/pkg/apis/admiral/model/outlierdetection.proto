@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package admiral.global.v1alpha;
+
+option go_package = "model";
+
+// ```
+// apiVersion: admiral.io/v1alpha1
+// kind: OutlierDetection
+// metadata:
+//   name: my-outlier-configuration
+// spec:
+//   selector:
+//     identity: my-identity
+//     env: prd
+//   outlier_config:
+//     base_ejection_time: 180
+//     consecutive_gateway_errors: 100
+//     interval: 60
+// ```
+
+message OutlierDetection {
+    // REQUIRED: base outlier configuration.
+    OutlierConfig outlier_config = 1;
+
+    // REQUIRED: One or more labels that indicate a specific set of pods/VMs
+    // on which this outlier configuration should be applied. The scope of
+    // label search is restricted to namespace mark for mesh enablement
+    // this will scan all cluster and namespace
+    map<string, string> selector = 2;
+}
+
+// OutlierConfig describes routing for a endpoint.
+message OutlierConfig {
+
+    //REQUIRED: Minimum duration of time in seconds, the endpoint will be ejected
+    int64 base_ejection_time = 1;
+
+    //REQUIRED: No. of consecutive failures in specified interval after which the endpoint will be ejected
+    uint32 consecutive_gateway_errors = 2;
+
+    //REQUIRED: Time interval between ejection sweep analysis
+    int64 interval = 3;
+}
