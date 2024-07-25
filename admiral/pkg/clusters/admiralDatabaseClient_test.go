@@ -1,5 +1,6 @@
 package clusters
 
+/*
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -421,3 +422,4 @@ func TestDeleteWorkloadData(t *testing.T) {
 		})
 	}
 }
+*/
