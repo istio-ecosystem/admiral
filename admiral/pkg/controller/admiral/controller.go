@@ -52,6 +52,7 @@ type Delegator interface {
 	GetProcessItemStatus(interface{}) (string, error)
 	LogValueOfAdmiralIoIgnore(interface{})
 	Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error)
+	DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error)
 }
 
 type EventType string
@@ -152,6 +153,17 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 				if err != nil {
 					ctxLogger.Errorf(err.Error())
 				}
+
+				// Check if the generation of the object has changed
+				// if the generation of old and new object is same then we do not process the object
+				doesGenerationMatch, err := controller.delegator.DoesGenerationMatch(ctxLogger, oldObj, newObj)
+				if err != nil {
+					ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), err.Error())
+				}
+				if doesGenerationMatch {
+					return
+				}
+
 				controller.delegator.LogValueOfAdmiralIoIgnore(newObj)
 				latestObj, isVersionChanged := checkIfResourceVersionHasIncreased(ctxLogger, ctx, oldObj, newObj, delegator)
 				txId, ctxLogger = updateTxId(ctx, newObj, latestObj, txId, ctxLogger, controller)

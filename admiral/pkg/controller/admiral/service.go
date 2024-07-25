@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/log"
+	"github.com/sirupsen/logrus"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -44,6 +45,10 @@ type ServiceController struct {
 	ServiceHandler ServiceHandler
 	Cache          *serviceCache
 	informer       cache.SharedIndexInformer
+}
+
+func (s *ServiceController) DoesGenerationMatch(*logrus.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
 }
 
 type serviceCache struct {

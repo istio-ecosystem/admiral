@@ -7,6 +7,7 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -33,6 +34,10 @@ type SidecarController struct {
 	IstioClient    versioned.Interface
 	SidecarHandler SidecarHandler
 	informer       cache.SharedIndexInformer
+}
+
+func (s *SidecarController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
 }
 
 func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*SidecarController, error) {

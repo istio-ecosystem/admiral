@@ -99,6 +99,7 @@ type AdmiralParams struct {
 	EnableSyncIstioResourcesToSourceClusters bool
 	AdmiralStateSyncerMode                   bool
 	DefaultWarmupDurationSecs                int64
+	EnableGenerationCheck                    bool
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool

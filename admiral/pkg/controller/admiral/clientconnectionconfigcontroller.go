@@ -31,6 +31,10 @@ type ClientConnectionConfigController struct {
 	Cache                           *clientConnectionSettingsCache
 }
 
+func (c *ClientConnectionConfigController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type clientConnectionSettingsItem struct {
 	clientConnectionSettings *v1.ClientConnectionConfig
 	status                   string

@@ -34,6 +34,10 @@ type GlobalTrafficController struct {
 	informer             cache.SharedIndexInformer
 }
 
+func (d *GlobalTrafficController) DoesGenerationMatch(*logrus.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type gtpItem struct {
 	GlobalTrafficPolicy *v1.GlobalTrafficPolicy
 	Status              string

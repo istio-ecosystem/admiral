@@ -40,9 +40,11 @@ func (m *MockIstioConfigStore) Delete(typ, name, namespace string) error {
 }
 
 type MockDeploymentHandler struct {
+	Obj *k8sAppsV1.Deployment
 }
 
 func (m *MockDeploymentHandler) Added(ctx context.Context, obj *k8sAppsV1.Deployment) error {
+	m.Obj = obj
 	return nil
 }
 

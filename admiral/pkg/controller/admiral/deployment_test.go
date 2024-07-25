@@ -14,6 +14,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -213,6 +214,113 @@ func TestDeploymentController_Deleted(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeploymentControlle_DoesGenerationMatch(t *testing.T) {
+	dc := DeploymentController{}
+
+	admiralParams := common.AdmiralParams{}
+
+	testCases := []struct {
+		name                  string
+		deploymentNew         interface{}
+		deploymentOld         interface{}
+		enableGenerationCheck bool
+		expectedValue         bool
+		expectedError         error
+	}{
+		{
+			name: "Given context, new deployment and old deployment object " +
+				"When new deployment is not of type *v1.Deployment " +
+				"Then func should return an error",
+			deploymentNew:         struct{}{},
+			deploymentOld:         struct{}{},
+			enableGenerationCheck: true,
+			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *v1.Deployment"),
+		},
+		{
+			name: "Given context, new deployment and old deployment object " +
+				"When old deployment is not of type *v1.Deployment " +
+				"Then func should return an error",
+			deploymentNew:         &k8sAppsV1.Deployment{},
+			deploymentOld:         struct{}{},
+			enableGenerationCheck: true,
+			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *v1.Deployment"),
+		},
+		{
+			name: "Given context, new deployment and old deployment object " +
+				"When deployment generation check is enabled but the generation does not match " +
+				"Then func should return false ",
+			deploymentNew: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			deploymentOld: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			enableGenerationCheck: true,
+			expectedError:         nil,
+		},
+		{
+			name: "Given context, new deployment and old deployment object " +
+				"When deployment generation check is disabled " +
+				"Then func should return false ",
+			deploymentNew: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			deploymentOld: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "Given context, new deployment and old deployment object " +
+				"When deployment generation check is enabled and the old and new deployment generation is equal " +
+				"Then func should just return true",
+			deploymentNew: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			deploymentOld: &k8sAppsV1.Deployment{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			enableGenerationCheck: true,
+			expectedError:         nil,
+			expectedValue:         true,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"txId": "abc",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams.EnableGenerationCheck = tc.enableGenerationCheck
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+			actual, err := dc.DoesGenerationMatch(ctxLogger, tc.deploymentNew, tc.deploymentOld)
+			if !ErrorEqualOrSimilar(err, tc.expectedError) {
+				t.Errorf("expected: %v, got: %v", tc.expectedError, err)
+			}
+			if err == nil {
+				if tc.expectedValue != actual {
+					t.Errorf("expected: %v, got: %v", tc.expectedValue, actual)
+				}
+			}
+		})
+	}
+
 }
 
 func TestNewDeploymentController(t *testing.T) {
@@ -664,6 +772,15 @@ func TestDeploymentDeleted(t *testing.T) {
 }
 
 func TestUpdateProcessItemStatus(t *testing.T) {
+	common.ResetSync()
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+	}
+	common.InitializeConfig(admiralParams)
 	var (
 		serviceAccount                     = &coreV1.ServiceAccount{}
 		env                                = "prd"
@@ -805,6 +922,15 @@ func TestUpdateProcessItemStatus(t *testing.T) {
 }
 
 func TestGetProcessItemStatus(t *testing.T) {
+	common.ResetSync()
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+	}
+	common.InitializeConfig(admiralParams)
 	var (
 		serviceAccount                     = &coreV1.ServiceAccount{}
 		env                                = "prd"

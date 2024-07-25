@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -36,6 +37,10 @@ type DependencyController struct {
 	DepHandler   DepHandler
 	Cache        *depCache
 	informer     cache.SharedIndexInformer
+}
+
+func (d *DependencyController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
 }
 
 type DependencyItem struct {

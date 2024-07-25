@@ -242,6 +242,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSyncIstioResourcesToSourceClusters, "enable_sync_istio_resources_to_source_clusters", true, "Enable/Disable Sync of Istio Resources to Source Clusters")
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
+
+	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
 	return rootCmd
 }
 

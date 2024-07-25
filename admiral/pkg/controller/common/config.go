@@ -426,6 +426,12 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
+func DoGenerationCheck() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableGenerationCheck
+}
+
 func DoSyncIstioResourcesToSourceClusters() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

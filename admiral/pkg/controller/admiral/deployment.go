@@ -50,6 +50,28 @@ type DeploymentController struct {
 	labelSet          *common.LabelSet
 }
 
+func (d *DeploymentController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
+	if !common.DoGenerationCheck() {
+		ctxLogger.Debugf(ControllerLogFormat, "DoesGenerationMatch", "",
+			fmt.Sprintf("generation check is disabled"))
+		return false, nil
+	}
+	deploymentNew, ok := obj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
+	}
+	deploymentOld, ok := oldObj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", oldObj)
+	}
+	if deploymentNew.Generation == deploymentOld.Generation {
+		ctxLogger.Infof(ControllerLogFormat, "DoesGenerationMatch", "",
+			fmt.Sprintf("old and new generation matched for deployment %s", deploymentNew.Name))
+		return true, nil
+	}
+	return false, nil
+}
+
 type deploymentCache struct {
 	//map of dependencies key=identity value array of onboarded identities
 	cache map[string]*DeploymentClusterEntry
