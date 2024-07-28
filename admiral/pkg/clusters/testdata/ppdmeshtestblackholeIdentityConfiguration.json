@@ -1,0 +1,123 @@
+{
+  "identityName": "intuit.services.gateway.ppdmeshtestblackhole",
+  "clusters": [
+    {
+      "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
+      "name": "multi-long-1026-usw2-k8s",
+      "locality": "us-west-2",
+      "ingressEndpoint": "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+      "ingressPort": "15443",
+      "ingressPortName": "http",
+      "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
+      "environment": [
+        {
+          "name": "multi-long-1026-usw2-k8s",
+          "namespace": "services-blackholed268-usw2-dev",
+          "serviceName": "blackhole-gw",
+          "type": "deployment",
+          "selectors": {
+            "app": "blackhole-gw"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "connectionPool": {
+              "http": {
+                "http2MaxRequests": 1000,
+                "maxRequestsPerConnection": 5
+              }
+            },
+            "loadBalancer": {
+              "localityLbSetting": {
+                "distribute": [
+                  {
+                    "from": "*",
+                    "to": {
+                      "us-west-2": 100
+                    }
+                  }
+                ]
+              },
+              "simple": "LEAST_REQUEST",
+              "warmupDurationSecs": "45s"
+            },
+            "outlierDetection": {
+              "consecutive5xxErrors": 0,
+              "consecutiveGatewayErrors": 0
+            }
+          }
+        }
+      ],
+      "clientAssets": [
+        {
+          "name": "intuit.services.gateway.ppdmeshtestinbounds"
+        }
+      ]
+    },
+    {
+      "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
+      "name": "multi-long-1026-use2-k8s",
+      "locality": "us-east-2",
+      "ingressEndpoint": "internal-ff96ae9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-east-2.elb.amazonaws.com.",
+      "ingressPort": "15443",
+      "ingressPortName": "http",
+      "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
+      "environment": [
+        {
+          "name": "multi-long-1026-use2-k8s",
+          "namespace": "services-blackholesh45-use2-dev",
+          "serviceName": "blackhole-gw",
+          "type": "deployment",
+          "selectors": {
+            "app": "blackhole-gw"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "connectionPool": {
+              "http": {
+                "http2MaxRequests": 1000,
+                "maxRequestsPerConnection": 5
+              }
+            },
+            "loadBalancer": {
+              "localityLbSetting": {
+                "distribute": [
+                  {
+                    "from": "*",
+                    "to": {
+                      "us-west-2": 100
+                    }
+                  }
+                ]
+              },
+              "simple": "LEAST_REQUEST",
+              "warmupDurationSecs": "45s"
+            },
+            "outlierDetection": {
+              "consecutive5xxErrors": 0,
+              "consecutiveGatewayErrors": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "clientAssets": [
+    {
+      "name": "intuit.services.gateway.ppdmeshtestinbounds"
+    }
+  ]
+}

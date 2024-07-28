@@ -90,9 +90,11 @@ type RemoteRegistry struct {
 	ServiceEntrySuspender       ServiceEntrySuspender
 	AdmiralDatabaseClient       AdmiralDatabaseManager
 	DependencyController        *admiral.DependencyController
+	ShardController             *admiral.ShardController
 	ClientLoader                loader.ClientLoader
 	ClusterShardHandler         registry.ClusterShardStore
 	ClusterIdentityStoreHandler registry.ClusterIdentityStore
+	RegistryClient              registry.IdentityConfiguration
 }
 
 // ModifySEFunc is a function that follows the dependency injection pattern which is used by HandleEventForGlobalTrafficPolicy
@@ -169,7 +171,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		clientLoader = loader.GetKubeClientLoader()
 	}
 
-	return &RemoteRegistry{
+	rr := &RemoteRegistry{
 		ctx:                   ctx,
 		StartTime:             time.Now(),
 		remoteControllers:     make(map[string]*RemoteController),
@@ -178,21 +180,12 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		AdmiralDatabaseClient: admiralDatabaseClient,
 		ClientLoader:          clientLoader,
 	}
-}
 
-// NewRemoteRegistryForHAController - creates an instance of RemoteRegistry
-// which initializes properties relevant to database builder functionality
-func NewRemoteRegistryForHAController(ctx context.Context) *RemoteRegistry {
-	return &RemoteRegistry{
-		ctx:               ctx,
-		StartTime:         time.Now(),
-		remoteControllers: make(map[string]*RemoteController),
-		ClientLoader:      loader.GetKubeClientLoader(),
-		AdmiralCache: &AdmiralCache{
-			IdentityClusterCache:    common.NewMapOfMaps(),
-			IdentityDependencyCache: common.NewMapOfMaps(),
-		},
+	if common.IsAdmiralOperatorMode() {
+		rr.RegistryClient = registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER"))
 	}
+
+	return rr
 }
 
 type sourceToDestinations struct {

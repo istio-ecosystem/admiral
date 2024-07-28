@@ -3,12 +3,12 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"os"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -76,33 +76,26 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	return rr, err
 }
 
-func InitAdmiralHA(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
+func InitAdmiralOperator(ctx context.Context, params common.AdmiralParams) (*RemoteRegistry, error) {
 	var (
 		err error
 		rr  *RemoteRegistry
 	)
-	logrus.Infof("Initializing Admiral HA with params: %v", params)
+	logrus.Infof("Initializing Admiral Operator with params: %v", params)
 	common.InitializeConfig(params)
-	if common.GetHAMode() == common.HAController {
-		rr = NewRemoteRegistryForHAController(ctx)
-	} else {
-		return nil, fmt.Errorf("admiral HA only supports %s mode", common.HAController)
-	}
-	destinationServiceProcessor := &ProcessDestinationService{}
-	rr.DependencyController, err = admiral.NewDependencyController(
-		ctx.Done(),
-		&DependencyHandler{
-			RemoteRegistry:              rr,
-			DestinationServiceProcessor: destinationServiceProcessor,
-		},
-		params.KubeconfigPath,
-		params.DependenciesNamespace,
-		params.CacheReconcileDuration,
-		rr.ClientLoader)
+	//init admiral state
+	commonUtil.CurrentAdmiralState = commonUtil.AdmiralState{ReadOnly: ReadOnlyEnabled, IsStateInitialized: StateNotInitialized}
+	// start admiral state checker for DR
+	drStateChecker := initAdmiralStateChecker(ctx, params.AdmiralStateCheckerName, params.DRStateStoreConfigPath)
+	rr = NewRemoteRegistry(ctx, params)
+	ctx = context.WithValue(ctx, "remoteRegistry", rr)
+	RunAdmiralStateCheck(ctx, params.AdmiralStateCheckerName, drStateChecker)
+	pauseForAdmiralToInitializeState()
+	logrus.Infof("starting ShardController")
+	rr.ShardController, err = admiral.NewShardController(ctx.Done(), &ShardHandler{RemoteRegistry: rr}, params.KubeconfigPath, params.DependenciesNamespace, params.CacheReconcileDuration, rr.ClientLoader)
 	if err != nil {
-		return nil, fmt.Errorf("error with DependencyController initialization: %v", err)
+		return nil, fmt.Errorf("error with ShardController initialization, err: %v", err)
 	}
-
 	err = InitAdmiralWithDefaultPersona(ctx, params, rr)
 	go rr.shutdown()
 	return rr, err
@@ -172,13 +165,12 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			StartTime: time.Now(),
 		}
 	)
-	if common.GetHAMode() != common.HAController {
+	if !common.IsAdmiralOperatorMode() {
 		logrus.Infof("starting ServiceController clusterID: %v", clusterID)
 		rc.ServiceController, err = admiral.NewServiceController(stop, &ServiceHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with ServiceController initialization, err: %v", err)
 		}
-
 		if common.IsClientConnectionConfigProcessingEnabled() {
 			logrus.Infof("starting ClientConnectionsConfigController clusterID: %v", clusterID)
 			rc.ClientConnectionConfigController, err = admiral.NewClientConnectionConfigController(
@@ -189,71 +181,64 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 		} else {
 			logrus.Infof("ClientConnectionsConfigController processing is disabled")
 		}
-
 		logrus.Infof("starting GlobalTrafficController clusterID: %v", clusterID)
 		rc.GlobalTraffic, err = admiral.NewGlobalTrafficController(stop, &GlobalTrafficHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with GlobalTrafficController initialization, err: %v", err)
 		}
-
 		logrus.Infof("starting OutlierDetectionController clusterID : %v", clusterID)
 		rc.OutlierDetectionController, err = admiral.NewOutlierDetectionController(stop, &OutlierDetectionHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with OutlierDetectionController initialization, err: %v", err)
 		}
-
 		logrus.Infof("starting NodeController clusterID: %v", clusterID)
 		rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with NodeController controller initialization, err: %v", err)
 		}
-		logrus.Infof("starting ServiceEntryController for clusterID: %v", clusterID)
-		rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clusterID, clientConfig, resyncPeriod.SeAndDrReconcileInterval, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with ServiceEntryController initialization, err: %v", err)
-		}
-
-		logrus.Infof("starting DestinationRuleController for clusterID: %v", clusterID)
-		rc.DestinationRuleController, err = istio.NewDestinationRuleController(stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clusterID, clientConfig, resyncPeriod.SeAndDrReconcileInterval, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with DestinationRuleController initialization, err: %v", err)
-		}
-
-		logrus.Infof("starting VirtualServiceController for clusterID: %v", clusterID)
-		virtualServiceHandler, err := NewVirtualServiceHandler(r, clusterID)
-		if err != nil {
-			return fmt.Errorf("error initializing VirtualServiceHandler: %v", err)
-		}
-		rc.VirtualServiceController, err = istio.NewVirtualServiceController(stop, virtualServiceHandler, clientConfig, 0, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with VirtualServiceController initialization, err: %v", err)
-		}
-
-		logrus.Infof("starting SidecarController for clusterID: %v", clusterID)
-		rc.SidecarController, err = istio.NewSidecarController(stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with SidecarController initialization, err: %v", err)
-		}
-
 		logrus.Infof("starting RoutingPoliciesController for clusterID: %v", clusterID)
 		rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with RoutingPoliciesController initialization, err: %v", err)
 		}
-	}
-	logrus.Infof("starting DeploymentController for clusterID: %v", clusterID)
-	rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod.UniversalReconcileInterval, r.ClientLoader)
-	if err != nil {
-		return fmt.Errorf("error with DeploymentController initialization, err: %v", err)
-	}
-	logrus.Infof("starting RolloutController clusterID: %v", clusterID)
-	if r.AdmiralCache == nil {
-		logrus.Warn("admiral cache was nil!")
-	} else if r.AdmiralCache.argoRolloutsEnabled {
-		rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod.UniversalReconcileInterval, r.ClientLoader)
+		logrus.Infof("starting DeploymentController for clusterID: %v", clusterID)
+		rc.DeploymentController, err = admiral.NewDeploymentController(stop, &DeploymentHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod.UniversalReconcileInterval, r.ClientLoader)
 		if err != nil {
-			return fmt.Errorf("error with RolloutController initialization, err: %v", err)
+			return fmt.Errorf("error with DeploymentController initialization, err: %v", err)
 		}
+		logrus.Infof("starting RolloutController clusterID: %v", clusterID)
+		if r.AdmiralCache == nil {
+			logrus.Warn("admiral cache was nil!")
+		} else if r.AdmiralCache.argoRolloutsEnabled {
+			rc.RolloutController, err = admiral.NewRolloutsController(stop, &RolloutHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod.UniversalReconcileInterval, r.ClientLoader)
+			if err != nil {
+				return fmt.Errorf("error with RolloutController initialization, err: %v", err)
+			}
+		}
+	}
+	logrus.Infof("starting ServiceEntryController for clusterID: %v", clusterID)
+	rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clusterID, clientConfig, resyncPeriod.SeAndDrReconcileInterval, r.ClientLoader)
+	if err != nil {
+		return fmt.Errorf("error with ServiceEntryController initialization, err: %v", err)
+	}
+	logrus.Infof("starting DestinationRuleController for clusterID: %v", clusterID)
+	rc.DestinationRuleController, err = istio.NewDestinationRuleController(stop, &DestinationRuleHandler{RemoteRegistry: r, ClusterID: clusterID}, clusterID, clientConfig, resyncPeriod.SeAndDrReconcileInterval, r.ClientLoader)
+	if err != nil {
+		return fmt.Errorf("error with DestinationRuleController initialization, err: %v", err)
+	}
+	logrus.Infof("starting VirtualServiceController for clusterID: %v", clusterID)
+	virtualServiceHandler, err := NewVirtualServiceHandler(r, clusterID)
+	if err != nil {
+		return fmt.Errorf("error initializing VirtualServiceHandler: %v", err)
+	}
+	rc.VirtualServiceController, err = istio.NewVirtualServiceController(stop, virtualServiceHandler, clientConfig, 0, r.ClientLoader)
+	if err != nil {
+		return fmt.Errorf("error with VirtualServiceController initialization, err: %v", err)
+	}
+	logrus.Infof("starting SidecarController for clusterID: %v", clusterID)
+	rc.SidecarController, err = istio.NewSidecarController(stop, &SidecarHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+	if err != nil {
+		return fmt.Errorf("error with SidecarController initialization, err: %v", err)
 	}
 	r.PutRemoteController(clusterID, &rc)
 	return nil

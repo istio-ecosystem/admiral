@@ -464,3 +464,15 @@ func GetDefaultWarmupDurationSecs() int64 {
 	defer wrapper.RUnlock()
 	return wrapper.params.DefaultWarmupDurationSecs
 }
+
+func IsAdmiralOperatorMode() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.AdmiralOperatorMode
+}
+
+func GetOperatorSyncNamespace() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.OperatorSyncNamespace
+}

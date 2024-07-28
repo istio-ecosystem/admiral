@@ -41,6 +41,8 @@ func setupForConfigTests() {
 			EnableSWAwareNSCaches:        true,
 			ExportToIdentityList:         []string{"*"},
 			ExportToMaxNamespaces:        35,
+			AdmiralOperatorMode:          false,
+			OperatorSyncNamespace:        "admiral-sync",
 		}
 		ResetSync()
 		initHappened = true
@@ -151,6 +153,14 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetExportToMaxNamespaces() != 35 {
 		t.Errorf("exportTo max namespaces mismatch, expected 35, got %v", GetExportToMaxNamespaces())
+	}
+
+	if IsAdmiralOperatorMode() {
+		t.Errorf("enable operator mode mismatch, expected false, got %v", IsAdmiralOperatorMode())
+	}
+
+	if GetOperatorSyncNamespace() != "admiral-sync" {
+		t.Errorf("operator sync namespace mismatch, expected admiral-sync, got %v", GetOperatorSyncNamespace())
 	}
 }
 

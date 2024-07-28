@@ -9417,6 +9417,9 @@ func compareServiceEntries(se1, se2 *istioNetworkingV1Alpha3.ServiceEntry) bool 
 	if se1.Resolution != se2.Resolution {
 		return false
 	}
+	if !reflect.DeepEqual(se1.ExportTo, se2.ExportTo) {
+		return false
+	}
 	if !reflect.DeepEqual(se1.SubjectAltNames, se2.SubjectAltNames) {
 		return false
 	}

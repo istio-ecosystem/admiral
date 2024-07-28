@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -446,7 +445,7 @@ func checkIfLogged(entries []*logrus.Entry, phrase string) bool {
 	return false
 }
 
-func TestInitAdmiralHA(t *testing.T) {
+func TestInitAdmiralOperator(t *testing.T) {
 	var (
 		ctx                 = context.TODO()
 		dummyKubeConfig     = "./testdata/fake.config"
@@ -459,12 +458,11 @@ func TestInitAdmiralHA(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "Given Admiral is running in HA mode for database builder, " +
-				"When InitAdmiralHA is invoked with correct parameters, " +
-				"Then, it should return RemoteRegistry with 3 controllers - DependencyController, " +
-				"DeploymentController, and RolloutController",
+			name: "Given Admiral is running in Operator mode, " +
+				"When InitAdmiralOperator is invoked with correct parameters, " +
+				"Then, it should return RemoteRegistry which has a ShardController and RegistryClient",
 			params: common.AdmiralParams{
-				HAMode:                common.HAController,
+				AdmiralOperatorMode:   true,
 				KubeconfigPath:        dummyKubeConfig,
 				DependenciesNamespace: dependencyNamespace,
 			},
@@ -472,34 +470,23 @@ func TestInitAdmiralHA(t *testing.T) {
 				if rr == nil {
 					t.Error("expected RemoteRegistry to be initialized, but got nil")
 				}
-				// check if it has DependencyController initialized
-				if rr != nil && rr.DependencyController == nil {
-					t.Error("expected DependencyController to be initialized, but it was not")
+				// check if it has ShardController initialized
+				if rr != nil && rr.ShardController == nil {
+					t.Error("expected ShardController to be initialized, but it was not")
+				}
+				// check if it has a RegistryClient initialized
+				if rr != nil && rr.RegistryClient == nil {
+					t.Error("expected RegistryClient to be initialized, but it was not")
 				}
 			},
 			expectedErr: nil,
-		},
-		{
-			name: "Given Admiral is running in HA mode for database builder, " +
-				"When InitAdmiralHA is invoked with invalid HAMode parameter, " +
-				"Then InitAdmiralHA should return an expected error",
-			params: common.AdmiralParams{
-				KubeconfigPath:        dummyKubeConfig,
-				DependenciesNamespace: dependencyNamespace,
-			},
-			assertFunc: func(rr *RemoteRegistry, t *testing.T) {
-				if rr != nil {
-					t.Error("expected RemoteRegistry to be uninitialized")
-				}
-			},
-			expectedErr: fmt.Errorf("admiral HA only supports %s mode", common.HAController),
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			common.ResetSync()
-			rr, err := InitAdmiralHA(ctx, c.params)
+			rr, err := InitAdmiralOperator(ctx, c.params)
 			if c.expectedErr == nil && err != nil {
 				t.Errorf("expected: nil, got: %v", err)
 			}

@@ -69,8 +69,8 @@ func GetRootCmd(args []string) *cobra.Command {
 				err            error
 				remoteRegistry *clusters.RemoteRegistry
 			)
-			if params.HAMode == common.HAController {
-				remoteRegistry, err = clusters.InitAdmiralHA(ctx, params)
+			if params.AdmiralOperatorMode {
+				remoteRegistry, err = clusters.InitAdmiralOperator(ctx, params)
 			} else {
 				remoteRegistry, err = clusters.InitAdmiral(ctx, params)
 			}
@@ -209,8 +209,6 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().IntVar(&params.ExportToMaxNamespaces, "exportto_max_namespaces", 35, "Max number of namespaces to write in ExportTo field before just replacing with *")
 
 	// Admiral HA flags
-	rootCmd.PersistentFlags().StringVar(&params.HAMode, "ha_mode", "",
-		"HA Mode changes the functionality of admiral. Valid options are: "+common.HAController)
 	rootCmd.PersistentFlags().IntVar(&params.DNSRetries, "dns_retries", 3, "number of retries for dns resolution")
 	rootCmd.PersistentFlags().IntVar(&params.DNSTimeoutMs, "dns_timeout_ms", 1000, "ttl for dns resolution timeout")
 	rootCmd.PersistentFlags().StringVar(&params.DnsConfigFile, "dns_config_file", "/etc/resolv.conf", "the dns config file to use")
@@ -244,6 +242,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
+
+	//Admiral 2.0 flags
+	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
+	rootCmd.PersistentFlags().StringVar(&params.OperatorSyncNamespace, "operator_sync_namespace", "admiral-operator-sync",
+		"Namespace in which Admiral Operator will put its generated configurations")
 	return rootCmd
 }
 

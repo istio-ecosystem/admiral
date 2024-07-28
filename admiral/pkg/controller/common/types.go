@@ -112,6 +112,10 @@ type AdmiralParams struct {
 
 	// Air specific
 	GatewayAssetAliases []string
+
+	//Admiral 2.0 params
+	AdmiralOperatorMode   bool
+	OperatorSyncNamespace string
 }
 
 func (b AdmiralParams) String() string {

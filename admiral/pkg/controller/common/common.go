@@ -89,7 +89,6 @@ const (
 	Deployment               = "deployment"
 	Rollout                  = "rollout"
 	GTP                      = "gtp"
-	HAController             = "ha-controller"
 	EventType                = "eventType"
 	ProcessingInProgress     = "ProcessingInProgress"
 	NotProcessed             = "NotProcessed"
@@ -138,6 +137,7 @@ const (
 	DependencyProxyResourceType     ResourceType = "DependencyProxy"
 	GlobalTrafficPolicyResourceType ResourceType = "GlobalTrafficPolicy"
 	RoutingPolicyResourceType       ResourceType = "RoutingPolicy"
+	ShardResourceType               ResourceType = "Shard"
 
 	// Istio Resource Types
 	VirtualServiceResourceType  ResourceType = "VirtualService"
