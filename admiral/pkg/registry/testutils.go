@@ -1,10 +1,10 @@
 package registry
 
 import (
-	"github.com/golang/protobuf/ptypes/duration"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	coreV1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -16,26 +16,58 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) IdentityCo
 		Type:        "rollout",
 		Selectors:   map[string]string{"app": "partner-data-to-tax"},
 		Ports:       []coreV1.ServicePort{{Name: "http-service-mesh", Port: int32(8090), Protocol: coreV1.ProtocolTCP, TargetPort: intstr.FromInt(8090)}},
-		TrafficPolicy: networkingV1Alpha3.TrafficPolicy{
-			LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
-				LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST},
-				LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
-					Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{{
-						From: "*",
-						To:   map[string]uint32{"us-west-2": 100},
+		TrafficPolicy: TrafficPolicy{
+			ClientConnectionConfig: v1alpha1.ClientConnectionConfig{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "sampleCCC",
+				},
+				Spec: v1alpha1.ClientConnectionConfigSpec{
+					ConnectionPool: model.ConnectionPool{Http: &model.ConnectionPool_HTTP{
+						Http2MaxRequests:         1000,
+						MaxRequestsPerConnection: 5,
 					}},
-				},
-				WarmupDurationSecs: &duration.Duration{Seconds: 45},
-			},
-			ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
-				Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
-					Http2MaxRequests:         1000,
-					MaxRequestsPerConnection: 5,
+					Tunnel: model.Tunnel{},
 				},
 			},
-			OutlierDetection: &networkingV1Alpha3.OutlierDetection{
-				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
-				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+			GlobalTrafficPolicy: v1alpha1.GlobalTrafficPolicy{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "sampleGTP",
+				},
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType: 0,
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 50,
+								},
+								{
+									Region: "us-east-2",
+									Weight: 50,
+								},
+							},
+							DnsPrefix: "testDnsPrefix",
+							OutlierDetection: &model.TrafficPolicy_OutlierDetection{
+								ConsecutiveGatewayErrors: 5,
+								Interval:                 5,
+							},
+						},
+					},
+					Selector: nil,
+				},
+			},
+			OutlierDetection: v1alpha1.OutlierDetection{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "sampleOD",
+				},
+				Spec: model.OutlierDetection{
+					OutlierConfig: &model.OutlierConfig{
+						ConsecutiveGatewayErrors: 10,
+						Interval:                 10,
+					},
+					Selector: nil,
+				},
 			},
 		},
 	}

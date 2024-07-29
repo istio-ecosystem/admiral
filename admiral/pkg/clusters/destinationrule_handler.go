@@ -43,7 +43,8 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry, locality string, gt
 	)
 
 	dr.Host = se.Hosts[0]
-	if common.EnableExportTo(dr.Host) {
+	// In Operator mode, exportTo will be present in the se as well
+	if common.EnableExportTo(dr.Host) || common.IsAdmiralOperatorMode() {
 		dr.ExportTo = se.ExportTo
 	}
 	dr.TrafficPolicy = &networkingV1Alpha3.TrafficPolicy{

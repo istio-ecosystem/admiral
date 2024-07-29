@@ -2,17 +2,14 @@ package registry
 
 import (
 	"encoding/json"
-	"os"
 
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
-	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
-	coreV1 "k8s.io/api/core/v1"
-<<<<<<< HEAD
-=======
 	"os"
 	"strings"
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749))
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
+	coreV1 "k8s.io/api/core/v1"
 )
 
 // IdentityConfiguration is an interface to fetch configuration from a registry
@@ -58,13 +55,19 @@ type IdentityConfigCluster struct {
 }
 
 type IdentityConfigEnvironment struct {
-	Name          string                           `json:"name"`
-	Namespace     string                           `json:"namespace"`
-	ServiceName   string                           `json:"serviceName"`
-	Type          string                           `json:"type"`
-	Selectors     map[string]string                `json:"selectors"`
-	Ports         []coreV1.ServicePort             `json:"ports"`
-	TrafficPolicy networkingV1Alpha3.TrafficPolicy `json:"trafficPolicy"`
+	Name          string               `json:"name"`
+	Namespace     string               `json:"namespace"`
+	ServiceName   string               `json:"serviceName"`
+	Type          string               `json:"type"`
+	Selectors     map[string]string    `json:"selectors"`
+	Ports         []coreV1.ServicePort `json:"ports"`
+	TrafficPolicy TrafficPolicy        `json:"trafficPolicy"`
+}
+
+type TrafficPolicy struct {
+	ClientConnectionConfig v1alpha1.ClientConnectionConfig `json:"clientConnectionConfig"`
+	GlobalTrafficPolicy    v1alpha1.GlobalTrafficPolicy    `json:"globalTrafficPolicy"`
+	OutlierDetection       v1alpha1.OutlierDetection       `json:"outlierDetection"`
 }
 
 // GetIdentityConfigByIdentityName calls the registry API to fetch the IdentityConfig for

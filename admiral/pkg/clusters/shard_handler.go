@@ -88,6 +88,12 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 				ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfig", identityItem.Name, shard.Namespace, clusterShard.Name, err)
 			}
 			ctxLogger.Infof(common.CtxLogFormat, "ProduceIdentityConfig", identityConfig.IdentityName, shard.Namespace, clusterShard.Name, "successfully produced IdentityConfig")
+			//TODO: Fill rr.AdmiralCache
+			//1. IdentityDependencyCache (identityConfig.IdentityName -> clientAssets)
+			//2. GlobalTrafficCache (id + env -> gtp)
+			//3. OutlierDetectionCache (id + env -> od)
+			//4. ClientConnectionConfigCache (id + env -> ccc)
+			//5. ClusterLocalityCache (cluster -> cluster -> locality) (don't care about set functionality, only one locality per cluster)
 			configWriterData <- &ConfigWriterData{
 				IdentityConfig: &identityConfig,
 				ClusterName:    clusterShard.Name,
@@ -114,7 +120,31 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 			ctxLogger.Warnf(common.CtxLogFormat, "ConsumeIdentityConfig", assetName, "", clientCluster, err)
 			data.Result = err.Error()
 		}
+		// service deployed in cluster 1 with 2 env qal, e2e, cluster 2 with 3 env qal, e2e, prod
+		// write SEs to cluster 1
+		// env -> list of cluster
+		// env -> se
+		// check if any of the clusters are a source cluster -> rethink this, won't work if one env is on a cluster but not on another
+		//isServiceEntryModifyCalledForSourceCluster := false
+		//for _, cluster := range identityConfig.Clusters {
+		//	if cluster.Name == clientCluster {
+		//		isServiceEntryModifyCalledForSourceCluster = true
+		//		break
+		//	}
+		//}
+		//ctx = context.WithValue(ctx, common.EventResourceType, identityConfig.Clusters[0].Environment[0].Type)
 		for _, se := range serviceEntries {
+			//clusters := make(chan string, 1)
+			//errors := make(chan error, 1)
+			//clusters <- clientCluster
+			//AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr,
+			//	true, //doGenerateAdditionalEndpoints()
+			//	isServiceEntryModifyCalledForSourceCluster,
+			//	assetName,
+			//	strings.Split(se.Hosts[0], common.Sep)[0],
+			//	se,
+			//	clusters,
+			//	errors)
 			rc := rr.GetRemoteController(clientCluster)
 			seName := strings.ToLower(se.Hosts[0]) + "-se"
 			sec := rc.ServiceEntryController

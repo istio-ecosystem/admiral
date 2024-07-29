@@ -27,36 +27,58 @@
             }
           ],
           "trafficPolicy": {
-            "connectionPool": {
-              "http": {
-                "http2MaxRequests": 1000,
-                "maxRequestsPerConnection": 5
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
               }
             },
-            "loadBalancer": {
-              "localityLbSetting": {
-                "distribute": [
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
                   {
-                    "from": "*",
-                    "to": {
-                      "us-west-2": 100
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
                     }
                   }
                 ]
-              },
-              "simple": "LEAST_REQUEST",
-              "warmupDurationSecs": "45s"
+              }
             },
             "outlierDetection": {
-              "consecutive5xxErrors": 0,
-              "consecutiveGatewayErrors": 0
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
             }
           }
-        }
-      ],
-      "clientAssets": [
-        {
-          "name": "intuit.services.gateway.ppdmeshtestinbounds"
         }
       ]
     },
@@ -86,29 +108,56 @@
             }
           ],
           "trafficPolicy": {
-            "connectionPool": {
-              "http": {
-                "http2MaxRequests": 1000,
-                "maxRequestsPerConnection": 5
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
               }
             },
-            "loadBalancer": {
-              "localityLbSetting": {
-                "distribute": [
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
                   {
-                    "from": "*",
-                    "to": {
-                      "us-west-2": 100
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
                     }
                   }
                 ]
-              },
-              "simple": "LEAST_REQUEST",
-              "warmupDurationSecs": "45s"
+              }
             },
             "outlierDetection": {
-              "consecutive5xxErrors": 0,
-              "consecutiveGatewayErrors": 0
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
             }
           }
         }
