@@ -445,7 +445,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Warnf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "unable to find label for rollout or deployment in source cluster: "+sourceCluster)
 		}
 		if createResourcesOnlyInDependentOverrideClusters {
-			continue
+			ctxLogger.Infof(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "processing service entry creation in source clusters as well as there can be a client in the source cluster ")
+			//continue
 		}
 		// For Deployment <-> Rollout migration
 		// This is maintaining the behavior like before if there was no serviceInstance
@@ -633,7 +634,10 @@ func modifyServiceEntryForNewServiceOrPod(
 	if createResourcesOnlyInDependentOverrideClusters {
 		var clusters = make(map[string]string, 0)
 		dependentClusterOverride.Range(func(k string, v string) {
-			clusters[k] = v
+			// ensure source clusters are not part of this
+			if _, ok := sourceServices[k]; !ok {
+				clusters[k] = v
+			}
 		})
 		ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToDependentClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("Using override values of dependent clusters: %v, count: %v", clusters, len(clusters)))
 		dependentClusters = clusters
