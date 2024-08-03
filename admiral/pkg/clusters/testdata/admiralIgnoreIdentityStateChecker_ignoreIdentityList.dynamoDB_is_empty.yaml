@@ -1,0 +1,10 @@
+ignoreIdentityList:
+  stateCheckerPeriodInSeconds: 60
+dynamoDB:
+  leaseName: qal
+  podIdentifier: qal-east
+  waitTimeInSeconds: 15
+  failureThreshold: 3
+  tableName: admiral-lease
+  role: arn:aws:iam::11111111:role/Admiral-IKS-Access
+  region: us-east-2
