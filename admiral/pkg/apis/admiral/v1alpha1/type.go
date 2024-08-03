@@ -52,8 +52,7 @@ type GlobalTrafficPolicyStatus struct {
 type GlobalTrafficPolicyList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
-
-	Items []GlobalTrafficPolicy `json:"items"`
+	Items            []GlobalTrafficPolicy `json:"items"`
 }
 
 // generic cdr object to wrap the OutlierDetection api
@@ -66,8 +65,6 @@ type OutlierDetection struct {
 	Status             OutlierDetectionStatus `json:"status"`
 }
 
-// FooStatus is the status for a Foo resource
-
 type OutlierDetectionStatus struct {
 	ClusterSynced int32  `json:"clustersSynced"`
 	State         string `json:"state"`
@@ -78,8 +75,7 @@ type OutlierDetectionStatus struct {
 type OutlierDetectionList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
-
-	Items []OutlierDetection `json:"items"`
+	Items            []OutlierDetection `json:"items"`
 }
 
 // generic cdr object to wrap the RoutingPolicy api
@@ -106,33 +102,6 @@ type RoutingPolicyList struct {
 	meta_v1.ListMeta `json:"metadata"`
 
 	Items []RoutingPolicy `json:"items"`
-}
-
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +k8s:openapi-gen=true
-// +kubebuilder:printcolumn:name="Destination",type="string",JSONPath=`.spec.destination.identity`
-// +kubebuilder:printcolumn:name="Proxy",type="string",JSONPath=`.spec.proxy.identity`
-// +kubebuilder:resource:shortName=dp
-type DependencyProxy struct {
-	meta_v1.TypeMeta   `json:",inline"`
-	meta_v1.ObjectMeta `json:"metadata"`
-	Spec               model.DependencyProxy `json:"spec"`
-	Status             DependencyProxyStatus `json:"status"`
-}
-
-// DependencyProxyStatus is the status for a DependencyProxy resource
-type DependencyProxyStatus struct {
-	State string `json:"state"`
-}
-
-// DependencyProxyList is a list of DependencyProxy resources
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type DependencyProxyList struct {
-	meta_v1.TypeMeta `json:",inline"`
-	meta_v1.ListMeta `json:"metadata"`
-
-	Items []DependencyProxy `json:"items"`
 }
 
 // +genclient

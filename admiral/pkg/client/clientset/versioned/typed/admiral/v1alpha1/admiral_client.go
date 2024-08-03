@@ -30,7 +30,6 @@ type AdmiralV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClientConnectionConfigsGetter
 	DependenciesGetter
-	DependencyProxiesGetter
 	GlobalTrafficPoliciesGetter
 	OutlierDetectionsGetter
 	RoutingPoliciesGetter
@@ -48,10 +47,6 @@ func (c *AdmiralV1alpha1Client) ClientConnectionConfigs(namespace string) Client
 
 func (c *AdmiralV1alpha1Client) Dependencies(namespace string) DependencyInterface {
 	return newDependencies(c, namespace)
-}
-
-func (c *AdmiralV1alpha1Client) DependencyProxies(namespace string) DependencyProxyInterface {
-	return newDependencyProxies(c, namespace)
 }
 
 func (c *AdmiralV1alpha1Client) GlobalTrafficPolicies(namespace string) GlobalTrafficPolicyInterface {

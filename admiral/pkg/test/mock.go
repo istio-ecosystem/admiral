@@ -290,21 +290,6 @@ func (m *MockEnvoyFilterHandler) Deleted(context.Context, *v1alpha32.EnvoyFilter
 func (m *MockEnvoyFilterHandler) Updated(context.Context, *v1alpha32.EnvoyFilter) {
 }
 
-type MockDependencyProxyHandler struct {
-}
-
-func (m *MockDependencyProxyHandler) Added(context.Context, *admiralV1.DependencyProxy) error {
-	return nil
-}
-
-func (m *MockDependencyProxyHandler) Deleted(context.Context, *admiralV1.DependencyProxy) error {
-	return nil
-}
-
-func (m *MockDependencyProxyHandler) Updated(context.Context, *admiralV1.DependencyProxy) error {
-	return nil
-}
-
 type MockRolloutsGetter struct{}
 type FakeRolloutsImpl struct{}
 

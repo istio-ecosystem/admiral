@@ -1355,10 +1355,6 @@ func (m MockAdmiralV1) Dependencies(namespace string) admiralv1.DependencyInterf
 	return nil
 }
 
-func (m MockAdmiralV1) DependencyProxies(namespace string) admiralv1.DependencyProxyInterface {
-	return nil
-}
-
 func (m MockAdmiralV1) GlobalTrafficPolicies(namespace string) admiralv1.GlobalTrafficPolicyInterface {
 	return nil
 }
