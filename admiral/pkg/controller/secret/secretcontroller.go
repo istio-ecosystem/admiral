@@ -355,6 +355,11 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 				log.Errorf("error during cluster delete: %s %v", clusterID, err)
 			}
 			delete(c.Cs.RemoteClusters, clusterID)
+			resolver, ok := c.secretResolver.(resolver.IDPSResolver)
+			if ok {
+				log.Infof("Deleting kubeconfig from cache for secret: %s", clusterID)
+				resolver.KubeConfigCache.Delete(clusterID)
+			}
 		}
 	}
 	remoteClustersMetric.Set(float64(len(c.Cs.RemoteClusters)))
