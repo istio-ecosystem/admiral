@@ -5,9 +5,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -35,15 +37,20 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 		identity       = identityConfig.IdentityName
 		seMap          = map[string]*networkingV1Alpha3.ServiceEntry{}
 		serviceEntries = []*networkingV1Alpha3.ServiceEntry{}
+		start          = time.Now()
 		err            error
 	)
-	ctxLogger.Infof(common.CtxLogFormat, "buildServiceEntry", identity, common.GetSyncNamespace(), b.ClientCluster, "Beginning to build the SE spec")
+	defer util.LogElapsedTime("BuildServiceEntriesFromIdentityConfig", identity, common.GetOperatorSyncNamespace(), b.ClientCluster)
+	ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntriesFromIdentityConfig", identity, common.GetOperatorSyncNamespace(), b.ClientCluster, "Beginning to build the SE spec")
 	ingressEndpoints, err := getIngressEndpoints(identityConfig.Clusters)
+	util.LogElapsedTimeSince("getIngressEndpoints", identity, "", b.ClientCluster, start)
 	if err != nil || len(ingressEndpoints) == 0 {
 		return serviceEntries, err
 	}
+	start = time.Now()
 	_, isServerOnClientCluster := ingressEndpoints[b.ClientCluster]
 	dependentNamespaces, err := getExportTo(ctxLogger, b.RemoteRegistry.RegistryClient, b.ClientCluster, isServerOnClientCluster, identityConfig.ClientAssets)
+	util.LogElapsedTimeSince("getExportTo", identity, "", b.ClientCluster, start)
 	if err != nil {
 		return serviceEntries, err
 	}
@@ -52,7 +59,9 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 		for _, identityConfigEnvironment := range identityConfigCluster.Environment {
 			env := identityConfigEnvironment.Name
 			var tmpSe *networkingV1Alpha3.ServiceEntry
+			start = time.Now()
 			ep, err := getServiceEntryEndpoint(ctxLogger, b.ClientCluster, serverCluster, ingressEndpoints, identityConfigEnvironment)
+			util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
 			if err != nil {
 				return serviceEntries, err
 			}
