@@ -171,7 +171,8 @@ func TestShardHandler_Deleted(t *testing.T) {
 	shardHandler := &ShardHandler{
 		RemoteRegistry: rr,
 	}
-	err := shardHandler.Deleted(context.Background(), nil)
+	shard := createMockShard("testShard", "testCluster", "testIdentity", "testEnv")
+	err := shardHandler.Deleted(context.Background(), shard)
 	if err != nil {
 		t.Errorf("expected nil err for delete, for %v", err)
 	}

@@ -213,7 +213,7 @@ func (d *ShardController) Deleted(ctx context.Context, obj interface{}) error {
 	if err == nil && len(key) > 0 {
 		d.Cache.DeleteFromShardClusterCache(key, shard)
 	}
-	return err
+	return d.ShardHandler.Deleted(ctx, shard)
 }
 
 func (d *ShardController) LogValueOfAdmiralIoIgnore(obj interface{}) {
