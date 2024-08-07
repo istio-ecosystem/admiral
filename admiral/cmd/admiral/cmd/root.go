@@ -191,12 +191,12 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The value of envoy filter is to add additional config to the filter config section")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
-	rootCmd.PersistentFlags().StringArrayVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
+	rootCmd.PersistentFlags().StringSliceVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
 		"List of identities which should be excluded from getting processed")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableDiffCheck, "enable_diff_check", true, "Enable diff check")
-	rootCmd.PersistentFlags().StringArrayVar(&params.AdditionalEndpointSuffixes, "additional_endpoint_suffixes", []string{},
+	rootCmd.PersistentFlags().StringSliceVar(&params.AdditionalEndpointSuffixes, "additional_endpoint_suffixes", []string{},
 		"Suffixes that Admiral should use to generate additional endpoints through VirtualServices")
-	rootCmd.PersistentFlags().StringArrayVar(&params.AdditionalEndpointLabelFilters, "additional_endpoint_label_filters", []string{},
+	rootCmd.PersistentFlags().StringSliceVar(&params.AdditionalEndpointLabelFilters, "additional_endpoint_label_filters", []string{},
 		"Labels that admiral will check on deployment/rollout before creating additional endpoints. '*' would indicate generating additional endpoints for all deployment/rollouts")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableWorkloadDataStorage, "enable_workload_data_storage", false,
 		"When true, workload data will be stored in a persistent storage")
@@ -205,7 +205,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.DisableIPGeneration, "disable_ip_generation", false, "When set to true, ips will not be generated and written to service entries")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.IdentityPartitionKey, "identity_partition_key", "admiral.io/identityPartition",
 		"The annotation on a deployment/rollout spec, which will be used to divide an asset based on user-specified partition. Defaults to `admiral.io/identityPartition`.")
-	rootCmd.PersistentFlags().StringArrayVar(&params.ExportToIdentityList, "exportto_identity_list", []string{"*"}, "List of identities to write ExportTo field for")
+	rootCmd.PersistentFlags().StringSliceVar(&params.ExportToIdentityList, "exportto_identity_list", []string{"*"}, "List of identities to write ExportTo field for")
 	rootCmd.PersistentFlags().IntVar(&params.ExportToMaxNamespaces, "exportto_max_namespaces", 35, "Max number of namespaces to write in ExportTo field before just replacing with *")
 
 	// Admiral HA flags
@@ -230,11 +230,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableServiceEntryCache, "enable_serviceentry_cache", false, "Enable/Disable Caching serviceentries")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableDestinationRuleCache, "enable_destinationrule_cache", false, "Enable/Disable Caching destinationrules")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableAbsoluteFQDN, "enable_absolute_fqdn", true, "Enable/Disable Absolute FQDN")
-	rootCmd.PersistentFlags().StringArrayVar(&params.AlphaIdentityList, "alpha_identity_list", []string{},
+	rootCmd.PersistentFlags().StringSliceVar(&params.AlphaIdentityList, "alpha_identity_list", []string{},
 		"Identities which can be used for testing of alpha features")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableAbsoluteFQDNForLocalEndpoints, "enable_absolute_fqdn_for_local_endpoints", false, "Enable/Disable Absolute FQDN for local endpoints")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientConnectionConfigProcessing, "enable_client_connection_config_processing", false, "Enable/Disable ClientConnectionConfig Processing")
-	rootCmd.PersistentFlags().StringArrayVar(&params.GatewayAssetAliases, "gateway_asset_aliases", []string{"Intuit.platform.servicesgateway.servicesgateway"}, "The asset aliases used for API Gateway")
+	rootCmd.PersistentFlags().StringSliceVar(&params.GatewayAssetAliases, "gateway_asset_aliases", []string{"Intuit.platform.servicesgateway.servicesgateway"}, "The asset aliases used for API Gateway")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableActivePassive, "enable_active_passive", false, "Enable/Disable Active-Passive behavior")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
@@ -246,6 +246,10 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSyncNamespace, "operator_sync_namespace", "admiral-operator-sync",
 		"Namespace in which Admiral Operator will put its generated configurations")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.OperatorIdentityLabel, "operator_identity_label", "admiral.io/operatorIdentity", "used to filter which shard Admiral Operator will watch")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.ShardIdentityLabel, "shard_identity_label", "admiral.io/shardIdentity", "used to filter which shard Admiral Operator will watch")
+	rootCmd.PersistentFlags().StringVar(&params.OperatorIdentityValue, "operator_identity_value", "", "Admiral operator should watch shards where operatorIdentityLabel == operatorIdentityValue")
+	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabel == shardIdentityValue")
 	return rootCmd
 }
 

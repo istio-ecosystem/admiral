@@ -39,66 +39,66 @@ type SidecarEgressMap struct {
 }
 
 type AdmiralParams struct {
-	ArgoRolloutsEnabled                    bool
-	KubeconfigPath                         string
-	SecretFilterTags                       string
-	CacheReconcileDuration                 time.Duration
-	SeAndDrCacheReconcileDuration          time.Duration
-	ClusterRegistriesNamespace             string
-	DependenciesNamespace                  string
-	DnsConfigFile                          string
-	DNSTimeoutMs                           int
-	DNSRetries                             int
-	TrafficConfigNamespace                 string
-	SyncNamespace                          string
-	EnableSAN                              bool
-	SANPrefix                              string
-	AdmiralConfig                          string
-	Profile                                string
-	LabelSet                               *LabelSet
-	LogLevel                               int
-	HostnameSuffix                         string
-	PreviewHostnamePrefix                  string
-	MetricsEnabled                         bool
-	ChannelCapacity                        int
-	WorkloadSidecarUpdate                  string
-	WorkloadSidecarName                    string
-	AdmiralStateCheckerName                string
-	DRStateStoreConfigPath                 string
-	ServiceEntryIPPrefix                   string
-	EnvoyFilterVersion                     string
-	DeprecatedEnvoyFilterVersion           string
-	EnvoyFilterAdditionalConfig            string
-	EnableRoutingPolicy                    bool
-	ExcludedIdentityList                   []string
-	AdditionalEndpointSuffixes             []string
-	AdditionalEndpointLabelFilters         []string
-	HAMode                                 string
-	EnableWorkloadDataStorage              bool
-	EnableDiffCheck                        bool
-	EnableProxyEnvoyFilter                 bool
-	EnableDependencyProcessing             bool
-	DeploymentOrRolloutWorkerConcurrency   int
-	DependentClusterWorkerConcurrency      int
-	SeAddressConfigmap                     string
-	DependencyWarmupMultiplier             int
-	EnableOutlierDetection                 bool
-	EnableClientConnectionConfigProcessing bool
-	MaxRequestsPerConnection               int32
-	EnableAbsoluteFQDN                     bool
-	EnableAbsoluteFQDNForLocalEndpoints    bool
-	DisableDefaultAutomaticFailover        bool
-	EnableServiceEntryCache                bool
-	AlphaIdentityList                      []string
-	EnableDestinationRuleCache             bool
-	DisableIPGeneration                    bool
-	EnableActivePassive                    bool
-	EnableSWAwareNSCaches                  bool
-	ExportToIdentityList                   []string
-	ExportToMaxNamespaces                  int
-	AdmiralStateSyncerMode                 bool
-	DefaultWarmupDurationSecs              int64
-	EnableGenerationCheck                  bool
+	ArgoRolloutsEnabled                      bool
+	KubeconfigPath                           string
+	SecretFilterTags                         string
+	CacheReconcileDuration                   time.Duration
+	SeAndDrCacheReconcileDuration            time.Duration
+	ClusterRegistriesNamespace               string
+	DependenciesNamespace                    string
+	DnsConfigFile                            string
+	DNSTimeoutMs                             int
+	DNSRetries                               int
+	TrafficConfigNamespace                   string
+	SyncNamespace                            string
+	EnableSAN                                bool
+	SANPrefix                                string
+	AdmiralConfig                            string
+	Profile                                  string
+	LabelSet                                 *LabelSet
+	LogLevel                                 int
+	HostnameSuffix                           string
+	PreviewHostnamePrefix                    string
+	MetricsEnabled                           bool
+	ChannelCapacity                          int
+	WorkloadSidecarUpdate                    string
+	WorkloadSidecarName                      string
+	AdmiralStateCheckerName                  string
+	DRStateStoreConfigPath                   string
+	ServiceEntryIPPrefix                     string
+	EnvoyFilterVersion                       string
+	DeprecatedEnvoyFilterVersion             string
+	EnvoyFilterAdditionalConfig              string
+	EnableRoutingPolicy                      bool
+	ExcludedIdentityList                     []string
+	AdditionalEndpointSuffixes               []string
+	AdditionalEndpointLabelFilters           []string
+	HAMode                                   string
+	EnableWorkloadDataStorage                bool
+	EnableDiffCheck                          bool
+	EnableProxyEnvoyFilter                   bool
+	EnableDependencyProcessing               bool
+	DeploymentOrRolloutWorkerConcurrency     int
+	DependentClusterWorkerConcurrency        int
+	SeAddressConfigmap                       string
+	DependencyWarmupMultiplier               int
+	EnableOutlierDetection                   bool
+	EnableClientConnectionConfigProcessing   bool
+	MaxRequestsPerConnection                 int32
+	EnableAbsoluteFQDN                       bool
+	EnableAbsoluteFQDNForLocalEndpoints      bool
+	DisableDefaultAutomaticFailover          bool
+	EnableServiceEntryCache                  bool
+	AlphaIdentityList                        []string
+	EnableDestinationRuleCache               bool
+	DisableIPGeneration                      bool
+	EnableActivePassive                      bool
+	EnableSWAwareNSCaches                    bool
+	ExportToIdentityList                     []string
+	ExportToMaxNamespaces                    int
+	EnableSyncIstioResourcesToSourceClusters bool
+	DefaultWarmupDurationSecs                int64
+	EnableGenerationCheck                    bool
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -113,8 +113,11 @@ type AdmiralParams struct {
 	GatewayAssetAliases []string
 
 	//Admiral 2.0 params
-	AdmiralOperatorMode   bool
-	OperatorSyncNamespace string
+	AdmiralOperatorMode    bool
+	OperatorSyncNamespace  string
+	AdmiralStateSyncerMode bool
+	OperatorIdentityValue  string
+	ShardIdentityValue     string
 }
 
 func (b AdmiralParams) String() string {
@@ -153,6 +156,8 @@ type LabelSet struct {
 	GatewayApp                          string //the value for `app` key that will be used to fetch the loadblancer for cross cluster calls, also referred to as east west gateway
 	AdmiralCRDIdentityLabel             string //Label Used to identify identity label for crd
 	IdentityPartitionKey                string //Label used for partitioning assets with same identity into groups
+	OperatorIdentityLabel               string
+	ShardIdentityLabel                  string
 }
 
 type TrafficObject struct {

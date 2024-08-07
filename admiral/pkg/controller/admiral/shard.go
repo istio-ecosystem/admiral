@@ -149,9 +149,10 @@ func NewShardController(stopCh <-chan struct{}, handler ShardHandler, configPath
 	if err != nil {
 		return nil, fmt.Errorf("failed to create shard controller crd client: %v", err)
 	}
-	//TODO: should not be hardcoded, fetch actual expected operator and shard identities from env variables
 	//labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-	//	opts.LabelSelector = "admiral.io/operatorIdentity=operatorIdentity, admiral.io/shardIdentity=dev"
+	//  opIdLabel, opIdValue := common.GetOperatorIdentityLabelValueSet()
+	//  shardIdLabel, shardIdValue := common.GetShardIdentityLabelValueSet()
+	//  opts.LabelSelector = fmt.Sprintf("%s=%s, %s=%s", opIdLabel, opIdValue, shardIdLabel, shardIdValue)
 	//})
 	//informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod, labelOptions)
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod)
