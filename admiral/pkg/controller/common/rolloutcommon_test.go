@@ -1,41 +1,59 @@
 package common
 
 import (
-	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/google/go-cmp/cmp"
-	v12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/google/go-cmp/cmp"
+	v12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func init() {
-	p := AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &LabelSet{},
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		SecretResolver:             "",
-		WorkloadSidecarName:        "default",
-		WorkloadSidecarUpdate:      "disabled",
+var rolloutCommonTestSingleton sync.Once
+
+func setupForRolloutCommonTests() {
+	var initHappened bool
+	rolloutCommonTestSingleton.Do(func() {
+		p := AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &LabelSet{
+				WorkloadIdentityKey:     "identity",
+				AdmiralCRDIdentityLabel: "identity",
+				EnvKey:                  "admiral.io/env",
+				IdentityPartitionKey:    "admiral.io/identityPartition",
+			},
+			EnableSAN:                  true,
+			SANPrefix:                  "prefix",
+			HostnameSuffix:             "mesh",
+			SyncNamespace:              "ns",
+			CacheReconcileDuration:     time.Minute,
+			ClusterRegistriesNamespace: "default",
+			DependenciesNamespace:      "default",
+			WorkloadSidecarName:        "default",
+			WorkloadSidecarUpdate:      "disabled",
+			EnableSWAwareNSCaches:      true,
+			ExportToIdentityList:       []string{"*"},
+		}
+
+		ResetSync()
+		initHappened = true
+		InitializeConfig(p)
+	})
+	if !initHappened {
+		log.Warn("InitializeConfig was NOT called from setupForRolloutCommonTests")
+	} else {
+		log.Info("InitializeConfig was called setupForRolloutCommonTests")
 	}
-
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-
-	InitializeConfig(p)
 }
 
 func TestGetEnvForRollout(t *testing.T) {
-
+	setupForRolloutCommonTests()
 	testCases := []struct {
 		name     string
 		rollout  argo.Rollout
@@ -52,8 +70,17 @@ func TestGetEnvForRollout(t *testing.T) {
 			expected: "stage2",
 		},
 		{
-			name:     "should return valid env from new env annotation",
-			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/env": "stage1"}, Labels: map[string]string{"env": "stage2"}}}}},
+			name: "should return valid env from new env annotation",
+			rollout: argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: v1.ObjectMeta{
+							Annotations: map[string]string{"admiral.io/env": "stage1"},
+							Labels:      map[string]string{"env": "stage2"},
+						},
+					},
+				},
+			},
 			expected: "stage1",
 		},
 		{
@@ -232,9 +259,60 @@ func TestMatchGTPsToRollout(t *testing.T) {
 }
 
 func TestGetRolloutGlobalIdentifier(t *testing.T) {
-
+	setupForRolloutCommonTests()
 	identifier := "identity"
 	identifierVal := "company.platform.server"
+
+	testCases := []struct {
+		name     string
+		rollout  argo.Rollout
+		expected string
+		original string
+	}{
+		{
+			name:     "should return valid identifier from label",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected: identifierVal,
+			original: identifierVal,
+		},
+		{
+			name:     "should return valid identifier from annotations",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			expected: identifierVal,
+			original: identifierVal,
+		},
+		{
+			name:     "should return partitioned identifier",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage", "admiral.io/identityPartition": "pid"}}}}},
+			expected: "pid." + identifierVal,
+			original: identifierVal,
+		},
+		{
+			name:     "should return empty identifier",
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}}}},
+			expected: "",
+			original: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GetRolloutGlobalIdentifier(&c.rollout)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted identity value: %s, got: %s", c.expected, iVal)
+			}
+			oiVal := GetRolloutOriginalIdentifier(&c.rollout)
+			if !(oiVal == c.original) {
+				t.Errorf("Wanted original identity value: %s, got: %s", c.original, oiVal)
+			}
+		})
+	}
+}
+
+func TestGetRolloutIdentityPartition(t *testing.T) {
+	setupForRolloutCommonTests()
+	partitionIdentifier := "admiral.io/identityPartition"
+	identifierVal := "swX"
 
 	testCases := []struct {
 		name     string
@@ -243,12 +321,12 @@ func TestGetRolloutGlobalIdentifier(t *testing.T) {
 	}{
 		{
 			name:     "should return valid identifier from label",
-			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
 			expected: identifierVal,
 		},
 		{
 			name:     "should return valid identifier from annotations",
-			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			rollout:  argo.Rollout{Spec: argo.RolloutSpec{Template: corev1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
 			expected: identifierVal,
 		},
 		{
@@ -260,9 +338,9 @@ func TestGetRolloutGlobalIdentifier(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			iVal := GetRolloutGlobalIdentifier(&c.rollout)
+			iVal := GetRolloutIdentityPartition(&c.rollout)
 			if !(iVal == c.expected) {
-				t.Errorf("Wanted identity value: %s, got: %s", c.expected, iVal)
+				t.Errorf("Wanted identityPartition value: %s, got: %s", c.expected, iVal)
 			}
 		})
 	}

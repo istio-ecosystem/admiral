@@ -1,24 +1,37 @@
 package clusters
 
 import (
+	"context"
 	"sync"
 
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
+	serviceEntrySuspenderLogPrefix = "op=serviceEntrySuspender message="
 	// Alert logs
-	alertMsgSuspensionEnabled = "op=dynamicEndpointSuspension message=endpoint generation suspension is enabled." +
-		"this does not mean that endpoint generation will be suspended. " +
+	alertMsgSuspensionEnabled = serviceEntrySuspenderLogPrefix + "service entry update suspension is enabled. " +
+		"this does not mean that service entry updates will not happen. " +
 		"it will depend on the suspension list, which can include all identities " +
 		"for all environments, OR certain identities for all or certain environments"
-	alertMsgSuspensionForAll                           = "op=dynamicEndpointSuspension message=endpoint generation suspended for all"
-	alertMsgSuspensionForIdentityInAllEnvironments     = "op=dynamicEndpointSuspension message=endpoint generation suspended for identity across all environments"
-	alertMsgSuspensionForIdentityInMatchingEnvironment = "op=dynamicEndpointSuspension message=endpoint generation suspended for identity for given environment"
+	alertMsgSuspensionForAll                           = serviceEntrySuspenderLogPrefix + "service entry update is suspended for all"
+	alertMsgSuspensionForIdentityInAllEnvironments     = serviceEntrySuspenderLogPrefix + "service entry update is suspended for identity across all environments"
+	alertMsgSuspensionForIdentityInMatchingEnvironment = serviceEntrySuspenderLogPrefix + "service entry update is suspended for identity for given environment"
 )
 
 type serviceEntrySuspender struct {
 	ignoredIdentityCache *IgnoredIdentityCache
+}
+
+func NewDynamicServiceEntrySuspender(ctx context.Context, params common.AdmiralParams) *serviceEntrySuspender {
+	var cache = &IgnoredIdentityCache{
+		RWLock: &sync.RWMutex{},
+	}
+	stateChecker := initAdmiralStateChecker(ctx, ignoreIdentityChecker, params.AdmiralConfig)
+	stateChecker.initStateCache(cache)
+	RunAdmiralStateCheck(ctx, ignoreIdentityChecker, stateChecker)
+	return &serviceEntrySuspender{ignoredIdentityCache: cache}
 }
 
 func NewDefaultServiceEntrySuspender(items []string) *serviceEntrySuspender {
@@ -55,21 +68,23 @@ func (des *serviceEntrySuspender) SuspendUpdate(identity, environment string) bo
 func (des *serviceEntrySuspender) enabled() bool {
 	if des.ignoredIdentityCache.Enabled {
 		log.Println(alertMsgSuspensionEnabled)
+	} else {
+		log.Println(serviceEntrySuspenderLogPrefix + "service entry update suspension is not enabled")
 	}
-	log.Println("op=dynamicEndpointSuspension message=endpoint generation suspension is not enabled")
 	return des.ignoredIdentityCache.Enabled
 }
 
 func (des *serviceEntrySuspender) all() bool {
 	if des.ignoredIdentityCache.All {
 		log.Println(alertMsgSuspensionForAll)
+	} else {
+		log.Println(serviceEntrySuspenderLogPrefix + "service entry update suspension for 'all' identities is not enabled")
 	}
-	log.Println("op=dynamicEndpointSuspension message=endpoint generation suspension for 'all' identities is not enabled")
 	return des.ignoredIdentityCache.All
 }
 
 func (des *serviceEntrySuspender) identityByEnvironment(identity, environment string) bool {
-	log.Printf("op=dynamicEndpointSuspension message=checking if identity %s in environment %s is in the suspension list",
+	log.Printf(serviceEntrySuspenderLogPrefix+"checking if identity %s in environment %s is in the suspension list",
 		identity, environment)
 	des.ignoredIdentityCache.RWLock.RLock()
 	defer des.ignoredIdentityCache.RWLock.RUnlock()

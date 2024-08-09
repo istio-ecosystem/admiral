@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
@@ -17,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestReturnSuccessGET(t *testing.T) {
@@ -113,14 +114,14 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 			name:              "failure with admiral not monitored cluster",
 			clusterName:       "bar",
 			remoteControllers: nil,
-			expectedErr:       "Admiral is not monitoring cluster bar\n",
+			expectedErr:       "admiral is not monitoring cluster bar\n",
 			statusCode:        404,
 		},
 		{
 			name:              "failure with cluster not provided request",
 			clusterName:       "",
 			remoteControllers: nil,
-			expectedErr:       "Cluster name not provided as part of the request\n",
+			expectedErr:       "cluster name not provided as part of the request\n",
 			statusCode:        400,
 		},
 		{
@@ -133,7 +134,7 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: "No service entries configured for cluster - cluster1",
+			expectedErr: "no service entries configured for cluster - cluster1",
 			statusCode:  200,
 		},
 		{
@@ -162,16 +163,19 @@ func TestGetServiceEntriesByCluster(t *testing.T) {
 			}
 			opts.RemoteRegistry = rr
 			if c.name == "success with service entry for cluster" {
-				fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &v1alpha3.ServiceEntry{}, v1.CreateOptions{})
+				fakeIstioClient.NetworkingV1alpha3().ServiceEntries("admiral-sync").Create(ctx, &v1alpha3.ServiceEntry{}, metaV1.CreateOptions{})
 			}
 			opts.GetServiceEntriesByCluster(w, r)
 			resp := w.Result()
 			body, _ := ioutil.ReadAll(resp.Body)
-			if string(body) != c.expectedErr && c.name != "success with service entry for cluster" {
-				t.Errorf("Error mismatch. Got %v, want %v", string(body), c.expectedErr)
+			if c.name != "success with service entry for cluster" {
+				if string(body) != c.expectedErr {
+					t.Errorf("Error mismatch, got: %v, want: %v", string(body), c.expectedErr)
+				}
 			}
+
 			if resp.StatusCode != c.statusCode {
-				t.Errorf("Status code mismatch. Got %v, want %v", resp.StatusCode, c.statusCode)
+				t.Errorf("Status code mismatch, got: %v, want: %v", resp.StatusCode, c.statusCode)
 			}
 		})
 	}
@@ -228,4 +232,144 @@ func TestGetServiceEntriesByIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetGlobalTrafficPolicyByIdentityAndEnv(t *testing.T) {
+	globalTrafficCache := &mockGlobalTrafficCache{
+		identityCache: map[string]*v1.GlobalTrafficPolicy{
+			"stage.testID": {
+				ObjectMeta: metaV1.ObjectMeta{
+					Namespace: "stage-testns",
+					Name:      "stage-testapp",
+					Labels:    map[string]string{"identity": "testID", "admiral.io/env": "stage"},
+				},
+			},
+			"default.testID": {
+				ObjectMeta: metaV1.ObjectMeta{
+					Namespace: "default-testns",
+					Name:      "default-testapp",
+					Labels:    map[string]string{"identity": "testID", "admiral.io/env": "stage"},
+				},
+			},
+		},
+	}
+	validOpts := RouteOpts{
+		RemoteRegistry: &clusters.RemoteRegistry{
+			AdmiralCache: &clusters.AdmiralCache{
+				SeClusterCache:     common.NewMapOfMaps(),
+				GlobalTrafficCache: globalTrafficCache,
+			},
+		},
+	}
+	testCases := []struct {
+		name            string
+		identity        string
+		env             string
+		opts            RouteOpts
+		expectedStatus  int
+		expectedError   string
+		expectedGTPName string
+	}{
+		{
+			name:           "nil RemoteRegistry in RouteOpts should result in InternalServerError",
+			identity:       "testID",
+			env:            "stage",
+			opts:           RouteOpts{},
+			expectedStatus: 500,
+			expectedError:  "invalid remote registry cache",
+		},
+		{
+			name:     "nil RemoteRegistry.AdmiralCache in RouteOpts should result in InternalServerError",
+			identity: "testID",
+			env:      "stage",
+			opts: RouteOpts{
+				RemoteRegistry: &clusters.RemoteRegistry{},
+			},
+			expectedStatus: 500,
+			expectedError:  "invalid remote registry cache",
+		},
+		{
+			name:           "missing identity path param should result in HTTP bad request",
+			identity:       "",
+			env:            "stage",
+			opts:           validOpts,
+			expectedStatus: 400,
+			expectedError:  "identity not provided as part of the path param",
+		},
+		{
+			name:            "missing env query param should return a valid 200 response with a valid GTP payload",
+			identity:        "testID",
+			env:             "",
+			opts:            validOpts,
+			expectedStatus:  200,
+			expectedGTPName: "default-testapp",
+		},
+		{
+			name:           "querying for an invalid gtp should result in a 404",
+			identity:       "invalidGTP",
+			env:            "stage",
+			opts:           validOpts,
+			expectedStatus: 404,
+			expectedError:  "globaltraffic policy with identity: invalidGTP and env: stage was not found",
+		},
+		{
+			name:            "valid GTP queried should return a valid 200 response with a valid GTP payload",
+			identity:        "testID",
+			env:             "stage",
+			opts:            validOpts,
+			expectedStatus:  200,
+			expectedGTPName: "stage-testapp",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "http://admiral.test.com/identity/{id}/globaltrafficpolicy?env="+c.env, nil)
+			r = mux.SetURLVars(r, map[string]string{"identity": c.identity})
+			w := httptest.NewRecorder()
+			c.opts.GetGlobalTrafficPolicyByIdentityAndEnv(w, r)
+			res := w.Result()
+			data, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			if res.StatusCode != c.expectedStatus {
+				t.Errorf("expected http status %d got %d", c.expectedStatus, res.StatusCode)
+			}
+			if c.expectedError != "" {
+				responseJSON := make(map[string]string)
+				json.Unmarshal(data, &responseJSON)
+				if responseJSON["error"] != c.expectedError {
+					t.Errorf("expected error '%s' got '%s'", c.expectedError, responseJSON["error"])
+				}
+			} else {
+				var responseGTP *v1.GlobalTrafficPolicy
+				json.Unmarshal(data, &responseGTP)
+				if responseGTP == nil {
+					t.Error("expected response GTP to be not nil")
+				}
+				if c.expectedGTPName != responseGTP.Name {
+					t.Errorf("expected GTP %s got GTP %s", c.expectedGTPName, responseGTP.Name)
+				}
+			}
+			res.Body.Close()
+		})
+	}
+
+}
+
+type mockGlobalTrafficCache struct {
+	identityCache map[string]*v1.GlobalTrafficPolicy
+}
+
+func (m *mockGlobalTrafficCache) GetFromIdentity(identity string, environment string) (*v1.GlobalTrafficPolicy, error) {
+	return m.identityCache[common.ConstructKeyWithEnvAndIdentity(environment, identity)], nil
+}
+
+func (*mockGlobalTrafficCache) Put(*v1.GlobalTrafficPolicy) error {
+	return nil
+}
+
+func (*mockGlobalTrafficCache) Delete(string, string) error {
+	return nil
 }

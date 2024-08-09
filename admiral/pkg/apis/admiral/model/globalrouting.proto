@@ -79,18 +79,17 @@ message TrafficPolicy {
     //Ex: dnsPrefix = west => generated service name = west.stage.servicename.global
     string dnsPrefix = 4;
 
-   message OutlierDetection {
-       //REQUIRED: Minimum duration of time in seconds, the endpoint will be ejected
-       int64 base_ejection_time = 1;
-       //REQUIRED: No. of consecutive failures in specified interval after which the endpoint will be ejected
-       uint32 consecutive_gateway_errors = 2;
-       //REQUIRED: Time interval between ejection sweep analysis
-       int64 interval = 3;
-   }
+    message OutlierDetection {
+        //REQUIRED: Minimum duration of time in seconds, the endpoint will be ejected
+        int64 base_ejection_time = 1;
+        //REQUIRED: No. of consecutive failures in specified interval after which the endpoint will be ejected
+        uint32 consecutive_gateway_errors = 2;
+        //REQUIRED: Time interval between ejection sweep analysis
+        int64 interval = 3;
+    }
 
-   //OPTIONAL: to configure the outlierDetection in DestinationRule
+    //OPTIONAL: to configure the outlierDetection in DestinationRule
     OutlierDetection outlier_detection = 5;
-
 }
 
 message TrafficGroup {

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash +x
 
 if [ -z "$ADMIRAL_HOME" ]
 then
@@ -8,8 +8,12 @@ fi
 
 if [ -z "$KUBECONFIG" ]
 then
-      echo "\$KUBECONFIG is not set"
-      exit 1
+    echo "\$KUBECONFIG is not set"
+    exit 1
+elif [[ $KUBECONFIG == *"ppd"* || $KUBECONFIG == *"prd"* || $KUBECONFIG == *"prod"* ]]
+then
+    echo "\$KUBECONFIG is not for a dev cluster"
+    exit 1
 fi
 
 cd $ADMIRAL_HOME

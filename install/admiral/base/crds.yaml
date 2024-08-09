@@ -187,3 +187,83 @@ spec:
           type: object
       served: true
       storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: outlierdetections.admiral.io
+spec:
+  group: admiral.io
+  names:
+    kind: OutlierDetection
+    listKind: OutlierDetectionList
+    plural: outlierdetections
+    singular: outlierdetection
+    shortNames:
+    - od
+    - ods
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: generic cdr object to wrap the OutlierDetection api
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              outlier_config:
+                description: 'REQUIRED: base outlier configuration.'
+                properties:
+                  base_ejection_time:
+                    description: 'REQUIRED: Minimum duration of time in seconds, the
+                      endpoint will be ejected'
+                    format: int64
+                    type: integer
+                  consecutive_gateway_errors:
+                    description: 'REQUIRED: No. of consecutive failures in specified
+                      interval after which the endpoint will be ejected'
+                    format: int32
+                    type: integer
+                  interval:
+                    description: 'REQUIRED: Time interval between ejection sweep analysis'
+                    format: int64
+                    type: integer
+                type: object
+              selector:
+                additionalProperties:
+                  type: string
+                description: 'REQUIRED: One or more labels that indicate a specific
+                  set of pods/VMs on which this outlier configuration should be applied.
+                  The scope of label search is restricted to namespace mark for mesh
+                  enablement this will scan all cluster and namespace'
+                type: object
+            type: object
+          status:
+            properties:
+              clustersSynced:
+                format: int32
+                type: integer
+              state:
+                type: string
+            required:
+            - clustersSynced
+            - state
+            type: object
+        required:
+        - metadata
+        - spec
+        type: object
+    served: true
+    storage: true

@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"strings"
 
-	structpb "github.com/golang/protobuf/ptypes/struct"
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+
+	structPb "github.com/golang/protobuf/ptypes/struct"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/api/networking/v1alpha3"
+	networkingv1alpha3 "istio.io/api/networking/v1alpha3"
 	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -20,71 +24,110 @@ var (
 	getSha1 = common.GetSha1
 )
 
-const hostsKey = "hosts: "
-const pluginKey = "plugin: "
+const (
+	envoyFilter                                           = "EnvoyFilter"
+	hostsKey                                              = "hosts: "
+	pluginKey                                             = "plugin: "
+	envoyfilterAssociatedRoutingPolicyNameAnnotation      = "associated-routing-policy-name"
+	envoyfilterAssociatedRoutingPolicyIdentityeAnnotation = "associated-routing-policy-identity"
+)
 
-func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache, workloadSelectorMap map[string]string) (*networking.EnvoyFilter, error) {
+// getEnvoyFilterNamespace returns the user namespace where envoy filter needs to be created.
+func getEnvoyFilterNamespace() string {
+	var namespace string
+	namespace = common.NamespaceIstioSystem
+	return namespace
+}
+func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType, workloadIdentityKey string, admiralCache *AdmiralCache) ([]*networking.EnvoyFilter, error) {
 
-	envoyfilterSpec, err := constructEnvoyFilterStruct(routingPolicy, workloadSelectorMap)
+	var (
+		filterNamespace string
+		err             error
+	)
+
+	filterNamespace = getEnvoyFilterNamespace()
+	routingPolicyNameSha, err := getSha1(routingPolicy.Name + common.GetRoutingPolicyEnv(routingPolicy) + common.GetRoutingPolicyIdentity(routingPolicy))
 	if err != nil {
-		log.Error("error occurred while constructing envoy filter struct")
+		log.Errorf(LogErrFormat, eventType, envoyFilter, routingPolicy.Name, rc.ClusterID, "error occurred while computing routingPolicy name sha1")
 		return nil, err
 	}
-
-	selectorLabelsSha, err := getSha1(workloadIdentityKey + common.GetRoutingPolicyEnv(routingPolicy))
+	dependentIdentitySha, err := getSha1(workloadIdentityKey)
 	if err != nil {
-		log.Error("error occurred while computing workload labels sha1")
+		log.Errorf(LogErrFormat, eventType, envoyFilter, routingPolicy.Name, rc.ClusterID, "error occurred while computing dependentIdentity sha1")
 		return nil, err
 	}
 	if len(common.GetEnvoyFilterVersion()) == 0 {
-		log.Error("envoy filter version not supplied")
+		log.Errorf(LogErrFormat, eventType, envoyFilter, routingPolicy.Name, rc.ClusterID, "envoy filter version not supplied")
 		return nil, errors.New("envoy filter version not supplied")
 	}
-	envoyFilterName := fmt.Sprintf("%s-dynamicrouting-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), selectorLabelsSha, common.GetEnvoyFilterVersion())
-	envoyfilter := &networking.EnvoyFilter{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "EnvoyFilter",
-			APIVersion: "networking.istio.io/v1alpha3",
-		},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      envoyFilterName,
-			Namespace: common.NamespaceIstioSystem,
-		},
-		//nolint
-		Spec: *envoyfilterSpec,
-	}
 
-	admiralCache.RoutingPolicyFilterCache.Put(workloadIdentityKey+common.GetRoutingPolicyEnv(routingPolicy), rc.ClusterID, envoyFilterName)
-	var filter *networking.EnvoyFilter
-	//get the envoyfilter if it exists. If it exists, update it. Otherwise create it.
-	if eventType == admiral.Add || eventType == admiral.Update {
-		// We query the API server instead of getting it from cache because there could be potential condition where the filter exists in the cache but not on the cluster.
-		filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
-			EnvoyFilters(common.NamespaceIstioSystem).Get(ctx, envoyFilterName, metaV1.GetOptions{})
-		if err != nil {
-			log.Infof("msg=%s filtername=%s clustername=%s", "creating the envoy filter", envoyFilterName, rc.ClusterID)
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
-				EnvoyFilters(common.NamespaceIstioSystem).Create(ctx, envoyfilter, metaV1.CreateOptions{})
-			if err != nil {
-				log.Infof("error creating filter: %v", err)
+	var versionsArray = common.GetEnvoyFilterVersion() // e.g. 1.13,1.17
+	env := common.GetRoutingPolicyEnv(routingPolicy)
+	filterList := make([]*networking.EnvoyFilter, 0)
+
+	for _, version := range versionsArray {
+		envoyFilterName := fmt.Sprintf("%s-dr-%s-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), routingPolicyNameSha, dependentIdentitySha, version)
+		envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, map[string]string{common.AssetAlias: workloadIdentityKey}, version, envoyFilterName)
+
+		log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "version +"+version)
+
+		envoyfilter := &networking.EnvoyFilter{
+			TypeMeta: metaV1.TypeMeta{
+				Kind:       "EnvoyFilter",
+				APIVersion: "networking.istio.io/v1alpha3",
+			},
+			ObjectMeta: metaV1.ObjectMeta{
+				Name:      envoyFilterName,
+				Namespace: filterNamespace,
+				Annotations: map[string]string{
+					envoyfilterAssociatedRoutingPolicyNameAnnotation:      routingPolicy.Name,
+					envoyfilterAssociatedRoutingPolicyIdentityeAnnotation: common.GetRoutingPolicyIdentity(routingPolicy),
+				},
+			},
+			//nolint
+			Spec: *envoyfilterSpec,
+		}
+
+		// To maintain mapping of envoyfilters created for a routing policy, and to facilitate deletion of envoyfilters when routing policy is deleted
+		admiralCache.RoutingPolicyFilterCache.Put(routingPolicy.Name+common.GetRoutingPolicyIdentity(routingPolicy)+env, rc.ClusterID, envoyFilterName, filterNamespace)
+
+		//get the envoyfilter if it exists. If it exists, update it. Otherwise create it.
+		if eventType == admiral.Add || eventType == admiral.Update {
+			// We query the API server instead of getting it from cache because there could be potential condition where the filter exists in the cache but not on the cluster.
+			var err2 error
+			filter, err1 := rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+				EnvoyFilters(filterNamespace).Get(ctx, envoyFilterName, metaV1.GetOptions{})
+
+			if k8sErrors.IsNotFound(err1) {
+				log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "creating the envoy filter")
+				filter, err2 = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+					EnvoyFilters(filterNamespace).Create(ctx, envoyfilter, metaV1.CreateOptions{})
+			} else if err1 == nil {
+				log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "updating existing envoy filter")
+				envoyfilter.ResourceVersion = filter.ResourceVersion
+				filter, err2 = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+					EnvoyFilters(filterNamespace).Update(ctx, envoyfilter, metaV1.UpdateOptions{})
+			} else {
+				err = common.AppendError(err1, err)
+				log.Errorf(LogErrFormat, eventType, envoyFilter, routingPolicy.Name, rc.ClusterID, err1)
 			}
-		} else {
-			log.Infof("msg=%s filtername=%s clustername=%s", "updating existing envoy filter", envoyFilterName, rc.ClusterID)
-			envoyfilter.ResourceVersion = filter.ResourceVersion
-			filter, err = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
-				EnvoyFilters(common.NamespaceIstioSystem).Update(ctx, envoyfilter, metaV1.UpdateOptions{})
+
+			if err2 == nil {
+				filterList = append(filterList, filter)
+			} else {
+				err = common.AppendError(err2, err)
+				log.Errorf(LogErrFormat, eventType, envoyFilter, routingPolicy.Name, rc.ClusterID, err2)
+			}
 		}
 	}
-
-	return filter, err
+	return filterList, err
 }
-
-func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string) (*v1alpha3.EnvoyFilter, error) {
+func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string, filterVersion string, filterName string) *v1alpha3.EnvoyFilter {
 	var envoyFilterStringConfig string
 	var wasmPath string
 	for key, val := range routingPolicy.Spec.Config {
 		if key == common.WASMPath {
-			wasmPath = val
+			wasmPath = common.WasmPathValue
 			continue
 		}
 		envoyFilterStringConfig += fmt.Sprintf("%s: %s\n", key, val)
@@ -92,43 +135,38 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	if len(common.GetEnvoyFilterAdditionalConfig()) != 0 {
 		envoyFilterStringConfig += common.GetEnvoyFilterAdditionalConfig() + "\n"
 	}
-	hosts, err := getHosts(routingPolicy)
-	if err != nil {
-		return nil, err
-	}
-	envoyFilterStringConfig += hosts + "\n"
-	plugin, err := getPlugin(routingPolicy)
-	if err != nil {
-		return nil, err
-	}
-	envoyFilterStringConfig += plugin
+	envoyFilterStringConfig += getHosts(routingPolicy) + "\n"
+	envoyFilterStringConfig += getPlugin(routingPolicy)
 
-	configuration := structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"@type": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.StringValue"}},
-			"value": {Kind: &structpb.Value_StringValue{StringValue: envoyFilterStringConfig}},
+	log.Infof("msg=%s type=routingpolicy name=%s", "adding config", routingPolicy.Name)
+
+	configuration := structPb.Struct{
+		Fields: map[string]*structPb.Value{
+			"@type": {Kind: &structPb.Value_StringValue{StringValue: "type.googleapis.com/google.protobuf.StringValue"}},
+			"value": {Kind: &structPb.Value_StringValue{StringValue: envoyFilterStringConfig}},
 		},
 	}
 
-	vmConfig := structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"runtime": {Kind: &structpb.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
-			"code": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-				"local": {Kind: &structpb.Value_StructValue{StructValue: &structpb.Struct{Fields: map[string]*structpb.Value{
-					"filename": {Kind: &structpb.Value_StringValue{StringValue: wasmPath}},
+	vmConfig := structPb.Struct{
+		Fields: map[string]*structPb.Value{
+			"runtime": {Kind: &structPb.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
+			"vm_id":   {Kind: &structpb.Value_StringValue{StringValue: filterName}},
+			"code": {Kind: &structPb.Value_StructValue{StructValue: &structPb.Struct{Fields: map[string]*structPb.Value{
+				"local": {Kind: &structPb.Value_StructValue{StructValue: &structPb.Struct{Fields: map[string]*structPb.Value{
+					"filename": {Kind: &structPb.Value_StringValue{StringValue: wasmPath}},
 				}}}},
 			}}}},
 		},
 	}
 
-	typedConfigValue := structpb.Struct{
-		Fields: map[string]*structpb.Value{
+	typedConfigValue := structPb.Struct{
+		Fields: map[string]*structPb.Value{
 			"config": {
-				Kind: &structpb.Value_StructValue{
-					StructValue: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"configuration": {Kind: &structpb.Value_StructValue{StructValue: &configuration}},
-							"vm_config":     {Kind: &structpb.Value_StructValue{StructValue: &vmConfig}},
+				Kind: &structPb.Value_StructValue{
+					StructValue: &structPb.Struct{
+						Fields: map[string]*structPb.Value{
+							"configuration": {Kind: &structPb.Value_StructValue{StructValue: &configuration}},
+							"vm_config":     {Kind: &structPb.Value_StructValue{StructValue: &vmConfig}},
 						},
 					},
 				},
@@ -136,19 +174,22 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 		},
 	}
 
-	typedConfig := &structpb.Struct{
-		Fields: map[string]*structpb.Value{
-			"@type":    {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/udpa.type.v1.TypedStruct"}},
-			"type_url": {Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"}},
-			"value":    {Kind: &structpb.Value_StructValue{StructValue: &typedConfigValue}},
+	typedConfig := &structPb.Struct{
+		Fields: map[string]*structPb.Value{
+			"@type":    {Kind: &structPb.Value_StringValue{StringValue: "type.googleapis.com/udpa.type.v1.TypedStruct"}},
+			"type_url": {Kind: &structPb.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"}},
+			"value":    {Kind: &structPb.Value_StructValue{StructValue: &typedConfigValue}},
 		},
 	}
 
-	envoyfilterSpec := getEnvoyFilterSpec(workloadSelectorLabels, typedConfig)
-	return envoyfilterSpec, nil
+	envoyfilter := getEnvoyFilterSpec(workloadSelectorLabels, "dynamicRoutingFilterPatch", typedConfig, v1alpha3.EnvoyFilter_SIDECAR_OUTBOUND,
+		&v1alpha3.EnvoyFilter_ListenerMatch_SubFilterMatch{Name: "envoy.filters.http.router"}, v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE, filterVersion)
+	return envoyfilter
 }
 
-func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *structpb.Struct) *v1alpha3.EnvoyFilter {
+func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, filterName string, typedConfig *structPb.Struct,
+	filterContext networkingv1alpha3.EnvoyFilter_PatchContext, subfilter *v1alpha3.EnvoyFilter_ListenerMatch_SubFilterMatch,
+	insertPosition networkingv1alpha3.EnvoyFilter_Patch_Operation, filterVersion string) *v1alpha3.EnvoyFilter {
 	return &v1alpha3.EnvoyFilter{
 		WorkloadSelector: &v1alpha3.WorkloadSelector{Labels: workloadSelectorLabels},
 
@@ -156,29 +197,27 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *s
 			{
 				ApplyTo: v1alpha3.EnvoyFilter_HTTP_FILTER,
 				Match: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
-					Context: v1alpha3.EnvoyFilter_SIDECAR_OUTBOUND,
+					Context: filterContext,
 					// TODO: Figure out the possibility of using this for istio version upgrades. Can we add multiple filters with different proxy version Match here?
-					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: "^" + strings.ReplaceAll(common.GetEnvoyFilterVersion(), ".", "\\.") + ".*"},
+					Proxy: &v1alpha3.EnvoyFilter_ProxyMatch{ProxyVersion: "^" + strings.ReplaceAll(filterVersion, ".", "\\.") + ".*"},
 					ObjectTypes: &v1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
 						Listener: &v1alpha3.EnvoyFilter_ListenerMatch{
 							FilterChain: &v1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
 								Filter: &v1alpha3.EnvoyFilter_ListenerMatch_FilterMatch{
-									Name: "envoy.filters.network.http_connection_manager",
-									SubFilter: &v1alpha3.EnvoyFilter_ListenerMatch_SubFilterMatch{
-										Name: "envoy.filters.http.router",
-									},
+									Name:      "envoy.filters.network.http_connection_manager",
+									SubFilter: subfilter,
 								},
 							},
 						},
 					},
 				},
 				Patch: &v1alpha3.EnvoyFilter_Patch{
-					Operation: v1alpha3.EnvoyFilter_Patch_INSERT_BEFORE,
-					Value: &structpb.Struct{
-						Fields: map[string]*structpb.Value{
-							"name": {Kind: &structpb.Value_StringValue{StringValue: "dynamicRoutingFilterPatch"}},
+					Operation: insertPosition,
+					Value: &structPb.Struct{
+						Fields: map[string]*structPb.Value{
+							"name": {Kind: &structPb.Value_StringValue{StringValue: filterName}},
 							"typed_config": {
-								Kind: &structpb.Value_StructValue{
+								Kind: &structPb.Value_StructValue{
 									StructValue: typedConfig,
 								},
 							},
@@ -190,24 +229,16 @@ func getEnvoyFilterSpec(workloadSelectorLabels map[string]string, typedConfig *s
 	}
 }
 
-func getHosts(routingPolicy *v1.RoutingPolicy) (string, error) {
+func getHosts(routingPolicy *v1.RoutingPolicy) string {
 	hosts := ""
 	for _, host := range routingPolicy.Spec.Hosts {
 		hosts += host + ","
 	}
-	if len(hosts) == 0 {
-		log.Error("routing policy hosts cannot be empty")
-		return "", errors.New("routing policy hosts cannot be empty")
-	}
 	hosts = strings.TrimSuffix(hosts, ",")
-	return hostsKey + hosts, nil
+	return hostsKey + hosts
 }
 
-func getPlugin(routingPolicy *v1.RoutingPolicy) (string, error) {
+func getPlugin(routingPolicy *v1.RoutingPolicy) string {
 	plugin := routingPolicy.Spec.Plugin
-	if len(plugin) == 0 {
-		log.Error("routing policy plugin cannot be empty")
-		return "", errors.New("routing policy plugin cannot be empty")
-	}
-	return pluginKey + plugin, nil
+	return pluginKey + plugin
 }

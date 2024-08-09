@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -9,10 +10,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	depModel "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"github.com/sirupsen/logrus"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 	networking "istio.io/api/networking/v1alpha3"
@@ -29,24 +32,25 @@ var registryTestSingleton sync.Once
 func admiralParamsForRegistryTests() common.AdmiralParams {
 	return common.AdmiralParams{
 		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey:          "identity",
-			GlobalTrafficDeploymentLabel: "identity",
-			PriorityKey:                  "priority",
-			EnvKey:                       "admiral.io/env",
+			WorkloadIdentityKey:     "identity",
+			AdmiralCRDIdentityLabel: "identity",
+			PriorityKey:             "priority",
+			EnvKey:                  "admiral.io/env",
 		},
-		KubeconfigPath:             "testdata/fake.config",
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		SecretResolver:             "",
-		WorkloadSidecarUpdate:      "enabled",
-		WorkloadSidecarName:        "default",
-		EnableRoutingPolicy:        true,
-		EnvoyFilterVersion:         "1.13",
+		KubeconfigPath:                "testdata/fake.config",
+		EnableSAN:                     true,
+		SANPrefix:                     "prefix",
+		HostnameSuffix:                "mesh",
+		SyncNamespace:                 "ns",
+		CacheReconcileDuration:        1 * time.Minute,
+		SeAndDrCacheReconcileDuration: 1 * time.Minute,
+		ClusterRegistriesNamespace:    "default",
+		DependenciesNamespace:         "default",
+		WorkloadSidecarUpdate:         "enabled",
+		WorkloadSidecarName:           "default",
+		EnableRoutingPolicy:           true,
+		EnvoyFilterVersion:            "1.13",
+		Profile:                       common.AdmiralProfileDefault,
 	}
 }
 
@@ -68,12 +72,12 @@ func TestDeleteCacheControllerThatDoesntExist(t *testing.T) {
 
 func TestDeleteCacheController(t *testing.T) {
 	setupForRegistryTests()
-	w := NewRemoteRegistry(nil, common.AdmiralParams{})
+	w := NewRemoteRegistry(context.TODO(), common.AdmiralParams{})
 	r := rest.Config{
 		Host: "test.com",
 	}
 	cluster := "test.cluster"
-	w.createCacheController(&r, cluster, time.Second*time.Duration(300))
+	w.createCacheController(&r, cluster, util.ResyncIntervals{UniversalReconcileInterval: 300 * time.Second, SeAndDrReconcileInterval: 300 * time.Second})
 	rc := w.GetRemoteController(cluster)
 
 	if rc == nil {
@@ -142,23 +146,23 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		Host: "localhost",
 	}
 	stop := make(chan struct{})
-	d, err := admiral.NewDeploymentController("", stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300))
+	d, err := admiral.NewDeploymentController(stop, &test.MockDeploymentHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
-	s, err := admiral.NewServiceController("test", stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300))
+	s, err := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
-	n, err := admiral.NewNodeController("", stop, &test.MockNodeHandler{}, &config)
+	n, err := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config, loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
-	r, err := admiral.NewRolloutsController("test", stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300))
+	r, err := admiral.NewRolloutsController(stop, &test.MockRolloutHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
-	rpc, err := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300))
+	rpc, err := admiral.NewRoutingPoliciesController(stop, &test.MockRoutingPolicyHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +171,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "test",
+			Labels:    map[string]string{"sidecar.istio.io/inject": "true", "identity": "bar", "env": "dev"},
 		},
 		Spec: k8sAppsV1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -174,7 +179,8 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 			},
 			Template: k8sCoreV1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+					Annotations: map[string]string{"sidecar.istio.io/inject": "true"},
+					Labels:      map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
 				},
 			},
 		},
@@ -215,7 +221,7 @@ func TestCreateSecretController(t *testing.T) {
 
 	common.SetKubeconfigPath("fail")
 
-	err = createSecretController(context.Background(), NewRemoteRegistry(nil, common.AdmiralParams{}))
+	err = createSecretController(context.Background(), NewRemoteRegistry(context.TODO(), common.AdmiralParams{}))
 
 	common.SetKubeconfigPath("testdata/fake.config")
 
@@ -257,15 +263,16 @@ func TestAdded(t *testing.T) {
 		t.Fail()
 	})
 	rr.PutRemoteController("test.cluster", rc)
-	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300))
+	d, e := admiral.NewDependencyController(make(chan struct{}), &test.MockDependencyHandler{}, p.KubeconfigPath, "dep-ns", time.Second*time.Duration(300), loader.GetFakeClientLoader())
 
 	if e != nil {
 		t.Fail()
 	}
 
 	dh := DependencyHandler{
-		RemoteRegistry: rr,
-		DepController:  d,
+		RemoteRegistry:              rr,
+		DepController:               d,
+		DestinationServiceProcessor: &MockDestinationServiceProcessor{},
 	}
 
 	depData := v1.Dependency{
@@ -284,23 +291,9 @@ func TestAdded(t *testing.T) {
 func TestGetServiceForDeployment(t *testing.T) {
 	setupForRegistryTests()
 	baseRc, _ := createMockRemoteController(func(i interface{}) {
-		//res := i.(istio.Config)
-		//se, ok := res.Spec.(*v1alpha3.ServiceEntry)
-		//if ok {
-		//	if se.Hosts[0] != "dev.bar.global" {
-		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-		//	}
-		//}
 	})
 
 	rcWithService, _ := createMockRemoteController(func(i interface{}) {
-		//res := i.(istio.Config)
-		//se, ok := res.Spec.(*networking.ServiceEntry)
-		//if ok {
-		//	if se.Hosts[0] != "dev.bar.global" {
-		//		t.Errorf("Host mismatch. Expected dev.bar.global, got %v", se.Hosts[0])
-		//	}
-		//}
 	})
 
 	service := k8sCoreV1.Service{}
@@ -354,7 +347,7 @@ func TestGetServiceForDeployment(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			resultingService := getServiceForDeployment(c.controller, c.deployment)
+			resultingService, _ := getServiceForDeployment(c.controller, c.deployment)
 			if resultingService == nil && c.expectedService == nil {
 				//perfect
 			} else {
@@ -370,9 +363,14 @@ func TestGetServiceForDeployment(t *testing.T) {
 func TestUpdateCacheController(t *testing.T) {
 	setupForRegistryTests()
 	p := common.AdmiralParams{
-		KubeconfigPath: "testdata/fake.config",
+		KubeconfigPath:                "testdata/fake.config",
+		CacheReconcileDuration:        300 * time.Second,
+		SeAndDrCacheReconcileDuration: 150 * time.Second,
 	}
 	originalConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake.config")
+	if err != nil {
+		t.Fatalf("unexpected error when building client with testdata/fake.config, err: %v", err)
+	}
 	changedConfig, err := clientcmd.BuildConfigFromFlags("", "testdata/fake_2.config")
 	if err != nil {
 		t.Fatalf("Unexpected error getting client %v", err)
@@ -415,13 +413,13 @@ func TestUpdateCacheController(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			hook := logTest.NewGlobal()
 			rr.GetRemoteController(c.clusterId).ApiServer = c.oldConfig.Host
-			d, err := admiral.NewDeploymentController("", make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300))
+			d, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, c.oldConfig, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 			if err != nil {
 				t.Fatalf("Unexpected error creating controller %v", err)
 			}
 			rc.DeploymentController = d
 
-			err = rr.updateCacheController(c.newConfig, c.clusterId, time.Second*time.Duration(300))
+			err = rr.updateCacheController(c.newConfig, c.clusterId, common.GetResyncIntervals())
 			if err != nil {
 				t.Fatalf("Unexpected error doing update %v", err)
 			}
@@ -446,4 +444,74 @@ func checkIfLogged(entries []*logrus.Entry, phrase string) bool {
 		}
 	}
 	return false
+}
+
+func TestInitAdmiralHA(t *testing.T) {
+	var (
+		ctx                 = context.TODO()
+		dummyKubeConfig     = "./testdata/fake.config"
+		dependencyNamespace = "dependency-ns"
+	)
+	testCases := []struct {
+		name        string
+		params      common.AdmiralParams
+		assertFunc  func(rr *RemoteRegistry, t *testing.T)
+		expectedErr error
+	}{
+		{
+			name: "Given Admiral is running in HA mode for database builder, " +
+				"When InitAdmiralHA is invoked with correct parameters, " +
+				"Then, it should return RemoteRegistry with 3 controllers - DependencyController, " +
+				"DeploymentController, and RolloutController",
+			params: common.AdmiralParams{
+				HAMode:                common.HAController,
+				KubeconfigPath:        dummyKubeConfig,
+				DependenciesNamespace: dependencyNamespace,
+			},
+			assertFunc: func(rr *RemoteRegistry, t *testing.T) {
+				if rr == nil {
+					t.Error("expected RemoteRegistry to be initialized, but got nil")
+				}
+				// check if it has DependencyController initialized
+				if rr != nil && rr.DependencyController == nil {
+					t.Error("expected DependencyController to be initialized, but it was not")
+				}
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Given Admiral is running in HA mode for database builder, " +
+				"When InitAdmiralHA is invoked with invalid HAMode parameter, " +
+				"Then InitAdmiralHA should return an expected error",
+			params: common.AdmiralParams{
+				KubeconfigPath:        dummyKubeConfig,
+				DependenciesNamespace: dependencyNamespace,
+			},
+			assertFunc: func(rr *RemoteRegistry, t *testing.T) {
+				if rr != nil {
+					t.Error("expected RemoteRegistry to be uninitialized")
+				}
+			},
+			expectedErr: fmt.Errorf("admiral HA only supports %s mode", common.HAController),
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			common.ResetSync()
+			rr, err := InitAdmiralHA(ctx, c.params)
+			if c.expectedErr == nil && err != nil {
+				t.Errorf("expected: nil, got: %v", err)
+			}
+			if c.expectedErr != nil {
+				if err == nil {
+					t.Errorf("expected: %v, got: %v", c.expectedErr, err)
+				}
+				if err != nil && c.expectedErr.Error() != err.Error() {
+					t.Errorf("expected: %v, got: %v", c.expectedErr, err)
+				}
+			}
+			c.assertFunc(rr, t)
+		})
+	}
 }
