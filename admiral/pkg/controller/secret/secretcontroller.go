@@ -355,10 +355,10 @@ func (c *Controller) deleteMemberCluster(secretName string) {
 				log.Errorf("error during cluster delete: %s %v", clusterID, err)
 			}
 			delete(c.Cs.RemoteClusters, clusterID)
-			resolver, ok := c.secretResolver.(resolver.IDPSResolver)
-			if ok {
-				log.Infof("Deleting kubeconfig from cache for secret: %s", clusterID)
-				resolver.KubeConfigCache.Delete(clusterID)
+			log.Infof("Deleting kubeconfig from cache for secret: %s", clusterID)
+			err = c.secretResolver.DeleteClusterFromCache(clusterID)
+			if err != nil {
+				log.Errorf("error deleting cluster from cache: %s %v", clusterID, err)
 			}
 		}
 	}

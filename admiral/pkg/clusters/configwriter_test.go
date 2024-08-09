@@ -2,15 +2,16 @@ package clusters
 
 import (
 	"context"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 func admiralParamsForConfigWriterTests() common.AdmiralParams {
@@ -63,15 +64,9 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 }
 
 func TestGetIngressEndpoints(t *testing.T) {
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-	identityConfig := getSampleIdentityConfig()
-	expectedIngressEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
-=======
 	identityConfig := registry.GetSampleIdentityConfig()
 	expectedIngressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cg-tax-ppd-usw2-k8s": {
 		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
@@ -133,15 +128,9 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-	e2eEnv := getSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
-	ingressEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
-=======
 	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
 	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cg-tax-ppd-usw2-k8s": {
 		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
@@ -151,13 +140,8 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-	remoteEndpoint := []*networkingV1Alpha3.WorkloadEntry{{
-		Address:  "a-elb.us-west-2.elb.amazonaws.com.",
-=======
 	remoteEndpoint := &networkingV1Alpha3.WorkloadEntry{
 		Address:  "internal-a1cbfde75adbe1fed9763495dfd07960-2123389388.us-west-2.elb.amazonaws.com.",
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
@@ -184,16 +168,9 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 				"Then the constructed endpoint should be a remote endpoint",
 			identityConfigEnvironment: e2eEnv,
 			ingressEndpoints:          ingressEndpoints,
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-			operatorCluster:           "cg-tax-ppd-usw2-k8s",
-			sourceCluster:             "apigw-cx-ppd-usw2-k8s",
-			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
-			expectedSEEndpoints:       remoteEndpoint,
-=======
 			clientCluster:             "cg-tax-ppd-usw2-k8s",
 			serverCluster:             "apigw-cx-ppd-usw2-k8s",
 			expectedSEEndpoint:        remoteEndpoint,
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 		},
 		{
 			name: "Given an IdentityConfigEnvironment and ingressEndpoint, " +
@@ -201,16 +178,9 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 				"Then the constructed endpoint should be a local endpoint",
 			identityConfigEnvironment: e2eEnv,
 			ingressEndpoints:          ingressEndpoints,
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-			operatorCluster:           "cg-tax-ppd-usw2-k8s",
-			sourceCluster:             "cg-tax-ppd-usw2-k8s",
-			remoteEndpointAddress:     "a-elb.us-west-2.elb.amazonaws.com.",
-			expectedSEEndpoints:       localEndpoint,
-=======
 			clientCluster:             "cg-tax-ppd-usw2-k8s",
 			serverCluster:             "cg-tax-ppd-usw2-k8s",
 			expectedSEEndpoint:        localEndpoint,
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 		},
 	}
 	for _, c := range testCases {
@@ -228,10 +198,6 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD:admiral/pkg/registry/serviceentry_test.go
-func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
-
-=======
 func TestGetExportTo(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
@@ -320,5 +286,4 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 			}
 		})
 	}
->>>>>>> 508caceb (MESH-5069: Operator Shards (#749)):admiral/pkg/clusters/configwriter_test.go
 }
