@@ -5959,6 +5959,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
 		TrafficDistribution: map[string]int32{"us-west-2": 100},
+		LbType:              model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)],
 	}
 
 	var workloadDataWithFailoverGTP = WorkloadData{
@@ -6100,7 +6101,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			workloadData := getWorkloadData(ctxLogger, c.serviceEntry, c.globalTrafficPolicy, c.additionalEndpoints, c.dr, "dev", c.isSuccess)
 			if !reflect.DeepEqual(workloadData, c.expectedWorkloadData) {
-				assert.Fail(t, "actual and expected workload data do not match. Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
+				assert.Fail(t, "actual and expected workload data do not match.", "Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
 			}
 		})
 	}

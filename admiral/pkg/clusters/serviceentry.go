@@ -1599,6 +1599,7 @@ func getWorkloadData(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntr
 				dr.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute[0].From == "*" {
 				for region, weight := range dr.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute[0].To {
 					trafficDistribution[region] = int32(weight)
+					lbType = model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)]
 				}
 			}
 		}
