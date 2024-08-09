@@ -1,13 +1,13 @@
 package routes
 
 import (
+	"log"
+	"net/http"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/filters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/server"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"k8s.io/client-go/tools/clientcmd"
-	"log"
-	"net/http"
 )
 
 var Filter = server.Filters{
@@ -16,8 +16,7 @@ var Filter = server.Filters{
 
 func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 	// create the config from the path
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeconfigPath)
-
+	config, err := opts.RemoteRegistry.ClientLoader.LoadKubeClientFromPath(opts.KubeconfigPath)
 	if err != nil || config == nil {
 		log.Printf("could not retrieve kubeconfig: %v", err)
 	}
@@ -47,6 +46,13 @@ func NewAdmiralAPIServer(opts *RouteOpts) server.Routes {
 			Method:      "GET",
 			Pattern:     "/identity/{identity}/serviceentries",
 			HandlerFunc: opts.GetServiceEntriesByIdentity,
+		},
+		server.Route{
+			Name:        "Get the GlobalTrafficPolicy based on the env and identity/asset alias",
+			Method:      "GET",
+			Pattern:     "/identity/{identity}/globaltrafficpolicy",
+			Query:       "env",
+			HandlerFunc: opts.GetGlobalTrafficPolicyByIdentityAndEnv,
 		},
 	}
 }

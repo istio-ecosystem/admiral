@@ -7,39 +7,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/testing/protocmp"
+	"istio.io/api/networking/v1alpha3"
+	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/stretchr/testify/assert"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
-	"istio.io/client-go/pkg/clientset/versioned/typed/networking/v1alpha3/fake"
-	time2 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	testing2 "k8s.io/client-go/testing"
+	k8sAppsV1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	k8sCorev1 "k8s.io/api/core/v1"
 )
 
 func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
-	p := common.AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		CacheRefreshDuration:       time.Minute,
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		SecretResolver:             "",
-		EnvoyFilterVersion:         "1.13",
-	}
-
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.EnvKey = "admiral.io/env"
-	p.LabelSet.GlobalTrafficDeploymentLabel = "identity"
-
-	common.ResetSync()
-	registry, _ := InitAdmiral(context.Background(), p)
+	registry := getRegistry("1.13,1.17")
 
 	handler := RoutingPolicyHandler{}
 
@@ -52,6 +40,45 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 
 	})
 
+	deployment := k8sAppsV1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+			Labels:    map[string]string{"sidecar.istio.io/inject": "true", "identity": "bar", "env": "dev"},
+		},
+		Spec: k8sAppsV1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: k8sCorev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"sidecar.istio.io/inject": "true"},
+					Labels:      map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	rollout := v1alpha1.Rollout{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "test",
+			Labels:    map[string]string{"sidecar.istio.io/inject": "true", "identity": "bar", "env": "dev"},
+		},
+		Spec: v1alpha1.RolloutSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: k8sCorev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"sidecar.istio.io/inject": "true"},
+					Labels:      map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+	ctx := context.Background()
+	remoteController.RolloutController.Added(ctx, &rollout)
 	remoteController.RoutingPolicyController = routingPolicyController
 
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
@@ -64,11 +91,12 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	handler.RemoteRegistry = registry
 
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta: time2.TypeMeta{},
-		ObjectMeta: time2.ObjectMeta{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "routingpolicy-foo",
 			Labels: map[string]string{
 				"identity":       "foo",
-				"admiral.io/env": "stage",
+				"admiral.io/env": "dev",
 			},
 		},
 		Spec: model.RoutingPolicy{
@@ -79,41 +107,170 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 				"cachettlSec":       "86400",
 				"routingServiceUrl": "e2e.test.routing.service.mesh",
 				"pathPrefix":        "/sayhello,/v1/company/{id}/",
+				"wasmPath":          "dummyPath",
 			},
 		},
 		Status: v1.RoutingPolicyStatus{},
 	}
 
-	selectors := map[string]string{"one": "test1", "two": "test2"}
-
-	getSha1 = getSha1Error
-
-	ctx := context.Background()
-
-	envoyfilter, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "barstage", registry.AdmiralCache, selectors)
-
-	assert.NotNil(t, err)
-	assert.Nil(t, envoyfilter)
+	envoyFilter_113 := &networking.EnvoyFilter{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-dr-70395ba3470fd8ce6062-f6ce3712830af1b15625-1.13",
+		},
+		Spec: v1alpha3.EnvoyFilter{
+			ConfigPatches: nil,
+			Priority:      0,
+		},
+	}
+	envoyFilter_117 := &networking.EnvoyFilter{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-dr-70395ba3470fd8ce6062-f6ce3712830af1b15625-1.17",
+		},
+		Spec: v1alpha3.EnvoyFilter{
+			ConfigPatches: nil,
+			Priority:      0,
+		},
+	}
 
 	getSha1 = common.GetSha1
 
-	envoyfilter, err = createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "bar", registry.AdmiralCache, selectors)
-	assert.Equal(t, "test1", envoyfilter.Spec.WorkloadSelector.GetLabels()["one"])
-	assert.Equal(t, "test2", envoyfilter.Spec.WorkloadSelector.GetLabels()["two"])
-	assert.Equal(t, "test-dynamicrouting-d0fdd-1.13", envoyfilter.Name)
-
-	envoyfilter, err = createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Update, "bar", registry.AdmiralCache, selectors)
-	assert.Nil(t, err)
-
-	remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().(*fake.FakeNetworkingV1alpha3).PrependReactor("create", "envoyfilters",
-		func(action testing2.Action) (handled bool, ret runtime.Object, err error) {
-			return true, nil, errors.New("error creating envoyfilter")
+	//Struct of test case info. Name is required.
+	testCases := []struct {
+		name                string
+		workloadKey         string
+		routingPolicy       *v1.RoutingPolicy
+		eventType           admiral.EventType
+		expectedEnvoyFilter *networking.EnvoyFilter
+		filterCount         int
+		registry            *AdmiralCache
+		shaMethod           func(interface{}) (string, error)
+		matchingRollout     bool
+	}{
+		{
+			name: "Given dynamic routing is enabled in admiral startup params, " +
+				"When an ADD event for routing policy is received but sha1 calculation fails" +
+				"Then 0 envoy filters are created and error is thrown",
+			workloadKey:         "bar",
+			routingPolicy:       routingPolicyFoo,
+			eventType:           admiral.Add,
+			expectedEnvoyFilter: nil,
+			filterCount:         0,
+			registry:            registry.AdmiralCache,
+			shaMethod:           getSha1Error,
 		},
-	)
-	envoyfilter3, err := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicyFoo, admiral.Add, "bar2", registry.AdmiralCache, selectors)
-	assert.NotNil(t, err)
-	assert.Nil(t, envoyfilter3)
+		{
+			name: "Given 2 envoy filter versions are specified in Admiral startup params, " +
+				"And there exists a dependent service, which has a deployment, " +
+				"When an ADD event is received for routing policy" +
+				"Then 2 envoy filters are created, one for each version in each dependent cluster's istio-system ns",
+			workloadKey:         "bar",
+			routingPolicy:       routingPolicyFoo,
+			eventType:           admiral.Add,
+			expectedEnvoyFilter: envoyFilter_113,
+			filterCount:         2,
+			registry:            registry.AdmiralCache,
+		},
+		{
+			name: "Given 2 envoy filter versions are specified in Admiral startup params, " +
+				"When an UPDATE event is received for routing policy" +
+				"Then 2 envoy filters are created, one for each version in each dependent's ns",
+			workloadKey:         "bar",
+			routingPolicy:       routingPolicyFoo,
+			eventType:           admiral.Update,
+			expectedEnvoyFilter: envoyFilter_113,
+			filterCount:         2,
+			registry:            registry.AdmiralCache,
+		},
+		{
+			name: "Given 2 envoy filter versions are specified in Admiral startup params, " +
+				"And there exists a dependent service, which has a rollout, " +
+				"When an ADD event is received for routing policy" +
+				"Then 2 envoy filters are created, one for each version in dependent cluster's istio-system ns",
+			workloadKey:         "bar",
+			routingPolicy:       routingPolicyFoo,
+			eventType:           admiral.Add,
+			expectedEnvoyFilter: envoyFilter_113,
+			filterCount:         2,
+			registry:            registry.AdmiralCache,
+			matchingRollout:     true,
+		},
+	}
 
+	//Run the test for every provided case
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.shaMethod != nil {
+				getSha1 = c.shaMethod
+			} else {
+				getSha1 = common.GetSha1
+			}
+			if c.matchingRollout {
+				remoteController.DeploymentController.Deleted(ctx, &deployment)
+			} else {
+				remoteController.DeploymentController.Added(ctx, &deployment)
+			}
+			if c.eventType == admiral.Update {
+				remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+					EnvoyFilters(common.NamespaceIstioSystem).Create(context.Background(), envoyFilter_113, metav1.CreateOptions{})
+				remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+					EnvoyFilters(common.NamespaceIstioSystem).Create(context.Background(), envoyFilter_117, metav1.CreateOptions{})
+
+			}
+			envoyfilterList, err := createOrUpdateEnvoyFilter(ctx, remoteController, c.routingPolicy, c.eventType, c.workloadKey, c.registry)
+
+			if err != nil && c.expectedEnvoyFilter != nil {
+				t.Fatalf("EnvoyFilter error: %v", err)
+			}
+
+			if c.expectedEnvoyFilter != nil && c.filterCount == len(envoyfilterList) && !cmp.Equal(envoyfilterList[0].Name, c.expectedEnvoyFilter.Name, protocmp.Transform()) {
+				t.Fatalf("EnvoyFilter Mismatch. Diff: %v", cmp.Diff(envoyfilterList[0], c.expectedEnvoyFilter, protocmp.Transform()))
+			}
+
+			for _, ef := range envoyfilterList {
+				assert.Equal(t, "bar", ef.Spec.WorkloadSelector.Labels[common.AssetAlias])
+				assert.Equal(t, c.routingPolicy.Name, ef.Annotations[envoyfilterAssociatedRoutingPolicyNameAnnotation])
+				assert.Equal(t, common.GetRoutingPolicyIdentity(c.routingPolicy), ef.Annotations[envoyfilterAssociatedRoutingPolicyIdentityeAnnotation])
+				assert.Equal(t, "istio-system", ef.ObjectMeta.Namespace)
+				// assert filename in vm_config
+				assert.Contains(t, ef.Spec.ConfigPatches[0].Patch.Value.String(), common.WasmPathValue)
+			}
+		})
+		t.Cleanup(func() {
+			remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+				EnvoyFilters(common.NamespaceIstioSystem).Delete(context.Background(), "test-dr-70395ba3470fd8ce6062-f6ce3712830af1b15625-1.13", metav1.DeleteOptions{})
+			remoteController.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
+				EnvoyFilters(common.NamespaceIstioSystem).Delete(context.Background(), "test-dr-70395ba3470fd8ce6062-f6ce3712830af1b15625-1.17", metav1.DeleteOptions{})
+
+		})
+	}
+}
+
+func getRegistry(filterVersion string) *RemoteRegistry {
+	p := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			DeploymentAnnotation: "sidecar.istio.io/inject",
+		},
+		KubeconfigPath:             "testdata/fake.config",
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheReconcileDuration:     time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		EnvoyFilterVersion:         filterVersion,
+		Profile:                    common.AdmiralProfileDefault,
+	}
+
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
+	common.ResetSync()
+	registry, _ := InitAdmiral(context.Background(), p)
+	return registry
 }
 
 func getSha1Error(key interface{}) (string, error) {
@@ -122,8 +279,8 @@ func getSha1Error(key interface{}) (string, error) {
 
 func TestGetHosts(t *testing.T) {
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta: time2.TypeMeta{},
-		ObjectMeta: time2.ObjectMeta{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"identity":       "foo",
 				"admiral.io/env": "stage",
@@ -142,17 +299,14 @@ func TestGetHosts(t *testing.T) {
 		Status: v1.RoutingPolicyStatus{},
 	}
 
-	hosts, err := getHosts(routingPolicyFoo)
-	if err != nil {
-		assert.Fail(t, err.Error())
-	}
+	hosts := getHosts(routingPolicyFoo)
 	assert.Equal(t, "hosts: e2e.testservice.mesh,e2e2.testservice.mesh", hosts)
 }
 
 func TestGetPlugin(t *testing.T) {
 	routingPolicyFoo := &v1.RoutingPolicy{
-		TypeMeta: time2.TypeMeta{},
-		ObjectMeta: time2.ObjectMeta{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"identity":       "foo",
 				"admiral.io/env": "stage",
@@ -171,9 +325,6 @@ func TestGetPlugin(t *testing.T) {
 		Status: v1.RoutingPolicyStatus{},
 	}
 
-	plugin, err := getPlugin(routingPolicyFoo)
-	if err != nil {
-		assert.Fail(t, err.Error())
-	}
+	plugin := getPlugin(routingPolicyFoo)
 	assert.Equal(t, "plugin: test", plugin)
 }

@@ -1,16 +1,19 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
+	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
+
 	"github.com/gorilla/mux"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/clusters"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/sirupsen/logrus"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
@@ -35,34 +38,34 @@ If Running in passive  mode, the health check returns 502 which forces DNS looku
 */
 
 func (opts *RouteOpts) ReturnSuccessGET(w http.ResponseWriter, r *http.Request) {
-	allQueryParams:= r.URL.Query()
+	allQueryParams := r.URL.Query()
 	checkIfReadOnlyStringVal := allQueryParams.Get("checkifreadonly")
 	//Remove all spaces
-	checkIfReadOnlyStringVal = strings.ReplaceAll(checkIfReadOnlyStringVal," ","")
+	checkIfReadOnlyStringVal = strings.ReplaceAll(checkIfReadOnlyStringVal, " ", "")
 	// checkIfReadOnlyStringVal will be empty in case ""checkifreadonly" query param is not sent in the request. checkIfReadOnlyBoolVal will be false
 	checkIfReadOnlyBoolVal, err := strconv.ParseBool(checkIfReadOnlyStringVal)
 	var response string
 
-	if len(checkIfReadOnlyStringVal) ==0 || nil==err {
-		if checkIfReadOnlyBoolVal{
+	if len(checkIfReadOnlyStringVal) == 0 || nil == err {
+		if checkIfReadOnlyBoolVal {
 
-			if clusters.CurrentAdmiralState.ReadOnly{
+			if commonUtil.IsAdmiralReadOnly() {
 				//Force fail health check if Admiral is in Readonly mode
 				w.WriteHeader(503)
-			}else {
+			} else {
 				w.WriteHeader(200)
 			}
-		}else {
+		} else {
 			w.WriteHeader(200)
 		}
 		response = fmt.Sprintf("Heath check method called: %v, URI: %v, Method: %v\n", r.Host, r.RequestURI, r.Method)
-	}else {
+	} else {
 		w.WriteHeader(400)
-		response = fmt.Sprintf("Health check method called with bad query param value %v for checkifreadonly",checkIfReadOnlyStringVal)
+		response = fmt.Sprintf("Health check method called with bad query param value %v for checkifreadonly", checkIfReadOnlyStringVal)
 	}
 	_, writeErr := w.Write([]byte(response))
 	if writeErr != nil {
-		log.Printf("Error writing body: %v", writeErr)
+		logrus.Printf("Error writing body: %v", writeErr)
 		http.Error(w, "can't write body", http.StatusInternalServerError)
 	}
 }
@@ -78,12 +81,12 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 
 	out, err := json.Marshal(clusterList)
 	if err != nil {
-		log.Printf("Failed to marshall response for GetClusters call")
+		logrus.Printf("Failed to marshall response for GetClusters call")
 		http.Error(w, "Failed to marshall response", http.StatusInternalServerError)
 	} else {
 		if len(clusterList) == 0 {
 			message := "No cluster is monitored by admiral"
-			log.Println(message)
+			logrus.Println(message)
 			w.WriteHeader(200)
 			out, _ = json.Marshal(message)
 		} else {
@@ -92,14 +95,16 @@ func (opts *RouteOpts) GetClusters(w http.ResponseWriter, r *http.Request) {
 		}
 		_, err := w.Write(out)
 		if err != nil {
-			log.Println("Failed to write message: ", err)
+			logrus.Println("Failed to write message: ", err)
 		}
 	}
 }
 
 func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http.Request) {
+	ctxLogger := logrus.WithFields(logrus.Fields{
+		"txId": common.FetchTxIdOrGenNew(context.TODO()),
+	})
 	defer r.Body.Close()
-
 	params := mux.Vars(r)
 	clusterName := strings.Trim(params["clustername"], " ")
 
@@ -109,44 +114,87 @@ func (opts *RouteOpts) GetServiceEntriesByCluster(w http.ResponseWriter, r *http
 
 	if clusterName != "" {
 
-		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(ctx, clusterName, opts.RemoteRegistry)
+		serviceEntriesByCluster, err := clusters.GetServiceEntriesByCluster(ctxLogger, ctx, clusterName, opts.RemoteRegistry)
 
 		if err != nil {
-			log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, err.Error())
-			if strings.Contains(err.Error(), "Admiral is not monitoring cluster") {
+			logrus.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, err.Error())
+			if strings.Contains(strings.ToLower(err.Error()), strings.ToLower("Admiral is not monitoring cluster")) {
 				http.Error(w, err.Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		} else {
 			if len(serviceEntriesByCluster) == 0 {
-				log.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, "No service entries configured for cluster - "+clusterName)
+				logrus.Printf("API call get service entry by cluster failed for clustername %v with Error: %v", clusterName, "no service entries configured for cluster - "+clusterName)
 				w.WriteHeader(200)
-				_, err := w.Write([]byte(fmt.Sprintf("No service entries configured for cluster - %s", clusterName)))
+				_, err := w.Write([]byte(fmt.Sprintf("no service entries configured for cluster - %s", clusterName)))
 				if err != nil {
-					log.Println("Error writing body: ", err)
+					logrus.Println("Error writing body: ", err)
 				}
 
 			} else {
 				response = serviceEntriesByCluster
 				out, err := json.Marshal(response)
 				if err != nil {
-					log.Printf("Failed to marshall response for GetServiceEntriesByCluster call")
+					logrus.Printf("Failed to marshall response for GetServiceEntriesByCluster call")
 					http.Error(w, fmt.Sprintf("Failed to marshall response for getting service entries api for cluster %s", clusterName), http.StatusInternalServerError)
 				} else {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(200)
 					_, err := w.Write(out)
 					if err != nil {
-						log.Println("failed to write resp body: ", err)
+						logrus.Println("failed to write resp body: ", err)
 					}
 				}
 			}
 		}
 	} else {
-		log.Printf("Cluster name not provided as part of the request")
-		http.Error(w, "Cluster name not provided as part of the request", http.StatusBadRequest)
+		logrus.Printf("cluster name not provided as part of the request")
+		http.Error(w, "cluster name not provided as part of the request", http.StatusBadRequest)
 	}
+}
+
+// GetGlobalTrafficPolicyByIdentityAndEnv handler returns GlobalTrafficPolicy resource based on
+// the matching env and identity passed as query parameters
+func (opts *RouteOpts) GetGlobalTrafficPolicyByIdentityAndEnv(w http.ResponseWriter, r *http.Request) {
+
+	pathParams := mux.Vars(r)
+	identity, ok := pathParams["identity"]
+	if !ok || identity == "" {
+		generateErrorResponse(w, http.StatusBadRequest, "identity not provided as part of the path param")
+		return
+	}
+
+	env := r.FormValue("env")
+	if env == "" {
+		env = "default"
+	}
+
+	if opts.RemoteRegistry == nil || opts.RemoteRegistry.AdmiralCache == nil {
+		logrus.Warn("invalid remote registry cache")
+		generateErrorResponse(w, http.StatusInternalServerError, "invalid remote registry cache")
+		return
+	}
+
+	gtps := opts.RemoteRegistry.AdmiralCache.GlobalTrafficCache
+
+	if gtps == nil {
+		logrus.Print("globaltrafficcache not initialized")
+		generateErrorResponse(w, http.StatusInternalServerError, "invalid globaltrafficcache")
+		return
+	}
+
+	gtp, err := gtps.GetFromIdentity(identity, env)
+	if err != nil {
+		logrus.Warn(err)
+		generateErrorResponse(w, http.StatusInternalServerError, err.Error())
+	}
+	if gtp == nil {
+		generateErrorResponse(w, http.StatusNotFound, fmt.Sprintf("globaltraffic policy with identity: %s and env: %s was not found", identity, env))
+		return
+	}
+
+	generateResponseJSON(w, http.StatusOK, gtp)
 }
 
 func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *http.Request) {
@@ -171,20 +219,36 @@ func (opts *RouteOpts) GetServiceEntriesByIdentity(w http.ResponseWriter, r *htt
 				response = append(response, identityServiceEntry)
 			}
 		})
+
 		out, err := json.Marshal(response)
 		if err != nil {
-			log.Printf("Failed to marshall response GetServiceEntriesByIdentity call")
+			logrus.Printf("Failed to marshall response GetServiceEntriesByIdentity call")
 			http.Error(w, fmt.Sprintf("Failed to marshall response for getting service entries api for identity %s", identity), http.StatusInternalServerError)
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
 			_, err := w.Write(out)
 			if err != nil {
-				log.Println("failed to write resp body", err)
+				logrus.Println("failed to write resp body", err)
 			}
 		}
 	} else {
-		log.Printf("Identity not provided as part of the request")
+		logrus.Printf("Identity not provided as part of the request")
 		http.Error(w, "Identity not provided as part of the request", http.StatusBadRequest)
 	}
+}
+
+func generateErrorResponse(w http.ResponseWriter, code int, message string) {
+	generateResponseJSON(w, code, map[string]string{"error": message})
+}
+
+func generateResponseJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		logrus.Printf("failed to serialize the payload due to %v", err)
+		response = []byte("{\"error\": \"malformed response payload\"}")
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
 }

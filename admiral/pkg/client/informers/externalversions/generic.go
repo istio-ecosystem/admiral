@@ -21,7 +21,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1"
+	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -52,15 +52,19 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=admiral.io, Version=v1
-	case v1.SchemeGroupVersion.WithResource("dependencies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().Dependencies().Informer()}, nil
-	case v1.SchemeGroupVersion.WithResource("dependencyproxies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().DependencyProxies().Informer()}, nil
-	case v1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().GlobalTrafficPolicies().Informer()}, nil
-	case v1.SchemeGroupVersion.WithResource("routingpolicies"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1().RoutingPolicies().Informer()}, nil
+	// Group=admiral.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("clientconnectionconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().ClientConnectionConfigs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("dependencies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().Dependencies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("globaltrafficpolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().GlobalTrafficPolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("outlierdetections"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().OutlierDetections().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("routingpolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().RoutingPolicies().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("trafficconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Admiral().V1alpha1().TrafficConfigs().Informer()}, nil
 
 	}
 
