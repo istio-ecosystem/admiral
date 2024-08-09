@@ -3,10 +3,11 @@ package clusters
 import (
 	"context"
 	"fmt"
-	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"strings"
 	"sync"
+
+	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 
 	log "github.com/sirupsen/logrus"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -56,31 +57,33 @@ func HandleEventForShard(ctx context.Context, event admiral.EventType, obj *admi
 	ctxLogger := common.GetCtxLogger(ctx, obj.Name, "")
 	tmpShard := obj.DeepCopy()
 	ctxLogger.Infof(common.CtxLogFormat, "HandleEventForShard", obj.Name, "", "", "")
-	var consumerwg, resultswg sync.WaitGroup
+	var consumerWG, producerWG, resultsWG sync.WaitGroup
 	configWriterData := make(chan *ConfigWriterData, 1000)
 	configWriterDataResults := make(chan *ConfigWriterData, 1000)
 	for i := 0; i < 5; i++ {
-		consumerwg.Add(1)
-		go ConsumeIdentityConfigs(ctxLogger, ctx, configWriterData, configWriterDataResults, remoteRegistry, &consumerwg)
+		consumerWG.Add(1)
+		go ConsumeIdentityConfigs(ctxLogger, ctx, configWriterData, configWriterDataResults, remoteRegistry, &consumerWG)
 	}
 	// Get all ICs from shard and put into channel
-	go ProduceIdentityConfigsFromShard(ctxLogger, *obj, configWriterData, remoteRegistry)
+	producerWG.Add(1)
+	go ProduceIdentityConfigsFromShard(ctxLogger, *obj, configWriterData, remoteRegistry, &producerWG)
 	// Start processing results
-	resultswg.Add(1)
-	go UpdateShard(ctxLogger, configWriterDataResults, &resultswg, tmpShard)
+	resultsWG.Add(1)
+	go UpdateShard(ctxLogger, configWriterDataResults, &resultsWG, tmpShard)
 	// wait for all consumers to finish
-	consumerwg.Wait()
+	producerWG.Wait()
+	consumerWG.Wait()
 	// all consumers done,no more values sent to results
 	close(configWriterDataResults)
 	// wait for all results to be processed
-	resultswg.Wait()
+	resultsWG.Wait()
 	//TODO: Need to write the new tmpShard with all the results to the cluster + return error for the item to be requeued
 	return nil
 }
 
 // ProduceIdentityConfigsFromShard creates a registry client and uses it to get the identity configs
 // of the assets on the shard, and puts those into configWriterData which go into the job channel
-func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Shard, configWriterData chan<- *ConfigWriterData, rr *RemoteRegistry) {
+func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Shard, configWriterData chan<- *ConfigWriterData, rr *RemoteRegistry, producerWG *sync.WaitGroup) {
 	for _, clusterShard := range shard.Spec.Clusters {
 		for _, identityItem := range clusterShard.Identities {
 			identityConfig, err := rr.RegistryClient.GetIdentityConfigByIdentityName(identityItem.Name, ctxLogger)
@@ -101,6 +104,7 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 			}
 		}
 	}
+	producerWG.Done()
 	close(configWriterData)
 }
 

@@ -1,0 +1,65 @@
+{
+  "identityName": "identity",
+  "clusters": {
+    "test-dev-k8s": {
+      "name": "test-dev-k8s",
+      "locality": "us-west-2",
+      "ingressEndpoint": "east.aws.lb",
+      "ingressPort": "15443",
+      "ingressPortName": "http",
+      "environment": {
+        "test": {
+          "name": "test",
+          "namespace": "foobar-ns",
+          "services": null,
+          "serviceName": "",
+          "type": "rollout",
+          "selectors": null,
+          "ports": [
+            {
+              "number": 80,
+              "protocol": "http",
+              "name": "http"
+            }
+          ],
+          "trafficPolicy": {
+            "globaltrafficpolicy": {
+              "metadata": {
+                "creationTimestamp": null
+              },
+              "spec": {},
+              "status": {
+                "clustersSynced": 0,
+                "state": ""
+              }
+            },
+            "outlierdetection": {
+              "metadata": {
+                "creationTimestamp": null
+              },
+              "spec": {},
+              "status": {
+                "clustersSynced": 0,
+                "state": ""
+              }
+            },
+            "clientconnectionconfig": {
+              "metadata": {
+                "creationTimestamp": null
+              },
+              "spec": {
+                "connectionPool": {},
+                "tunnel": {}
+              },
+              "status": {
+                "state": ""
+              }
+            }
+          },
+          "event": ""
+        }
+      }
+    }
+  },
+  "clientAssets": null
+}

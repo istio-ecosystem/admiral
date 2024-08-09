@@ -260,7 +260,7 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			err := UpdateEndpointsForDeployToRolloutMigration(c.serviceInstance, c.serviceEntry, meshPorts, c.clusterIngress, c.clusterAppDeleteMap, clusterName, c.clusterDeployRolloutPresent)
+			_, err := UpdateEndpointsForDeployToRolloutMigration(c.serviceInstance, c.serviceEntry, meshPorts, c.clusterIngress, c.clusterAppDeleteMap, clusterName, c.clusterDeployRolloutPresent)
 			assert.Equal(t, c.expectedErr, err)
 			if err == nil {
 				if !reflect.DeepEqual(c.expectedSeEndpoints, c.serviceEntry.Endpoints) {

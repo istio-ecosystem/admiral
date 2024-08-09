@@ -4,41 +4,22 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	networking "istio.io/api/networking/v1alpha3"
-	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 )
 
 type WorkloadEntrySorted []*networking.WorkloadEntry
-
-func GetMeshPortsForDeployments(clusterName string, destService *k8sV1.Service,
-	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
-
-	if destService == nil || destDeployment == nil {
-		logrus.Warnf("Deployment or Service is nil cluster=%s", clusterName)
-		return nil
-	}
-
-	var meshPorts string
-	if destDeployment.Spec.Template.Annotations == nil {
-		meshPorts = ""
-	} else {
-		meshPorts = destDeployment.Spec.Template.Annotations[common.SidecarEnabledPorts]
-	}
-	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
-	return ports
-}
 
 func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	destRollout *argo.Rollout) map[string]uint32 {
@@ -53,7 +34,7 @@ func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	} else {
 		meshPorts = destRollout.Spec.Template.Annotations[common.SidecarEnabledPorts]
 	}
-	ports := getMeshPortsHelper(meshPorts, destService, clusterName)
+	ports := common.GetMeshPortsHelper(meshPorts, destService, clusterName)
 	return ports
 }
 
@@ -70,67 +51,6 @@ func GetServiceSelector(clusterName string, destService *k8sV1.Service) *common.
 	}
 	logrus.Infof(LogFormat, "GetServiceLabels", "selectors present", destService.Name, clusterName, selectors)
 	return tempMap
-}
-
-func getMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterName string) map[string]uint32 {
-	var ports = make(map[string]uint32)
-
-	if destService == nil {
-		return ports
-	}
-	if len(meshPorts) == 0 {
-		logrus.Infof(LogFormatAdv, "GetMeshPorts", "service", destService.Name, destService.Namespace,
-			clusterName, "No mesh ports present, defaulting to first port")
-		if destService.Spec.Ports != nil && len(destService.Spec.Ports) > 0 {
-			var protocol = util.GetPortProtocol(destService.Spec.Ports[0].Name)
-			ports[protocol] = uint32(destService.Spec.Ports[0].Port)
-		}
-		return ports
-	}
-
-	meshPortsSplit := strings.Split(meshPorts, ",")
-
-	if len(meshPortsSplit) > 1 {
-		logrus.Warnf(LogErrFormat, "Get", "MeshPorts", "", clusterName,
-			"Multiple inbound mesh ports detected, admiral generates service entry with first matched port and protocol")
-	}
-
-	//fetch the first valid port if there is more than one mesh port
-	var meshPortMap = make(map[uint32]uint32)
-	for _, meshPort := range meshPortsSplit {
-		port, err := strconv.ParseUint(meshPort, 10, 32)
-		if err == nil {
-			meshPortMap[uint32(port)] = uint32(port)
-			break
-		}
-	}
-	for _, servicePort := range destService.Spec.Ports {
-		//handling relevant protocols from here:
-		// https://istio.io/latest/docs/ops/configuration/traffic-management/protocol-selection/#manual-protocol-selection
-		//use target port if present to match the annotated mesh port
-		targetPort := uint32(servicePort.Port)
-		if servicePort.TargetPort.StrVal != "" {
-			port, err := strconv.Atoi(servicePort.TargetPort.StrVal)
-			if err != nil {
-				logrus.Warnf(LogErrFormat, "GetMeshPorts", "Failed to parse TargetPort", destService.Name, clusterName, err)
-			}
-			if port > 0 {
-				targetPort = uint32(port)
-			}
-
-		}
-		if servicePort.TargetPort.IntVal != 0 {
-			targetPort = uint32(servicePort.TargetPort.IntVal)
-		}
-		if _, ok := meshPortMap[targetPort]; ok {
-			var protocol = util.GetPortProtocol(servicePort.Name)
-			logrus.Infof(LogFormatAdv, "MeshPort", servicePort.Port, destService.Name, destService.Namespace,
-				clusterName, "Protocol: "+protocol)
-			ports[protocol] = uint32(servicePort.Port)
-			break
-		}
-	}
-	return ports
 }
 
 func GetServiceEntryStateFromConfigmap(configmap *k8sV1.ConfigMap) *ServiceEntryAddressStore {
@@ -375,4 +295,37 @@ func (w WorkloadEntrySorted) Less(i, j int) bool {
 
 func (w WorkloadEntrySorted) Swap(i, j int) {
 	w[i], w[j] = w[j], w[i]
+}
+
+// TODO: it should return an error when locality is not found
+func getLocality(rc *RemoteController) string {
+	if rc.NodeController.Locality != nil {
+		return rc.NodeController.Locality.Region
+	}
+	return ""
+}
+
+func getIngressEndpointAndPort(rc *RemoteController) (string, int) {
+	return rc.ServiceController.Cache.
+		GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+}
+
+func getIngressPort(rc *RemoteController) string {
+	return ""
+}
+
+func getIngressPortName(meshPorts map[string]uint32) string {
+	var finalProtocol = commonUtil.Http
+	for protocol := range meshPorts {
+		finalProtocol = protocol
+	}
+	return finalProtocol
+}
+
+func parseWeightedService(weightedServices map[string]*WeightedService) map[string]*registry.RegistryServiceConfig {
+	return nil
+}
+
+func parseMigrationService(services []*k8sV1.Service) map[string]*registry.RegistryServiceConfig {
+	return nil
 }

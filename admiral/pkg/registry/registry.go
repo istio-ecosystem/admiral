@@ -2,14 +2,12 @@ package registry
 
 import (
 	"encoding/json"
-
 	"os"
+
 	"strings"
 
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
-	coreV1 "k8s.io/api/core/v1"
 )
 
 // IdentityConfiguration is an interface to fetch configuration from a registry
@@ -37,37 +35,6 @@ func WithRegistryEndpoint(registryEndpoint string) func(*registryClient) {
 	return func(c *registryClient) {
 		c.registryEndpoint = registryEndpoint
 	}
-}
-
-type IdentityConfig struct {
-	IdentityName string                  `json:"identityName"`
-	Clusters     []IdentityConfigCluster `json:"clusters"`
-	ClientAssets []map[string]string     `json:"clientAssets"`
-}
-
-type IdentityConfigCluster struct {
-	Name            string                      `json:"name"`
-	Locality        string                      `json:"locality"`
-	IngressEndpoint string                      `json:"ingressEndpoint"`
-	IngressPort     string                      `json:"ingressPort"`
-	IngressPortName string                      `json:"ingressPortName"`
-	Environment     []IdentityConfigEnvironment `json:"environment"`
-}
-
-type IdentityConfigEnvironment struct {
-	Name          string               `json:"name"`
-	Namespace     string               `json:"namespace"`
-	ServiceName   string               `json:"serviceName"`
-	Type          string               `json:"type"`
-	Selectors     map[string]string    `json:"selectors"`
-	Ports         []coreV1.ServicePort `json:"ports"`
-	TrafficPolicy TrafficPolicy        `json:"trafficPolicy"`
-}
-
-type TrafficPolicy struct {
-	ClientConnectionConfig v1alpha1.ClientConnectionConfig `json:"clientConnectionConfig"`
-	GlobalTrafficPolicy    v1alpha1.GlobalTrafficPolicy    `json:"globalTrafficPolicy"`
-	OutlierDetection       v1alpha1.OutlierDetection       `json:"outlierDetection"`
 }
 
 // GetIdentityConfigByIdentityName calls the registry API to fetch the IdentityConfig for

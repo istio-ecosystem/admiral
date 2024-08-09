@@ -81,7 +81,7 @@ func GetRootCmd(args []string) *cobra.Command {
 			// This is required for PERF tests only.
 			// Perf tests requires remote registry object for validations.
 			// There is no way to inject this object
-			// There is no other away to propogate this object to perf suite
+			// There is no other away to propagate this object to perf suite
 			if params.KubeconfigPath == loader.FakeKubeconfigPath {
 				cmd.SetContext(context.WithValue(cmd.Context(), "remote-registry", remoteRegistry))
 			}

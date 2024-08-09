@@ -13,13 +13,14 @@ import (
 func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV1.Service,
 	serviceEntry *networking.ServiceEntry, meshPorts map[string]map[string]uint32, clusterIngress string,
 	clusterAppDeleteMap map[string]string, clusterName string,
-	clusterDeployRolloutPresent map[string]map[string]bool) error {
+	clusterDeployRolloutPresent map[string]map[string]bool) ([]*k8sV1.Service, error) {
 	if serviceInstance[common.Deployment] == nil || serviceInstance[common.Rollout] == nil {
-		return fmt.Errorf("serviceInstance for Deployment/Rollout is nil as the service cache has not updated yet")
+		return nil, fmt.Errorf("serviceInstance for Deployment/Rollout is nil as the service cache has not updated yet")
 	}
 
 	deployLocalFqdn := serviceInstance[common.Deployment].Name + common.Sep + serviceInstance[common.Deployment].Namespace + common.GetLocalDomainSuffix()
 	rolloutFqdn := serviceInstance[common.Rollout].Name + common.Sep + serviceInstance[common.Rollout].Namespace + common.GetLocalDomainSuffix()
+	var requiredServices []*k8sV1.Service
 
 	var uniqueEndpointsList []*networking.WorkloadEntry
 	for _, ep := range serviceEntry.Endpoints {
@@ -36,6 +37,7 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 					Labels:   map[string]string{"type": common.Deployment},
 				}
 				uniqueEndpointsList = append(uniqueEndpointsList, deployEp)
+				requiredServices = append(requiredServices, serviceInstance[common.Deployment])
 			}
 
 			if clusterAppDeleteMap[clusterName] != common.Rollout && clusterDeployRolloutPresent[clusterName][common.Rollout] {
@@ -46,8 +48,11 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 					Labels:   map[string]string{"type": common.Rollout},
 				}
 				uniqueEndpointsList = append(uniqueEndpointsList, rolloutEp)
+				requiredServices = append(requiredServices, serviceInstance[common.Rollout])
 			}
 		} else {
+			// TODO: check when will this be applicable, and then
+			// update the required service accordingly
 			ep.Labels = nil
 			uniqueEndpointsList = append(uniqueEndpointsList, ep)
 		}
@@ -55,5 +60,5 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 
 	serviceEntry.Endpoints = uniqueEndpointsList
 
-	return nil
+	return requiredServices, nil
 }

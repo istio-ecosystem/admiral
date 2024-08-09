@@ -1,16 +1,15 @@
 package clusters
 
 import (
-	"errors"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
-	"github.com/sirupsen/logrus"
-	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/sirupsen/logrus"
+	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 )
 
 // IstioSEBuilder is an interface to construct Service Entry objects
@@ -54,14 +53,10 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 			if err != nil {
 				return serviceEntries, err
 			}
-			ports, err := getServiceEntryPorts(identityConfigEnvironment)
-			if err != nil {
-				return serviceEntries, err
-			}
 			if se, ok := seMap[env]; !ok {
 				tmpSe = &networkingV1Alpha3.ServiceEntry{
 					Hosts:           []string{common.GetCnameVal([]string{env, strings.ToLower(identity), common.GetHostnameSuffix()})},
-					Ports:           ports,
+					Ports:           identityConfigEnvironment.Ports,
 					Location:        networkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
 					Resolution:      networkingV1Alpha3.ServiceEntry_DNS,
 					SubjectAltNames: []string{common.SpiffePrefix + common.GetSANPrefix() + common.Slash + identity},
@@ -72,6 +67,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 				tmpSe = se
 				tmpSe.Endpoints = append(tmpSe.Endpoints, ep)
 			}
+			sort.Sort(WorkloadEntrySorted(tmpSe.Endpoints))
 			serviceEntries = append(serviceEntries, tmpSe)
 		}
 	}
@@ -80,7 +76,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 
 // getIngressEndpoints constructs the endpoint of the ingress gateway/remote endpoint for an identity
 // by reading the information directly from the IdentityConfigCluster.
-func getIngressEndpoints(clusters []registry.IdentityConfigCluster) (map[string]*networkingV1Alpha3.WorkloadEntry, error) {
+func getIngressEndpoints(clusters map[string]*registry.IdentityConfigCluster) (map[string]*networkingV1Alpha3.WorkloadEntry, error) {
 	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{}
 	var err error
 	for _, cluster := range clusters {
@@ -99,46 +95,32 @@ func getIngressEndpoints(clusters []registry.IdentityConfigCluster) (map[string]
 	return ingressEndpoints, err
 }
 
-// getServiceEntryPorts constructs the ServicePorts of the service entry that should be built
-// for the given identityConfigEnvironment.
-func getServiceEntryPorts(identityConfigEnvironment registry.IdentityConfigEnvironment) ([]*networkingV1Alpha3.ServicePort, error) {
-	port := &networkingV1Alpha3.ServicePort{Number: uint32(common.DefaultServiceEntryPort), Name: util.Http, Protocol: util.Http}
-	var err error
-	if len(identityConfigEnvironment.Ports) == 0 {
-		err = errors.New("identityConfigEnvironment had no ports for: " + identityConfigEnvironment.Name)
-	}
-	for _, servicePort := range identityConfigEnvironment.Ports {
-		//TODO: 8090 is supposed to be set as the common.SidecarEnabledPorts (includeInboundPorts) which we check that in the rollout, but we don't have that information here so assume it is 8090
-		if servicePort.TargetPort.IntValue() == 8090 {
-			protocol := util.GetPortProtocol(servicePort.Name)
-			port.Name = protocol
-			port.Protocol = protocol
-		}
-	}
-	ports := []*networkingV1Alpha3.ServicePort{port}
-	return ports, err
-}
-
 // getServiceEntryEndpoint constructs the remote or local endpoints of the service entry that
 // should be built for the given identityConfigEnvironment.
-func getServiceEntryEndpoint(ctxLogger *logrus.Entry, clientCluster string, serverCluster string, ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry, identityConfigEnvironment registry.IdentityConfigEnvironment) (*networkingV1Alpha3.WorkloadEntry, error) {
+func getServiceEntryEndpoint(
+	ctxLogger *logrus.Entry,
+	clientCluster string,
+	serverCluster string,
+	ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry,
+	identityConfigEnvironment *registry.IdentityConfigEnvironment) (*networkingV1Alpha3.WorkloadEntry, error) {
 	//TODO: Verify Local and Remote Endpoints are constructed correctly
 	var err error
 	endpoint := ingressEndpoints[serverCluster]
 	tmpEp := endpoint.DeepCopy()
 	tmpEp.Labels["type"] = identityConfigEnvironment.Type
 	if clientCluster == serverCluster {
-		//Local Endpoint Address if the identity is deployed on the same cluster as it's client and the endpoint is the remote endpoint for the cluster
-		tmpEp.Address = identityConfigEnvironment.ServiceName + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-		for _, servicePort := range identityConfigEnvironment.Ports {
-			//There should only be one mesh port here (http-service-mesh), but we are preserving ability to have multiple ports
-			protocol := util.GetPortProtocol(servicePort.Name)
-			if _, ok := tmpEp.Ports[protocol]; ok {
-				tmpEp.Ports[protocol] = uint32(servicePort.Port)
-				ctxLogger.Infof(common.CtxLogFormat, "LocalMeshPort", servicePort.Port, "", serverCluster, "Protocol: "+protocol)
-			} else {
-				err = errors.New("failed to get Port for protocol: " + protocol)
+		for _, service := range identityConfigEnvironment.Services {
+			if service.Weight == -1 {
+				// its not a weighted service, which means we should have only one service endpoint
+				//Local Endpoint Address if the identity is deployed on the same cluster as it's client and the endpoint is the remote endpoint for the cluster
+				tmpEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				tmpEp.Ports = service.Ports
+				break
 			}
+			// TODO: this needs fixing, because there can be multiple services when we have weighted endpoints, and this
+			// will only choose one service
+			tmpEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+			tmpEp.Ports = service.Ports
 		}
 	}
 	return tmpEp, err
@@ -147,15 +129,16 @@ func getServiceEntryEndpoint(ctxLogger *logrus.Entry, clientCluster string, serv
 // getExportTo constructs a sorted list of unique namespaces for a given cluster, client assets,
 // and cname, where each namespace is where a client asset of the cname is deployed on the cluster. If the cname
 // is also deployed on the cluster then the istio-system namespace is also in the list.
-func getExportTo(ctxLogger *logrus.Entry, registryClient registry.IdentityConfiguration, clientCluster string, isServerOnClientCluster bool, clientAssets []map[string]string) ([]string, error) {
+func getExportTo(ctxLogger *logrus.Entry, registryClient registry.IdentityConfiguration, clientCluster string, isServerOnClientCluster bool, clientAssets map[string]string) ([]string, error) {
 	clientNamespaces := []string{}
 	var err error
 	var clientIdentityConfig registry.IdentityConfig
-	for _, clientAsset := range clientAssets {
+	for clientAsset := range clientAssets {
 		// For each client asset of cname, we fetch its identityConfig
-		clientIdentityConfig, err = registryClient.GetIdentityConfigByIdentityName(clientAsset["name"], ctxLogger)
+		clientIdentityConfig, err = registryClient.GetIdentityConfigByIdentityName(clientAsset, ctxLogger)
 		if err != nil {
-			ctxLogger.Infof(common.CtxLogFormat, "buildServiceEntry", clientAsset["name"], common.GetSyncNamespace(), "", "could not fetch IdentityConfig: "+err.Error())
+			// TODO: this should return an error.
+			ctxLogger.Infof(common.CtxLogFormat, "buildServiceEntry", clientAsset, common.GetSyncNamespace(), "", "could not fetch IdentityConfig: "+err.Error())
 			continue
 		}
 		for _, clientIdentityConfigCluster := range clientIdentityConfig.Clusters {

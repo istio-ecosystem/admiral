@@ -57,16 +57,16 @@ func LogElapsedTimeController(logger *log.Entry, logMessage string) func() {
 	}
 }
 
-func LogElapsedTimeForModifySE(logger *log.Entry, op, name, namespace, cluster, message string) func() {
+func LogElapsedTimeForTask(logger *log.Entry, op, name, namespace, cluster, message string) func() {
 	start := time.Now()
 	return func() {
-		LogElapsedTimeSinceForModifySE(logger, op, name, namespace, cluster, message, start)
+		LogElapsedTimeSinceTask(logger, op, name, namespace, cluster, message, start)
 	}
 }
 
-func LogElapsedTimeSinceForModifySE(logger *log.Entry, op, name, namespace, cluster, message string, start time.Time) {
-	// op=%v name=%v namespace=%s cluster=%s message=%v txId=%v
-	logger.Infof(common.CtxLogFormatWithTime, op, name, namespace, cluster, message, time.Since(start).Milliseconds())
+func LogElapsedTimeSinceTask(logger *log.Entry, task, name, namespace, cluster, message string, start time.Time) {
+	// task=%v name=%v namespace=%s cluster=%s message=%v txId=%v
+	logger.Infof(common.CtxLogFormatWithTime, task, name, namespace, cluster, message, time.Since(start).Milliseconds())
 }
 
 func LogElapsedTimeSince(op, identity, env, clusterId string, start time.Time) {

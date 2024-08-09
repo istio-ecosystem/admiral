@@ -1,16 +1,16 @@
 {
   "identityName": "intuit.services.gateway.ppdmeshtestinbounds",
-  "clusters": [
-    {
+  "clusters": {
+    "multi-long-1026-usw2-k8s": {
       "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
       "name": "multi-long-1026-usw2-k8s",
       "locality": "us-west-2",
-      "ingressEndpoint": "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+      "ingressEndpoint": "abc-elb.us-west-2.elb.amazonaws.com.",
       "ingressPort": "15443",
       "ingressPortName": "http",
       "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
-      "environment": [
-        {
+      "environment": {
+        "multi-long-1026-usw2-k8s": {
           "name": "multi-long-1026-usw2-k8s",
           "namespace": "services-inboundd268-usw2-dev",
           "serviceName": "inbound-gw",
@@ -80,12 +80,10 @@
             }
           }
         }
-      ]
+      }
     }
-  ],
-  "clientAssets": [
-    {
-      "name": "intuit.services.gateway.ppdmeshtestinbounds"
-    }
-  ]
+  },
+  "clientAssets": {
+      "intuit.services.gateway.ppdmeshtestinbounds": "intuit.services.gateway.ppdmeshtestinbounds"
+  }
 }

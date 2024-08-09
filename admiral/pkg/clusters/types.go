@@ -94,7 +94,9 @@ type RemoteRegistry struct {
 	ClientLoader                loader.ClientLoader
 	ClusterShardHandler         registry.ClusterShardStore
 	ClusterIdentityStoreHandler registry.ClusterIdentityStore
+	ConfigSyncer                registry.ConfigSyncer
 	RegistryClient              registry.IdentityConfiguration
+	ConfigWriter                ConfigWriter
 }
 
 // ModifySEFunc is a function that follows the dependency injection pattern which is used by HandleEventForGlobalTrafficPolicy
@@ -172,13 +174,16 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	}
 
 	rr := &RemoteRegistry{
-		ctx:                   ctx,
-		StartTime:             time.Now(),
-		remoteControllers:     make(map[string]*RemoteController),
-		AdmiralCache:          admiralCache,
-		ServiceEntrySuspender: serviceEntrySuspender,
-		AdmiralDatabaseClient: admiralDatabaseClient,
-		ClientLoader:          clientLoader,
+		ctx:                         ctx,
+		StartTime:                   time.Now(),
+		remoteControllers:           make(map[string]*RemoteController),
+		AdmiralCache:                admiralCache,
+		ServiceEntrySuspender:       serviceEntrySuspender,
+		AdmiralDatabaseClient:       admiralDatabaseClient,
+		ClientLoader:                clientLoader,
+		ClusterIdentityStoreHandler: registry.NewClusterIdentityStoreHandler(),
+		ConfigSyncer:                registry.NewConfigSync(),
+		ConfigWriter:                NewConfigWriter(),
 	}
 
 	if common.IsAdmiralOperatorMode() {
