@@ -426,6 +426,12 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
+func DoGenerationCheck() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableGenerationCheck
+}
+
 func DoSyncIstioResourcesToSourceClusters() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
@@ -457,4 +463,16 @@ func GetDefaultWarmupDurationSecs() int64 {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.DefaultWarmupDurationSecs
+}
+
+func IsAdmiralOperatorMode() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.AdmiralOperatorMode
+}
+
+func GetOperatorSyncNamespace() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.OperatorSyncNamespace
 }

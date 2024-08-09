@@ -9,6 +9,10 @@ func (r DefaultResolver) FetchKubeConfig(secretName string, kubeConfig []byte) (
 type DefaultResolver struct {
 }
 
+func (r DefaultResolver) DeleteClusterFromCache(clusterName string) error {
+	return nil
+}
+
 func NewDefaultResolver() (SecretResolver, error) {
 	resolver := DefaultResolver{}
 	return resolver, nil

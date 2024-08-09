@@ -99,6 +99,7 @@ type AdmiralParams struct {
 	EnableSyncIstioResourcesToSourceClusters bool
 	AdmiralStateSyncerMode                   bool
 	DefaultWarmupDurationSecs                int64
+	EnableGenerationCheck                    bool
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -111,6 +112,10 @@ type AdmiralParams struct {
 
 	// Air specific
 	GatewayAssetAliases []string
+
+	//Admiral 2.0 params
+	AdmiralOperatorMode   bool
+	OperatorSyncNamespace string
 }
 
 func (b AdmiralParams) String() string {

@@ -1,0 +1,91 @@
+{
+  "identityName": "intuit.services.gateway.ppdmeshtestinbounds",
+  "clusters": [
+    {
+      "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
+      "name": "multi-long-1026-usw2-k8s",
+      "locality": "us-west-2",
+      "ingressEndpoint": "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+      "ingressPort": "15443",
+      "ingressPortName": "http",
+      "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
+      "environment": [
+        {
+          "name": "multi-long-1026-usw2-k8s",
+          "namespace": "services-inboundd268-usw2-dev",
+          "serviceName": "inbound-gw",
+          "type": "deployment",
+          "selectors": {
+            "app": "inbound-gw"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
+              }
+            },
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
+                  {
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
+                    }
+                  }
+                ]
+              }
+            },
+            "outlierDetection": {
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "clientAssets": [
+    {
+      "name": "intuit.services.gateway.ppdmeshtestinbounds"
+    }
+  ]
+}

@@ -1,0 +1,255 @@
+{
+  "identityName": "Intuit.ctg.taxprep.partnerdatatotax",
+  "clusters": [
+    {
+      "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
+      "name": "cg-tax-ppd-usw2-k8s",
+      "locality": "us-west-2",
+      "ingressEndpoint": "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+      "ingressPort": "15443",
+      "ingressPortName": "http",
+      "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
+      "environment": [
+        {
+          "name": "prf",
+          "namespace": "ctg-taxprep-partnerdatatotax-usw2-prf",
+          "serviceName": "partner-data-to-tax-spk-root-service",
+          "type": "rollout",
+          "selectors": {
+            "app": "partner-data-to-tax"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
+              }
+            },
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
+                  {
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
+                    }
+                  }
+                ]
+              }
+            },
+            "outlierDetection": {
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "e2e",
+          "namespace": "ctg-taxprep-partnerdatatotax-usw2-e2e",
+          "serviceName": "partner-data-to-tax-spk-root-service",
+          "type": "rollout",
+          "selectors": {
+            "app": "partner-data-to-tax"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
+              }
+            },
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
+                  {
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
+                    }
+                  }
+                ]
+              }
+            },
+            "outlierDetection": {
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "qal",
+          "namespace": "ctg-taxprep-partnerdatatotax-usw2-qal",
+          "serviceName": "partner-data-to-tax-spk-root-service",
+          "type": "rollout",
+          "selectors": {
+            "app": "partner-data-to-tax"
+          },
+          "ports": [
+            {
+              "name": "http-service-mesh",
+              "port": 8090,
+              "protocol": "TCP",
+              "targetPort": 8090
+            }
+          ],
+          "trafficPolicy": {
+            "clientConnectionConfig": {
+              "metadata": {
+                "name": "sampleCCC"
+              },
+              "spec": {
+                "connectionPool": {
+                  "http": {
+                    "http2MaxRequests": 1000,
+                    "maxRequestsPerConnection": 5
+                  }
+                },
+                "tunnel": {}
+              }
+            },
+            "globalTrafficPolicy": {
+              "metadata": {
+                "name": "sampleGTP"
+              },
+              "spec": {
+                "policy": [
+                  {
+                    "target": [
+                      {
+                        "region": "us-west-2",
+                        "weight": 50
+                      },
+                      {
+                        "region": "us-east-2",
+                        "weight": 50
+                      }
+                    ],
+                    "dnsPrefix": "testDnsPrefix",
+                    "outlier_detection": {
+                      "consecutive_gateway_errors": 5,
+                      "interval": 5
+                    }
+                  }
+                ]
+              }
+            },
+            "outlierDetection": {
+              "metadata": {
+                "name": "sampleOD"
+              },
+              "spec": {
+                "outlier_config": {
+                  "consecutive_gateway_errors": 10,
+                  "interval": 10
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "clientAssets": [
+    {
+      "name": "intuit.cto.dev_portal"
+    },
+    {
+      "name": "intuit.ctg.tto.browserclient"
+    },
+    {
+      "name": "intuit.ctg.taxprep.partnerdatatotaxtestclient"
+    },
+    {
+      "name": "intuit.productmarketing.ipu.pmec"
+    },
+    {
+      "name": "intuit.tax.taxdev.txo"
+    },
+    {
+      "name": "intuit.CTO.oauth2"
+    },
+    {
+      "name": "intuit.platform.servicesgateway.servicesgateway"
+    },
+    {
+      "name": "intuit.ctg.taxprep.partnerdatatotax"
+    },
+    {
+      "name": "sample"
+    }
+  ]
+}

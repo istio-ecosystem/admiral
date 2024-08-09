@@ -35,6 +35,10 @@ type ServiceEntryController struct {
 	Cluster             string
 }
 
+func (s *ServiceEntryController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type ServiceEntryItem struct {
 	ServiceEntry *networking.ServiceEntry
 	Status       string

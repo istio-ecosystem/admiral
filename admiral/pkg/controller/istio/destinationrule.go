@@ -39,6 +39,10 @@ type DestinationRuleController struct {
 	Cluster                string
 }
 
+func (drc *DestinationRuleController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type DestinationRuleItem struct {
 	DestinationRule *networking.DestinationRule
 	Status          string

@@ -32,6 +32,10 @@ type EnvoyFilterController struct {
 	informer           cache.SharedIndexInformer
 }
 
+func (e *EnvoyFilterController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func (e *EnvoyFilterController) Added(ctx context.Context, obj interface{}) error {
 	ef, ok := obj.(*networking.EnvoyFilter)
 	if !ok {

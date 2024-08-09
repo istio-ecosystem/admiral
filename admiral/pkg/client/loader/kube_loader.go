@@ -2,8 +2,8 @@ package loader
 
 import (
 	"fmt"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
+	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	admiral "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	log "github.com/sirupsen/logrus"
 	istio "istio.io/client-go/pkg/clientset/versioned"
@@ -32,6 +32,18 @@ func (loader *KubeClientLoader) LoadAdmiralClientFromPath(kubeConfigPath string)
 
 func (*KubeClientLoader) LoadAdmiralClientFromConfig(config *rest.Config) (admiral.Interface, error) {
 	return admiral.NewForConfig(config)
+}
+
+func (loader *KubeClientLoader) LoadAdmiralApiClientFromPath(kubeConfigPath string) (admiralapi.Interface, error) {
+	config, err := getConfig(kubeConfigPath)
+	if err != nil || config == nil {
+		return nil, err
+	}
+	return loader.LoadAdmiralApiClientFromConfig(config)
+}
+
+func (loader *KubeClientLoader) LoadAdmiralApiClientFromConfig(config *rest.Config) (admiralapi.Interface, error) {
+	return admiralapi.NewForConfig(config)
 }
 
 func (loader *KubeClientLoader) LoadIstioClientFromPath(kubeConfigPath string) (istio.Interface, error) {

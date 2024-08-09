@@ -55,6 +55,28 @@ type RolloutController struct {
 	labelSet       *common.LabelSet
 }
 
+func (rc *RolloutController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
+	if !common.DoGenerationCheck() {
+		ctxLogger.Debugf(ControllerLogFormat, "DoesGenerationMatch", "",
+			fmt.Sprintf("generation check is disabled"))
+		return false, nil
+	}
+	rolloutNew, ok := obj.(*argo.Rollout)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", obj)
+	}
+	rolloutOld, ok := oldObj.(*argo.Rollout)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", oldObj)
+	}
+	if rolloutNew.Generation == rolloutOld.Generation {
+		ctxLogger.Infof(ControllerLogFormat, "DoesGenerationMatch", "",
+			fmt.Sprintf("old and new generation matched for rollout %s", rolloutNew.Name))
+		return true, nil
+	}
+	return false, nil
+}
+
 type rolloutCache struct {
 	//map of dependencies key=identity value array of onboarded identities
 	cache map[string]*RolloutClusterEntry

@@ -44,6 +44,10 @@ type RoutingPolicyController struct {
 	informer             cache.SharedIndexInformer
 }
 
+func (r *RoutingPolicyController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func (r *RoutingPolicyController) Added(ctx context.Context, obj interface{}) error {
 	routingPolicy, ok := obj.(*v1.RoutingPolicy)
 	if !ok {

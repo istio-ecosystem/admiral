@@ -445,7 +445,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Warnf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "unable to find label for rollout or deployment in source cluster: "+sourceCluster)
 		}
 		if createResourcesOnlyInDependentOverrideClusters {
-			continue
+			ctxLogger.Infof(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "processing service entry creation in source clusters as well as there can be a client in the source cluster ")
+			//continue
 		}
 		// For Deployment <-> Rollout migration
 		// This is maintaining the behavior like before if there was no serviceInstance
@@ -633,7 +634,10 @@ func modifyServiceEntryForNewServiceOrPod(
 	if createResourcesOnlyInDependentOverrideClusters {
 		var clusters = make(map[string]string, 0)
 		dependentClusterOverride.Range(func(k string, v string) {
-			clusters[k] = v
+			// ensure source clusters are not part of this
+			if _, ok := sourceServices[k]; !ok {
+				clusters[k] = v
+			}
 		})
 		ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToDependentClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("Using override values of dependent clusters: %v, count: %v", clusters, len(clusters)))
 		dependentClusters = clusters
@@ -653,6 +657,9 @@ func modifyServiceEntryForNewServiceOrPod(
 // Given an identity with a partition prefix, returns the identity without the prefix that is stored in the PartitionIdentityCache
 // If the identity did not have a partition prefix, returns the passed in identity
 func getNonPartitionedIdentity(admiralCache *AdmiralCache, sourceIdentity string) string {
+	if common.IsAdmiralOperatorMode() {
+		return sourceIdentity
+	}
 	if common.EnableSWAwareNSCaches() && admiralCache.PartitionIdentityCache != nil {
 		nonPartitionedIdentity := admiralCache.PartitionIdentityCache.Get(sourceIdentity)
 		if len(nonPartitionedIdentity) > 0 {
@@ -1055,7 +1062,9 @@ func AddServiceEntriesWithDrWorker(
 	//partitionedIdentity holds the originally passed in identity which could have a partition prefix
 	partitionedIdentity := identityId
 	//identityId is guaranteed to have the non-partitioned identity
+	// Operator Branch 1: since partition cache will not be filled, return identityId from getNonPartitionedIdentity
 	identityId = getNonPartitionedIdentity(rr.AdmiralCache, identityId)
+	// Operator: When calling this function make a channel with one cluster in it
 	for cluster := range clusters { // TODO log cluster / service entry
 		se := copyServiceEntry(seObj)
 		var (
@@ -1066,13 +1075,20 @@ func AddServiceEntriesWithDrWorker(
 		)
 
 		rc := rr.GetRemoteController(cluster)
-		if rc == nil || rc.NodeController == nil || rc.NodeController.Locality == nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, "remote controller not found for the cluster") // TODO: add service entry name
+		if rc == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, "remote controller not found for the cluster")
+			errors <- nil
+			continue
+		}
+		region, err := getClusterRegion(rr, cluster, rc)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, "region not found for the cluster")
 			errors <- nil
 			continue
 		}
 
 		//this get is within the loop to avoid race condition when one event could update destination rule on stale data
+		// TODO: Operator: Fill these caches in AdmiralCache in shardHandler
 		globalTrafficPolicy, err := cache.GlobalTrafficCache.GetFromIdentity(partitionedIdentity, env)
 		if err != nil {
 			ctxLogger.Errorf(LogErrFormat, "GlobalTrafficCache", "", "", cluster, err.Error())
@@ -1104,7 +1120,7 @@ func AddServiceEntriesWithDrWorker(
 		start = time.Now()
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
-		var seDrSet = createSeAndDrSetFromGtp(ctxLogger, ctx, env, rc.NodeController.Locality.Region, cluster, se,
+		var seDrSet = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR)
 		util.LogElapsedTimeSinceForModifySE(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
@@ -1272,11 +1288,12 @@ func AddServiceEntriesWithDrWorker(
 							// build list of gateway clusters
 							gwClusters := []string{}
 							for _, gwAlias := range common.GetGatewayAssetAliases() {
+								// TODO: Operator fills this cache in produceIdentityConfigs
 								dependents := rr.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity)
 								if dependents != nil && dependents.Len() > 0 {
 									dependents.Range(func(_ string, dependent string) {
 										if strings.Contains(strings.ToLower(dependent), strings.ToLower(gwAlias)) {
-											gwClustersMap := rr.AdmiralCache.IdentityClusterCache.Get(dependent)
+											gwClustersMap := getClusters(rr, dependent)
 											if gwClustersMap != nil {
 												for _, cluster := range gwClustersMap.GetKeys() {
 													gwClusters = append(gwClusters, cluster)
@@ -1312,7 +1329,7 @@ func AddServiceEntriesWithDrWorker(
 							ctxLogger.Infof(LogFormat, "Create", "VirtualService", env+"."+identityId, cluster, "skipped creating additional endpoints through VirtualService in "+syncNamespace+" namespace")
 						}
 
-						//update worklaodEndpoint entry to dynamoDB workloadData table only for source entry
+						//update workloadEndpoint entry to dynamoDB workloadData table only for source entry
 						if isServiceEntryModifyCalledForSourceCluster {
 							start = time.Now()
 							err = storeWorkloadData(cluster, newServiceEntry, globalTrafficPolicy, additionalEndpoints, rr, ctxLogger, *seDr.DestinationRule, true)
@@ -1354,6 +1371,24 @@ func AddServiceEntriesWithDrWorker(
 
 		errors <- addSEorDRToAClusterError
 	}
+}
+
+func getClusterRegion(rr *RemoteRegistry, cluster string, rc *RemoteController) (string, error) {
+	if common.IsAdmiralOperatorMode() && rr.AdmiralCache.ClusterLocalityCache != nil {
+		return rr.AdmiralCache.ClusterLocalityCache.Get(cluster).Get(cluster), nil
+	}
+	if rc.NodeController != nil && rc.NodeController.Locality != nil {
+		return rc.NodeController.Locality.Region, nil
+	}
+	return "", fmt.Errorf("failed to get region of cluster %v", cluster)
+}
+
+func getClusters(rr *RemoteRegistry, dependent string) *common.Map {
+	if common.IsAdmiralOperatorMode() {
+		// TODO: go through registry client to pull dependent identity clusters and construct map...
+		return nil
+	}
+	return rr.AdmiralCache.IdentityClusterCache.Get(dependent)
 }
 
 // getDNSPrefixFromServiceEntry returns DNSPrefix set on SE DR Tuple,
@@ -1508,7 +1543,7 @@ func storeWorkloadData(clusterName string, serviceEntry *v1alpha3.ServiceEntry,
 		return fmt.Errorf("dynamodb client for workload data table is not initialized")
 	}
 
-	//get worklaod data based on service entry, globaltrafficpolicy and additional endpoints
+	//get workload data based on service entry, globaltrafficpolicy and additional endpoints
 	workloadData := getWorkloadData(ctxLogger, serviceEntry, globalTrafficPolicy, additionalEndpoints, dr, clusterName, isSuccess)
 
 	err := pushWorkloadDataToDynamodbTable(workloadData, serviceEntry.Spec.Hosts[0], clusterName, rr, ctxLogger)
@@ -1564,6 +1599,7 @@ func getWorkloadData(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntr
 				dr.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute[0].From == "*" {
 				for region, weight := range dr.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute[0].To {
 					trafficDistribution[region] = int32(weight)
+					lbType = model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)]
 				}
 			}
 		}
@@ -1891,6 +1927,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		seDrSet       = make(map[string]*SeDrTuple)
 	)
 
+	// TODO: Operator needs to add the EventResourceType to the ctx in shardHandler ConsumeIdentityConfigs
 	eventResourceType, ok := ctx.Value(common.EventResourceType).(string)
 	if !ok {
 		ctxLogger.Errorf(AlertLogMsg, ctx.Value(common.EventResourceType))
@@ -1906,7 +1943,8 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		}
 	}
 
-	if common.EnableExportTo(se.Hosts[0]) && se != nil {
+	// This is calculated elsewhere for Operator
+	if !common.IsAdmiralOperatorMode() && common.EnableExportTo(se.Hosts[0]) && se != nil {
 		sortedDependentNamespaces := getSortedDependentNamespaces(cache, se.Hosts[0], cluster, ctxLogger)
 		se.ExportTo = sortedDependentNamespaces
 	}

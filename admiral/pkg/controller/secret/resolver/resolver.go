@@ -4,4 +4,5 @@ package resolver
 
 type SecretResolver interface {
 	FetchKubeConfig(secretName string, kubeConfig []byte) ([]byte, error)
+	DeleteClusterFromCache(clusterName string) error
 }

@@ -2,11 +2,17 @@ package admiral
 
 import (
 	"context"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type MockDelegator struct {
 	obj    interface{}
 	getErr error
+}
+
+func (m *MockDelegator) DoesGenerationMatch(ctx *log.Entry, i interface{}, i2 interface{}) (bool, error) {
+	return false, nil
 }
 
 func NewMockDelegator() *MockDelegator {

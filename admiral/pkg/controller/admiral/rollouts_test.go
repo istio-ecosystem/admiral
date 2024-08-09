@@ -17,6 +17,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +39,113 @@ func TestNewRolloutController(t *testing.T) {
 	if depCon == nil {
 		t.Errorf("Rollout controller should not be nil")
 	}
+}
+
+func TestRolloutController_DoesGenerationMatch(t *testing.T) {
+	rc := RolloutController{}
+
+	admiralParams := common.AdmiralParams{}
+
+	testCases := []struct {
+		name                  string
+		rolloutNew            interface{}
+		rolloutOld            interface{}
+		enableGenerationCheck bool
+		expectedValue         bool
+		expectedError         error
+	}{
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When new rollout is not of type *argo.Rollout " +
+				"Then func should return an error",
+			rolloutNew:            struct{}{},
+			rolloutOld:            struct{}{},
+			enableGenerationCheck: true,
+			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *argo.Rollout"),
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When old rollout is not of type *argo.Rollout " +
+				"Then func should return an error",
+			rolloutNew:            &argo.Rollout{},
+			rolloutOld:            struct{}{},
+			enableGenerationCheck: true,
+			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *argo.Rollout"),
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When rollout generation check is enabled but the generation does not match " +
+				"Then func should return false ",
+			rolloutNew: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			expectedError:         nil,
+			enableGenerationCheck: true,
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When rollout generation check is disabled " +
+				"Then func should return false",
+			rolloutNew: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 1,
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When rollout generation check is enabled and the old and new rollout generation is equal " +
+				"Then func should just return true",
+			rolloutNew: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				ObjectMeta: v1.ObjectMeta{
+					Generation: 2,
+				},
+			},
+			expectedValue:         true,
+			enableGenerationCheck: true,
+			expectedError:         nil,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"txId": "abc",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams.EnableGenerationCheck = tc.enableGenerationCheck
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+			actual, err := rc.DoesGenerationMatch(ctxLogger, tc.rolloutNew, tc.rolloutOld)
+			if !ErrorEqualOrSimilar(err, tc.expectedError) {
+				t.Errorf("expected: %v, got: %v", tc.expectedError, err)
+			}
+			if err == nil {
+				if tc.expectedValue != actual {
+					t.Errorf("expected: %v, got: %v", tc.expectedValue, actual)
+				}
+			}
+		})
+	}
+
 }
 
 func TestRolloutController_Added(t *testing.T) {

@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"errors"
+	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,9 +41,11 @@ func (m *MockIstioConfigStore) Delete(typ, name, namespace string) error {
 }
 
 type MockDeploymentHandler struct {
+	Obj *k8sAppsV1.Deployment
 }
 
 func (m *MockDeploymentHandler) Added(ctx context.Context, obj *k8sAppsV1.Deployment) error {
+	m.Obj = obj
 	return nil
 }
 
@@ -408,5 +411,16 @@ func (m *MockOutlierDetectionHandler) Updated(ctx context.Context, obj *admiralV
 
 func (m *MockOutlierDetectionHandler) Deleted(ctx context.Context, obj *admiralV1.OutlierDetection) error {
 	m.Obj = nil
+	return nil
+}
+
+type MockShardHandler struct {
+}
+
+func (m *MockShardHandler) Added(ctx context.Context, obj *admiralapiv1.Shard) error {
+	return nil
+}
+
+func (m *MockShardHandler) Deleted(ctx context.Context, obj *admiralapiv1.Shard) error {
 	return nil
 }

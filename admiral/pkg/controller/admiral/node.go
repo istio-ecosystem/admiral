@@ -6,6 +6,7 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 	k8sV1Informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/rest"
 
@@ -23,6 +24,10 @@ type NodeController struct {
 	NodeHandler NodeHandler
 	Locality    *Locality
 	informer    cache.SharedIndexInformer
+}
+
+func (p *NodeController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
 }
 
 type Locality struct {

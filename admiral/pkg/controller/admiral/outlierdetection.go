@@ -35,6 +35,10 @@ type OutlierDetectionController struct {
 	crdclient clientset.Interface
 }
 
+func (o *OutlierDetectionController) DoesGenerationMatch(*logrus.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func (c *odCache) Put(od *v1.OutlierDetection) {
 
 	defer c.mutex.Unlock()

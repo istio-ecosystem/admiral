@@ -3,6 +3,8 @@ package loader
 import (
 	argo "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
 	argofake "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/fake"
+	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
+	admiralapifake "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned/fake"
 	admiral "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	admiralfake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	istio "istio.io/client-go/pkg/clientset/versioned"
@@ -16,12 +18,14 @@ const FakePrefix = "fake"
 
 // fake clients for the Admiral cluster
 var FakeAdmiralClient admiral.Interface = admiralfake.NewSimpleClientset()
+var FakeAdmiralApiClient admiralapi.Interface = admiralapifake.NewSimpleClientset()
 var FakeIstioClient istio.Interface = istiofake.NewSimpleClientset()
 var FakeKubeClient kubernetes.Interface = kubefake.NewSimpleClientset()
 var FakeArgoClient argo.Interface = argofake.NewSimpleClientset()
 
 // fake clients for dependent clusters
 var FakeAdmiralClientMap map[string]admiral.Interface = make(map[string]admiral.Interface)
+var FakeAdmiralApiClientMap map[string]admiralapi.Interface = make(map[string]admiralapi.Interface)
 var FakeIstioClientMap map[string]istio.Interface = make(map[string]istio.Interface)
 var FakeKubeClientMap map[string]kubernetes.Interface = make(map[string]kubernetes.Interface)
 var FakeArgoClientMap map[string]argo.Interface = make(map[string]argo.Interface)
@@ -46,6 +50,19 @@ func (*FakeClientLoader) LoadAdmiralClientFromConfig(config *rest.Config) (admir
 		FakeAdmiralClientMap[config.Host] = admiralClient
 	}
 	return admiralClient, nil
+}
+
+func (loader *FakeClientLoader) LoadAdmiralApiClientFromPath(path string) (admiralapi.Interface, error) {
+	return FakeAdmiralApiClient, nil
+}
+
+func (loader *FakeClientLoader) LoadAdmiralApiClientFromConfig(config *rest.Config) (admiralapi.Interface, error) {
+	admiralApiClient, ok := FakeAdmiralApiClientMap[config.Host]
+	if !ok {
+		admiralApiClient = admiralapifake.NewSimpleClientset()
+		FakeAdmiralApiClientMap[config.Host] = admiralApiClient
+	}
+	return admiralApiClient, nil
 }
 
 func (loader *FakeClientLoader) LoadIstioClientFromPath(path string) (istio.Interface, error) {

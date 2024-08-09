@@ -31,6 +31,10 @@ type VirtualServiceController struct {
 	informer              cache.SharedIndexInformer
 }
 
+func (v *VirtualServiceController) DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*VirtualServiceController, error) {
 
 	vsController := VirtualServiceController{}
