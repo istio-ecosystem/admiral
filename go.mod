@@ -33,7 +33,6 @@ require (
 require (
 	github.com/aws/aws-sdk-go v1.55.2
 	github.com/istio-ecosystem/admiral-api v1.1.0
-	github.com/jamiealquiza/tachymeter v2.0.0+incompatible
 	github.com/prometheus/common v0.53.0
 	go.opentelemetry.io/otel v1.27.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.49.0

@@ -160,7 +160,10 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 				if err != nil {
 					ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), err.Error())
 				}
-				if doesGenerationMatch {
+				if status == common.Processed && doesGenerationMatch {
+					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
+						fmt.Sprintf("skipped processing event due to status=%s doesGenerationMatch=%v",
+							status, doesGenerationMatch))
 					return
 				}
 
