@@ -30,7 +30,7 @@
           "ports": [
             {
               "name": "http",
-              "port": 8090,
+              "number": 80,
               "protocol": "http"
             }
           ],
@@ -108,7 +108,7 @@
           "ports": [
             {
               "name": "http",
-              "port": 80,
+              "number": 80,
               "protocol": "http"
             }
           ],
@@ -186,7 +186,7 @@
           "ports": [
             {
               "name": "http",
-              "port": 80,
+              "number": 80,
               "protocol": "http"
             }
           ],

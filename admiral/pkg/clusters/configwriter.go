@@ -68,8 +68,11 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 				tmpSe.Endpoints = append(tmpSe.Endpoints, ep)
 			}
 			sort.Sort(WorkloadEntrySorted(tmpSe.Endpoints))
-			serviceEntries = append(serviceEntries, tmpSe)
+			seMap[env] = tmpSe
 		}
+	}
+	for _, se := range seMap {
+		serviceEntries = append(serviceEntries, se)
 	}
 	return serviceEntries, err
 }

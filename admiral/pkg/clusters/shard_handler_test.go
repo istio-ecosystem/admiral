@@ -23,7 +23,7 @@ func setupForShardTests() common.AdmiralParams {
 	admiralParams := admiralParamsForServiceEntryTests()
 	admiralParams.EnableAbsoluteFQDN = true
 	admiralParams.EnableAbsoluteFQDNForLocalEndpoints = true
-	admiralParams.SANPrefix = "pre-prod.api.intuit.com"
+	admiralParams.SANPrefix = "pre-prod.api.org.com"
 	admiralParams.ExportToMaxNamespaces = 35
 	admiralParams.AdmiralOperatorMode = true
 	admiralParams.OperatorSyncNamespace = "shard-namespace"
@@ -76,7 +76,6 @@ func jsonPrint(v any) string {
 }
 
 func TestShardHandler_Added(t *testing.T) {
-	t.SkipNow()
 	admiralParams := setupForShardTests()
 	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
 	rc1 := &RemoteController{
@@ -87,16 +86,16 @@ func TestShardHandler_Added(t *testing.T) {
 		},
 	}
 	rc2 := &RemoteController{
-		ClusterID: "multi-long-1026-usw2-k8s",
+		ClusterID: "cluster-usw2-k8s",
 		ServiceEntryController: &istio.ServiceEntryController{
 			IstioClient: istiofake.NewSimpleClientset(),
 			Cache:       istio.NewServiceEntryCache(),
 		},
 	}
 	rr.PutRemoteController("cluster1", rc1)
-	rr.PutRemoteController("multi-long-1026-usw2-k8s", rc2)
+	rr.PutRemoteController("cluster-usw2-k8s", rc2)
 	sampleShard1 := createMockShard("shard-sample", "cluster1", "sample", "e2e")
-	sampleShard2 := createMockShard("blackhole-shard", "multi-long-1026-usw2-k8s", "intuit.services.gateway.ppdmeshtestblackhole", "multi-long-1026-usw2-k8s")
+	sampleShard2 := createMockShard("blackhole-shard", "cluster-usw2-k8s", "ppdmeshtestblackhole", "ppd")
 	shardHandler := &ShardHandler{
 		RemoteRegistry: rr,
 	}
@@ -107,10 +106,10 @@ func TestShardHandler_Added(t *testing.T) {
 		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
 		Endpoints:       []*istioNetworkingV1Alpha3.WorkloadEntry{{Address: "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", Ports: map[string]uint32{"http": 8090}, Labels: map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}, Locality: "us-west-2"}},
 		ExportTo:        []string{common.NamespaceIstioSystem, "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"},
-		SubjectAltNames: []string{"spiffe://pre-prod.api.intuit.com/sample"},
+		SubjectAltNames: []string{"spiffe://pre-prod.api.org.com/sample"},
 	}
 	se2 := &istioNetworkingV1Alpha3.ServiceEntry{
-		Hosts:      []string{"multi-long-1026-use2-k8s.intuit.services.gateway.ppdmeshtestblackhole.mesh"},
+		Hosts:      []string{"ppd.ppdmeshtestblackhole.mesh"},
 		Ports:      []*istioNetworkingV1Alpha3.ServicePort{{Number: 80, Protocol: "http", Name: "http"}},
 		Location:   istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
 		Resolution: istioNetworkingV1Alpha3.ServiceEntry_DNS,
@@ -118,7 +117,7 @@ func TestShardHandler_Added(t *testing.T) {
 			{Address: "abc-elb.us-east-2.elb.amazonaws.com.", Ports: map[string]uint32{"http": 15443}, Labels: map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}, Locality: "us-east-2"},
 		},
 		ExportTo:        []string{common.NamespaceIstioSystem, "services-inboundd268-usw2-dev"},
-		SubjectAltNames: []string{"spiffe://pre-prod.api.intuit.com/intuit.services.gateway.ppdmeshtestblackhole"},
+		SubjectAltNames: []string{"spiffe://pre-prod.api.org.com/ppdmeshtestblackhole"},
 	}
 	testCases := []struct {
 		name           string
@@ -141,7 +140,7 @@ func TestShardHandler_Added(t *testing.T) {
 				"Then an SE with only remote endpoint and istio-system in exportTo should be built for env B",
 			rc:             rc2,
 			shard:          sampleShard2,
-			expectedSEName: "multi-long-1026-use2-k8s.intuit.services.gateway.ppdmeshtestblackhole.mesh-se",
+			expectedSEName: "ppd.ppdmeshtestblackhole.mesh-se",
 			expectedSE:     se2,
 		},
 		//TODO: Given the server asset we want to write resources for is deployed remotely and locally in the same env, se should have local and remote endpoint and istio-system
