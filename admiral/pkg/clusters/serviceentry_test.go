@@ -5601,7 +5601,7 @@ func TestGetWorkloadData(t *testing.T) {
 					DnsPrefix: common.Default,
 					Target: []*model.TrafficGroup{
 						{
-							Region: "us-west-2",
+							Region: "us-west",
 							Weight: 100,
 						},
 					},
@@ -5630,7 +5630,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5644,7 +5644,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5694,7 +5694,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 	}
 
 	var workloadDataWithFailoverGTP = WorkloadData{
@@ -5705,7 +5705,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Aliases:    []string{"dev.custom.testsuffix"},
 		LbType:     model.TrafficPolicy_FAILOVER.String(),
 		TrafficDistribution: map[string]int32{
-			"us-west-2": 100,
+			"us-west": 100,
 		},
 		GtpManagedBy:   "mesh-agent",
 		LastUpdatedAt:  currentTime,
@@ -5718,7 +5718,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Env:                 "dev",
 		DnsPrefix:           "default",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		GtpManagedBy:        "github",
 		LastUpdatedAt:       currentTime,
@@ -5789,7 +5789,7 @@ func TestGetWorkloadData(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			workloadData := getWorkloadData(ctxLogger, c.serviceEntry, c.globalTrafficPolicy, c.additionalEndpoints, istioNetworkingV1Alpha3.DestinationRule{}, "dev", c.isSuccess)
 			if !reflect.DeepEqual(workloadData, c.expectedWorkloadData) {
-				assert.Fail(t, "actual and expected workload data do not match. Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
+				assert.Fail(t, "actual and expected workload data do not match", "Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
 			}
 		})
 	}
@@ -5819,7 +5819,6 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 					Ports:    map[string]uint32{"http": 80},
 					Network:  "mesh1",
 					Locality: "us-west",
-					Weight:   100,
 				},
 			},
 		},
@@ -5859,7 +5858,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 				Distribute: []*istioNetworkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
 					{
 						From: "*",
-						To:   map[string]uint32{"us-west-2": 100},
+						To:   map[string]uint32{"us-west": 100},
 					},
 				},
 			},
@@ -5884,7 +5883,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 				Distribute: []*istioNetworkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
 					{
 						From: "us-west-2/*",
-						To:   map[string]uint32{"us-west-2": 70, "us-east-2": 30},
+						To:   map[string]uint32{"us-west": 70, "us-east": 30},
 					},
 				},
 			},
@@ -5927,7 +5926,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 					DnsPrefix: common.Default,
 					Target: []*model.TrafficGroup{
 						{
-							Region: "us-west-2",
+							Region: "us-west",
 							Weight: 100,
 						},
 					},
@@ -5956,7 +5955,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5970,7 +5969,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -6018,7 +6017,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 	}
 
 	var workloadDataWithoutGTPDefaultDistribution = WorkloadData{
@@ -6026,7 +6025,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{"us-west-2": 100},
+		TrafficDistribution: map[string]int32{"us-west": 100},
 		LbType:              model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)],
 	}
 
@@ -6038,7 +6037,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Aliases:    []string{"dev.custom.testsuffix"},
 		LbType:     model.TrafficPolicy_FAILOVER.String(),
 		TrafficDistribution: map[string]int32{
-			"us-west-2": 100,
+			"us-west": 100,
 		},
 		GtpManagedBy:   "mesh-agent",
 		LastUpdatedAt:  currentTime,
@@ -6051,7 +6050,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Env:                 "dev",
 		DnsPrefix:           "default",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		GtpManagedBy:        "github",
 		LastUpdatedAt:       currentTime,

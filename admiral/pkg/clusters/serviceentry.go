@@ -1806,6 +1806,20 @@ func getWorkloadData(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntr
 		}
 	}
 
+	// always update trafficDistribution to reflect deployed regions from se.
+	if serviceEntry != nil &&
+		serviceEntry.Spec.Endpoints != nil {
+		for _, ep := range serviceEntry.Spec.Endpoints {
+			region := ep.Locality
+			_, present := trafficDistribution[region]
+			if !present {
+				// topology: region keys indicate the deployments. ignore the weights which would be 0 for all deployed regions.
+				// failover: regions keys indicate the deployments with weights indicating the split across the regions.
+				trafficDistribution[region] = 0
+			}
+		}
+	}
+
 	workloadData := WorkloadData{
 		AssetAlias:          serviceEntry.Annotations[common.GetWorkloadIdentifier()],
 		Endpoint:            serviceEntry.Spec.Hosts[0],

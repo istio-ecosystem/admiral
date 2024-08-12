@@ -71,6 +71,11 @@ type WorkloadData struct {
 	FailedClusters      []string         `json:"failedClusters"`
 }
 
+func (w WorkloadData) String() string {
+	return fmt.Sprintf("[ assetAlias=%s endpoint=%s env=%s dnsPrefix=%s lbType=%s trafficDistribution=%v aliases=%s gtpManagedBy=%s gtpId=%s successCluster=%s failureCluster=%s ]",
+		w.AssetAlias, w.Endpoint, w.Env, w.DnsPrefix, w.LbType, w.TrafficDistribution, w.Aliases, w.GtpManagedBy, w.GtpId, w.SuccessCluster, w.FailedClusters)
+}
+
 type DynamoClient struct {
 	svc dynamodbiface.DynamoDBAPI
 }
