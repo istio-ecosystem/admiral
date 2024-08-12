@@ -248,9 +248,6 @@
     }
   },
   "clientAssets": {
-      "asset1": "asset1",
-      "asset2": "asset2",
-      "asset3": "asset3",
       "sample": "sample"
   }
 }
