@@ -10,7 +10,7 @@
       "ingressPortName": "http",
       "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
       "environment": {
-        "ppd": {
+        "prod": {
           "name": "prod",
           "namespace": "services-blackholed268-usw2-dev",
           "serviceName": "blackhole-root-service",

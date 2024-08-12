@@ -13,7 +13,7 @@
         "ppd": {
           "name": "ppd",
           "namespace": "services-inboundd268-usw2-dev",
-          "serviceName": "inbound-gw",
+          "serviceName": "inbound-root-service",
           "services": {
             "inbound-root-service": {
               "name": "inbound-root-service",
