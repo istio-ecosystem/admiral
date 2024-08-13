@@ -1,9 +1,14 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	registryMocks "github.com/istio-ecosystem/admiral/admiral/pkg/registry/mocks"
+	"github.com/stretchr/testify/mock"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -71,14 +76,6 @@ func admiralParamsForServiceEntryTests() common.AdmiralParams {
 		Profile:                           common.AdmiralProfileDefault,
 		DependentClusterWorkerConcurrency: 5,
 	}
-}
-
-func cartographerParamsForSETests() common.AdmiralParams {
-	params := admiralParamsForServiceEntryTests()
-	params.TrafficConfigPersona = true
-	params.AdditionalEndpointSuffixes = []string{"intuit"}
-	params.AdditionalEndpointLabelFilters = []string{"express"}
-	return params
 }
 
 var serviceEntryTestSingleton sync.Once
@@ -294,13 +291,11 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 	gtpc, err := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, resyncPeriod, loader.GetFakeClientLoader())
 	if err != nil {
 		t.Fatalf("%v", err)
-		t.FailNow()
 	}
 
 	od, err := admiral.NewOutlierDetectionController(make(chan struct{}), &test.MockOutlierDetectionHandler{}, &config, resyncPeriod, loader.GetFakeClientLoader())
 	if err != nil {
 		t.Fatalf("%v", err)
-		t.FailNow()
 	}
 
 	t.Logf("expectedServiceEntriesForDeployment: %v\n", expectedServiceEntriesForDeployment)
@@ -369,7 +364,7 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 		},
 		{
 			name: "Given asset is using a deployment, " +
-				"And asset is NOT in the exclude list" +
+				"And asset is NOT in the exclude list, " +
 				"When modifyServiceEntryForNewServiceOrPod is called, " +
 				"Then, corresponding service entry should be created, " +
 				"And the function should return a map containing the created service entry",
@@ -379,7 +374,7 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 		},
 		{
 			name: "Given asset is using a deployment, " +
-				"And asset is NOT in the exclude list and admial database client is not initialized" +
+				"And asset is NOT in the exclude list and admiral database client is not initialized" +
 				"When modifyServiceEntryForNewServiceOrPod is called, " +
 				"Then, corresponding service entry should be created, " +
 				"And the function should return a map containing the created service entry",
@@ -6772,104 +6767,6 @@ func TestGetDNSPrefixFromServiceEntry(t *testing.T) {
 		})
 	}
 }
-
-func TestAdditionalEndpointsCacheCartographer(t *testing.T) {
-
-	common.ResetSync()
-	common.InitializeConfig(cartographerParamsForSETests())
-	istioFakeController := istiofake.NewSimpleClientset()
-	config := rest.Config{Host: "localhost"}
-	testRollout1 := makeTestRollout("test", "test", "identity")
-	testRollout2 := makeTestRollout("test", "test", "identity")
-	testRollout2.ObjectMeta.Labels["express"] = "true"
-	rolloutController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, 0, loader.GetFakeClientLoader())
-	if err != nil {
-		t.Fail()
-	}
-
-	rr1 := NewRemoteRegistry(nil, cartographerParamsForSETests())
-	rc := &RemoteController{
-		ClusterID:         "new",
-		RolloutController: rolloutController,
-		VirtualServiceController: &istio.VirtualServiceController{
-			IstioClient: istioFakeController,
-		},
-		NodeController: &admiral.NodeController{
-			Locality: &admiral.Locality{
-				Region: "us-west-2",
-			},
-		},
-		ServiceEntryController: &istio.ServiceEntryController{
-			IstioClient: istioFakeController,
-			Cache:       istio.NewServiceEntryCache(),
-		},
-		DestinationRuleController: &istio.DestinationRuleController{
-			IstioClient: istioFakeController,
-			Cache:       istio.NewDestinationRuleCache(),
-		},
-		GlobalTraffic: nil,
-	}
-	rr1.PutRemoteController("new", rc)
-
-	testCases := []struct {
-		name              string
-		assetIdentity     string
-		remoteRegistry    *RemoteRegistry
-		rolloutController *admiral.RolloutController
-		rollout           *argo.Rollout
-		expectedCache     string
-	}{
-		{
-			name: "Given asset is using a deployment and trafficPersona is enabled," +
-				"If the app is not express," +
-				"Then, it does not populate the additionalEndpointsCache",
-			assetIdentity:     "identity",
-			remoteRegistry:    rr1,
-			rolloutController: rolloutController,
-			rollout:           &testRollout1,
-			expectedCache:     "",
-		},
-		{
-			name: "Given asset is using a deployment and trafficPersona is enabled," +
-				"If the app is express," +
-				"Then, it populates the additionalEndpointsCache",
-			assetIdentity:     "identity",
-			remoteRegistry:    rr1,
-			rolloutController: rolloutController,
-			rollout:           &testRollout2,
-			expectedCache:     "identity",
-		},
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-
-			ctx := context.Background()
-			ctx = context.WithValue(ctx, "clusterName", "new")
-			ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
-
-			c.rolloutController.Cache.UpdateRolloutToClusterCache("identity", c.rollout)
-			_, err := modifyServiceEntryForNewServiceOrPod(
-				ctx,
-				admiral.Add,
-				"test",
-				c.assetIdentity,
-				c.remoteRegistry,
-			)
-
-			if err != nil {
-				t.Errorf("Unexpected error %s", err.Error())
-			} else if len(c.expectedCache) > 0 {
-				_, ok := c.remoteRegistry.AdmiralCache.IdentitiesWithAdditionalEndpoints.Load(c.expectedCache)
-				if !ok {
-					t.Errorf("Unexpected identity in cache %s not found", c.expectedCache)
-				}
-			}
-
-		})
-	}
-}
-
 func TestReconcileServiceEntry(t *testing.T) {
 	var ctxLogger = logrus.WithFields(logrus.Fields{
 		"type": "modifySE",
@@ -9930,6 +9827,391 @@ func TestPartitionAwarenessExportToMultipleRemote(t *testing.T) {
 			} else if !reflect.DeepEqual(createdVs.Spec.ExportTo, c.expectedRemoteVirtualServiceInGWCluster.ExportTo) {
 				t.Errorf("expected exportTo of %v but got %v for remoteVSInGWCluster", gwRemoteClusterVS.ExportTo, createdVs.Spec.ExportTo)
 			}
+		})
+	}
+}
+
+func TestStateSyncerConfiguration(t *testing.T) {
+	var (
+		env                      = "test"
+		stop                     = make(chan struct{})
+		foobarMetadataName       = "foobar"
+		foobarMetadataNamespace  = "foobar-ns"
+		identity                 = "identity"
+		testRollout1             = makeTestRollout(foobarMetadataName, foobarMetadataNamespace, identity)
+		testDeployment1          = makeTestDeployment(foobarMetadataName, foobarMetadataNamespace, identity)
+		clusterID                = "test-dev-k8s"
+		clusterDependentID       = "test-dev-dependent-k8s"
+		fakeIstioClient          = istiofake.NewSimpleClientset()
+		config                   = rest.Config{Host: "localhost"}
+		reSyncPeriod             = time.Millisecond * 1
+		serviceEntryAddressStore = &ServiceEntryAddressStore{
+			EntryAddresses: map[string]string{
+				"test." + identity + ".mesh-se": "127.0.0.1",
+			},
+			Addresses: []string{},
+		}
+		serviceForRollout = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              foobarMetadataName + "-stable",
+				Namespace:         foobarMetadataNamespace,
+				CreationTimestamp: metav1.NewTime(time.Now()),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
+		serviceForDeployment = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              foobarMetadataName,
+				Namespace:         foobarMetadataNamespace,
+				CreationTimestamp: metav1.NewTime(time.Now().AddDate(-1, 1, 1)),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
+		serviceForIngress = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "east.aws.lb",
+				Namespace: "istio-system",
+				Labels:    map[string]string{"app": "gatewayapp"},
+			},
+			Spec: coreV1.ServiceSpec{
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+			Status: coreV1.ServiceStatus{
+				LoadBalancer: coreV1.LoadBalancerStatus{
+					Ingress: []coreV1.LoadBalancerIngress{
+						{
+							Hostname: "east.aws.lb",
+						},
+					},
+				},
+			},
+		}
+		remoteRegistryWithSyncError, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+		remoteRegistry, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+		remoteRegistryWithoutMockedSyncer, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+	)
+
+	deploymentController, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+	deploymentController.Cache.UpdateDeploymentToClusterCache(identity, testDeployment1)
+
+	deploymentDependentController, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+
+	rolloutController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+	rolloutController.Cache.UpdateRolloutToClusterCache(identity, &testRollout1)
+
+	rolloutDependentController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+
+	serviceController, err := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	serviceDependentController, err := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	virtualServiceController, err := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	globalTrafficPolicyController, err := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	serviceController.Cache.Put(serviceForDeployment)
+	serviceController.Cache.Put(serviceForRollout)
+	serviceController.Cache.Put(serviceForIngress)
+
+	rc := &RemoteController{
+		ClusterID:                clusterID,
+		DeploymentController:     deploymentController,
+		RolloutController:        rolloutController,
+		ServiceController:        serviceController,
+		VirtualServiceController: virtualServiceController,
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewServiceEntryCache(),
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewDestinationRuleCache(),
+		},
+		GlobalTraffic: globalTrafficPolicyController,
+	}
+
+	dependentRc := &RemoteController{
+		ClusterID:                clusterDependentID,
+		DeploymentController:     deploymentDependentController,
+		RolloutController:        rolloutDependentController,
+		ServiceController:        serviceDependentController,
+		VirtualServiceController: virtualServiceController,
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewServiceEntryCache(),
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewDestinationRuleCache(),
+		},
+		GlobalTraffic: globalTrafficPolicyController,
+	}
+
+	remoteRegistryWithSyncError.PutRemoteController(clusterID, rc)
+	remoteRegistryWithSyncError.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistryWithSyncError.StartTime = time.Now()
+	remoteRegistryWithSyncError.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	mockConfigSyncerWithErr := &registryMocks.MockConfigSyncer{}
+	mockConfigSyncerWithErr.On("UpdateEnvironmentConfigByCluster",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).Return(fmt.Errorf("failed to update registry config"))
+	remoteRegistryWithSyncError.ConfigSyncer = mockConfigSyncerWithErr
+	configWriterMock := &ConfigWriterMock{}
+	remoteRegistryWithSyncError.ConfigWriter = configWriterMock
+	remoteRegistryWithSyncError.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	remoteRegistry.PutRemoteController(clusterID, rc)
+	remoteRegistry.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistry.StartTime = time.Now()
+	remoteRegistry.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	mockConfigSyncer := &registryMocks.MockConfigSyncer{}
+	mockConfigSyncer.On("UpdateEnvironmentConfigByCluster",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).
+		Return(nil)
+	remoteRegistry.ConfigSyncer = mockConfigSyncer
+	remoteRegistry.ConfigWriter = configWriterMock
+	remoteRegistry.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	remoteRegistryWithoutMockedSyncer.PutRemoteController(clusterID, rc)
+	remoteRegistryWithoutMockedSyncer.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistryWithoutMockedSyncer.StartTime = time.Now()
+	remoteRegistryWithoutMockedSyncer.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	remoteRegistryWithoutMockedSyncer.ConfigSyncer = registry.NewConfigSync()
+	remoteRegistryWithoutMockedSyncer.ConfigWriter = configWriterMock
+	remoteRegistryWithoutMockedSyncer.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	common.ResetSync()
+	common.InitializeConfig(common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			GatewayApp:              "gatewayapp",
+			WorkloadIdentityKey:     "identity",
+			PriorityKey:             "priority",
+			EnvKey:                  "env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		EnableSAN:                         true,
+		SANPrefix:                         "prefix",
+		HostnameSuffix:                    "mesh",
+		SyncNamespace:                     "ns",
+		CacheReconcileDuration:            0,
+		ClusterRegistriesNamespace:        "default",
+		DependenciesNamespace:             "default",
+		WorkloadSidecarName:               "default",
+		Profile:                           common.AdmiralProfileDefault,
+		DependentClusterWorkerConcurrency: 1,
+		AdmiralStateSyncerMode:            true,
+	})
+	passAssertFunc := func() error { return nil }
+
+	testCases := []struct {
+		name           string
+		assetIdentity  string
+		remoteRegistry *RemoteRegistry
+		configSyncer   *registryMocks.MockConfigSyncer
+		assertFunc     func() error
+		expectedErr    error
+	}{
+		{
+			name: "Given state syncer mode is enabled, " +
+				"When state syncer returns an error, " +
+				"Then, it returns an error, " +
+				"And, it doesn't call ConfigWriter",
+			assetIdentity:  "identity",
+			configSyncer:   mockConfigSyncerWithErr,
+			remoteRegistry: remoteRegistryWithSyncError,
+			assertFunc:     passAssertFunc,
+			expectedErr:    fmt.Errorf("failed to update registry config"),
+		},
+		{
+			name: "Given state syncer mode is enabled, " +
+				"When ConfigSyncer doesn't return any errors, " +
+				"Then, it should not return any error, " +
+				"Then, ConfigSyncer should be called," +
+				"And, it doesn't call ConfigWriter",
+			assetIdentity:  "identity",
+			remoteRegistry: remoteRegistry,
+			configSyncer:   mockConfigSyncer,
+			assertFunc:     passAssertFunc,
+			expectedErr:    nil,
+		},
+		{
+			name: "Given state syncer mode is enabled, " +
+				"Then, it should create the expected config",
+			assetIdentity:  "identity",
+			remoteRegistry: remoteRegistryWithoutMockedSyncer,
+			assertFunc: func() error {
+				wantFile, err := os.ReadFile("testdata/expectedIdentityIdentityConfiguration.json")
+				if err != nil {
+					return err
+				}
+				gotFile, err := os.ReadFile("testdata/identityIdentityConfiguration.json")
+				if err != nil {
+					return err
+				}
+				if bytes.Equal(wantFile, gotFile) {
+					return nil
+				}
+				return fmt.Errorf("expected configuration not found")
+			},
+			expectedErr: nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, "clusterName", clusterID)
+			ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
+
+			_, err = modifyServiceEntryForNewServiceOrPod(
+				ctx,
+				admiral.Add,
+				env,
+				c.assetIdentity,
+				c.remoteRegistry,
+			)
+			assert.Equal(t, err, c.expectedErr)
+			assert.Equal(t, configWriterMock.AssertNotCalled(t, "AddServiceEntriesWithDrToAllCluster",
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+			), true)
+			if c.configSyncer != nil {
+				assert.Equal(t, c.configSyncer.AssertCalled(t, "UpdateEnvironmentConfigByCluster",
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+				), true)
+			}
+			assert.Equal(t, c.assertFunc(), nil)
 		})
 	}
 }

@@ -76,16 +76,15 @@ func TestIdentityConfigGetByIdentityName(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-
 			identityConfig, err := registryClient.GetIdentityConfigByIdentityName(c.identityAlias, ctxLogger)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while getting identityConfig by name with error: %v", err)
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			} else {
-				opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.TrafficPolicy{}, networkingV1Alpha3.LoadBalancerSettings{}, networkingV1Alpha3.LocalityLoadBalancerSetting{}, networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{}, duration.Duration{}, networkingV1Alpha3.ConnectionPoolSettings{}, networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{}, networkingV1Alpha3.OutlierDetection{}, wrappers.UInt32Value{})
+				opts := getUnexportedProperties()
 				if !cmp.Equal(identityConfig, c.expectedIdentityConfig, opts) {
-					t.Errorf("mismatch between parsed JSON file and expected identity config for alias: %s", c.identityAlias)
+					t.Errorf("want=%v, got=%v", c.expectedIdentityConfig, identityConfig)
 					t.Errorf(cmp.Diff(identityConfig, c.expectedIdentityConfig, opts))
 				}
 			}
@@ -129,7 +128,7 @@ func TestGetIdentityConfigByClusterName(t *testing.T) {
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			} else {
-				opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.TrafficPolicy{}, networkingV1Alpha3.LoadBalancerSettings{}, networkingV1Alpha3.LocalityLoadBalancerSetting{}, networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{}, duration.Duration{}, networkingV1Alpha3.ConnectionPoolSettings{}, networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{}, networkingV1Alpha3.OutlierDetection{}, wrappers.UInt32Value{})
+				opts := getUnexportedProperties()
 				if !cmp.Equal(identityConfigs[0], c.expectedIdentityConfig, opts) {
 					t.Errorf("mismatch between parsed JSON file and expected identity config for file: %s", c.clusterName)
 					t.Errorf(cmp.Diff(identityConfigs[0], c.expectedIdentityConfig, opts))
@@ -137,4 +136,18 @@ func TestGetIdentityConfigByClusterName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getUnexportedProperties() cmp.Option {
+	return cmpopts.IgnoreUnexported(
+		networkingV1Alpha3.ServicePort{},
+		networkingV1Alpha3.TrafficPolicy{},
+		networkingV1Alpha3.LoadBalancerSettings{},
+		networkingV1Alpha3.LocalityLoadBalancerSetting{},
+		networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{},
+		duration.Duration{},
+		networkingV1Alpha3.ConnectionPoolSettings{},
+		networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{},
+		networkingV1Alpha3.OutlierDetection{},
+		wrappers.UInt32Value{})
 }

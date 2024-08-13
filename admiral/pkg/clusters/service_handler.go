@@ -243,7 +243,7 @@ func checkIfThereAreMultipleMatchingServices(svc *coreV1.Service, serviceControl
 				if !ok {
 					return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
 				}
-				ports = GetMeshPortsForDeployments(clusterName, service, &deployment)
+				ports = common.GetMeshPortsForDeployments(clusterName, service, &deployment)
 			} else {
 				rollout, ok := obj.(rolloutsV1Alpha1.Rollout)
 				if !ok {

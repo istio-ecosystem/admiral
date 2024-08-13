@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,16 +16,15 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	admiralv1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
-	v12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralV1Alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//v1admiral "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-var ignoreUnexported = cmpopts.IgnoreUnexported(v12.GlobalTrafficPolicy{}.Status)
+var ignoreUnexported = cmpopts.IgnoreUnexported(admiralV1Alpha1.GlobalTrafficPolicy{}.Status)
 
 func init() {
 	initConfig(false, false)
@@ -61,7 +61,7 @@ func initConfig(fqdn bool, fqdnLocal bool) {
 }
 
 func TestGetTrafficConfigTransactionID(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"transactionID": ""},
 			Annotations: map[string]string{
 				"transactionID": "123456",
@@ -72,7 +72,7 @@ func TestGetTrafficConfigTransactionID(t *testing.T) {
 }
 
 func TestGetTrafficConfigRevision(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"revisionNumber": ""},
 			Annotations: map[string]string{
 				"revisionNumber": "123456",
@@ -83,7 +83,7 @@ func TestGetTrafficConfigRevision(t *testing.T) {
 }
 
 func TestGetTrafficConfigIdentity(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"asset": ""},
 			Annotations: map[string]string{
 				"asset": "123456",
@@ -100,8 +100,8 @@ func TestGetSAN(t *testing.T) {
 	identifierVal := "company.platform.server"
 	domain := "preprd"
 
-	deployment := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal}}}}}
-	deploymentWithAnnotation := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}}}}}
+	deployment := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{identifier: identifierVal}}}}}
+	deploymentWithAnnotation := k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}}}}}
 
 	deploymentWithNoIdentifier := k8sAppsV1.Deployment{}
 
@@ -161,25 +161,25 @@ func TestGetCname(t *testing.T) {
 	}{
 		{
 			name:       "should return valid cname (from label)",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		}, {
 			name:       "should return valid cname (from label) uses case sensitive DNS annotation -enabled",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "true"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "true"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   "stage." + identifierVal + ".global",
 		}, {
 			name:       "should return valid cname (from label)  uses case sensitive DNS annotation -disabled",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "false"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"admiral.io/cname-case-sensitive": "false"}, Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return valid cname (from annotation)",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}, Labels: map[string]string{"env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal}, Labels: map[string]string{"env": "stage"}}}}},
 			expected:   strings.ToLower("stage." + identifierVal + ".global"),
 		},
 		{
 			name:       "should return empty string",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{"env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"env": "stage"}}}}},
 			expected:   "",
 		},
 	}
@@ -250,12 +250,12 @@ func TestNodeLocality(t *testing.T) {
 	}{
 		{
 			name:     "should return valid node region",
-			node:     k8sCoreV1.Node{Spec: k8sCoreV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string{NodeRegionLabel: nodeLocalityLabel}}},
+			node:     k8sCoreV1.Node{Spec: k8sCoreV1.NodeSpec{}, ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{NodeRegionLabel: nodeLocalityLabel}}},
 			expected: nodeLocalityLabel,
 		},
 		{
 			name:     "should return empty value when node annotation isn't present",
-			node:     k8sCoreV1.Node{Spec: k8sCoreV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}}},
+			node:     k8sCoreV1.Node{Spec: k8sCoreV1.NodeSpec{}, ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}}},
 			expected: "",
 		},
 	}
@@ -283,25 +283,25 @@ func TestGetDeploymentGlobalIdentifier(t *testing.T) {
 	}{
 		{
 			name:       "should return valid identifier from label",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   identifierVal,
 			originalex: identifierVal,
 		},
 		{
 			name:       "should return valid identifier from annotations",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}}}},
 			expected:   identifierVal,
 			originalex: identifierVal,
 		},
 		{
 			name:       "should return partitioned identifier",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage", "admiral.io/identityPartition": "pid"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage", "admiral.io/identityPartition": "pid"}}}}},
 			expected:   "pid." + identifierVal,
 			originalex: identifierVal,
 		},
 		{
 			name:       "should return empty identifier",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}}}},
 			expected:   "",
 			originalex: "",
 		},
@@ -333,17 +333,17 @@ func TestGetDeploymentIdentityPartition(t *testing.T) {
 	}{
 		{
 			name:       "should return valid identifier from label",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
 			expected:   identifierVal,
 		},
 		{
 			name:       "should return valid identifier from annotations",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}}}},
 			expected:   identifierVal,
 		},
 		{
 			name:       "should return empty identifier",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}}}},
 			expected:   "",
 		},
 	}
@@ -370,17 +370,17 @@ func TestGetPodGlobalIdentifier(t *testing.T) {
 	}{
 		{
 			name:     "should return valid identifier from label",
-			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}},
+			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{identifier: identifierVal, "env": "stage"}}},
 			expected: identifierVal,
 		},
 		{
 			name:     "should return valid identifier from annotation",
-			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}},
+			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{identifier: identifierVal, "env": "stage"}}},
 			expected: identifierVal,
 		},
 		{
 			name:     "should return empty identifier",
-			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{}}},
+			pod:      k8sCoreV1.Pod{Spec: k8sCoreV1.PodSpec{}, ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{}}},
 			expected: "",
 		},
 	}
@@ -404,32 +404,32 @@ func TestGetEnv(t *testing.T) {
 	}{
 		{
 			name:       "should return default env",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}}}},
 			expected:   Default,
 		},
 		{
 			name:       "should return valid env from label",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage2"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"env": "stage2"}}}}},
 			expected:   "stage2",
 		},
 		{
 			name:       "should return valid env from new annotation",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{"admiral.io/env": "stage1"}, Labels: map[string]string{"env": "stage2"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"admiral.io/env": "stage1"}, Labels: map[string]string{"env": "stage2"}}}}},
 			expected:   "stage1",
 		},
 		{
 			name:       "should return valid env from new label",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"admiral.io/env": "production", "env": "stage2"}}}}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}, Labels: map[string]string{"admiral.io/env": "production", "env": "stage2"}}}}},
 			expected:   "production",
 		},
 		{
 			name:       "should return env from namespace suffix",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "uswest2-prd"}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: metav1.ObjectMeta{Namespace: "uswest2-prd"}},
 			expected:   "prd",
 		},
 		{
 			name:       "should return default when namespace doesn't have blah..region-env format",
-			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: v1.ObjectMeta{Namespace: "sample"}},
+			deployment: k8sAppsV1.Deployment{Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{}}}}, ObjectMeta: metav1.ObjectMeta{Namespace: "sample"}},
 			expected:   Default,
 		},
 	}
@@ -446,34 +446,34 @@ func TestGetEnv(t *testing.T) {
 
 func TestGetGtpEnv(t *testing.T) {
 
-	envNewAnnotationGtp := v12.GlobalTrafficPolicy{}
-	envNewAnnotationGtp.CreationTimestamp = v1.Now()
+	envNewAnnotationGtp := admiralV1Alpha1.GlobalTrafficPolicy{}
+	envNewAnnotationGtp.CreationTimestamp = metav1.Now()
 	envNewAnnotationGtp.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
 	envNewAnnotationGtp.Annotations = map[string]string{"admiral.io/env": "production"}
 	envNewAnnotationGtp.Namespace = "namespace"
 	envNewAnnotationGtp.Name = "myGTP-new-annotation"
 
-	envNewLabelGtp := v12.GlobalTrafficPolicy{}
-	envNewLabelGtp.CreationTimestamp = v1.Now()
+	envNewLabelGtp := admiralV1Alpha1.GlobalTrafficPolicy{}
+	envNewLabelGtp.CreationTimestamp = metav1.Now()
 	envNewLabelGtp.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1", "env": "stage2"}
 	envNewLabelGtp.Namespace = "namespace"
 	envNewLabelGtp.Name = "myGTP-new-label"
 
-	envLabelGtp := v12.GlobalTrafficPolicy{}
-	envLabelGtp.CreationTimestamp = v1.Now()
+	envLabelGtp := admiralV1Alpha1.GlobalTrafficPolicy{}
+	envLabelGtp.CreationTimestamp = metav1.Now()
 	envLabelGtp.Labels = map[string]string{"identity": "app1", "env": "stage2"}
 	envLabelGtp.Namespace = "namespace"
 	envLabelGtp.Name = "myGTP-label"
 
-	noEnvGtp := v12.GlobalTrafficPolicy{}
-	noEnvGtp.CreationTimestamp = v1.Now()
+	noEnvGtp := admiralV1Alpha1.GlobalTrafficPolicy{}
+	noEnvGtp.CreationTimestamp = metav1.Now()
 	noEnvGtp.Labels = map[string]string{"identity": "app1"}
 	noEnvGtp.Namespace = "namespace"
 	noEnvGtp.Name = "myGTP-no-env"
 
 	testCases := []struct {
 		name        string
-		gtp         *v12.GlobalTrafficPolicy
+		gtp         *admiralV1Alpha1.GlobalTrafficPolicy
 		expectedEnv string
 	}{
 		{
@@ -511,27 +511,27 @@ func TestGetGtpEnv(t *testing.T) {
 
 func TestGetRoutingPolicyEnv(t *testing.T) {
 
-	envNewAnnotationRP := v12.RoutingPolicy{}
-	envNewAnnotationRP.CreationTimestamp = v1.Now()
+	envNewAnnotationRP := admiralV1Alpha1.RoutingPolicy{}
+	envNewAnnotationRP.CreationTimestamp = metav1.Now()
 	envNewAnnotationRP.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
 	envNewAnnotationRP.Annotations = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
 	envNewAnnotationRP.Namespace = "namespace"
 	envNewAnnotationRP.Name = "myRP-new-annotation"
 
-	envLabelRP := v12.RoutingPolicy{}
-	envLabelRP.CreationTimestamp = v1.Now()
+	envLabelRP := admiralV1Alpha1.RoutingPolicy{}
+	envLabelRP.CreationTimestamp = metav1.Now()
 	envLabelRP.Labels = map[string]string{"admiral.io/env": "stage1", "env": "stage2"}
 	envLabelRP.Namespace = "namespace"
 	envLabelRP.Name = "myRP-label"
 
-	noEnvRP := v12.RoutingPolicy{}
-	noEnvRP.CreationTimestamp = v1.Now()
+	noEnvRP := admiralV1Alpha1.RoutingPolicy{}
+	noEnvRP.CreationTimestamp = metav1.Now()
 	noEnvRP.Namespace = "namespace"
 	noEnvRP.Name = "myRP-no-env"
 
 	testCases := []struct {
 		name        string
-		rp          *v12.RoutingPolicy
+		rp          *admiralV1Alpha1.RoutingPolicy
 		expectedEnv string
 	}{
 		{
@@ -564,15 +564,15 @@ func TestGetRoutingPolicyEnv(t *testing.T) {
 
 func TestGetGtpIdentity(t *testing.T) {
 
-	gtpIdentityFromLabels := v12.GlobalTrafficPolicy{}
-	gtpIdentityFromLabels.CreationTimestamp = v1.Now()
+	gtpIdentityFromLabels := admiralV1Alpha1.GlobalTrafficPolicy{}
+	gtpIdentityFromLabels.CreationTimestamp = metav1.Now()
 	gtpIdentityFromLabels.Labels = map[string]string{"identity": "app1", "admiral.io/env": "stage1"}
 	gtpIdentityFromLabels.Annotations = map[string]string{"admiral.io/env": "production"}
 	gtpIdentityFromLabels.Namespace = "namespace"
 	gtpIdentityFromLabels.Name = "myGTP"
 
-	gtpIdenityFromSelector := v12.GlobalTrafficPolicy{}
-	gtpIdenityFromSelector.CreationTimestamp = v1.Now()
+	gtpIdenityFromSelector := admiralV1Alpha1.GlobalTrafficPolicy{}
+	gtpIdenityFromSelector.CreationTimestamp = metav1.Now()
 	gtpIdenityFromSelector.Labels = map[string]string{"admiral.io/env": "stage1", "env": "stage2"}
 	gtpIdenityFromSelector.Spec.Selector = map[string]string{"identity": "app2", "admiral.io/env": "stage1", "env": "stage2"}
 	gtpIdenityFromSelector.Namespace = "namespace"
@@ -580,7 +580,7 @@ func TestGetGtpIdentity(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		gtp              *v12.GlobalTrafficPolicy
+		gtp              *admiralV1Alpha1.GlobalTrafficPolicy
 		expectedIdentity string
 	}{
 		{
@@ -607,23 +607,23 @@ func TestGetGtpIdentity(t *testing.T) {
 }
 
 func TestIsServiceMatch(t *testing.T) {
-	matchingSelector := v1.LabelSelector{}
+	matchingSelector := metav1.LabelSelector{}
 	matchingSelector.MatchLabels = map[string]string{"app": "app1", "asset": "asset1"}
 	matchingServiceSelector := map[string]string{"app": "app1", "asset": "asset1"}
 
-	nonMatchingSelector := v1.LabelSelector{}
+	nonMatchingSelector := metav1.LabelSelector{}
 	nonMatchingSelector.MatchLabels = map[string]string{"app": "app1", "asset": "asset1"}
 	nonMatchingServiceSelector := map[string]string{"app": "app2", "asset": "asset1"}
 
-	nilSelector := v1.LabelSelector{}
+	nilSelector := metav1.LabelSelector{}
 	nonNilServiceSelector := map[string]string{"app": "app1", "asset": "asset1"}
 
-	nonNilSelector := v1.LabelSelector{}
+	nonNilSelector := metav1.LabelSelector{}
 	nonNilSelector.MatchLabels = map[string]string{"app": "app1", "asset": "asset1"}
 	nilServiceSelector := map[string]string{}
 	testCases := []struct {
 		name            string
-		selector        *v1.LabelSelector
+		selector        *metav1.LabelSelector
 		serviceSelector map[string]string
 		expectedBool    bool
 	}{
@@ -664,7 +664,7 @@ func TestIsServiceMatch(t *testing.T) {
 }
 
 func TestGetRoutingPolicyIdentity(t *testing.T) {
-	rp := &admiralv1.RoutingPolicy{
+	rp := &admiralV1Alpha1.RoutingPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"routingPolicy": "test-policy",
@@ -712,7 +712,7 @@ func TestGetRoutingPolicy(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			rp := &admiralv1.RoutingPolicy{
+			rp := &admiralV1Alpha1.RoutingPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "test-ns",
 					Labels:    tc.labels,
@@ -778,23 +778,23 @@ func TestAppendError(t *testing.T) {
 
 func TestGetODIdentity(t *testing.T) {
 	type args struct {
-		od *admiralv1.OutlierDetection
+		od *admiralV1Alpha1.OutlierDetection
 	}
 
-	test1od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test1od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 	test1od.Labels = make(map[string]string)
 	test1od.Labels["identity"] = "foo"
 
-	test2od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test2od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 	test2od.Labels = make(map[string]string)
 	tests := []struct {
@@ -814,40 +814,40 @@ func TestGetODIdentity(t *testing.T) {
 
 func TestGetODEnv(t *testing.T) {
 	type args struct {
-		od *admiralv1.OutlierDetection
+		od *admiralV1Alpha1.OutlierDetection
 	}
 
-	test1od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test1od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 	test1od.Labels = make(map[string]string)
 
-	test2od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test2od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 	test2od.Annotations = make(map[string]string)
 	test2od.Annotations["admiral.io/env"] = "fooAnnotation"
 
-	test3od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test3od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 	test3od.Labels = make(map[string]string)
 	test3od.Labels["admiral.io/env"] = "fooLabel"
 
-	test4od := &admiralv1.OutlierDetection{
-		TypeMeta:   v1.TypeMeta{},
-		ObjectMeta: v1.ObjectMeta{},
+	test4od := &admiralV1Alpha1.OutlierDetection{
+		TypeMeta:   metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{},
 		Spec:       model.OutlierDetection{},
-		Status:     v12.OutlierDetectionStatus{},
+		Status:     admiralV1Alpha1.OutlierDetectionStatus{},
 	}
 
 	selector := make(map[string]string)
@@ -874,7 +874,7 @@ func TestGetODEnv(t *testing.T) {
 }
 
 func TestCheckIFEnvLabelIsPresentEnvValueEmpty(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"env": ""},
 			Annotations: map[string]string{
 				"asset": "123456",
@@ -885,7 +885,7 @@ func TestCheckIFEnvLabelIsPresentEnvValueEmpty(t *testing.T) {
 }
 
 func TestCheckIFEnvLabelIsPresentLabelsMissing(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
 				"asset": "123456",
@@ -896,7 +896,7 @@ func TestCheckIFEnvLabelIsPresentLabelsMissing(t *testing.T) {
 }
 
 func TestCheckIFEnvLabelIsPresentSuccess(t *testing.T) {
-	tc := admiralv1.TrafficConfig{
+	tc := admiralV1Alpha1.TrafficConfig{
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"env": "qal"},
 			Annotations: map[string]string{
 				"asset": "123456",
@@ -950,7 +950,7 @@ func TestCheckIFEnvLabelIsPresentSuccess(t *testing.T) {
 
 func TestGenerateTxId(t *testing.T) {
 	type args struct {
-		meta     v1.Object
+		meta     metav1.Object
 		ctrlName string
 		id       string
 	}
@@ -1010,6 +1010,141 @@ func TestGenerateTxId(t *testing.T) {
 	}
 }
 
+func TestGetMeshPorts(t *testing.T) {
+	var (
+		annotatedPort               = 8090
+		annotatedSecondPort         = 8091
+		defaultServicePort          = uint32(8080)
+		ports                       = map[string]uint32{"http": uint32(annotatedPort)}
+		portsDiffTargetPort         = map[string]uint32{"http": uint32(80)}
+		grpcPorts                   = map[string]uint32{"grpc": uint32(annotatedPort)}
+		grpcWebPorts                = map[string]uint32{"grpc-web": uint32(annotatedPort)}
+		http2Ports                  = map[string]uint32{"http2": uint32(annotatedPort)}
+		portsFromDefaultSvcPort     = map[string]uint32{"http": defaultServicePort}
+		emptyPorts                  = map[string]uint32{}
+		defaultK8sSvcPortNoName     = k8sCoreV1.ServicePort{Port: int32(defaultServicePort)}
+		defaultK8sSvcPort           = k8sCoreV1.ServicePort{Name: "default", Port: int32(defaultServicePort)}
+		meshK8sSvcPort              = k8sCoreV1.ServicePort{Name: "mesh", Port: int32(annotatedPort)}
+		serviceMeshPorts            = []k8sCoreV1.ServicePort{defaultK8sSvcPort, meshK8sSvcPort}
+		serviceMeshPortsOnlyDefault = []k8sCoreV1.ServicePort{defaultK8sSvcPortNoName}
+		service                     = k8sCoreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+			Spec:       k8sCoreV1.ServiceSpec{Ports: serviceMeshPorts},
+		}
+		deployment = k8sAppsV1.Deployment{
+			Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{SidecarEnabledPorts: strconv.Itoa(annotatedPort)}},
+			}}}
+		deploymentWithMultipleMeshPorts = k8sAppsV1.Deployment{
+			Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{SidecarEnabledPorts: strconv.Itoa(annotatedPort) + "," + strconv.Itoa(annotatedSecondPort)}},
+			}}}
+	)
+
+	testCases := []struct {
+		name        string
+		clusterName string
+		service     k8sCoreV1.Service
+		deployment  k8sAppsV1.Deployment
+		expected    map[string]uint32
+	}{
+		{
+			name:       "should return a port based on annotation",
+			service:    service,
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
+			name: "should return a http port if no port name is specified",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Port: int32(80), TargetPort: intstr.FromInt(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   portsDiffTargetPort,
+		},
+		{
+			name: "should return a http port if the port name doesn't start with a protocol name",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Name: "hello-grpc", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   ports,
+		},
+		{
+			name: "should return a grpc port based on annotation",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Name: "grpc-service", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   grpcPorts,
+		},
+		{
+			name: "should return a grpc-web port based on annotation",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Name: "grpc-web", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   grpcWebPorts,
+		},
+		{
+			name: "should return a http2 port based on annotation",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Name: "http2", Port: int32(annotatedPort)}}},
+			},
+			deployment: deployment,
+			expected:   http2Ports,
+		},
+		{
+			name: "should return a default port",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: serviceMeshPortsOnlyDefault},
+			},
+			deployment: k8sAppsV1.Deployment{
+				Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}},
+				}}},
+			expected: portsFromDefaultSvcPort,
+		},
+		{
+			name: "should return empty ports",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec:       k8sCoreV1.ServiceSpec{Ports: nil},
+			},
+			deployment: k8sAppsV1.Deployment{
+				Spec: k8sAppsV1.DeploymentSpec{Template: k8sCoreV1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{}},
+				}}},
+			expected: emptyPorts,
+		},
+		{
+			name: "should return a http port if the port name doesn't start with a protocol name",
+			service: k8sCoreV1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "server", Labels: map[string]string{"asset": "Intuit.platform.mesh.server"}},
+				Spec: k8sCoreV1.ServiceSpec{Ports: []k8sCoreV1.ServicePort{{Name: "http", Port: int32(annotatedPort)},
+					{Name: "grpc", Port: int32(annotatedSecondPort)}}},
+			},
+			deployment: deploymentWithMultipleMeshPorts,
+			expected:   ports,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			meshPorts := GetMeshPortsForDeployments(c.clusterName, &c.service, &c.deployment)
+			if !reflect.DeepEqual(meshPorts, c.expected) {
+				t.Errorf("Wanted meshPorts: %v, got: %v", c.expected, meshPorts)
+			}
+		})
+	}
+}
+
 func TestGetGtpIdentityPartition(t *testing.T) {
 	initConfig(true, true)
 	partitionIdentifier := "admiral.io/identityPartition"
@@ -1017,22 +1152,22 @@ func TestGetGtpIdentityPartition(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		gtp      v12.GlobalTrafficPolicy
+		gtp      admiralV1Alpha1.GlobalTrafficPolicy
 		expected string
 	}{
 		{
 			name:     "should return valid identifier from label",
-			gtp:      v12.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}},
+			gtp:      admiralV1Alpha1.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}},
 			expected: identifierVal,
 		},
 		{
 			name:     "should return valid identifier from annotations",
-			gtp:      v12.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}},
+			gtp:      admiralV1Alpha1.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{partitionIdentifier: identifierVal, "env": "stage"}}},
 			expected: identifierVal,
 		},
 		{
 			name:     "should return empty identifier",
-			gtp:      v12.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}},
+			gtp:      admiralV1Alpha1.GlobalTrafficPolicy{ObjectMeta: v1.ObjectMeta{Labels: map[string]string{}, Annotations: map[string]string{}}},
 			expected: "",
 		},
 	}

@@ -3,19 +3,27 @@ package registry
 import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
-	coreV1 "k8s.io/api/core/v1"
+	networking "istio.io/api/networking/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func GetSampleIdentityConfigEnvironment(env string, namespace string) IdentityConfigEnvironment {
-	identityConfigEnvironment := IdentityConfigEnvironment{
+func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityConfigEnvironment {
+	identityConfigEnvironment := &IdentityConfigEnvironment{
 		Name:        env,
 		Namespace:   namespace,
-		ServiceName: "partner-data-to-tax-spk-root-service",
-		Type:        "rollout",
-		Selectors:   map[string]string{"app": "partner-data-to-tax"},
-		Ports:       []coreV1.ServicePort{{Name: "http-service-mesh", Port: int32(8090), Protocol: coreV1.ProtocolTCP, TargetPort: intstr.FromInt(8090)}},
+		ServiceName: "app-1-spk-root-service",
+		Services: map[string]*RegistryServiceConfig{
+			"app-1-spk-root-service": &RegistryServiceConfig{
+				Name:   "app-1-spk-root-service",
+				Weight: -1,
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+			},
+		},
+		Type:      "rollout",
+		Selectors: map[string]string{"app": "app-1"},
+		Ports:     []*networking.ServicePort{{Name: "http", Number: uint32(80), Protocol: "http"}},
 		TrafficPolicy: TrafficPolicy{
 			ClientConnectionConfig: v1alpha1.ClientConnectionConfig{
 				ObjectMeta: v1.ObjectMeta{
@@ -75,22 +83,29 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) IdentityCo
 }
 
 func GetSampleIdentityConfig() IdentityConfig {
-	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ctg-taxprep-partnerdatatotax-usw2-prf")
-	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
-	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ctg-taxprep-partnerdatatotax-usw2-qal")
-	environments := []IdentityConfigEnvironment{prfEnv, e2eEnv, qalEnv}
-	clientAssets := []map[string]string{{"name": "intuit.cto.dev_portal"}, {"name": "intuit.ctg.tto.browserclient"}, {"name": "intuit.ctg.taxprep.partnerdatatotaxtestclient"}, {"name": "intuit.productmarketing.ipu.pmec"}, {"name": "intuit.tax.taxdev.txo"}, {"name": "intuit.CTO.oauth2"}, {"name": "intuit.platform.servicesgateway.servicesgateway"}, {"name": "intuit.ctg.taxprep.partnerdatatotax"}, {"name": "sample"}}
+	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf")
+	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e")
+	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal")
+	environments := map[string]*IdentityConfigEnvironment{
+		"prf": prfEnv,
+		"e2e": e2eEnv,
+		"qal": qalEnv,
+	}
+	clientAssets := map[string]string{
+		"sample": "sample",
+	}
 	cluster := IdentityConfigCluster{
-		Name:            "cg-tax-ppd-usw2-k8s",
+		Name:            "cluster1",
 		Locality:        "us-west-2",
-		IngressEndpoint: "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+		IngressEndpoint: "abc-elb.us-west-2.elb.amazonaws.com.",
 		IngressPort:     "15443",
 		IngressPortName: "http",
 		Environment:     environments,
 	}
 	identityConfig := IdentityConfig{
-		IdentityName: "Intuit.ctg.taxprep.partnerdatatotax",
-		Clusters:     []IdentityConfigCluster{cluster},
+		IdentityName: "sample",
+		Clusters: map[string]*IdentityConfigCluster{
+			"cluster1": &cluster},
 		ClientAssets: clientAssets,
 	}
 	return identityConfig

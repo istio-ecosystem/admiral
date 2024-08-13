@@ -3,11 +3,13 @@ package clusters
 import (
 	"context"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -65,15 +67,17 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 
 func TestGetIngressEndpoints(t *testing.T) {
 	identityConfig := registry.GetSampleIdentityConfig()
-	expectedIngressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cg-tax-ppd-usw2-k8s": {
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
-		Locality: "us-west-2",
-		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
-	}}
+	expectedIngressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{
+		"cluster1": {
+			Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
+			Locality: "us-west-2",
+			Ports:    map[string]uint32{"http": uint32(15443)},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
+		},
+	}
 	testCases := []struct {
 		name                     string
-		identityConfigClusters   []registry.IdentityConfigCluster
+		identityConfigClusters   map[string]*registry.IdentityConfigCluster
 		expectedIngressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry
 	}{
 		{
@@ -87,38 +91,10 @@ func TestGetIngressEndpoints(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ingressEndpoints, err := getIngressEndpoints(c.identityConfigClusters)
 			if err != nil {
-				t.Errorf("While constructing ingressEndpoint, got error: %v", err)
+				t.Errorf("want=nil, got=%v", err)
 			}
 			if !reflect.DeepEqual(ingressEndpoints, c.expectedIngressEndpoints) {
-				t.Errorf("Mismatch between constructed ingressEndpoint and expected ingressEndpoint")
-			}
-		})
-	}
-}
-
-func TestGetServiceEntryPorts(t *testing.T) {
-	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
-	expectedSEPorts := []*networkingV1Alpha3.ServicePort{{Number: uint32(common.DefaultServiceEntryPort), Name: util.Http, Protocol: util.Http}}
-	testCases := []struct {
-		name                      string
-		identityConfigEnvironment registry.IdentityConfigEnvironment
-		expectedSEPorts           []*networkingV1Alpha3.ServicePort
-	}{
-		{
-			name: "Given an IdentityConfigEnvironment, " +
-				"Then the constructed ServiceEntryPorts should be as expected",
-			identityConfigEnvironment: e2eEnv,
-			expectedSEPorts:           expectedSEPorts,
-		},
-	}
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			sePorts, err := getServiceEntryPorts(e2eEnv)
-			if err != nil {
-				t.Errorf("While constructing serviceEntryPorts, got error: %v", err)
-			}
-			if !reflect.DeepEqual(sePorts, c.expectedSEPorts) {
-				t.Errorf("Mismatch between constructed ingressEndpoint and expected ingressEndpoint")
+				t.Errorf("want=%v, got=%v", c.expectedIngressEndpoints, ingressEndpoints)
 			}
 		})
 	}
@@ -128,26 +104,26 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
-	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ctg-taxprep-partnerdatatotax-usw2-e2e")
-	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cg-tax-ppd-usw2-k8s": {
-		Address:  "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e")
+	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cluster1": {
+		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}, "apigw-cx-ppd-usw2-k8s": {
-		Address:  "internal-a1cbfde75adbe1fed9763495dfd07960-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	remoteEndpoint := &networkingV1Alpha3.WorkloadEntry{
-		Address:  "internal-a1cbfde75adbe1fed9763495dfd07960-2123389388.us-west-2.elb.amazonaws.com.",
+		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
 	}
 	localEndpoint := &networkingV1Alpha3.WorkloadEntry{
-		Address:  "partner-data-to-tax-spk-root-service.ctg-taxprep-partnerdatatotax-usw2-e2e.svc.cluster.local.",
+		Address:  "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
@@ -156,7 +132,7 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 	ctxLogger := common.GetCtxLogger(ctx, "ctg-taxprep-partnerdatatotax", "")
 	testCases := []struct {
 		name                      string
-		identityConfigEnvironment registry.IdentityConfigEnvironment
+		identityConfigEnvironment *registry.IdentityConfigEnvironment
 		ingressEndpoints          map[string]*networkingV1Alpha3.WorkloadEntry
 		clientCluster             string
 		serverCluster             string
@@ -168,7 +144,7 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 				"Then the constructed endpoint should be a remote endpoint",
 			identityConfigEnvironment: e2eEnv,
 			ingressEndpoints:          ingressEndpoints,
-			clientCluster:             "cg-tax-ppd-usw2-k8s",
+			clientCluster:             "cluster1",
 			serverCluster:             "apigw-cx-ppd-usw2-k8s",
 			expectedSEEndpoint:        remoteEndpoint,
 		},
@@ -178,8 +154,8 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 				"Then the constructed endpoint should be a local endpoint",
 			identityConfigEnvironment: e2eEnv,
 			ingressEndpoints:          ingressEndpoints,
-			clientCluster:             "cg-tax-ppd-usw2-k8s",
-			serverCluster:             "cg-tax-ppd-usw2-k8s",
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster1",
 			expectedSEEndpoint:        localEndpoint,
 		},
 	}
@@ -187,12 +163,11 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			seEndpoint, err := getServiceEntryEndpoint(ctxLogger, c.clientCluster, c.serverCluster, c.ingressEndpoints, c.identityConfigEnvironment)
 			if err != nil {
-				t.Errorf("While constructing serviceEntryPortEndpoint, got error: %v", err)
+				t.Errorf("want=nil, got=%v", err)
 			}
 			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.WorkloadEntry{})
 			if !cmp.Equal(seEndpoint, c.expectedSEEndpoint, opts) {
-				t.Errorf("Mismatch between constructed ingressEndpoint and expected ingressEndpoint")
-				t.Errorf(cmp.Diff(seEndpoint, c.expectedSEEndpoint, opts))
+				t.Errorf("want=%v, got=%v", c.expectedSEEndpoint, seEndpoint)
 			}
 		})
 	}
@@ -202,13 +177,13 @@ func TestGetExportTo(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
-	ctxLogger := common.GetCtxLogger(context.Background(), "ctg-taxprep-partnerdatatotax", "")
+	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
 	testCases := []struct {
 		name                    string
 		registryClient          registry.IdentityConfiguration
 		clientCluster           string
 		isServerOnClientCluster bool
-		clientAssets            []map[string]string
+		clientAssets            map[string]string
 		expectedNamespaces      []string
 	}{
 		{
@@ -216,31 +191,30 @@ func TestGetExportTo(t *testing.T) {
 				"When the client cluster is the same as the server cluster" +
 				"Then the constructed dependent namespaces should include istio-system",
 			registryClient:          registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER")),
-			clientCluster:           "cg-tax-ppd-usw2-k8s",
+			clientCluster:           "cluster1",
 			isServerOnClientCluster: true,
-			clientAssets:            []map[string]string{{"name": "sample"}},
-			expectedNamespaces:      []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "ctg-taxprep-partnerdatatotax-usw2-prf", "ctg-taxprep-partnerdatatotax-usw2-qal", "istio-system"},
+			clientAssets:            map[string]string{"sample": "sample"},
+			expectedNamespaces:      []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"},
 		},
 		{
 			name: "Given asset info, cluster info, and client info, " +
 				"When the client cluster is not the same as the server cluster" +
 				"Then the constructed dependent namespaces should not include istio-system",
 			registryClient:          registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER")),
-			clientCluster:           "cg-tax-ppd-usw2-k8s",
+			clientCluster:           "cluster1",
 			isServerOnClientCluster: false,
-			clientAssets:            []map[string]string{{"name": "sample"}},
-			expectedNamespaces:      []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "ctg-taxprep-partnerdatatotax-usw2-prf", "ctg-taxprep-partnerdatatotax-usw2-qal"},
+			clientAssets:            map[string]string{"sample": "sample"},
+			expectedNamespaces:      []string{"ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"},
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			namespaces, err := getExportTo(ctxLogger, c.registryClient, c.clientCluster, c.isServerOnClientCluster, c.clientAssets)
 			if err != nil {
-				t.Errorf("While constructing sorted dependent namespaces, got error: %v", err)
+				t.Errorf("want=%v, got=%v", nil, err)
 			}
 			if !cmp.Equal(namespaces, c.expectedNamespaces) {
-				t.Errorf("Mismatch between constructed sortedDependentNamespaces and expected sortedDependentNamespaces")
-				t.Errorf(cmp.Diff(namespaces, c.expectedNamespaces))
+				t.Errorf("want=%v, got=%v", c.expectedNamespaces, namespaces)
 			}
 		})
 	}
@@ -251,15 +225,16 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
-	ctxLogger := common.GetCtxLogger(context.Background(), "ctg-taxprep-partnerdatatotax", "")
+	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
 	identityConfig := registry.GetSampleIdentityConfig()
-	expectedLocalServiceEntryprf := createMockServiceEntry("prf", "Intuit.ctg.taxprep.partnerdatatotax", "partner-data-to-tax-spk-root-service.ctg-taxprep-partnerdatatotax-usw2-prf.svc.cluster.local.", 8090, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "ctg-taxprep-partnerdatatotax-usw2-prf", "ctg-taxprep-partnerdatatotax-usw2-qal", "istio-system"})
-	expectedLocalServiceEntrye2e := createMockServiceEntry("e2e", "Intuit.ctg.taxprep.partnerdatatotax", "partner-data-to-tax-spk-root-service.ctg-taxprep-partnerdatatotax-usw2-e2e.svc.cluster.local.", 8090, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "ctg-taxprep-partnerdatatotax-usw2-prf", "ctg-taxprep-partnerdatatotax-usw2-qal", "istio-system"})
-	expectedLocalServiceEntryqal := createMockServiceEntry("qal", "Intuit.ctg.taxprep.partnerdatatotax", "partner-data-to-tax-spk-root-service.ctg-taxprep-partnerdatatotax-usw2-qal.svc.cluster.local.", 8090, []string{"ctg-taxprep-partnerdatatotax-usw2-e2e", "ctg-taxprep-partnerdatatotax-usw2-prf", "ctg-taxprep-partnerdatatotax-usw2-qal", "istio-system"})
-	expectedLocalServiceEntries := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryprf, &expectedLocalServiceEntrye2e, &expectedLocalServiceEntryqal}
+	expectedLocalServiceEntryPRF := createMockServiceEntry("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryE2E := createMockServiceEntry("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryQAL := createMockServiceEntry("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntries := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQAL, &expectedLocalServiceEntryPRF, &expectedLocalServiceEntryE2E}
 	testCases := []struct {
 		name                   string
 		clientCluster          string
+		event                  admiral.EventType
 		identityConfig         registry.IdentityConfig
 		expectedServiceEntries []*networkingV1Alpha3.ServiceEntry
 	}{
@@ -267,7 +242,8 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 			name: "Given information to build an se, " +
 				"When the client cluster is the same as the server cluster" +
 				"Then the constructed se should have local endpoint and istio-system in exportTo",
-			clientCluster:          "cg-tax-ppd-usw2-k8s",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
 			identityConfig:         identityConfig,
 			expectedServiceEntries: expectedLocalServiceEntries,
 		},
@@ -277,13 +253,29 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 			serviceEntryBuilder := ServiceEntryBuilder{ClientCluster: c.clientCluster, RemoteRegistry: rr}
 			serviceEntries, err := serviceEntryBuilder.BuildServiceEntriesFromIdentityConfig(ctxLogger, c.identityConfig)
 			if err != nil {
-				t.Errorf("While constructing service entries, got error: %v", err)
+				t.Errorf("want=%v, \ngot=%v", nil, err)
 			}
 			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.ServiceEntry{}, networkingV1Alpha3.ServicePort{}, networkingV1Alpha3.WorkloadEntry{})
+			// sort the service entries by name
+			sort.Sort(ServiceEntryListSorterByHost(serviceEntries))
+			sort.Sort(ServiceEntryListSorterByHost(c.expectedServiceEntries))
 			if !cmp.Equal(serviceEntries, c.expectedServiceEntries, opts) {
-				t.Errorf("Mismatch between constructed sorted entries and expected service entries")
-				t.Errorf(cmp.Diff(serviceEntries, c.expectedServiceEntries, opts))
+				t.Errorf("want=%v, \ngot=%v", c.expectedServiceEntries, serviceEntries)
 			}
 		})
 	}
+}
+
+type ServiceEntryListSorterByHost []*networkingV1Alpha3.ServiceEntry
+
+func (s ServiceEntryListSorterByHost) Len() int {
+	return len(s)
+}
+
+func (w ServiceEntryListSorterByHost) Less(i, j int) bool {
+	return w[i].Hosts[0] < w[j].Hosts[0]
+}
+
+func (w ServiceEntryListSorterByHost) Swap(i, j int) {
+	w[i], w[j] = w[j], w[i]
 }

@@ -18,6 +18,8 @@ import (
 	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	k8sAppsV1 "k8s.io/api/apps/v1"
@@ -27,6 +29,8 @@ import (
 var (
 	CtxLogFormat         = "task=%v name=%v namespace=%s cluster=%s message=%v"
 	CtxLogFormatWithTime = "task=%v name=%v namespace=%s cluster=%s message=%v txTime=%v"
+	LogFormatAdv         = "op=%v type=%v name=%v namespace=%s cluster=%s message=%v"
+	LogErrFormat         = "op=%v type=%v name=%v cluster=%v error=%v"
 	ConfigWriter         = "ConfigWriter"
 )
 
@@ -618,4 +622,83 @@ func IsPresent(s []string, e string) bool {
 
 func IsAirEnv(originalEnvLabel string) bool {
 	return strings.HasSuffix(originalEnvLabel, AIREnvSuffix)
+}
+
+func GetMeshPortsForDeployments(clusterName string, destService *k8sV1.Service,
+	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
+
+	if destService == nil || destDeployment == nil {
+		logrus.Warnf("Deployment or Service is nil cluster=%s", clusterName)
+		return nil
+	}
+
+	var meshPorts string
+	if destDeployment.Spec.Template.Annotations == nil {
+		meshPorts = ""
+	} else {
+		meshPorts = destDeployment.Spec.Template.Annotations[SidecarEnabledPorts]
+	}
+	ports := GetMeshPortsHelper(meshPorts, destService, clusterName)
+	return ports
+}
+
+func GetMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterName string) map[string]uint32 {
+	var ports = make(map[string]uint32)
+
+	if destService == nil {
+		return ports
+	}
+	if len(meshPorts) == 0 {
+		logrus.Infof(LogFormatAdv, "GetMeshPorts", "service", destService.Name, destService.Namespace,
+			clusterName, "No mesh ports present, defaulting to first port")
+		if destService.Spec.Ports != nil && len(destService.Spec.Ports) > 0 {
+			var protocol = util.GetPortProtocol(destService.Spec.Ports[0].Name)
+			ports[protocol] = uint32(destService.Spec.Ports[0].Port)
+		}
+		return ports
+	}
+
+	meshPortsSplit := strings.Split(meshPorts, ",")
+
+	if len(meshPortsSplit) > 1 {
+		logrus.Warnf(LogErrFormat, "Get", "MeshPorts", "", clusterName,
+			"Multiple inbound mesh ports detected, admiral generates service entry with first matched port and protocol")
+	}
+
+	//fetch the first valid port if there is more than one mesh port
+	var meshPortMap = make(map[uint32]uint32)
+	for _, meshPort := range meshPortsSplit {
+		port, err := strconv.ParseUint(meshPort, 10, 32)
+		if err == nil {
+			meshPortMap[uint32(port)] = uint32(port)
+			break
+		}
+	}
+	for _, servicePort := range destService.Spec.Ports {
+		//handling relevant protocols from here:
+		// https://istio.io/latest/docs/ops/configuration/traffic-management/protocol-selection/#manual-protocol-selection
+		//use target port if present to match the annotated mesh port
+		targetPort := uint32(servicePort.Port)
+		if servicePort.TargetPort.StrVal != "" {
+			port, err := strconv.Atoi(servicePort.TargetPort.StrVal)
+			if err != nil {
+				logrus.Warnf(LogErrFormat, "GetMeshPorts", "Failed to parse TargetPort", destService.Name, clusterName, err)
+			}
+			if port > 0 {
+				targetPort = uint32(port)
+			}
+
+		}
+		if servicePort.TargetPort.IntVal != 0 {
+			targetPort = uint32(servicePort.TargetPort.IntVal)
+		}
+		if _, ok := meshPortMap[targetPort]; ok {
+			var protocol = util.GetPortProtocol(servicePort.Name)
+			logrus.Infof(LogFormatAdv, "MeshPort", servicePort.Port, destService.Name, destService.Namespace,
+				clusterName, "Protocol: "+protocol)
+			ports[protocol] = uint32(servicePort.Port)
+			break
+		}
+	}
+	return ports
 }

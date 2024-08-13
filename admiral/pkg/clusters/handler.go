@@ -94,7 +94,7 @@ func getServiceForDeployment(rc *RemoteController, deployment *appsV1.Deployment
 		var match = common.IsServiceMatch(service.Spec.Selector, deployment.Spec.Selector)
 		//make sure the service matches the deployment Selector and also has a mesh port in the port spec
 		if match {
-			ports := GetMeshPortsForDeployments(rc.ClusterID, service, deployment)
+			ports := common.GetMeshPortsForDeployments(rc.ClusterID, service, deployment)
 			if len(ports) > 0 {
 				matchedService = service
 				break

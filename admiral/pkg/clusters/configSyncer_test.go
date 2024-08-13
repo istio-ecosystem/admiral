@@ -12,8 +12,8 @@ import (
 func TestUpdateClusterIdentityState(t *testing.T) {
 	var (
 		sourceCluster1          = "cluster1"
-		foobarIdentity          = "intuit.foobar.service"
-		helloWorldIdentity      = "intuit.helloworld.service"
+		foobarIdentity          = "org.foobar.service"
+		helloWorldIdentity      = "org.helloworld.service"
 		remoteRegistryHappyCase = &RemoteRegistry{
 			ClusterIdentityStoreHandler: registry.NewClusterIdentityStoreHandler(),
 			AdmiralCache: &AdmiralCache{

@@ -1,29 +1,37 @@
 {
-  "identityName": "intuit.services.gateway.ppdmeshtestblackhole",
-  "clusters": [
-    {
+  "identityName": "ppdmeshtestblackhole",
+  "clusters": {
+    "cluster-usw2-k8s": {
       "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
-      "name": "multi-long-1026-usw2-k8s",
+      "name": "cluster-usw2-k8s",
       "locality": "us-west-2",
-      "ingressEndpoint": "internal-a96ffe9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-west-2.elb.amazonaws.com.",
+      "ingressEndpoint": "abc-elb.us-west-2.elb.amazonaws.com.",
       "ingressPort": "15443",
       "ingressPortName": "http",
       "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
-      "environment": [
-        {
-          "name": "multi-long-1026-usw2-k8s",
+      "environment": {
+        "prod": {
+          "name": "prod",
           "namespace": "services-blackholed268-usw2-dev",
-          "serviceName": "blackhole-gw",
+          "serviceName": "blackhole-root-service",
+          "services": {
+            "blackhole-root-service": {
+              "name": "blackhole-root-service",
+              "weight": -1,
+              "ports": {
+                "http": 8090
+              }
+            }
+          },
           "type": "deployment",
           "selectors": {
             "app": "blackhole-gw"
           },
           "ports": [
             {
-              "name": "http-service-mesh",
-              "port": 8090,
-              "protocol": "TCP",
-              "targetPort": 8090
+              "name": "http",
+              "number": 80,
+              "protocol": "http"
             }
           ],
           "trafficPolicy": {
@@ -80,31 +88,39 @@
             }
           }
         }
-      ]
+      }
     },
-    {
+    "cluster-use2-k8s": {
       "_comment-1": "THIS SECTION CONTAINS CLUSTER LEVEL DETAILS, WHICH ARE THE SAME FOR THE ASSET IN A GIVEN CLUSTER",
-      "name": "multi-long-1026-use2-k8s",
+      "name": "cluster-use2-k8s",
       "locality": "us-east-2",
-      "ingressEndpoint": "internal-ff96ae9cdbb4c4d81b796cc6a37d3e1d-2123389388.us-east-2.elb.amazonaws.com.",
+      "ingressEndpoint": "abc-elb.us-east-2.elb.amazonaws.com.",
       "ingressPort": "15443",
       "ingressPortName": "http",
       "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
-      "environment": [
-        {
-          "name": "multi-long-1026-use2-k8s",
+      "environment": {
+        "ppd": {
+          "name": "ppd",
           "namespace": "services-blackholesh45-use2-dev",
-          "serviceName": "blackhole-gw",
+          "serviceName": "blackhole-root-service",
+          "services": {
+            "blackhole-root-service": {
+              "name": "blackhole-root-service",
+              "weight": -1,
+              "ports": {
+                "http": 8090
+              }
+            }
+          },
           "type": "deployment",
           "selectors": {
             "app": "blackhole-gw"
           },
           "ports": [
             {
-              "name": "http-service-mesh",
-              "port": 8090,
-              "protocol": "TCP",
-              "targetPort": 8090
+              "name": "http",
+              "number": 80,
+              "protocol": "http"
             }
           ],
           "trafficPolicy": {
@@ -161,12 +177,10 @@
             }
           }
         }
-      ]
+      }
     }
-  ],
-  "clientAssets": [
-    {
-      "name": "intuit.services.gateway.ppdmeshtestinbounds"
-    }
-  ]
+  },
+  "clientAssets": {
+      "ppdmeshtestinbounds": "ppdmeshtestinbounds"
+  }
 }
