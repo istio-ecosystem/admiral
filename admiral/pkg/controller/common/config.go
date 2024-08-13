@@ -432,12 +432,6 @@ func DoGenerationCheck() bool {
 	return wrapper.params.EnableGenerationCheck
 }
 
-func DoSyncIstioResourcesToSourceClusters() bool {
-	wrapper.RLock()
-	defer wrapper.RUnlock()
-	return wrapper.params.EnableSyncIstioResourcesToSourceClusters
-}
-
 func GetResyncIntervals() util.ResyncIntervals {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

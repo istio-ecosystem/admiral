@@ -38,6 +38,7 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 		ctx                                      = context.TODO()
 		remoteRegistry                           = NewRemoteRegistry(ctx, common.AdmiralParams{})
 		remoteRegistryWithDependents             = newRemoteRegistryWithDependents(ctx, cname1, dependentCluster1)
+		remoteRegistryWithDependentsAndSource    = newRemoteRegistryWithSourceClusters(ctx, cname1, clusterID, dependentCluster1)
 	)
 	cases := []struct {
 		name                                         string
@@ -330,6 +331,30 @@ func TestHandleVirtualServiceEvent(t *testing.T) {
 			expectToCallUpdateResource:                   true,
 			expectToCallSyncResourceForDependentClusters: false,
 			expectToCallSyncResourceForAllClusters:       true,
+			expectedErr:                                  nil,
+		},
+		{
+			name: "Given VirtualService is valid and argo is enabled, " +
+				"When, handleVirtualServiceEvent is invoked, " +
+				"When there are dependents clusters and source clusters," +
+				"And, source clusters should be included in the list" +
+				"And, syncVirtualServiceForDependentClusters should be called",
+			params: common.AdmiralParams{
+				ArgoRolloutsEnabled: true,
+				SyncNamespace:       syncNamespace,
+			},
+			remoteRegistry: remoteRegistryWithDependentsAndSource,
+			virtualService: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{cname1},
+				},
+			},
+			updateResource:                               newFakeUpdateResource(false, nil),
+			syncResourceForDependentClusters:             checkSourceClusterInDependentList(nil),
+			syncResourceForAllClusters:                   newFakeSyncResource(nil),
+			expectToCallUpdateResource:                   true,
+			expectToCallSyncResourceForDependentClusters: false,
+			expectToCallSyncResourceForAllClusters:       false,
 			expectedErr:                                  nil,
 		},
 	}
@@ -898,9 +923,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			common.ResetSync()
-			admiralParams := common.AdmiralParams{
-				EnableSyncIstioResourcesToSourceClusters: c.doSyncVSToSourceCluster,
-			}
+			admiralParams := common.AdmiralParams{}
 			common.InitializeConfig(admiralParams)
 			err := syncVirtualServicesToAllDependentClusters(
 				ctx,
@@ -1264,9 +1287,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			common.ResetSync()
-			admiralParams := common.AdmiralParams{
-				EnableSyncIstioResourcesToSourceClusters: c.doSyncVSToSourceCluster,
-			}
+			admiralParams := common.AdmiralParams{}
 			common.InitializeConfig(admiralParams)
 			err := syncVirtualServicesToAllRemoteClusters(
 				ctx,
@@ -1505,6 +1526,29 @@ func newFakeSyncResource(err error) *fakeSyncResource {
 	return f
 }
 
+func checkSourceClusterInDependentList(err error) *fakeSyncResource {
+	f := &fakeSyncResource{}
+	f.syncResourceFunc = func() SyncVirtualServiceResource {
+		return func(
+			_ context.Context,
+			dependentClusters []string,
+			_ *apiNetworkingV1Alpha3.VirtualService,
+			_ common.Event,
+			_ *RemoteRegistry,
+			clusterId string,
+			_ string) error {
+			for _, cluster := range dependentClusters {
+				if cluster == clusterId {
+					return nil
+				}
+			}
+			f.called = true
+			return fmt.Errorf("source clusters are not present in cluster list")
+		}
+	}
+	return f
+}
+
 type fakeUpdateResource struct {
 	updateResourceFunc func() UpdateResourcesForVirtualService
 	called             bool
@@ -1529,6 +1573,13 @@ func newFakeUpdateResource(isCanaryVS bool, err error) *fakeUpdateResource {
 func newRemoteRegistryWithDependents(ctx context.Context, cname, clusterID string) *RemoteRegistry {
 	remoteRegistry := NewRemoteRegistry(ctx, common.AdmiralParams{})
 	remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, clusterID, clusterID)
+	return remoteRegistry
+}
+
+func newRemoteRegistryWithSourceClusters(ctx context.Context, cname, clusterID string, depCluster string) *RemoteRegistry {
+	remoteRegistry := NewRemoteRegistry(ctx, common.AdmiralParams{})
+	remoteRegistry.AdmiralCache.CnameClusterCache.Put(cname, clusterID, clusterID)
+	remoteRegistry.AdmiralCache.CnameDependentClusterCache.Put(cname, depCluster, depCluster)
 	return remoteRegistry
 }
 

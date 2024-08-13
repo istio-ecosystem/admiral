@@ -161,9 +161,12 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 
 	dependentClusters := vh.remoteRegistry.AdmiralCache.CnameDependentClusterCache.Get(spec.Hosts[0]).CopyJustValues()
 	if len(dependentClusters) > 0 {
+		// Add source clusters to the list of clusters to copy the virtual service
+		sourceClusters := vh.remoteRegistry.AdmiralCache.CnameClusterCache.Get(spec.Hosts[0]).CopyJustValues()
+		clusters := append(dependentClusters, sourceClusters...)
 		err := vh.syncVirtualServiceForDependentClusters(
 			ctx,
-			dependentClusters,
+			clusters,
 			virtualService,
 			event,
 			vh.remoteRegistry,
@@ -261,10 +264,6 @@ func syncVirtualServicesToAllDependentClusters(
 	var wg sync.WaitGroup
 	wg.Add(len(clusters))
 	for _, cluster := range clusters {
-		if cluster == sourceCluster && !common.DoSyncIstioResourcesToSourceClusters() {
-			wg.Done()
-			continue
-		}
 		go func(ctx context.Context, cluster string, remoteRegistry *RemoteRegistry, virtualServiceCopy *v1alpha3.VirtualService, event common.Event, syncNamespace string) {
 			defer wg.Done()
 			err := syncVirtualServiceToDependentCluster(
@@ -373,10 +372,6 @@ func syncVirtualServicesToAllRemoteClusters(
 	var wg sync.WaitGroup
 	wg.Add(len(clusters))
 	for _, cluster := range clusters {
-		if cluster == sourceCluster && !common.DoSyncIstioResourcesToSourceClusters() {
-			wg.Done()
-			continue
-		}
 		go func(ctx context.Context, cluster string, remoteRegistry *RemoteRegistry, virtualServiceCopy *v1alpha3.VirtualService, event common.Event, syncNamespace string) {
 			defer wg.Done()
 			err := syncVirtualServiceToRemoteCluster(
