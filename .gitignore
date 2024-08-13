@@ -9,3 +9,4 @@ out.yaml
 istio-*
 .DS_Store
 cobertura-coverage.xml
+.vscode

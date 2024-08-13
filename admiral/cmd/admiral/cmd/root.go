@@ -237,7 +237,6 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringArrayVar(&params.GatewayAssetAliases, "gateway_asset_aliases", []string{"Intuit.platform.servicesgateway.servicesgateway"}, "The asset aliases used for API Gateway")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableActivePassive, "enable_active_passive", false, "Enable/Disable Active-Passive behavior")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
-	rootCmd.PersistentFlags().BoolVar(&params.EnableSyncIstioResourcesToSourceClusters, "enable_sync_istio_resources_to_source_clusters", true, "Enable/Disable Sync of Istio Resources to Source Clusters")
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
 
