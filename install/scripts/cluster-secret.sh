@@ -33,7 +33,7 @@ export KUBECFG_FILE=/tmp/${CLUSTER_NAME}
 SERVER=$(kubectl config view --minify=true -o "jsonpath={.clusters[].cluster.server}")
 NAMESPACE_SYNC=admiral-sync
 SERVICE_ACCOUNT=admiral
-SECRET_NAME=$(kubectl get sa ${SERVICE_ACCOUNT} -n ${NAMESPACE_SYNC} -o jsonpath='{.secrets[].name}')
+SECRET_NAME=admiral-token
 CA_DATA=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['ca\.crt']}")
 RAW_TOKEN=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['token']}")
 TOKEN=$(kubectl get secret ${SECRET_NAME} -n ${NAMESPACE_SYNC} -o "jsonpath={.data['token']}" | base64 --decode)
