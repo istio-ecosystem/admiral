@@ -55,7 +55,7 @@ func (c *registryClient) GetIdentityConfigByIdentityName(identityAlias string, c
 
 func readIdentityConfigFromFile(shortAlias []string) ([]byte, error) {
 	pathName := "testdata/" + shortAlias[len(shortAlias)-1] + "IdentityConfiguration.json"
-	if common.GetSecretFilterTags() == "admiral/syncrtay" {
+	if common.GetSecretFilterTags() == common.GetOperatorSecretFilterTags() && common.GetOperatorSyncNamespace() != "" {
 		pathName = "/etc/serviceregistry/config/" + shortAlias[len(shortAlias)-1] + "IdentityConfiguration.json"
 	}
 	return os.ReadFile(pathName)

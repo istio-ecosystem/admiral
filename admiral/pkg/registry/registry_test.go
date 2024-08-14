@@ -16,7 +16,7 @@ import (
 )
 
 func TestParseIdentityConfigJSON(t *testing.T) {
-	identityConfig := GetSampleIdentityConfig()
+	identityConfig := GetSampleIdentityConfig("sample")
 	testCases := []struct {
 		name           string
 		identityConfig IdentityConfig
@@ -47,7 +47,7 @@ func TestParseIdentityConfigJSON(t *testing.T) {
 }
 
 func TestIdentityConfigGetByIdentityName(t *testing.T) {
-	sampleIdentityConfig := GetSampleIdentityConfig()
+	sampleIdentityConfig := GetSampleIdentityConfig("sample")
 	registryClient := NewRegistryClient(WithRegistryEndpoint("endpoint"))
 	var jsonErr *json.SyntaxError
 	ctxLogger := log.WithContext(context.Background())
@@ -93,7 +93,7 @@ func TestIdentityConfigGetByIdentityName(t *testing.T) {
 }
 
 func TestGetIdentityConfigByClusterName(t *testing.T) {
-	sampleIdentityConfig := GetSampleIdentityConfig()
+	sampleIdentityConfig := GetSampleIdentityConfig("sample")
 	registryClient := NewRegistryClient(WithRegistryEndpoint("endpoint"))
 	var jsonErr *json.SyntaxError
 	ctxLogger := log.WithContext(context.Background())

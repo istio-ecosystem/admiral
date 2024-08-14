@@ -113,8 +113,9 @@ type AdmiralParams struct {
 	GatewayAssetAliases []string
 
 	//Admiral 2.0 params
-	AdmiralOperatorMode   bool
-	OperatorSyncNamespace string
+	AdmiralOperatorMode      bool
+	OperatorSyncNamespace    string
+	OperatorSecretFilterTags string
 }
 
 func (b AdmiralParams) String() string {

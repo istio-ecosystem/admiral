@@ -470,3 +470,9 @@ func GetOperatorSyncNamespace() string {
 	defer wrapper.RUnlock()
 	return wrapper.params.OperatorSyncNamespace
 }
+
+func GetOperatorSecretFilterTags() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.OperatorSecretFilterTags
+}

@@ -37,7 +37,13 @@
           "trafficPolicy": {
             "clientConnectionConfig": {
               "metadata": {
-                "name": "sampleCCC"
+                "name": "sampleCCC",
+                "labels": {
+                  "identity": "ppdmeshtestinbounds"
+                },
+                "annotations": {
+                  "env": "ppd"
+                }
               },
               "spec": {
                 "connectionPool": {
@@ -51,7 +57,13 @@
             },
             "globalTrafficPolicy": {
               "metadata": {
-                "name": "sampleGTP"
+                "name": "sampleGTP",
+                "labels": {
+                  "identity": "ppdmeshtestinbounds"
+                },
+                "annotations": {
+                  "env": "ppd"
+                }
               },
               "spec": {
                 "policy": [
@@ -77,7 +89,13 @@
             },
             "outlierDetection": {
               "metadata": {
-                "name": "sampleOD"
+                "name": "sampleOD",
+                "labels": {
+                  "identity": "ppdmeshtestinbounds"
+                },
+                "annotations": {
+                  "env": "ppd"
+                }
               },
               "spec": {
                 "outlier_config": {
