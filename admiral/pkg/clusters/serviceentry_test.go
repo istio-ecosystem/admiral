@@ -6193,7 +6193,8 @@ func (mockDatabaseClientWithError) Get(env string, identity string) (interface{}
 }
 
 func TestDeployRolloutMigration(t *testing.T) {
-	setupForServiceEntryTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParamsForServiceEntryTests())
 	var (
 		env                     = "test"
 		stop                    = make(chan struct{})
