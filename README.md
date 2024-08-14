@@ -46,7 +46,9 @@ Organizations below are **officially** using Admiral. Please send a PR with your
 
 ## Collaboration and Communication
 
-[Admiral Slack Channel](https://istio.slack.com/archives/CT3F18T08) - `Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
+[Admiral Slack Channel](https://istio.slack.com/archives/CT3F18T08) 
+
+`Note:` This channel is under Istio slack org, please fill out this [form](https://docs.google.com/forms/d/e/1FAIpQLSfdsupDfOWBtNVvVvXED6ULxtR4UIsYGCH_cQcRr0VcG1ZqQQ/viewform) to get access to Istio slack.
 
 ## Local Development
 Refer to [Local Development Setup](./CONTRIBUTING.md#setting-up-for-local-development)
@@ -61,15 +63,15 @@ Details can be found [here](./docs/Processes.md)
 ## Admiral Sequence Diagram
 
 ### Legend:
-SE - Istio ServiceEntry
+SE - [Istio ServiceEntry](https://istio.io/latest/docs/reference/config/networking/service-entry/)
 
-VS - Istio VirtualService
+VS - [Istio VirtualService](https://istio.io/latest/docs/reference/config/networking/virtual-service/)
 
-DR - Istio DestinationRule
+DR - [Istio DestinationRule](https://istio.io/latest/docs/reference/config/networking/destination-rule/)
 
-K8sAPI - Kubernetes API Server
+K8s API - [Kubernetes API Server](https://kubernetes.io/docs/concepts/overview/kubernetes-api/)
 
-GTP - Admiral GlobalTrafficPolicy
+GTP - [Admiral GlobalTrafficPolicy](https://github.com/istio-ecosystem/admiral/blob/master/docs/Architecture.md#global-traffic-policy)
 
 ```mermaid
 sequenceDiagram
