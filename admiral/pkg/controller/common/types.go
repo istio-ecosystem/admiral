@@ -118,6 +118,7 @@ type AdmiralParams struct {
 	AdmiralStateSyncerMode bool
 	OperatorIdentityValue  string
 	ShardIdentityValue     string
+	OperatorSecretFilterTags string
 }
 
 func (b AdmiralParams) String() string {

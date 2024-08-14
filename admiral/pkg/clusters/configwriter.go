@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 )
+
+const typeLabel = "type"
 
 // IstioSEBuilder is an interface to construct Service Entry objects
 // from IdentityConfig objects. It can construct multiple Service Entries
@@ -36,7 +39,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 	)
 	ctxLogger.Infof(common.CtxLogFormat, "buildServiceEntry", identity, common.GetSyncNamespace(), b.ClientCluster, "Beginning to build the SE spec")
 	ingressEndpoints, err := getIngressEndpoints(identityConfig.Clusters)
-	if err != nil {
+	if err != nil || len(ingressEndpoints) == 0 {
 		return serviceEntries, err
 	}
 	_, isServerOnClientCluster := ingressEndpoints[b.ClientCluster]
@@ -110,7 +113,10 @@ func getServiceEntryEndpoint(
 	var err error
 	endpoint := ingressEndpoints[serverCluster]
 	tmpEp := endpoint.DeepCopy()
-	tmpEp.Labels["type"] = identityConfigEnvironment.Type
+	tmpEp.Labels[typeLabel] = identityConfigEnvironment.Type
+	if len(identityConfigEnvironment.Services) == 0 {
+		return tmpEp, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
+	}
 	if clientCluster == serverCluster {
 		for _, service := range identityConfigEnvironment.Services {
 			if service.Weight == -1 {
@@ -140,9 +146,8 @@ func getExportTo(ctxLogger *logrus.Entry, registryClient registry.IdentityConfig
 		// For each client asset of cname, we fetch its identityConfig
 		clientIdentityConfig, err = registryClient.GetIdentityConfigByIdentityName(clientAsset, ctxLogger)
 		if err != nil {
-			// TODO: this should return an error.
 			ctxLogger.Infof(common.CtxLogFormat, "buildServiceEntry", clientAsset, common.GetSyncNamespace(), "", "could not fetch IdentityConfig: "+err.Error())
-			continue
+			return clientNamespaces, err
 		}
 		for _, clientIdentityConfigCluster := range clientIdentityConfig.Clusters {
 			// For each cluster the client asset is deployed on, we check if that cluster is the client cluster we are writing to

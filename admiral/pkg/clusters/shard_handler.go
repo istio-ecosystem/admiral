@@ -9,12 +9,9 @@ import (
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 
-	log "github.com/sirupsen/logrus"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 )
 
 type ShardHandler struct {
@@ -85,6 +82,7 @@ func HandleEventForShard(ctx context.Context, event admiral.EventType, obj *admi
 // ProduceIdentityConfigsFromShard creates a registry client and uses it to get the identity configs
 // of the assets on the shard, and puts those into configWriterData which go into the job channel
 func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Shard, configWriterData chan<- *ConfigWriterData, rr *RemoteRegistry, producerWG *sync.WaitGroup) {
+	cnames := make(map[string]string)
 	for _, clusterShard := range shard.Spec.Clusters {
 		for _, identityItem := range clusterShard.Identities {
 			identityConfig, err := rr.RegistryClient.GetIdentityConfigByIdentityName(identityItem.Name, ctxLogger)
@@ -92,12 +90,37 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 				ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfig", identityItem.Name, shard.Namespace, clusterShard.Name, err)
 			}
 			ctxLogger.Infof(common.CtxLogFormat, "ProduceIdentityConfig", identityConfig.IdentityName, shard.Namespace, clusterShard.Name, "successfully produced IdentityConfig")
-			//TODO: Fill rr.AdmiralCache
-			//1. IdentityDependencyCache (identityConfig.IdentityName -> clientAssets)
-			//2. GlobalTrafficCache (id + env -> gtp)
-			//3. OutlierDetectionCache (id + env -> od)
-			//4. ClientConnectionConfigCache (id + env -> ccc)
-			//5. ClusterLocalityCache (cluster -> cluster -> locality) (don't care about set functionality, only one locality per cluster)
+			// Fill the IdentityDependencyCache
+			for _, clientAsset := range identityConfig.ClientAssets {
+				rr.AdmiralCache.IdentityDependencyCache.Put(identityConfig.IdentityName, clientAsset, clientAsset)
+			}
+			// Fill the GTP, OD, and CCC caches
+			for _, identityConfigCluster := range identityConfig.Clusters {
+				for _, identityConfigEnv := range identityConfigCluster.Environment {
+					err = rr.AdmiralCache.GlobalTrafficCache.Put(&identityConfigEnv.TrafficPolicy.GlobalTrafficPolicy)
+					if err != nil {
+						ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfigGTPPut", identityItem.Name, shard.Namespace, clusterShard.Name, err)
+					}
+					err = rr.AdmiralCache.OutlierDetectionCache.Put(&identityConfigEnv.TrafficPolicy.OutlierDetection)
+					if err != nil {
+						ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfigODPut", identityItem.Name, shard.Namespace, clusterShard.Name, err)
+					}
+					err = rr.AdmiralCache.ClientConnectionConfigCache.Put(&identityConfigEnv.TrafficPolicy.ClientConnectionConfig)
+					if err != nil {
+						ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfigCCCPut", identityItem.Name, shard.Namespace, clusterShard.Name, err)
+					}
+					// Fill the DependencyNamespaceCache
+					for _, clientAsset := range identityConfig.ClientAssets {
+						//TODO: How to deal with multiple services here?
+						cname := common.GetCnameVal([]string{identityConfigEnv.Name, strings.ToLower(identityConfig.IdentityName), common.GetHostnameSuffix()})
+						cnames[cname] = "1"
+						localFqdn := identityConfigEnv.ServiceName + common.Sep + identityConfigEnv.Namespace + common.GetLocalDomainSuffix()
+						rr.AdmiralCache.DependencyNamespaceCache.Put(clientAsset, identityConfigEnv.Namespace, localFqdn, cnames)
+					}
+				}
+				// Fill the ClusterLocalityCache
+				rr.AdmiralCache.ClusterLocalityCache.Put(identityConfigCluster.Name, identityConfigCluster.Name, identityConfigCluster.Locality)
+			}
 			configWriterData <- &ConfigWriterData{
 				IdentityConfig: &identityConfig,
 				ClusterName:    clusterShard.Name,
@@ -118,57 +141,64 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 		assetName := identityConfig.IdentityName
 		clientCluster := data.ClusterName
 		ctxLogger.Infof(common.CtxLogFormat, "ConsumeIdentityConfig", assetName, "", clientCluster, "starting to consume identityConfig")
-		//TODO: doesn't make much sense to have this as a struct, easier to just pass in the cluster and remote registry
 		serviceEntryBuilder := ServiceEntryBuilder{ClientCluster: clientCluster, RemoteRegistry: rr}
 		serviceEntries, err := serviceEntryBuilder.BuildServiceEntriesFromIdentityConfig(ctxLogger, *identityConfig)
 		if err != nil {
 			ctxLogger.Warnf(common.CtxLogFormat, "ConsumeIdentityConfig", assetName, "", clientCluster, err)
 			data.Result = err.Error()
 		}
-		// service deployed in cluster 1 with 2 env qal, e2e, cluster 2 with 3 env qal, e2e, prod
-		// write SEs to cluster 1
-		// env -> list of cluster
-		// env -> se
-		// check if any of the clusters are a source cluster -> rethink this, won't work if one env is on a cluster but not on another
-		//isServiceEntryModifyCalledForSourceCluster := false
-		//for _, cluster := range identityConfig.Clusters {
-		//	if cluster.Name == clientCluster {
-		//		isServiceEntryModifyCalledForSourceCluster = true
-		//		break
-		//	}
-		//}
-		//ctx = context.WithValue(ctx, common.EventResourceType, identityConfig.Clusters[0].Environment[0].Type)
-		for _, se := range serviceEntries {
-			//clusters := make(chan string, 1)
-			//errors := make(chan error, 1)
-			//clusters <- clientCluster
-			//AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr,
-			//	true, //doGenerateAdditionalEndpoints()
-			//	isServiceEntryModifyCalledForSourceCluster,
-			//	assetName,
-			//	strings.Split(se.Hosts[0], common.Sep)[0],
-			//	se,
-			//	clusters,
-			//	errors)
-			rc := rr.GetRemoteController(clientCluster)
-			seName := strings.ToLower(se.Hosts[0]) + "-se"
-			sec := rc.ServiceEntryController
-			//TODO: se reconciliation cache
-			oldServiceEntry := sec.Cache.Get(seName, clientCluster)
-			if oldServiceEntry == nil {
-				ctxLogger.Infof(common.CtxLogFormat, "ConsumeIdentityConfig", seName, "", clientCluster, "starting to write se to cluster")
-				oldServiceEntry, err = rc.ServiceEntryController.IstioClient.NetworkingV1alpha3().ServiceEntries(common.GetOperatorSyncNamespace()).Get(ctx, seName, metav1.GetOptions{})
-				// if old service entry not find, just create a new service entry instead
-				if err != nil && k8sErrors.IsNotFound(err) {
-					ctxLogger.Infof(common.CtxLogFormat, "ConsumeIdentityConfig", seName, "", clientCluster, fmt.Sprintf("failed fetching old service entry, error=%v", err))
-					oldServiceEntry = nil
+		isServiceEntryModifyCalledForSourceCluster := false
+		sourceClusterEnvironmentNamespaces := map[string]string{}
+		for _, cluster := range identityConfig.Clusters {
+			if cluster.Name == clientCluster {
+				isServiceEntryModifyCalledForSourceCluster = true
+				for _, environment := range cluster.Environment {
+					sourceClusterEnvironmentNamespaces[environment.Name] = environment.Namespace
 				}
+				break
 			}
-			newServiceEntry := createServiceEntrySkeleton(*se, seName, common.GetOperatorSyncNamespace())
-			err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, common.GetOperatorSyncNamespace(), rc)
+		}
+		// Get any type from the identityConfig
+		for _, cv := range identityConfig.Clusters {
+			for _, ev := range cv.Environment {
+				ctx = context.WithValue(ctx, common.EventResourceType, ev.Type)
+				break
+			}
+			break
+		}
+		for _, se := range serviceEntries {
+			isServiceEntryModifyCalledForSourceClusterAndEnv := false
+			env := strings.Split(se.Hosts[0], common.Sep)[0]
+			if _, ok := sourceClusterEnvironmentNamespaces[env]; ok && isServiceEntryModifyCalledForSourceCluster {
+				isServiceEntryModifyCalledForSourceClusterAndEnv = true
+			}
+			clusters := make(chan string, 1)
+			errors := make(chan error, 1)
+			go AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr,
+				true, //TODO: doGenerateAdditionalEndpoints()
+				isServiceEntryModifyCalledForSourceClusterAndEnv,
+				assetName,
+				strings.Split(se.Hosts[0], common.Sep)[0],
+				copyServiceEntry(se),
+				clusters,
+				errors)
+			clusters <- clientCluster
+			close(clusters)
+			err := <-errors
 			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "ConsumeIdentityConfig", seName, "", clientCluster, err)
+				ctxLogger.Warnf(common.CtxLogFormat, "ConsumeIdentityConfig", strings.ToLower(se.Hosts[0])+"-se", "", clientCluster, err)
 				data.Result = err.Error()
+			}
+			if isServiceEntryModifyCalledForSourceClusterAndEnv {
+				ctxLogger.Infof(common.CtxLogFormat, "ConsumeIdentityConfig", strings.ToLower(se.Hosts[0])+"-se", "", clientCluster, "modifying Sidecar for local cluster communication")
+				err = modifySidecarForLocalClusterCommunication(
+					ctxLogger,
+					ctx, sourceClusterEnvironmentNamespaces[env], assetName,
+					rr.AdmiralCache.DependencyNamespaceCache, rr.GetRemoteController(clientCluster))
+				if err != nil {
+					ctxLogger.Errorf(common.CtxLogFormat, "modifySidecarForLocalClusterCommunication",
+						assetName, sourceClusterEnvironmentNamespaces[env], "", err)
+				}
 			}
 		}
 		configWriterDataResults <- data

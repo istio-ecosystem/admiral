@@ -482,3 +482,9 @@ func GetShardIdentityLabelValueSet() (string, string) {
 	defer wrapper.RUnlock()
 	return wrapper.params.LabelSet.ShardIdentityLabel, wrapper.params.ShardIdentityValue
 }
+
+func GetOperatorSecretFilterTags() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.OperatorSecretFilterTags
+}

@@ -11,7 +11,6 @@ import (
 const (
 	serviceRegistryIdentityConfigMapName = "service-registry-identityconfig"
 	admiralQaNs                          = "services-admiral-use2-qal"
-	secretLabel                          = "admiral/syncrtay"
 )
 
 type ConfigSyncer interface {

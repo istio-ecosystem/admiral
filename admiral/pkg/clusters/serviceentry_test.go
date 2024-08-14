@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	registryMocks "github.com/istio-ecosystem/admiral/admiral/pkg/registry/mocks"
 	"github.com/stretchr/testify/mock"
@@ -3007,6 +3008,78 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		}
 	} else {
 		t.Error("sidecar resource could not be created")
+	}
+}
+
+func TestRetryUpdatingSidecar(t *testing.T) {
+	ctxLogger := logrus.WithFields(logrus.Fields{"txId": "abc"})
+	setupForServiceEntryTests()
+	var (
+		assetIdentity     = "test-identity"
+		identityNamespace = "test-sidecar-namespace"
+		sidecarName       = "default"
+		assetHostsList    = []string{"test-host"}
+		sidecar           = &v1alpha3.Sidecar{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            sidecarName,
+				Namespace:       identityNamespace,
+				ResourceVersion: "12345",
+			},
+			Spec: istioNetworkingV1Alpha3.Sidecar{
+				Egress: []*istioNetworkingV1Alpha3.IstioEgressListener{
+					{
+						Hosts: assetHostsList,
+					},
+				},
+			},
+		}
+		sidecarController     = &istio.SidecarController{}
+		remoteController      = &RemoteController{}
+		sidecarCacheEgressMap = common.NewSidecarEgressMap()
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	sidecarCacheEgressMap.Put(
+		assetIdentity,
+		"test-dependency-namespace",
+		"test-local-fqdn",
+		map[string]string{
+			"test.myservice.global": "1",
+		},
+	)
+	remoteController.SidecarController = sidecarController
+	sidecarController.IstioClient = istiofake.NewSimpleClientset()
+	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).Create(context.TODO(), sidecar, metav1.CreateOptions{})
+	sidecarEgressMap := make(map[string]common.SidecarEgress)
+	cnameMap := common.NewMap()
+	cnameMap.Put("test.myservice.global", "1")
+	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: cnameMap}
+	newSidecar := copySidecar(createdSidecar)
+	egressHosts := make(map[string]string)
+	for _, sidecarEgress := range sidecarEgressMap {
+		egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
+		egressHosts[egressHost] = egressHost
+		sidecarEgress.CNAMEs.Range(func(k, v string) {
+			scopedCname := sidecarEgress.Namespace + "/" + k
+			egressHosts[scopedCname] = scopedCname
+		})
+	}
+	for egressHost := range egressHosts {
+		if !util.Contains(newSidecar.Spec.Egress[0].Hosts, egressHost) {
+			newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, egressHost)
+		}
+	}
+	newSidecarConfig := createSidecarSkeleton(newSidecar.Spec, common.GetWorkloadSidecarName(), identityNamespace)
+	err := retryUpdatingSidecar(ctxLogger, ctx, newSidecarConfig, createdSidecar, identityNamespace, remoteController, k8sErrors.NewConflict(schema.GroupResource{}, "", nil), "Add")
+	if err != nil {
+		t.Errorf("failed to retry updating sidecar, got err: %v", err)
+	}
+	updatedSidecar, err := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars("test-sidecar-namespace").Get(ctx, "default", metav1.GetOptions{})
+	if err != nil {
+		t.Errorf("failed to get updated sidecar, got err: %v", err)
+	}
+	if updatedSidecar.ResourceVersion != createdSidecar.ResourceVersion {
+		t.Errorf("resource version check failed, expected %v but got %v", createdSidecar.ResourceVersion, updatedSidecar.ResourceVersion)
 	}
 }
 
@@ -9826,6 +9899,40 @@ func TestPartitionAwarenessExportToMultipleRemote(t *testing.T) {
 				t.Errorf("expected the virtual service %s but it wasn't found", vsName)
 			} else if !reflect.DeepEqual(createdVs.Spec.ExportTo, c.expectedRemoteVirtualServiceInGWCluster.ExportTo) {
 				t.Errorf("expected exportTo of %v but got %v for remoteVSInGWCluster", gwRemoteClusterVS.ExportTo, createdVs.Spec.ExportTo)
+			}
+		})
+	}
+}
+
+func TestGetClusters(t *testing.T) {
+	admiralParams := admiralParamsForServiceEntryTests()
+	admiralParams.AdmiralOperatorMode = true
+	admiralParams.OperatorSecretFilterTags = "admiral/syncoperator"
+	admiralParams.SecretFilterTags = "admiral/sync"
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	rr, _ := InitAdmiral(context.Background(), admiralParams)
+	expectedgwClusterMap := common.NewMap()
+	expectedgwClusterMap.Put("cluster1", "cluster1")
+	ctxLogger := logrus.WithFields(logrus.Fields{"txId": "abc"})
+	testCases := []struct {
+		name        string
+		dependent   string
+		expectedMap *common.Map
+	}{
+		{
+			name: "Given that dependent is a valid identity, " +
+				"When we call getClusters on it, " +
+				"Then we get a map with the clusters it is deployed on",
+			dependent:   "sample",
+			expectedMap: expectedgwClusterMap,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			gwClusterMap := getClusters(rr, c.dependent, ctxLogger)
+			if !reflect.DeepEqual(gwClusterMap, c.expectedMap) {
+				t.Errorf("got=%+v, want %+v", gwClusterMap, c.expectedMap)
 			}
 		})
 	}

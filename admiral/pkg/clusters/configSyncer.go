@@ -50,7 +50,7 @@ func updateRegistryConfigForClusterPerEnvironment(ctxLogger *logrus.Entry, remot
 	task := "updateRegistryConfigForClusterPerEnvironment"
 	defer util.LogElapsedTimeForTask(ctxLogger, task, registryConfig.IdentityName, "", "", "processingTime")()
 	k8sClient, err := remoteRegistry.ClientLoader.LoadKubeClientFromPath(common.GetKubeconfigPath())
-	if err != nil && common.GetSecretFilterTags() == "admiral/syncrtay" {
+	if err != nil && common.GetSecretFilterTags() == common.GetOperatorSecretFilterTags() {
 		ctxLogger.Infof(common.CtxLogFormat, task, registryConfig.IdentityName, "", "", "unable to get kube client")
 		return errors.Wrap(err, "unable to get kube client")
 	}

@@ -43,6 +43,7 @@ func setupForConfigTests() {
 			ExportToMaxNamespaces:        35,
 			AdmiralOperatorMode:          false,
 			OperatorSyncNamespace:        "admiral-sync",
+			OperatorSecretFilterTags:     "admiral/syncoperator",
 		}
 		ResetSync()
 		initHappened = true
@@ -161,6 +162,10 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetOperatorSyncNamespace() != "admiral-sync" {
 		t.Errorf("operator sync namespace mismatch, expected admiral-sync, got %v", GetOperatorSyncNamespace())
+	}
+
+	if GetOperatorSecretFilterTags() != "admiral/syncoperator" {
+		t.Errorf("operator secret filter tags mismatch, expected admiral/syncoperator, got %s", GetOperatorSecretFilterTags())
 	}
 }
 

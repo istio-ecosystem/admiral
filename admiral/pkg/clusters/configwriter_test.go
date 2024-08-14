@@ -66,7 +66,7 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 }
 
 func TestGetIngressEndpoints(t *testing.T) {
-	identityConfig := registry.GetSampleIdentityConfig()
+	identityConfig := registry.GetSampleIdentityConfig("sample")
 	expectedIngressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{
 		"cluster1": {
 			Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
@@ -104,7 +104,7 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
-	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e")
+	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
 	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cluster1": {
 		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
@@ -226,17 +226,24 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 	common.InitializeConfig(admiralParams)
 	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
 	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
-	identityConfig := registry.GetSampleIdentityConfig()
+	identityConfig := registry.GetSampleIdentityConfig("sample")
 	expectedLocalServiceEntryPRF := createMockServiceEntry("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
 	expectedLocalServiceEntryE2E := createMockServiceEntry("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
 	expectedLocalServiceEntryQAL := createMockServiceEntry("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
 	expectedLocalServiceEntries := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQAL, &expectedLocalServiceEntryPRF, &expectedLocalServiceEntryE2E}
+	identityConfigFailsIngressEndpoints := registry.GetSampleIdentityConfig("sample")
+	identityConfigFailsIngressEndpoints.Clusters = map[string]*registry.IdentityConfigCluster{}
+	identityConfigFailsExportTo := registry.GetSampleIdentityConfig("sample")
+	identityConfigFailsExportTo.ClientAssets["fake"] = "fake"
+	identityConfigFailsServiceEntryEndpoint := registry.GetSampleIdentityConfig("sample")
+	identityConfigFailsServiceEntryEndpoint.Clusters["cluster1"].Environment["e2e"].Services = make(map[string]*registry.RegistryServiceConfig)
 	testCases := []struct {
 		name                   string
 		clientCluster          string
 		event                  admiral.EventType
 		identityConfig         registry.IdentityConfig
 		expectedServiceEntries []*networkingV1Alpha3.ServiceEntry
+		expectedErr            bool
 	}{
 		{
 			name: "Given information to build an se, " +
@@ -246,13 +253,41 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 			event:                  admiral.Add,
 			identityConfig:         identityConfig,
 			expectedServiceEntries: expectedLocalServiceEntries,
+			expectedErr:            false,
+		},
+		{
+			name: "Given getIngressEndpoints fails with a non-nil error or is empty, " +
+				"Then there should be an empty array of returned service entries",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfigFailsIngressEndpoints,
+			expectedServiceEntries: make([]*networkingV1Alpha3.ServiceEntry, 0),
+			expectedErr:            false,
+		},
+		{
+			name: "Given getExportTo fails with a non-nil error, " +
+				"Then there should be an empty array of returned service entries",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfigFailsExportTo,
+			expectedServiceEntries: make([]*networkingV1Alpha3.ServiceEntry, 0),
+			expectedErr:            true,
+		},
+		{
+			name: "Given getServiceEntryEndpoint fails with a non-nil error, " +
+				"Then there should be an empty array of returned service entries",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfigFailsServiceEntryEndpoint,
+			expectedServiceEntries: make([]*networkingV1Alpha3.ServiceEntry, 0),
+			expectedErr:            true,
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
 			serviceEntryBuilder := ServiceEntryBuilder{ClientCluster: c.clientCluster, RemoteRegistry: rr}
 			serviceEntries, err := serviceEntryBuilder.BuildServiceEntriesFromIdentityConfig(ctxLogger, c.identityConfig)
-			if err != nil {
+			if err != nil && !c.expectedErr {
 				t.Errorf("want=%v, \ngot=%v", nil, err)
 			}
 			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.ServiceEntry{}, networkingV1Alpha3.ServicePort{}, networkingV1Alpha3.WorkloadEntry{})

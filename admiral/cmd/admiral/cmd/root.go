@@ -250,6 +250,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.ShardIdentityLabel, "shard_identity_label", "admiral.io/shardIdentity", "used to filter which shard Admiral Operator will watch")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorIdentityValue, "operator_identity_value", "", "Admiral operator should watch shards where operatorIdentityLabel == operatorIdentityValue")
 	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabel == shardIdentityValue")
+	rootCmd.PersistentFlags().StringVar(&params.OperatorSecretFilterTags, "operator_secret_filter_tags", "admiral/syncoperator",
+		"Filter tags for the specific admiral operator namespace secret to watch")
 	return rootCmd
 }
 
