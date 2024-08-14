@@ -7,13 +7,13 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityConfigEnvironment {
+func GetSampleIdentityConfigEnvironment(env string, namespace string, identity string) *IdentityConfigEnvironment {
 	identityConfigEnvironment := &IdentityConfigEnvironment{
 		Name:        env,
 		Namespace:   namespace,
 		ServiceName: "app-1-spk-root-service",
 		Services: map[string]*RegistryServiceConfig{
-			"app-1-spk-root-service": &RegistryServiceConfig{
+			"app-1-spk-root-service": {
 				Name:   "app-1-spk-root-service",
 				Weight: -1,
 				Ports: map[string]uint32{
@@ -27,7 +27,9 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityC
 		TrafficPolicy: TrafficPolicy{
 			ClientConnectionConfig: v1alpha1.ClientConnectionConfig{
 				ObjectMeta: v1.ObjectMeta{
-					Name: "sampleCCC",
+					Name:        "sampleCCC",
+					Labels:      map[string]string{"identity": identity},
+					Annotations: map[string]string{"env": env},
 				},
 				Spec: v1alpha1.ClientConnectionConfigSpec{
 					ConnectionPool: model.ConnectionPool{Http: &model.ConnectionPool_HTTP{
@@ -39,7 +41,9 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityC
 			},
 			GlobalTrafficPolicy: v1alpha1.GlobalTrafficPolicy{
 				ObjectMeta: v1.ObjectMeta{
-					Name: "sampleGTP",
+					Name:        "sampleGTP",
+					Labels:      map[string]string{"identity": identity},
+					Annotations: map[string]string{"env": env},
 				},
 				Spec: model.GlobalTrafficPolicy{
 					Policy: []*model.TrafficPolicy{
@@ -67,7 +71,9 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityC
 			},
 			OutlierDetection: v1alpha1.OutlierDetection{
 				ObjectMeta: v1.ObjectMeta{
-					Name: "sampleOD",
+					Name:        "sampleOD",
+					Labels:      map[string]string{"identity": identity},
+					Annotations: map[string]string{"env": env},
 				},
 				Spec: model.OutlierDetection{
 					OutlierConfig: &model.OutlierConfig{
@@ -82,10 +88,10 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string) *IdentityC
 	return identityConfigEnvironment
 }
 
-func GetSampleIdentityConfig() IdentityConfig {
-	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf")
-	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e")
-	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal")
+func GetSampleIdentityConfig(identity string) IdentityConfig {
+	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf", identity)
+	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", identity)
+	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal", identity)
 	environments := map[string]*IdentityConfigEnvironment{
 		"prf": prfEnv,
 		"e2e": e2eEnv,
@@ -103,7 +109,7 @@ func GetSampleIdentityConfig() IdentityConfig {
 		Environment:     environments,
 	}
 	identityConfig := IdentityConfig{
-		IdentityName: "sample",
+		IdentityName: identity,
 		Clusters: map[string]*IdentityConfigCluster{
 			"cluster1": &cluster},
 		ClientAssets: clientAssets,

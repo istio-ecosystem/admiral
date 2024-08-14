@@ -37,7 +37,13 @@
           "trafficPolicy": {
             "clientConnectionConfig": {
               "metadata": {
-                "name": "sampleCCC"
+                "name": "sampleCCC",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "prf"
+                }
               },
               "spec": {
                 "connectionPool": {
@@ -51,7 +57,13 @@
             },
             "globalTrafficPolicy": {
               "metadata": {
-                "name": "sampleGTP"
+                "name": "sampleGTP",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "prf"
+                }
               },
               "spec": {
                 "policy": [
@@ -77,7 +89,13 @@
             },
             "outlierDetection": {
               "metadata": {
-                "name": "sampleOD"
+                "name": "sampleOD",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "prf"
+                }
               },
               "spec": {
                 "outlier_config": {
@@ -115,7 +133,13 @@
           "trafficPolicy": {
             "clientConnectionConfig": {
               "metadata": {
-                "name": "sampleCCC"
+                "name": "sampleCCC",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "e2e"
+                }
               },
               "spec": {
                 "connectionPool": {
@@ -129,7 +153,13 @@
             },
             "globalTrafficPolicy": {
               "metadata": {
-                "name": "sampleGTP"
+                "name": "sampleGTP",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "e2e"
+                }
               },
               "spec": {
                 "policy": [
@@ -155,7 +185,13 @@
             },
             "outlierDetection": {
               "metadata": {
-                "name": "sampleOD"
+                "name": "sampleOD",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "e2e"
+                }
               },
               "spec": {
                 "outlier_config": {
@@ -193,7 +229,13 @@
           "trafficPolicy": {
             "clientConnectionConfig": {
               "metadata": {
-                "name": "sampleCCC"
+                "name": "sampleCCC",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "qal"
+                }
               },
               "spec": {
                 "connectionPool": {
@@ -207,7 +249,13 @@
             },
             "globalTrafficPolicy": {
               "metadata": {
-                "name": "sampleGTP"
+                "name": "sampleGTP",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "qal"
+                }
               },
               "spec": {
                 "policy": [
@@ -233,7 +281,13 @@
             },
             "outlierDetection": {
               "metadata": {
-                "name": "sampleOD"
+                "name": "sampleOD",
+                "labels": {
+                  "identity": "sample"
+                },
+                "annotations": {
+                  "env": "qal"
+                }
               },
               "spec": {
                 "outlier_config": {

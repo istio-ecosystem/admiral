@@ -1085,6 +1085,7 @@ func modifySidecarForLocalClusterCommunication(
 
 			sidecar, err := sidecarConfig.IstioClient.NetworkingV1alpha3().Sidecars(sidecarNamespace).Get(ctx, common.GetWorkloadSidecarName(), v12.GetOptions{})
 			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "modifySidecarForLocalClusterCommunication", sourceIdentity, sidecarNamespace, rc.ClusterID, err)
 				return
 			}
 			if sidecar == nil || (sidecar.Spec.Egress == nil) {
@@ -1132,10 +1133,38 @@ func addUpdateSidecar(ctxLogger *logrus.Entry, ctx context.Context, obj *v1alpha
 	}
 	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, obj, v12.UpdateOptions{})
 	if err != nil {
+		err = retryUpdatingSidecar(ctxLogger, ctx, obj, exist, namespace, rc, err, "Update")
 		ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
 	} else {
 		ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Success")
 	}
+}
+
+func retryUpdatingSidecar(ctxLogger *logrus.Entry, ctx context.Context, obj *v1alpha3.Sidecar, exist *v1alpha3.Sidecar, namespace string, rc *RemoteController, err error, op string) error {
+	numRetries := 5
+	if err != nil && (k8sErrors.IsConflict(err) || k8sErrors.IsInvalid(err)) {
+		for i := 0; i < numRetries; i++ {
+			ctxLogger.Errorf(common.CtxLogFormat, op, obj.Name, obj.Namespace, rc.ClusterID, err.Error()+". retrying sidecar update.")
+
+			updatedSidecar, err := rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Get(ctx, exist.Name, v12.GetOptions{})
+			// if old sidecar not found, just create a new sidecar instead
+			if err != nil {
+				ctxLogger.Infof(common.CtxLogFormat, op, exist.Name, exist.Namespace, rc.ClusterID, err.Error()+fmt.Sprintf(". Error getting old sidecar"))
+				continue
+			}
+			existingResourceVersion := updatedSidecar.GetResourceVersion()
+			ctxLogger.Infof(common.CtxLogFormat, op, obj.Name, obj.Namespace, rc.ClusterID, fmt.Sprintf("existingResourceVersion=%s resourceVersionUsedForUpdate=%s", updatedSidecar.ResourceVersion, obj.ResourceVersion))
+			updatedSidecar.Spec = obj.Spec
+			updatedSidecar.Annotations = obj.Annotations
+			updatedSidecar.Labels = obj.Labels
+			updatedSidecar.SetResourceVersion(existingResourceVersion)
+			_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, updatedSidecar, v12.UpdateOptions{})
+			if err == nil {
+				return nil
+			}
+		}
+	}
+	return err
 }
 
 func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
@@ -1226,7 +1255,6 @@ func AddServiceEntriesWithDrWorker(
 	//partitionedIdentity holds the originally passed in identity which could have a partition prefix
 	partitionedIdentity := identityId
 	//identityId is guaranteed to have the non-partitioned identity
-	// Operator Branch 1: since partition cache will not be filled, return identityId from getNonPartitionedIdentity
 	identityId = getNonPartitionedIdentity(rr.AdmiralCache, identityId)
 	// Operator: When calling this function make a channel with one cluster in it
 	for cluster := range clusters { // TODO log cluster / service entry
@@ -1237,6 +1265,10 @@ func AddServiceEntriesWithDrWorker(
 			syncNamespace            = common.GetSyncNamespace()
 			addSEorDRToAClusterError error
 		)
+
+		if common.IsAdmiralOperatorMode() {
+			syncNamespace = common.GetOperatorSyncNamespace()
+		}
 
 		rc := rr.GetRemoteController(cluster)
 		if rc == nil {
@@ -1252,7 +1284,6 @@ func AddServiceEntriesWithDrWorker(
 		}
 
 		//this get is within the loop to avoid race condition when one event could update destination rule on stale data
-		// TODO: Operator: Fill these caches in AdmiralCache in shardHandler
 		globalTrafficPolicy, err := cache.GlobalTrafficCache.GetFromIdentity(partitionedIdentity, env)
 		if err != nil {
 			ctxLogger.Errorf(LogErrFormat, "GlobalTrafficCache", "", "", cluster, err.Error())
@@ -1452,12 +1483,11 @@ func AddServiceEntriesWithDrWorker(
 							// build list of gateway clusters
 							gwClusters := []string{}
 							for _, gwAlias := range common.GetGatewayAssetAliases() {
-								// TODO: Operator fills this cache in produceIdentityConfigs
 								dependents := rr.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity)
 								if dependents != nil && dependents.Len() > 0 {
 									dependents.Range(func(_ string, dependent string) {
 										if strings.Contains(strings.ToLower(dependent), strings.ToLower(gwAlias)) {
-											gwClustersMap := getClusters(rr, dependent)
+											gwClustersMap := getClusters(rr, dependent, ctxLogger)
 											if gwClustersMap != nil {
 												for _, cluster := range gwClustersMap.GetKeys() {
 													gwClusters = append(gwClusters, cluster)
@@ -1532,7 +1562,6 @@ func AddServiceEntriesWithDrWorker(
 				}
 			}
 		}
-
 		errors <- addSEorDRToAClusterError
 	}
 }
@@ -1547,10 +1576,18 @@ func getClusterRegion(rr *RemoteRegistry, cluster string, rc *RemoteController) 
 	return "", fmt.Errorf("failed to get region of cluster %v", cluster)
 }
 
-func getClusters(rr *RemoteRegistry, dependent string) *common.Map {
+func getClusters(rr *RemoteRegistry, dependent string, ctxLogger *logrus.Entry) *common.Map {
 	if common.IsAdmiralOperatorMode() {
-		// TODO: go through registry client to pull dependent identity clusters and construct map...
-		return nil
+		// Any better way than calling service registry here?
+		dependentIdentityConfig, err := rr.RegistryClient.GetIdentityConfigByIdentityName(dependent, ctxLogger)
+		if err != nil {
+			return nil
+		}
+		gwClusterMap := common.NewMap()
+		for _, cluster := range dependentIdentityConfig.Clusters {
+			gwClusterMap.Put(cluster.Name, cluster.Name)
+		}
+		return gwClusterMap
 	}
 	return rr.AdmiralCache.IdentityClusterCache.Get(dependent)
 }

@@ -52,7 +52,7 @@ func writeToFileLocal(writer ConfigWriter, config *IdentityConfig) error {
 		return err
 	}
 	pathName := currentDir + "/testdata/" + shortAlias[len(shortAlias)-1] + "IdentityConfiguration.json"
-	if common.GetSecretFilterTags() == "admiral/syncrtay" {
+	if common.GetSecretFilterTags() == common.GetOperatorSecretFilterTags() && common.GetOperatorSecretFilterTags() != "" {
 		pathName = "/etc/serviceregistry/config/" + shortAlias[len(shortAlias)-1] + "IdentityConfiguration.json"
 	}
 	fmt.Printf("[state syncer] file path=%s", pathName)

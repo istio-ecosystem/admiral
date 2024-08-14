@@ -38,7 +38,7 @@ func (c *configMapWriter) Write(name string, data []byte) error {
 		err  error
 	)
 	defer util.LogElapsedTimeForTask(c.ctxLogger, task, name, "", "", "processingTime")()
-	if common.GetSecretFilterTags() != secretLabel {
+	if common.GetSecretFilterTags() != common.GetOperatorSecretFilterTags() || common.GetOperatorSecretFilterTags() == "" {
 		c.ctxLogger.Infof(common.CtxLogFormat, task, name, "", "", "writing to local file")
 		return writeToFile(name, data)
 	}
