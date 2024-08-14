@@ -102,31 +102,23 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 
 	if nodeController == nil {
 		t.Errorf("Node controller should never be nil without an error thrown")
+		return
 	}
 	region := "us-west-2"
 	nodeObj := &k8sV1.Node{Spec: k8sV1.NodeSpec{}, ObjectMeta: v1.ObjectMeta{Labels: map[string]string{common.NodeRegionLabel: region}}}
 
 	ctx := context.Background()
 
-	nodeController.Added(ctx, nodeObj)
+	_ = nodeController.Added(ctx, nodeObj)
+	assert.Equal(t, "us-west-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
 
-	locality := nodeController.Locality
+	nodeObj.Labels[common.NodeRegionLabel] = "us-east-2"
+	_ = nodeController.Updated(ctx, nodeObj, nodeObj)
+	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
 
-	if locality.Region != region {
-		t.Errorf("region expected %v, got: %v", region, locality.Region)
-	}
-
-	nodeController.Updated(ctx, nodeObj, nodeObj)
-	//update should make no difference
-	if locality.Region != region {
-		t.Errorf("region expected %v, got: %v", region, locality.Region)
-	}
-
-	nodeController.Deleted(ctx, nodeObj)
+	_ = nodeController.Deleted(ctx, nodeObj)
 	//delete should make no difference
-	if locality.Region != region {
-		t.Errorf("region expected %v, got: %v", region, locality.Region)
-	}
+	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
 }
 
 // TODO: This is just a placeholder for when we add diff check for other types

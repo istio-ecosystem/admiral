@@ -57,19 +57,29 @@ func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest
 	return &nodeController, nil
 }
 
-func (p *NodeController) Added(ctx context.Context, obj interface{}) error {
+func process(ctx context.Context, obj interface{}) (string, error) {
 	node, ok := obj.(*k8sV1.Node)
 	if !ok {
-		return fmt.Errorf("type assertion failed, %v is not of type *v1.Node", obj)
+		return "", fmt.Errorf("type assertion failed, %v is not of type *v1.Node", obj)
 	}
-	if p.Locality == nil {
-		p.Locality = &Locality{Region: common.GetNodeLocality(node)}
+	return common.GetNodeLocality(node), nil
+}
+
+func (d *NodeController) Added(ctx context.Context, obj interface{}) error {
+	region, err := process(ctx, obj)
+	if err != nil {
+		return err
 	}
+	d.Locality = &Locality{Region: region}
 	return nil
 }
 
-func (p *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
-	//ignore
+func (d *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
+	region, err := process(ctx, obj)
+	if err != nil {
+		return err
+	}
+	d.Locality = &Locality{Region: region}
 	return nil
 }
 
