@@ -1683,37 +1683,6 @@ func pushWorkloadDataToDynamodbTable(workloadDataToUpdate WorkloadData, endpoint
 
 func storeWorkloadData(clusterName string, serviceEntry *v1alpha3.ServiceEntry,
 	globalTrafficPolicy *v1.GlobalTrafficPolicy, additionalEndpoints []string, rr *RemoteRegistry, ctxLogger *logrus.Entry, dr networking.DestinationRule, isSuccess bool) error {
-
-	start := time.Now()
-
-	if serviceEntry == nil {
-		return fmt.Errorf("provided service entry is nil")
-	}
-
-	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
-		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
-	}
-
-	if serviceEntry.Spec.Hosts == nil {
-		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if len(serviceEntry.Spec.Hosts) == 0 {
-		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if rr.AdmiralDatabaseClient == nil {
-		return fmt.Errorf("dynamodb client for workload data table is not initialized")
-	}
-
-	//get workload data based on service entry, globaltrafficpolicy and additional endpoints
-	workloadData := getWorkloadData(ctxLogger, serviceEntry, globalTrafficPolicy, additionalEndpoints, dr, clusterName, isSuccess)
-
-	err := pushWorkloadDataToDynamodbTable(workloadData, serviceEntry.Spec.Hosts[0], clusterName, rr, ctxLogger)
-	util.LogElapsedTimeSinceTask(ctxLogger, "UpdateEndpointRecord", serviceEntry.Spec.Hosts[0], "", clusterName, "", start)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
