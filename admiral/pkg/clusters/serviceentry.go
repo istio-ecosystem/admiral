@@ -1602,44 +1602,6 @@ func getDNSPrefixFromServiceEntry(seDR *SeDrTuple) string {
 }
 
 func deleteWorkloadData(clusterName, env string, serviceEntry *v1alpha3.ServiceEntry, rr *RemoteRegistry, ctxLogger *logrus.Entry) error {
-	start := time.Now()
-
-	if serviceEntry == nil {
-		return fmt.Errorf("provided service entry is nil")
-	}
-
-	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
-		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
-	}
-
-	if serviceEntry.Spec.Hosts == nil {
-		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if len(serviceEntry.Spec.Hosts) == 0 {
-		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if rr.AdmiralDatabaseClient == nil {
-		return fmt.Errorf("dynamodb client for workload data table is not initialized")
-	}
-
-	workloadDataToDelete := WorkloadData{
-		AssetAlias: serviceEntry.Annotations[common.GetWorkloadIdentifier()],
-		Endpoint:   serviceEntry.Spec.Hosts[0],
-	}
-
-	err := rr.AdmiralDatabaseClient.Delete(workloadDataToDelete, ctxLogger)
-	if err != nil {
-		return err
-	}
-
-	_, ok := rr.AdmiralCache.DynamoDbEndpointUpdateCache.Load(workloadDataToDelete.Endpoint)
-	if ok {
-		rr.AdmiralCache.DynamoDbEndpointUpdateCache.Delete(workloadDataToDelete.Endpoint)
-	}
-
-	util.LogElapsedTimeSince("DeleteEndpointRecord", serviceEntry.Spec.Hosts[0], env, clusterName, start)
 	return nil
 }
 
