@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
+	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -417,7 +418,7 @@ func (m *MockOutlierDetectionHandler) Deleted(ctx context.Context, obj *admiralV
 type MockShardHandler struct {
 }
 
-func (m *MockShardHandler) Added(ctx context.Context, obj *admiralapiv1.Shard) error {
+func (m *MockShardHandler) Added(ctx context.Context, obj *admiralapiv1.Shard, cc admiralapi.Interface) error {
 	return nil
 }
 
