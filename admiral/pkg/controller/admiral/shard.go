@@ -21,7 +21,7 @@ import (
 const OperatorIdentityLabelKey = "admiral.io/operatorIdentity"
 
 type ShardHandler interface {
-	Added(ctx context.Context, obj *admiralapiv1.Shard) error
+	Added(ctx context.Context, obj *admiralapiv1.Shard, cc admiralapi.Interface) error
 	Deleted(ctx context.Context, obj *admiralapiv1.Shard) error
 }
 
@@ -200,7 +200,7 @@ func HandleAddUpdateShard(ctx context.Context, obj interface{}, d *ShardControll
 	if len(key) > 0 {
 		d.Cache.UpdateShardToClusterCache(key, shard)
 	}
-	err := d.ShardHandler.Added(ctx, shard)
+	err := d.ShardHandler.Added(ctx, shard, d.CrdClient)
 	return err
 }
 

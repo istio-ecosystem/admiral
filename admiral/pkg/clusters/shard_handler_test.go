@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"sync"
 	"testing"
+	"time"
 
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -115,9 +118,11 @@ func TestShardHandler_Added(t *testing.T) {
 	rc2 := createRemoteControllerForShardTests("cluster-usw2-k8s")
 	rr.PutRemoteController("cluster1", rc1)
 	rr.PutRemoteController("cluster-usw2-k8s", rc2)
+
 	//sampleShard1 := createMockShard("shard-sample", "cluster1", "sample", "e2e")
 	sampleShard2 := createMockShard("blackhole-shard", "cluster-usw2-k8s", "ppdmeshtestblackhole", "ppd")
 	shardHandler := &ShardHandler{RemoteRegistry: rr}
+	sc, _ := admiral.NewShardController(make(chan struct{}), shardHandler, "../../test/resources/admins@fake-cluster.k8s.local", "ns", time.Duration(1000), loader.GetFakeClientLoader())
 	defaultSidecar := &v1alpha3.Sidecar{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "default",
@@ -251,7 +256,7 @@ func TestShardHandler_Added(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			shErr := shardHandler.Added(context.Background(), tt.shard)
+			shErr := shardHandler.Added(context.Background(), tt.shard, sc.CrdClient)
 			if shErr != nil {
 				t.Errorf("failed to handle Shard with err: %v", shErr)
 			}
