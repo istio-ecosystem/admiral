@@ -113,11 +113,11 @@ type AdmiralParams struct {
 	GatewayAssetAliases []string
 
 	//Admiral 2.0 params
-	AdmiralOperatorMode    bool
-	OperatorSyncNamespace  string
-	AdmiralStateSyncerMode bool
-	OperatorIdentityValue  string
-	ShardIdentityValue     string
+	AdmiralOperatorMode      bool
+	OperatorSyncNamespace    string
+	AdmiralStateSyncerMode   bool
+	OperatorIdentityValue    string
+	ShardIdentityValue       string
 	OperatorSecretFilterTags string
 }
 
@@ -157,8 +157,8 @@ type LabelSet struct {
 	GatewayApp                          string //the value for `app` key that will be used to fetch the loadblancer for cross cluster calls, also referred to as east west gateway
 	AdmiralCRDIdentityLabel             string //Label Used to identify identity label for crd
 	IdentityPartitionKey                string //Label used for partitioning assets with same identity into groups
-	OperatorIdentityLabel               string
-	ShardIdentityLabel                  string
+	OperatorIdentityLabelKey            string
+	ShardIdentityLabelKey               string
 }
 
 type TrafficObject struct {

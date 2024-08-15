@@ -246,10 +246,10 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSyncNamespace, "operator_sync_namespace", "admiral-operator-sync",
 		"Namespace in which Admiral Operator will put its generated configurations")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.OperatorIdentityLabel, "operator_identity_label", "admiral.io/operatorIdentity", "used to filter which shard Admiral Operator will watch")
-	rootCmd.PersistentFlags().StringVar(&params.LabelSet.ShardIdentityLabel, "shard_identity_label", "admiral.io/shardIdentity", "used to filter which shard Admiral Operator will watch")
-	rootCmd.PersistentFlags().StringVar(&params.OperatorIdentityValue, "operator_identity_value", "", "Admiral operator should watch shards where operatorIdentityLabel == operatorIdentityValue")
-	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabel == shardIdentityValue")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.OperatorIdentityLabelKey, "operator_identity_label_key", "admiral.io/operatorIdentity", "used to filter which shard Admiral Operator will watch")
+	rootCmd.PersistentFlags().StringVar(&params.LabelSet.ShardIdentityLabelKey, "shard_identity_label_key", "admiral.io/shardIdentity", "used to filter which shard Admiral Operator will watch")
+	rootCmd.PersistentFlags().StringVar(&params.OperatorIdentityValue, "operator_identity_value", "", "Admiral operator should watch shards where operatorIdentityLabelKey == operatorIdentityValue")
+	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabelKey == shardIdentityValue")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSecretFilterTags, "operator_secret_filter_tags", "admiral/syncoperator",
 		"Filter tags for the specific admiral operator namespace secret to watch")
 	return rootCmd
