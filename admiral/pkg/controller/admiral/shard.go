@@ -155,7 +155,6 @@ func NewShardController(stopCh <-chan struct{}, handler ShardHandler, configPath
 		opts.LabelSelector = fmt.Sprintf("%s=%s, %s=%s", opIdLabel, opIdValue, shardIdLabel, shardIdValue)
 	})
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod, labelOptions)
-	//informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod)
 	informerFactory.Start(stopCh)
 	shardController.informer = v1.NewShardInformer(shardController.CrdClient,
 		namespace,
