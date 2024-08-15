@@ -54,6 +54,7 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
+	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service due to error "
 )
 
 func createServiceEntryForDeployment(
@@ -159,6 +160,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		sourceClusters                        []string
 		isAdditionalEndpointGenerationEnabled bool
 		deployRolloutMigration                = make(map[string]bool)
+		sourceIngressVirtualService           = make(map[string]*v1alpha3.VirtualService)
 	)
 
 	clusterName, ok := ctx.Value(common.ClusterName).(string)
@@ -290,6 +292,16 @@ func modifyServiceEntryForNewServiceOrPod(
 				Namespace: namespace,
 				Type:      common.Deployment,
 			}
+			if common.IsVSBasedRoutingEnabled() {
+				err := generateIngressVirtualServiceForDeployment(deployment, sourceIngressVirtualService)
+				if err != nil {
+					err = fmt.Errorf(ingressVSGenerationErrorMessage + " w%" + err.Error())
+					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForDeployment",
+						deployment.Name, deployment.Namespace, clusterId, err.Error())
+					modifySEerr = common.AppendError(modifySEerr, err)
+				}
+			}
+
 		}
 
 		if rollout != nil {
@@ -338,6 +350,16 @@ func modifyServiceEntryForNewServiceOrPod(
 				Name:      env,
 				Namespace: namespace,
 				Type:      common.Rollout,
+			}
+
+			if common.IsVSBasedRoutingEnabled() {
+				err := generateIngressVirtualServiceForRollout(rollout, sourceIngressVirtualService)
+				if err != nil {
+					err = fmt.Errorf(ingressVSGenerationErrorMessage + " w%" + err.Error())
+					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForRollout",
+						rollout.Name, rollout.Namespace, clusterId, err.Error())
+					modifySEerr = common.AppendError(modifySEerr, err)
+				}
 			}
 		}
 
@@ -768,6 +790,16 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
 		return nil, nil
 	}
+	// If VS based routing is enabled, generate VirtualServices for the source cluster's ingress
+	// This is done after the ServiceEntries are created for the source cluster
+	if common.IsVSBasedRoutingEnabled() && len(sourceIngressVirtualService) > 0 {
+		err := addUpdateVirtualServicesForSourceIngress(
+			ctx, ctxLogger, remoteRegistry, sourceServices, sourceIngressVirtualService, sourceDeployments, sourceRollouts)
+		if err != nil {
+			modifySEerr = common.AppendError(modifySEerr, err)
+		}
+	}
+
 	//Write to dependent clusters
 	start = time.Now()
 	isServiceEntryModifyCalledForSourceCluster = false

@@ -426,6 +426,18 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
+func IsVSBasedRoutingEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableVSRouting
+}
+
+func GetVSRoutingGateways() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.VSRoutingGateways
+}
+
 func DoGenerationCheck() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
