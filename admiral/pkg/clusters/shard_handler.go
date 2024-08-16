@@ -35,10 +35,6 @@ func (sh *ShardHandler) Added(ctx context.Context, obj *admiralapiv1.Shard) erro
 }
 
 func (sh *ShardHandler) Deleted(ctx context.Context, obj *admiralapiv1.Shard) error {
-	//err := HandleEventForShard(ctx, admiral.Delete, obj, sh.RemoteRegistry)
-	//if err != nil {
-	//	return fmt.Errorf(LogErrFormat, common.Delete, common.ShardResourceType, obj.Name, "", err)
-	//}
 	ctxLogger := common.GetCtxLogger(ctx, obj.Name, "")
 	ctxLogger.Warnf(common.CtxLogFormat, "ShardHandlerDeleted", obj.Name, obj.Namespace, "", "", "Shard object was deleted")
 	return nil

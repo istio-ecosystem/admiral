@@ -42,9 +42,9 @@ func GetMockShard() *admiralapiv1.Shard {
 			LastUpdatedTime:   v1.Time{},
 		},
 	}
-	opIdLabel, opIdValue := common.GetOperatorIdentityLabelKeyValueSet()
+	opIdValue := common.GetOperatorIdentityLabelValue()
 	shardIdLabel, shardIdValue := common.GetShardIdentityLabelKeyValueSet()
-	shard.Labels = map[string]string{opIdLabel: opIdValue, shardIdLabel: shardIdValue}
+	shard.Labels = map[string]string{OperatorIdentityLabelKey: opIdValue, shardIdLabel: shardIdValue}
 	return &shard
 }
 

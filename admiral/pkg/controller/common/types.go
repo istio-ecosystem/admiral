@@ -157,7 +157,6 @@ type LabelSet struct {
 	GatewayApp                          string //the value for `app` key that will be used to fetch the loadblancer for cross cluster calls, also referred to as east west gateway
 	AdmiralCRDIdentityLabel             string //Label Used to identify identity label for crd
 	IdentityPartitionKey                string //Label used for partitioning assets with same identity into groups
-	OperatorIdentityLabelKey            string
 	ShardIdentityLabelKey               string
 }
 
