@@ -3,10 +3,10 @@ package registry
 import (
 	"encoding/json"
 	"os"
-
 	"strings"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,6 +41,7 @@ func WithRegistryEndpoint(registryEndpoint string) func(*registryClient) {
 // the given identityAlias
 func (c *registryClient) GetIdentityConfigByIdentityName(identityAlias string, ctxLogger *log.Entry) (IdentityConfig, error) {
 	//TODO: Use real result from registry and remove string splitting to match test file names
+	defer util.LogElapsedTime("GetIdentityConfigByIdentityName", identityAlias, "", "")
 	byteValue, err := readIdentityConfigFromFile(strings.Split(identityAlias, "."))
 	if err != nil {
 		ctxLogger.Infof(common.CtxLogFormat, "GetByIdentityName", identityAlias, "", "", err)
@@ -64,6 +65,7 @@ func readIdentityConfigFromFile(shortAlias []string) ([]byte, error) {
 // GetIdentityConfigByClusterName calls the registry API to fetch the IdentityConfigs for
 // every identity on the cluster.
 func (c *registryClient) GetIdentityConfigByClusterName(clusterName string, ctxLogger *log.Entry) ([]IdentityConfig, error) {
+	defer util.LogElapsedTime("GetIdentityConfigByClusterName", "", "", clusterName)
 	//TODO: need to call this function once during startup time to warm the cache
 	//jsonResult = os.request(/cluster/{cluster_id}/configurations
 	ctxLogger.Infof(common.CtxLogFormat, "GetByClusterName", "", "", clusterName, "")

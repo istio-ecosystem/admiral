@@ -1074,6 +1074,7 @@ func modifySidecarForLocalClusterCommunication(
 	if rc == nil {
 		return fmt.Errorf("skipped modifying sidecar resource as remoteController object is nil")
 	}
+	defer util.LogElapsedTime("modifySidecarForLocalClusterCommunication", sourceIdentity, sidecarNamespace, rc.ClusterID)
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
 	sidecarEgressMap.Range(func(k string, v map[string]common.SidecarEgress) {

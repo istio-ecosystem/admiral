@@ -3,8 +3,10 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"strings"
 	"sync"
+	"time"
 
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
@@ -82,8 +84,10 @@ func HandleEventForShard(ctx context.Context, event admiral.EventType, obj *admi
 // of the assets on the shard, and puts those into configWriterData which go into the job channel
 func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Shard, configWriterData chan<- *ConfigWriterData, rr *RemoteRegistry, producerWG *sync.WaitGroup) {
 	cnames := make(map[string]string)
+	defer util.LogElapsedTime("ProduceIdentityConfigsFromShard", shard.Name, shard.Namespace, "")
 	for _, clusterShard := range shard.Spec.Clusters {
 		for _, identityItem := range clusterShard.Identities {
+			start := time.Now()
 			identityConfig, err := rr.RegistryClient.GetIdentityConfigByIdentityName(identityItem.Name, ctxLogger)
 			if err != nil {
 				ctxLogger.Warnf(common.CtxLogFormat, "ProduceIdentityConfig", identityItem.Name, shard.Namespace, clusterShard.Name, err)
@@ -125,6 +129,7 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 				ClusterName:    clusterShard.Name,
 				Error:          err,
 			}
+			util.LogElapsedTimeSince("ProduceIdentityConfigsFillCaches", identityItem.Name, "", clusterShard.Name, start)
 		}
 	}
 	producerWG.Done()
@@ -140,6 +145,7 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 		assetName := identityConfig.IdentityName
 		clientCluster := data.ClusterName
 		ctxLogger.Infof(common.CtxLogFormat, "ConsumeIdentityConfig", assetName, "", clientCluster, "starting to consume identityConfig")
+		start := time.Now()
 		serviceEntryBuilder := ServiceEntryBuilder{ClientCluster: clientCluster, RemoteRegistry: rr}
 		serviceEntries, err := serviceEntryBuilder.BuildServiceEntriesFromIdentityConfig(ctxLogger, *identityConfig)
 		if err != nil {
@@ -201,6 +207,7 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 			}
 		}
 		configWriterDataResults <- data
+		util.LogElapsedTimeSince("ConsumeIdentityConfigs", assetName, "", clientCluster, start)
 	}
 }
 
