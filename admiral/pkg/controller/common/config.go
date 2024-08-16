@@ -471,6 +471,18 @@ func GetOperatorSyncNamespace() string {
 	return wrapper.params.OperatorSyncNamespace
 }
 
+func GetOperatorIdentityLabelValue() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.OperatorIdentityValue
+}
+
+func GetShardIdentityLabelKeyValueSet() (string, string) {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.LabelSet.ShardIdentityLabelKey, wrapper.params.ShardIdentityValue
+}
+
 func GetOperatorSecretFilterTags() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

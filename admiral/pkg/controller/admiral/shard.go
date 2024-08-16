@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+const OperatorIdentityLabelKey = "admiral.io/operatorIdentity"
+
 type ShardHandler interface {
 	Added(ctx context.Context, obj *admiralapiv1.Shard) error
 	Deleted(ctx context.Context, obj *admiralapiv1.Shard) error
@@ -149,12 +151,12 @@ func NewShardController(stopCh <-chan struct{}, handler ShardHandler, configPath
 	if err != nil {
 		return nil, fmt.Errorf("failed to create shard controller crd client: %v", err)
 	}
-	//TODO: should not be hardcoded, fetch actual expected operator and shard identities from env variables
-	//labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
-	//	opts.LabelSelector = "admiral.io/operatorIdentity=operatorIdentity, admiral.io/shardIdentity=dev"
-	//})
-	//informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod, labelOptions)
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod)
+	labelOptions := informers.WithTweakListOptions(func(opts *metav1.ListOptions) {
+		opIdValue := common.GetOperatorIdentityLabelValue()
+		shardIdLabel, shardIdValue := common.GetShardIdentityLabelKeyValueSet()
+		opts.LabelSelector = fmt.Sprintf("%s=%s, %s=%s", OperatorIdentityLabelKey, opIdValue, shardIdLabel, shardIdValue)
+	})
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(shardController.K8sClient, resyncPeriod, labelOptions)
 	informerFactory.Start(stopCh)
 	shardController.informer = v1.NewShardInformer(shardController.CrdClient,
 		namespace,
@@ -212,7 +214,7 @@ func (d *ShardController) Deleted(ctx context.Context, obj interface{}) error {
 	if err == nil && len(key) > 0 {
 		d.Cache.DeleteFromShardClusterCache(key, shard)
 	}
-	return err
+	return d.ShardHandler.Deleted(ctx, shard)
 }
 
 func (d *ShardController) LogValueOfAdmiralIoIgnore(obj interface{}) {
