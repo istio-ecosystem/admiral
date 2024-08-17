@@ -11,6 +11,8 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sync"
 	"testing"
 	"time"
@@ -99,7 +101,7 @@ func createMockShard(shardName string, clusterName string, identityName string, 
 			ClustersMonitored: 1,
 			Conditions:        []admiralapiv1.ShardStatusCondition{shardStatusCondition},
 			FailureDetails:    admiralapiv1.FailureDetails{},
-			LastUpdatedTime:   v1.Time{},
+			LastUpdatedTime:   v1.Now(),
 		},
 	}
 	return &shard
@@ -123,6 +125,7 @@ func TestShardHandler_Added(t *testing.T) {
 	sampleShard2 := createMockShard("blackhole-shard", "cluster-usw2-k8s", "ppdmeshtestblackhole", "ppd")
 	shardHandler := &ShardHandler{RemoteRegistry: rr}
 	sc, _ := admiral.NewShardController(make(chan struct{}), shardHandler, "../../test/resources/admins@fake-cluster.k8s.local", "ns", time.Duration(1000), loader.GetFakeClientLoader())
+	sampleShard2, _ = sc.CrdClient.AdmiralV1().Shards(sampleShard2.Namespace).Create(context.Background(), sampleShard2, v1.CreateOptions{})
 	defaultSidecar := &v1alpha3.Sidecar{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "default",
@@ -314,5 +317,61 @@ func TestShardHandler_Deleted(t *testing.T) {
 	err := shardHandler.Deleted(context.Background(), shard)
 	if err != nil {
 		t.Errorf("expected nil err for delete, for %v", err)
+	}
+}
+
+func TestRetryUpdatingShard(t *testing.T) {
+	admiralParams := setupForShardTests()
+	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
+	sampleShard := createMockShard("blackhole-shard", "cluster-usw2-k8s", "ppdmeshtestblackhole", "ppd")
+	shardHandler := &ShardHandler{RemoteRegistry: rr}
+	sc, _ := admiral.NewShardController(make(chan struct{}), shardHandler, "../../test/resources/admins@fake-cluster.k8s.local", "ns", time.Duration(1000), loader.GetFakeClientLoader())
+	sc.CrdClient.AdmiralV1().Shards(sampleShard.Namespace).Create(context.Background(), sampleShard, v1.CreateOptions{})
+	sampleShard2 := sampleShard.DeepCopy()
+	newFailedCluster := admiralapiv1.FailedCluster{
+		Name: "cluster-usw2-k8s",
+		FailedIdentities: []admiralapiv1.FailedIdentity{{
+			Name:    "ppdmeshtestblackhole",
+			Message: "test failure message",
+		}},
+	}
+	sampleShard2.Status.FailureDetails.FailedClusters = append(sampleShard2.Status.FailureDetails.FailedClusters, newFailedCluster)
+	ctxLogger := common.GetCtxLogger(context.Background(), sampleShard2.Name, "")
+	testCases := []struct {
+		name          string
+		sc            *admiral.ShardController
+		newShard      *admiralapiv1.Shard
+		existingShard *admiralapiv1.Shard
+		expectedShard *admiralapiv1.Shard
+		err           *k8sErrors.StatusError
+	}{
+		{
+			name: "Given the server asset we want to write resources for is deployed on a remote cluster in env A and a client cluster in env B" +
+				"Then an SE with only remote endpoint and istio-system in exportTo should be built for env B",
+			sc:            sc,
+			newShard:      sampleShard2,
+			existingShard: sampleShard,
+			expectedShard: sampleShard2,
+			err:           k8sErrors.NewConflict(schema.GroupResource{}, "", nil),
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := retryUpdatingShard(context.Background(), ctxLogger, tt.newShard, tt.existingShard, tt.sc.CrdClient, tt.err)
+			if err != nil {
+				t.Errorf("failed to retry updating shard with err: %v", err)
+			}
+			// Check that the expected Shard matches the produced Shard
+			actualShard, shardErr := tt.sc.CrdClient.AdmiralV1().Shards(tt.newShard.Namespace).Get(context.Background(), tt.newShard.Name, v1.GetOptions{})
+			if actualShard == nil {
+				t.Errorf("expected Shard to not be nil")
+			} else if !cmp.Equal(actualShard.Status, tt.expectedShard.Status, protocmp.Transform()) {
+				t.Errorf("got=%v, want=%v", jsonPrint(actualShard.Status), jsonPrint(tt.expectedShard.Status))
+			}
+			if shardErr != nil {
+				t.Errorf("failed to get Shard with err %v", shardErr)
+			}
+		})
 	}
 }
