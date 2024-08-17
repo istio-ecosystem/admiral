@@ -326,10 +326,11 @@ func retryUpdatingShard(ctx context.Context, ctxLogger *log.Entry, obj *admirala
 			}
 			ctxLogger.Infof(common.CtxLogFormat, "Update", obj.Name, obj.Namespace, "", fmt.Sprintf("existingResourceVersion=%s resourceVersionUsedForUpdate=%s", updatedShard.ResourceVersion, obj.ResourceVersion))
 			updatedShard.Spec = obj.Spec
+			updatedShard.Status = obj.Status
 			updatedShard.Annotations = obj.Annotations
 			updatedShard.Labels = obj.Labels
-			_, err = cc.AdmiralV1().Shards(exist.Namespace).Update(ctx, exist, v1.UpdateOptions{})
-			if err == nil {
+			sh, err := cc.AdmiralV1().Shards(exist.Namespace).Update(ctx, updatedShard, v1.UpdateOptions{})
+			if err == nil || sh == nil {
 				return nil
 			}
 		}
