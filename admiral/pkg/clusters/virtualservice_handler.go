@@ -760,7 +760,7 @@ func addUpdateVirtualServicesForSourceIngress(
 		destinationHostPort := make(map[string]uint32)
 		if serviceInstance[common.Deployment] != nil {
 			host := serviceInstance[common.Deployment].Name + "." + serviceInstance[common.Deployment].Namespace + ".svc.cluster.local"
-			protocolPortMap := GetMeshPortsForDeployments(sourceCluster, serviceInstance[common.Deployment], sourceDeployment[sourceCluster])
+			protocolPortMap := common.GetMeshPortsForDeployments(sourceCluster, serviceInstance[common.Deployment], sourceDeployment[sourceCluster])
 			if port, ok := protocolPortMap[constUtil.Http]; ok {
 				destinationHostPort[host] = port
 			}
