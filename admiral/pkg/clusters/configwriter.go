@@ -60,7 +60,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 			env := identityConfigEnvironment.Name
 			var tmpSe *networkingV1Alpha3.ServiceEntry
 			start = time.Now()
-			ep, err := getServiceEntryEndpoint(ctxLogger, b.ClientCluster, serverCluster, ingressEndpoints, identityConfigEnvironment)
+			endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, ingressEndpoints, identityConfigEnvironment)
 			util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
 			if err != nil {
 				return serviceEntries, err
@@ -72,12 +72,12 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 					Location:        networkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
 					Resolution:      networkingV1Alpha3.ServiceEntry_DNS,
 					SubjectAltNames: []string{common.SpiffePrefix + common.GetSANPrefix() + common.Slash + identity},
-					Endpoints:       []*networkingV1Alpha3.WorkloadEntry{ep},
+					Endpoints:       endpoints,
 					ExportTo:        dependentNamespaces,
 				}
 			} else {
 				tmpSe = se
-				tmpSe.Endpoints = append(tmpSe.Endpoints, ep)
+				tmpSe.Endpoints = append(tmpSe.Endpoints, endpoints...)
 			}
 			sort.Sort(WorkloadEntrySorted(tmpSe.Endpoints))
 			seMap[env] = tmpSe
@@ -112,36 +112,61 @@ func getIngressEndpoints(clusters map[string]*registry.IdentityConfigCluster) (m
 
 // getServiceEntryEndpoint constructs the remote or local endpoints of the service entry that
 // should be built for the given identityConfigEnvironment.
-func getServiceEntryEndpoint(
+func getServiceEntryEndpoints(
 	ctxLogger *logrus.Entry,
 	clientCluster string,
 	serverCluster string,
 	ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry,
-	identityConfigEnvironment *registry.IdentityConfigEnvironment) (*networkingV1Alpha3.WorkloadEntry, error) {
-	//TODO: Verify Local and Remote Endpoints are constructed correctly
+	identityConfigEnvironment *registry.IdentityConfigEnvironment) ([]*networkingV1Alpha3.WorkloadEntry, error) {
+	if len(identityConfigEnvironment.Services) == 0 {
+		return nil, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
+	}
 	var err error
 	endpoint := ingressEndpoints[serverCluster]
+	endpoints := []*networkingV1Alpha3.WorkloadEntry{}
 	tmpEp := endpoint.DeepCopy()
 	tmpEp.Labels[typeLabel] = identityConfigEnvironment.Type
-	if len(identityConfigEnvironment.Services) == 0 {
-		return tmpEp, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
+	services := []*registry.RegistryServiceConfig{}
+	for _, service := range identityConfigEnvironment.Services {
+		services = append(services, service)
 	}
-	if clientCluster == serverCluster {
-		for _, service := range identityConfigEnvironment.Services {
-			if service.Weight == -1 {
-				// its not a weighted service, which means we should have only one service endpoint
-				//Local Endpoint Address if the identity is deployed on the same cluster as it's client and the endpoint is the remote endpoint for the cluster
-				tmpEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-				tmpEp.Ports = service.Ports
-				break
+	sort.Sort(registry.RegistryServiceConfigSorted(services))
+	// Deployment won't have weights, so just sort and take the first service to use as the endpoint
+	if identityConfigEnvironment.Type == common.Deployment {
+		if clientCluster == serverCluster {
+			tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+			tmpEp.Ports = services[0].Ports
+		}
+		endpoints = append(endpoints, tmpEp)
+	}
+	// Rollout without weights is treated the same as deployment so sort and take first service
+	// If any of the services have weights then add them to the list of endpoints
+	if identityConfigEnvironment.Type == common.Rollout {
+		for _, service := range services {
+			if service.Weight > 0 {
+				weightedEp := tmpEp.DeepCopy()
+				weightedEp.Weight = uint32(service.Weight)
+				if clientCluster == serverCluster {
+					weightedEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+					weightedEp.Ports = service.Ports
+				}
+				endpoints = append(endpoints, weightedEp)
 			}
-			// TODO: this needs fixing, because there can be multiple services when we have weighted endpoints, and this
-			// will only choose one service
-			tmpEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-			tmpEp.Ports = service.Ports
+		}
+		// If we go through all the services associated with the rollout and none have applicable weights then endpoints is empty
+		// Treat the rollout like a deployment and sort and take the first service
+		if len(endpoints) == 0 {
+			if clientCluster == serverCluster {
+				tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				tmpEp.Ports = services[0].Ports
+			}
+			endpoints = append(endpoints, tmpEp)
 		}
 	}
-	return tmpEp, err
+	// TODO: type is rollout, strategy is bluegreen, need a way to know which service is preview/desired, trigger another SE
+	// TODO: type is rollout, strategy is canary, need a way to know which service is stable/root/desired, trigger another SE
+	// TODO: two types in the environment, deployment to rollout migration
+	return endpoints, err
 }
 
 // getExportTo constructs a sorted list of unique namespaces for a given cluster, client assets,

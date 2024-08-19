@@ -56,3 +56,17 @@ type IdentityConfigEnvironment struct {
 	TrafficPolicy TrafficPolicy                     `json:"trafficPolicy"`
 	Event         admiral.EventType                 `json:"event"`
 }
+
+type RegistryServiceConfigSorted []*RegistryServiceConfig
+
+func (r RegistryServiceConfigSorted) Len() int {
+	return len(r)
+}
+
+func (r RegistryServiceConfigSorted) Less(i, j int) bool {
+	return r[i].Name < r[j].Name
+}
+
+func (r RegistryServiceConfigSorted) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
