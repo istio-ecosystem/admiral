@@ -100,43 +100,91 @@ func TestGetIngressEndpoints(t *testing.T) {
 	}
 }
 
-func TestGetServiceEntryEndpoint(t *testing.T) {
+func TestGetServiceEntryEndpoints(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	unweightedDeployment := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	unweightedDeployment.Type = common.Deployment
+	weightedServices := map[string]*registry.RegistryServiceConfig{
+		"app-1-spk-root-service": {
+			Name: "app-1-spk-root-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+		"app-1-spk-desired-service": {
+			Name:   "app-1-spk-desired-service",
+			Weight: 25,
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+		"app-1-spk-stable-service": {
+			Name:   "app-1-spk-stable-service",
+			Weight: 75,
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+	}
+	weightedRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	weightedRollout.Services = weightedServices
 	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cluster1": {
 		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
-	}, "apigw-cx-ppd-usw2-k8s": {
-		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
+	}, "cluster2": {
+		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
-	remoteEndpoint := &networkingV1Alpha3.WorkloadEntry{
-		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
+	remoteEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
-	}
-	localEndpoint := &networkingV1Alpha3.WorkloadEntry{
+	}}
+	remoteDeploymentEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(15443)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"},
+	}}
+	localEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
 		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+	}}
+	weightedEndpoints := []*networkingV1Alpha3.WorkloadEntry{
+		{
+			Address:  "app-1-spk-desired-service.ns-1-usw2-e2e.svc.cluster.local.",
+			Locality: "us-west-2",
+			Ports:    map[string]uint32{"http": uint32(8090)},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Weight:   25,
+		},
+		{
+			Address:  "app-1-spk-stable-service.ns-1-usw2-e2e.svc.cluster.local.",
+			Locality: "us-west-2",
+			Ports:    map[string]uint32{"http": uint32(8090)},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Weight:   75,
+		},
 	}
 	ctx := context.Background()
-	ctxLogger := common.GetCtxLogger(ctx, "ctg-taxprep-partnerdatatotax", "")
+	ctxLogger := common.GetCtxLogger(ctx, "sample", "")
 	testCases := []struct {
 		name                      string
 		identityConfigEnvironment *registry.IdentityConfigEnvironment
 		ingressEndpoints          map[string]*networkingV1Alpha3.WorkloadEntry
 		clientCluster             string
 		serverCluster             string
-		expectedSEEndpoint        *networkingV1Alpha3.WorkloadEntry
+		expectedSEEndpoints       []*networkingV1Alpha3.WorkloadEntry
 	}{
 		{
 			name: "Given an IdentityConfigEnvironment and ingressEndpoint, " +
@@ -145,8 +193,8 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 			identityConfigEnvironment: e2eEnv,
 			ingressEndpoints:          ingressEndpoints,
 			clientCluster:             "cluster1",
-			serverCluster:             "apigw-cx-ppd-usw2-k8s",
-			expectedSEEndpoint:        remoteEndpoint,
+			serverCluster:             "cluster2",
+			expectedSEEndpoints:       remoteEndpoints,
 		},
 		{
 			name: "Given an IdentityConfigEnvironment and ingressEndpoint, " +
@@ -156,18 +204,38 @@ func TestGetServiceEntryEndpoint(t *testing.T) {
 			ingressEndpoints:          ingressEndpoints,
 			clientCluster:             "cluster1",
 			serverCluster:             "cluster1",
-			expectedSEEndpoint:        localEndpoint,
+			expectedSEEndpoints:       localEndpoints,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint, " +
+				"When the service is an unweighted deployment on a remote cluster" +
+				"Then the constructed endpoint should be a remote endpoint",
+			identityConfigEnvironment: unweightedDeployment,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster2",
+			expectedSEEndpoints:       remoteDeploymentEndpoints,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint, " +
+				"When the rollout has weighted services on a local cluster" +
+				"Then the constructed endpoints should weighted local endpoints",
+			identityConfigEnvironment: weightedRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster1",
+			expectedSEEndpoints:       weightedEndpoints,
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			seEndpoint, err := getServiceEntryEndpoint(ctxLogger, c.clientCluster, c.serverCluster, c.ingressEndpoints, c.identityConfigEnvironment)
+			seEndpoints, err := getServiceEntryEndpoints(ctxLogger, c.clientCluster, c.serverCluster, c.ingressEndpoints, c.identityConfigEnvironment)
 			if err != nil {
 				t.Errorf("want=nil, got=%v", err)
 			}
 			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.WorkloadEntry{})
-			if !cmp.Equal(seEndpoint, c.expectedSEEndpoint, opts) {
-				t.Errorf("want=%v, got=%v", c.expectedSEEndpoint, seEndpoint)
+			if !cmp.Equal(seEndpoints, c.expectedSEEndpoints, opts) {
+				t.Errorf("want=%v, got=%v", c.expectedSEEndpoints, seEndpoints)
 			}
 		})
 	}
