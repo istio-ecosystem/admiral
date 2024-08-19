@@ -35,6 +35,7 @@ func Test_updateGlobalOutlierDetectionCache(t *testing.T) {
 		LabelSet: &common.LabelSet{
 			AdmiralCRDIdentityLabel: "assetAlias",
 		},
+		Profile: common.AdmiralProfileDefault,
 	})
 
 	type args struct {
