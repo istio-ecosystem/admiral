@@ -465,6 +465,7 @@ func TestInitAdmiralOperator(t *testing.T) {
 				AdmiralOperatorMode:   true,
 				KubeconfigPath:        dummyKubeConfig,
 				DependenciesNamespace: dependencyNamespace,
+				Profile:               common.AdmiralProfileDefault,
 			},
 			assertFunc: func(rr *RemoteRegistry, t *testing.T) {
 				if rr == nil {

@@ -100,7 +100,7 @@ func NewController(
 	updateCallback updateSecretCallback,
 	removeCallback removeSecretCallback,
 	admiralProfile string,
-	secretResolverType string) *Controller {
+	secretResolverConfig string) *Controller {
 
 	ctx := context.Background()
 	secretsInformer := cache.NewSharedIndexInformer(
@@ -121,11 +121,12 @@ func NewController(
 
 	var secretResolver resolver.SecretResolver
 	var err error
-	if len(secretResolverType) == 0 {
+
+	if admiralProfile == common.AdmiralProfileDefault {
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
-		err = fmt.Errorf("unrecognized secret resolver type %v specified", secretResolverType)
+		err = fmt.Errorf("unrecognized admiral profile %v specified", admiralProfile)
 	}
 
 	if err != nil {
@@ -202,10 +203,10 @@ func StartSecretController(
 	removeCallback removeSecretCallback,
 	namespace string,
 	admiralProfile string,
-	secretResolverType string) (*Controller, error) {
+	secretResolverConfig string) (*Controller, error) {
 
 	clusterStore := newClustersStore()
-	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverType)
+	controller := NewController(k8s, namespace, clusterStore, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverConfig)
 
 	go controller.Run(ctx.Done())
 
