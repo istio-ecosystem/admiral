@@ -126,7 +126,7 @@ func NewController(
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()
 	} else {
-		err = fmt.Errorf("unrecognized secret resolver type %v specified", admiralProfile)
+		err = fmt.Errorf("unrecognized admiral profile %v specified", admiralProfile)
 	}
 
 	if err != nil {
