@@ -22,6 +22,7 @@ func TestHandleEventForOutlierDetection(t *testing.T) {
 		LabelSet: &common.LabelSet{
 			AdmiralCRDIdentityLabel: "assetAlias",
 		},
+		Profile: common.AdmiralProfileDefault,
 	}
 
 	common.ResetSync()
