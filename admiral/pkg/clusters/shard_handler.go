@@ -10,6 +10,7 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -217,7 +218,7 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 			close(clusters)
 			err := <-errors
 			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "ConsumeIdentityConfigAddSEWithDRWorker", strings.ToLower(se.Hosts[0])+"-se", "", clientCluster, err)
+				ctxLogger.Errorf(common.CtxLogFormat, "ConsumeIdentityConfigAddSEWithDRWorker", strings.ToLower(se.Hosts[0])+"-se", "", clientCluster, err)
 				data.Error = err
 			}
 			if isServiceEntryModifyCalledForSourceClusterAndEnv {
@@ -256,7 +257,7 @@ func ProcessResults(ctx context.Context, ctxLogger *log.Entry, results <-chan *C
 	clusterFailedIdentitiesMap := make(map[string][]admiralapiv1.FailedIdentity)
 	for data := range results {
 		if data.Error != nil {
-			ctxLogger.Infof(common.CtxLogFormat, "ProcessResults", shard.Name, common.GetOperatorSyncNamespace(), data.ClusterName, data.Error.Error())
+			ctxLogger.Warnf(common.CtxLogFormat, "ProcessResults", shard.Name, common.GetOperatorSyncNamespace(), data.ClusterName, data.Error.Error())
 			failedIdentityList := clusterFailedIdentitiesMap[data.ClusterName]
 			failedIdentity := admiralapiv1.FailedIdentity{
 				Name:    data.IdentityConfig.IdentityName,
@@ -302,6 +303,7 @@ func updateShardStatus(ctx context.Context, ctxLogger *log.Entry, obj *admiralap
 	exist.Spec = obj.Spec
 	_, err = cc.AdmiralV1().Shards(exist.Namespace).Update(ctx, exist, v1.UpdateOptions{})
 	if err != nil {
+		ctxLogger.Infof(common.CtxLogFormat, "UpdateShard", exist.Name, exist.Namespace, "", "Failed to initially update shard="+obj.Name)
 		err = retryUpdatingShard(ctx, ctxLogger, obj, exist, cc, err)
 	}
 	if err != nil {
@@ -317,7 +319,7 @@ func retryUpdatingShard(ctx context.Context, ctxLogger *log.Entry, obj *admirala
 	numRetries := 5
 	if err != nil && k8sErrors.IsConflict(err) {
 		for i := 0; i < numRetries; i++ {
-			ctxLogger.Errorf(common.CtxLogFormat, "Update", obj.Name, obj.Namespace, "", err.Error()+". will retry the update operation before adding back to the shard controller queue.")
+			ctxLogger.Errorf(common.CtxLogFormat, "Update", obj.Name, obj.Namespace, "", err.Error()+". retry Shard update "+strconv.Itoa(i+1)+"/"+strconv.Itoa(numRetries))
 			updatedShard, err := cc.AdmiralV1().Shards(exist.Namespace).Get(ctx, exist.Name, v1.GetOptions{})
 			// if old shard not found, move on
 			if err != nil {
