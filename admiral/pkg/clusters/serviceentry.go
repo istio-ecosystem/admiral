@@ -54,6 +54,7 @@ const (
 	gtpManagedByGithub                           = "github"
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
+	errorCluster                                 = "error-cluster"
 )
 
 func createServiceEntryForDeployment(
@@ -1562,6 +1563,9 @@ func AddServiceEntriesWithDrWorker(
 					}
 				}
 			}
+		}
+		if addSEorDRToAClusterError != nil {
+			addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("%s=%s", errorCluster, cluster))
 		}
 		errors <- addSEorDRToAClusterError
 	}
