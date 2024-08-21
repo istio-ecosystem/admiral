@@ -10,294 +10,413 @@
       "ingressPortName": "http",
       "_comment-2": "THIS SECTION CONTAINS ENVIRONMENT LEVEL DETAILS, FOR THE ASSET IN A GIVEN CLUSTER",
       "environment": {
-        "prf": {
-          "name": "prf",
-          "namespace": "ns-1-usw2-prf",
-          "serviceName": "app-1-spk-root-service",
-          "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
-              }
-            }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
-          },
-          "ports": [
-            {
-              "name": "http",
-              "number": 80,
-              "protocol": "http"
-            }
-          ],
-          "trafficPolicy": {
-            "clientConnectionConfig": {
-              "metadata": {
-                "name": "sampleCCC",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "prf"
+        "prf": [
+          {
+            "name": "prf",
+            "namespace": "ns-1-usw2-prf",
+            "strategy": "canary",
+            "services": {
+              "root": {
+                "name": "app-1-spk-root-service",
+                "weight": -1,
+                "ports": {
+                  "http": 8090
                 }
               },
-              "spec": {
-                "connectionPool": {
-                  "http": {
-                    "http2MaxRequests": 1000,
-                    "maxRequestsPerConnection": 5
-                  }
-                },
-                "tunnel": {}
+              "stable": {
+                "name": "app-1-spk-stable-service",
+                "weight": 25,
+                "ports": {
+                  "http": 8090
+                }
+              },
+              "desired": {
+                "name": "app-1-spk-desired-service",
+                "weight": 75,
+                "ports": {
+                  "http": 8090
+                }
               }
             },
-            "globalTrafficPolicy": {
-              "metadata": {
-                "name": "sampleGTP",
-                "labels": {
-                  "identity": "sample"
+            "type": "rollout",
+            "selectors": {
+              "app": "app-1"
+            },
+            "ports": [
+              {
+                "name": "http",
+                "number": 80,
+                "protocol": "http"
+              }
+            ],
+            "trafficPolicy": {
+              "clientConnectionConfig": {
+                "metadata": {
+                  "name": "sampleCCC",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
                 },
-                "annotations": {
-                  "env": "prf"
-                }
-              },
-              "spec": {
-                "policy": [
-                  {
-                    "target": [
-                      {
-                        "region": "us-west-2",
-                        "weight": 50
-                      },
-                      {
-                        "region": "us-east-2",
-                        "weight": 50
-                      }
-                    ],
-                    "dnsPrefix": "testDnsPrefix",
-                    "outlier_detection": {
-                      "consecutive_gateway_errors": 5,
-                      "interval": 5
+                "spec": {
+                  "connectionPool": {
+                    "http": {
+                      "http2MaxRequests": 1000,
+                      "maxRequestsPerConnection": 5
                     }
-                  }
-                ]
-              }
-            },
-            "outlierDetection": {
-              "metadata": {
-                "name": "sampleOD",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "prf"
+                  },
+                  "tunnel": {}
                 }
               },
-              "spec": {
-                "outlier_config": {
-                  "consecutive_gateway_errors": 10,
-                  "interval": 10
+              "globalTrafficPolicy": {
+                "metadata": {
+                  "name": "sampleGTP",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
+                },
+                "spec": {
+                  "policy": [
+                    {
+                      "target": [
+                        {
+                          "region": "us-west-2",
+                          "weight": 50
+                        },
+                        {
+                          "region": "us-east-2",
+                          "weight": 50
+                        }
+                      ],
+                      "dnsPrefix": "testDnsPrefix",
+                      "outlier_detection": {
+                        "consecutive_gateway_errors": 5,
+                        "interval": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "outlierDetection": {
+                "metadata": {
+                  "name": "sampleOD",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
+                },
+                "spec": {
+                  "outlier_config": {
+                    "consecutive_gateway_errors": 10,
+                    "interval": 10
+                  }
+                }
+              }
+            }
+          },
+          {
+            "name": "prf",
+            "namespace": "ns-1-usw2-prf",
+            "app-1-spk-service": {
+              "root": {
+                "name": "app-1-spk-service",
+                "weight": -1,
+                "ports": {
+                  "http": 8090
+                }
+              }
+            },
+            "type": "deployment",
+            "selectors": {
+              "app": "app-1"
+            },
+            "ports": [
+              {
+                "name": "http",
+                "number": 80,
+                "protocol": "http"
+              }
+            ],
+            "trafficPolicy": {
+              "clientConnectionConfig": {
+                "metadata": {
+                  "name": "sampleCCC",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
+                },
+                "spec": {
+                  "connectionPool": {
+                    "http": {
+                      "http2MaxRequests": 1000,
+                      "maxRequestsPerConnection": 5
+                    }
+                  },
+                  "tunnel": {}
+                }
+              },
+              "globalTrafficPolicy": {
+                "metadata": {
+                  "name": "sampleGTP",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
+                },
+                "spec": {
+                  "policy": [
+                    {
+                      "target": [
+                        {
+                          "region": "us-west-2",
+                          "weight": 50
+                        },
+                        {
+                          "region": "us-east-2",
+                          "weight": 50
+                        }
+                      ],
+                      "dnsPrefix": "testDnsPrefix",
+                      "outlier_detection": {
+                        "consecutive_gateway_errors": 5,
+                        "interval": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "outlierDetection": {
+                "metadata": {
+                  "name": "sampleOD",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "prf"
+                  }
+                },
+                "spec": {
+                  "outlier_config": {
+                    "consecutive_gateway_errors": 10,
+                    "interval": 10
+                  }
                 }
               }
             }
           }
-        },
-        "e2e": {
-          "name": "e2e",
-          "namespace": "ns-1-usw2-e2e",
-          "serviceName": "app-1-spk-root-service",
-          "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
-              }
-            }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
-          },
-          "ports": [
-            {
-              "name": "http",
-              "number": 80,
-              "protocol": "http"
-            }
-          ],
-          "trafficPolicy": {
-            "clientConnectionConfig": {
-              "metadata": {
-                "name": "sampleCCC",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "e2e"
+        ],
+        "e2e": [
+          {
+            "name": "e2e",
+            "namespace": "ns-1-usw2-e2e",
+            "strategy": "bluegreen",
+            "services": {
+              "preview": {
+                "name": "app-1-spk-preview-service",
+                "ports": {
+                  "http": 8090
                 }
               },
-              "spec": {
-                "connectionPool": {
-                  "http": {
-                    "http2MaxRequests": 1000,
-                    "maxRequestsPerConnection": 5
-                  }
-                },
-                "tunnel": {}
+              "desired": {
+                "name": "app-1-spk-desired-service",
+                "ports": {
+                  "http": 8090
+                }
               }
             },
-            "globalTrafficPolicy": {
-              "metadata": {
-                "name": "sampleGTP",
-                "labels": {
-                  "identity": "sample"
+            "type": "rollout",
+            "selectors": {
+              "app": "app-1"
+            },
+            "ports": [
+              {
+                "name": "http",
+                "number": 80,
+                "protocol": "http"
+              }
+            ],
+            "trafficPolicy": {
+              "clientConnectionConfig": {
+                "metadata": {
+                  "name": "sampleCCC",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "e2e"
+                  }
                 },
-                "annotations": {
-                  "env": "e2e"
-                }
-              },
-              "spec": {
-                "policy": [
-                  {
-                    "target": [
-                      {
-                        "region": "us-west-2",
-                        "weight": 50
-                      },
-                      {
-                        "region": "us-east-2",
-                        "weight": 50
-                      }
-                    ],
-                    "dnsPrefix": "testDnsPrefix",
-                    "outlier_detection": {
-                      "consecutive_gateway_errors": 5,
-                      "interval": 5
+                "spec": {
+                  "connectionPool": {
+                    "http": {
+                      "http2MaxRequests": 1000,
+                      "maxRequestsPerConnection": 5
                     }
-                  }
-                ]
-              }
-            },
-            "outlierDetection": {
-              "metadata": {
-                "name": "sampleOD",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "e2e"
+                  },
+                  "tunnel": {}
                 }
               },
-              "spec": {
-                "outlier_config": {
-                  "consecutive_gateway_errors": 10,
-                  "interval": 10
+              "globalTrafficPolicy": {
+                "metadata": {
+                  "name": "sampleGTP",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "e2e"
+                  }
+                },
+                "spec": {
+                  "policy": [
+                    {
+                      "target": [
+                        {
+                          "region": "us-west-2",
+                          "weight": 50
+                        },
+                        {
+                          "region": "us-east-2",
+                          "weight": 50
+                        }
+                      ],
+                      "dnsPrefix": "testDnsPrefix",
+                      "outlier_detection": {
+                        "consecutive_gateway_errors": 5,
+                        "interval": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "outlierDetection": {
+                "metadata": {
+                  "name": "sampleOD",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "e2e"
+                  }
+                },
+                "spec": {
+                  "outlier_config": {
+                    "consecutive_gateway_errors": 10,
+                    "interval": 10
+                  }
                 }
               }
             }
           }
-        },
-        "qal": {
-          "name": "qal",
-          "namespace": "ns-1-usw2-qal",
-          "serviceName": "app-1-spk-root-service",
-          "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
-              }
-            }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
-          },
-          "ports": [
-            {
-              "name": "http",
-              "number": 80,
-              "protocol": "http"
-            }
-          ],
-          "trafficPolicy": {
-            "clientConnectionConfig": {
-              "metadata": {
-                "name": "sampleCCC",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "qal"
+        ],
+        "qal": [
+          {
+            "name": "qal",
+            "namespace": "ns-1-usw2-qal",
+            "services": {
+              "app-1-spk-service": {
+                "name": "app-1-spk-service",
+                "weight": -1,
+                "ports": {
+                  "http": 8090
                 }
-              },
-              "spec": {
-                "connectionPool": {
-                  "http": {
-                    "http2MaxRequests": 1000,
-                    "maxRequestsPerConnection": 5
-                  }
-                },
-                "tunnel": {}
               }
             },
-            "globalTrafficPolicy": {
-              "metadata": {
-                "name": "sampleGTP",
-                "labels": {
-                  "identity": "sample"
+            "type": "rollout",
+            "selectors": {
+              "app": "app-1"
+            },
+            "ports": [
+              {
+                "name": "http",
+                "number": 80,
+                "protocol": "http"
+              }
+            ],
+            "trafficPolicy": {
+              "clientConnectionConfig": {
+                "metadata": {
+                  "name": "sampleCCC",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "qal"
+                  }
                 },
-                "annotations": {
-                  "env": "qal"
-                }
-              },
-              "spec": {
-                "policy": [
-                  {
-                    "target": [
-                      {
-                        "region": "us-west-2",
-                        "weight": 50
-                      },
-                      {
-                        "region": "us-east-2",
-                        "weight": 50
-                      }
-                    ],
-                    "dnsPrefix": "testDnsPrefix",
-                    "outlier_detection": {
-                      "consecutive_gateway_errors": 5,
-                      "interval": 5
+                "spec": {
+                  "connectionPool": {
+                    "http": {
+                      "http2MaxRequests": 1000,
+                      "maxRequestsPerConnection": 5
                     }
-                  }
-                ]
-              }
-            },
-            "outlierDetection": {
-              "metadata": {
-                "name": "sampleOD",
-                "labels": {
-                  "identity": "sample"
-                },
-                "annotations": {
-                  "env": "qal"
+                  },
+                  "tunnel": {}
                 }
               },
-              "spec": {
-                "outlier_config": {
-                  "consecutive_gateway_errors": 10,
-                  "interval": 10
+              "globalTrafficPolicy": {
+                "metadata": {
+                  "name": "sampleGTP",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "qal"
+                  }
+                },
+                "spec": {
+                  "policy": [
+                    {
+                      "target": [
+                        {
+                          "region": "us-west-2",
+                          "weight": 50
+                        },
+                        {
+                          "region": "us-east-2",
+                          "weight": 50
+                        }
+                      ],
+                      "dnsPrefix": "testDnsPrefix",
+                      "outlier_detection": {
+                        "consecutive_gateway_errors": 5,
+                        "interval": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "outlierDetection": {
+                "metadata": {
+                  "name": "sampleOD",
+                  "labels": {
+                    "identity": "sample"
+                  },
+                  "annotations": {
+                    "env": "qal"
+                  }
+                },
+                "spec": {
+                  "outlier_config": {
+                    "consecutive_gateway_errors": 10,
+                    "interval": 10
+                  }
                 }
               }
             }
           }
-        }
+        ]
       }
     }
   },
