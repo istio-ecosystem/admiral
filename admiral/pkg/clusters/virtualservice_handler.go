@@ -648,7 +648,8 @@ func getBaseVirtualServiceForIngress(host, sniHost string) (*v1alpha3.VirtualSer
 	}
 
 	vs := networkingV1Alpha3.VirtualService{
-		Hosts:    []string{host},
+		// We are using the SNI host in hosts field as they need to match
+		Hosts:    []string{sniHost},
 		Gateways: gateways,
 		ExportTo: []string{"istio-system"},
 		Tls: []*networkingV1Alpha3.TLSRoute{
@@ -737,7 +738,7 @@ func generateSNIHost(fqdn string) (string, error) {
 	if fqdn == "" {
 		return "", fmt.Errorf("fqdn is empty")
 	}
-	return fmt.Sprintf("outbound_.80_._.%s", fqdn), nil
+	return fmt.Sprintf("outbound_.%d_._.%s", common.DefaultServiceEntryPort, fqdn), nil
 }
 
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices exported to
