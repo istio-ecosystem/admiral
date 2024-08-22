@@ -54,7 +54,7 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
-	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service due to error "
+	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service on cluster %s due to error %w"
 )
 
 func createServiceEntryForDeployment(
@@ -295,7 +295,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			if common.IsVSBasedRoutingEnabled() {
 				err := generateIngressVirtualServiceForDeployment(deployment, sourceIngressVirtualService)
 				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage + " w%" + err.Error())
+					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
 					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForDeployment",
 						deployment.Name, deployment.Namespace, clusterId, err.Error())
 					modifySEerr = common.AppendError(modifySEerr, err)
@@ -355,7 +355,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			if common.IsVSBasedRoutingEnabled() {
 				err := generateIngressVirtualServiceForRollout(rollout, sourceIngressVirtualService)
 				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage + " w%" + err.Error())
+					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
 					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForRollout",
 						rollout.Name, rollout.Namespace, clusterId, err.Error())
 					modifySEerr = common.AppendError(modifySEerr, err)
