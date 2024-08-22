@@ -2267,7 +2267,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-host"},
+			Hosts:    []string{"test-sni-host"},
 			Gateways: []string{"istio-system/passthrough-gateway"},
 			ExportTo: []string{"istio-system"},
 			Tls: []*networkingV1Alpha3.TLSRoute{
