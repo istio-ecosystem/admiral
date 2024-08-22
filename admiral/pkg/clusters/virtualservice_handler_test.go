@@ -2083,7 +2083,7 @@ func TestGenerateIngressVirtualServiceForRollout(t *testing.T) {
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
+			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
 			Gateways: []string{"istio-system/passthrough-gateway"},
 			ExportTo: []string{"istio-system"},
 			Tls: []*networkingV1Alpha3.TLSRoute{
@@ -2179,7 +2179,7 @@ func TestGenerateIngressVirtualServiceForDeployment(t *testing.T) {
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
+			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
 			Gateways: []string{"istio-system/passthrough-gateway"},
 			ExportTo: []string{"istio-system"},
 			Tls: []*networkingV1Alpha3.TLSRoute{
