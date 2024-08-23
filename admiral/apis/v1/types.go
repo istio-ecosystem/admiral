@@ -2,7 +2,6 @@ package v1
 
 const (
 	Admiral = "Admiral"
-	Intuit  = "intuit"
 )
 
 type AdmiralConfig struct {
