@@ -121,8 +121,9 @@ type AdmiralParams struct {
 	OperatorSecretFilterTags string
 
 	// VS Based Routing
-	EnableVSRouting   bool
-	VSRoutingGateways []string
+	EnableVSRouting             bool
+	VSRoutingGateways           []string
+	IngressVSExportToNamespaces []string
 }
 
 func (b AdmiralParams) String() string {
