@@ -426,6 +426,12 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
+func GetIngressVSExportToNamespace() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.IngressVSExportToNamespaces
+}
+
 func IsVSBasedRoutingEnabled() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

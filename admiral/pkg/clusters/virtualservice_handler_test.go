@@ -2254,6 +2254,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		SyncNamespace: "test-sync-ns",
+		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 
 	vsLabels := map[string]string{

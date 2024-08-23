@@ -651,7 +651,7 @@ func getBaseVirtualServiceForIngress(host, sniHost string) (*v1alpha3.VirtualSer
 		// We are using the SNI host in hosts field as they need to match
 		Hosts:    []string{sniHost},
 		Gateways: gateways,
-		ExportTo: []string{"istio-system"},
+		ExportTo: common.GetIngressVSExportToNamespace(),
 		Tls: []*networkingV1Alpha3.TLSRoute{
 			{
 				Match: []*networkingV1Alpha3.TLSMatchAttributes{
