@@ -45,7 +45,6 @@ type SeDrTuple struct {
 }
 
 const (
-	intuitHostSuffix                             = "intuit"
 	resourceCreatedByAnnotationLabel             = "app.kubernetes.io/created-by"
 	resourceCreatedByAnnotationValue             = "admiral"
 	resourceCreatedByAnnotationCartographerValue = "cartographer"
