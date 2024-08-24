@@ -1181,3 +1181,59 @@ func TestGetGtpIdentityPartition(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateUniqueNameForVS(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     string
+		vsName   string
+		nsName   string
+		expected string
+	}{
+		{
+			name: "Given valid namespace name and virtual service name" +
+				"Should return valid vsname ",
+			vsName:   "test-vs",
+			nsName:   "test-ns",
+			expected: "test-ns-test-vs",
+		},
+		{
+			name: "Given valid namespace name and nil virtual service name" +
+				"Should return valid vsname with only namespace name ",
+			vsName:   "",
+			nsName:   "test-ns",
+			expected: "test-ns",
+		},
+		{
+			name: "Given nil namespace name and valid virtual service name" +
+				"Should return valid vsname with only vs name ",
+			vsName:   "test-vs",
+			nsName:   "",
+			expected: "test-vs",
+		},
+		{
+			name: "Given valid namespace name and virtual service name over 250 chars long" +
+				"Should return valid truncated vsname",
+			vsName:   "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123",
+			nsName:   "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123",
+			expected: "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123-mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiw",
+		},
+		{
+			name: "Given nil namespace name and nil virtual service name" +
+				"Should return nil vsname ",
+			vsName:   "",
+			nsName:   "",
+			expected: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GenerateUniqueNameForVS(c.nsName, c.vsName)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %s, got: %s", c.expected, iVal)
+			}
+		})
+	}
+}

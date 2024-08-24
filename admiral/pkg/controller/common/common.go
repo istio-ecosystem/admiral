@@ -702,3 +702,24 @@ func GetMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 	}
 	return ports
 }
+
+func GenerateUniqueNameForVS(syncNamespace string, vsName string) string {
+
+	if syncNamespace == "" && vsName == "" {
+		return ""
+	} else if syncNamespace == "" {
+		return vsName
+	} else if vsName == "" {
+		return syncNamespace
+	}
+
+	newVSName := syncNamespace + "-" + vsName
+	if len(newVSName) > 250 {
+		newVSName = newVSName[:250]
+	}
+	//"op=%v type=%v name=%v namespace=%s cluster=%s message=%v"
+	logrus.Debugf(LogFormatAdv, "VirtualService", newVSName, syncNamespace, "", "New VS name generated")
+
+	return newVSName
+
+}
