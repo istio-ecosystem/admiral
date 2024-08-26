@@ -2066,8 +2066,9 @@ func TestGenerateIngressVirtualServiceForRollout(t *testing.T) {
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
 		},
-		HostnameSuffix:    "global",
-		VSRoutingGateways: []string{"istio-system/passthrough-gateway"},
+		HostnameSuffix:              "global",
+		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
+		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2162,8 +2163,9 @@ func TestGenerateIngressVirtualServiceForDeployment(t *testing.T) {
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
 		},
-		HostnameSuffix:    "global",
-		VSRoutingGateways: []string{"istio-system/passthrough-gateway"},
+		HostnameSuffix:              "global",
+		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
+		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2253,7 +2255,7 @@ func TestGenerateIngressVirtualServiceForDeployment(t *testing.T) {
 func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
-		SyncNamespace: "test-sync-ns",
+		SyncNamespace:               "test-sync-ns",
 		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 
