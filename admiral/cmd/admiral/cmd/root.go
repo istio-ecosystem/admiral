@@ -251,6 +251,12 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabelKey == shardIdentityValue")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSecretFilterTags, "operator_secret_filter_tags", "admiral/syncoperator",
 		"Filter tags for the specific admiral operator namespace secret to watch")
+
+	// Flags pertaining to VS based routing
+	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
+	rootCmd.PersistentFlags().StringArrayVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
+	rootCmd.PersistentFlags().StringArrayVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
+
 	return rootCmd
 }
 

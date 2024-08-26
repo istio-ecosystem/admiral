@@ -119,6 +119,11 @@ type AdmiralParams struct {
 	OperatorIdentityValue    string
 	ShardIdentityValue       string
 	OperatorSecretFilterTags string
+
+	// VS Based Routing
+	EnableVSRouting             bool
+	VSRoutingGateways           []string
+	IngressVSExportToNamespaces []string
 }
 
 func (b AdmiralParams) String() string {
