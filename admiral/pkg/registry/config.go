@@ -17,12 +17,13 @@ func (config *IdentityConfig) PutClusterConfig(name string, clusterConfig Identi
 }
 
 type IdentityConfigCluster struct {
-	Name            string                                `json:"name"`
-	Locality        string                                `json:"locality"`
-	IngressEndpoint string                                `json:"ingressEndpoint"`
-	IngressPort     string                                `json:"ingressPort"`
-	IngressPortName string                                `json:"ingressPortName"`
-	Environment     map[string]*IdentityConfigEnvironment `json:"environment"`
+	Name            string `json:"name"`
+	Locality        string `json:"locality"`
+	IngressEndpoint string `json:"ingressEndpoint"`
+	IngressPort     string `json:"ingressPort"`
+	IngressPortName string `json:"ingressPortName"`
+	// env -> rollout/deploy -> IdentityConfigEnvironment
+	Environment map[string]map[string]*IdentityConfigEnvironment `json:"environment"`
 }
 
 func (config *IdentityConfigCluster) PutEnvironment(name string, environmentConfig IdentityConfigEnvironment) error {
@@ -49,7 +50,7 @@ type IdentityConfigEnvironment struct {
 	Name          string                            `json:"name"`
 	Namespace     string                            `json:"namespace"`
 	Services      map[string]*RegistryServiceConfig `json:"services"`
-	ServiceName   string                            `json:"serviceName"`
+	Strategy      string                            `json:"strategy"`
 	Type          string                            `json:"type"`
 	Selectors     map[string]string                 `json:"selectors"`
 	Ports         []*networking.ServicePort         `json:"ports"`

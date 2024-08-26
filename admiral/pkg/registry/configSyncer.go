@@ -59,7 +59,7 @@ func (c *configSync) UpdateEnvironmentConfigByCluster(
 			configCache.Clusters[cluster].Locality = clusterConfig.Locality
 			configCache.Clusters[cluster].Name = clusterConfig.Name
 			if configCache.Clusters[cluster].Environment == nil {
-				configCache.Clusters[cluster].Environment = map[string]*IdentityConfigEnvironment{}
+				configCache.Clusters[cluster].Environment = map[string]map[string]*IdentityConfigEnvironment{}
 			}
 			configCache.Clusters[cluster].Environment[environment] = config.Clusters[cluster].Environment[environment]
 			ctxLogger.Infof(common.CtxLogFormat, task, config.IdentityName, "", cluster, "updating the cache")
@@ -72,9 +72,7 @@ func (c *configSync) UpdateEnvironmentConfigByCluster(
 			IngressEndpoint: clusterConfig.IngressEndpoint,
 			IngressPort:     clusterConfig.IngressPort,
 			IngressPortName: clusterConfig.IngressPortName,
-			Environment: map[string]*IdentityConfigEnvironment{
-				environment: clusterConfig.Environment[environment],
-			},
+			Environment:     clusterConfig.Environment,
 		}
 		ctxLogger.Infof(common.CtxLogFormat, task, config.IdentityName, "", cluster, "updating the cache")
 		return cache.Update(config.IdentityName, configCache, writer)

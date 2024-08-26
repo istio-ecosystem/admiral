@@ -55,6 +55,10 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
+	bluegreenStrategy                            = "bluegreen"
+	canaryStrategy                               = "canary"
+	deployToRolloutStrategy                      = "deployToRollout"
+	rolloutToDeployStrategy                      = "rolloutToDeploy"
 )
 
 func createServiceEntryForDeployment(
@@ -212,9 +216,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			Locality:        getLocality(rc),
 			IngressEndpoint: ingressEndpoint,
 			IngressPort:     strconv.Itoa(port),
-			Environment: map[string]*registry.IdentityConfigEnvironment{
-				env: &registry.IdentityConfigEnvironment{},
-			},
+			Environment:     map[string]map[string]*registry.IdentityConfigEnvironment{},
 		}
 
 		// For Deployment <-> Rollout migration
@@ -286,7 +288,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
 			modifySEerr = common.AppendError(modifySEerr, errCreateSE)
 
-			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
+			registryConfig.Clusters[clusterId].Environment[env][common.Deployment] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
 				Type:      common.Deployment,
@@ -335,7 +337,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForRollout",
 				deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
 			modifySEerr = common.AppendError(modifySEerr, errCreateSE)
-			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
+			registryConfig.Clusters[clusterId].Environment[env][common.Rollout] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
 				Type:      common.Rollout,
@@ -411,7 +413,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 	}
 
-	//PID: use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity - DONE
+	// use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
 	cname = strings.TrimSpace(cname)
@@ -537,7 +539,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 		registryConfig.Clusters[sourceCluster].IngressPortName = getIngressPortName(meshPorts)
 
-		registryConfig.Clusters[sourceCluster].Environment[env].Ports = []*networking.ServicePort{getServiceEntryPort(meshPorts)}
+		registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].Ports = []*networking.ServicePort{getServiceEntryPort(meshPorts)}
 		// store admiral crd configurations for state syncer
 		gtp, err := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
 		if err != nil {
@@ -551,25 +553,26 @@ func modifyServiceEntryForNewServiceOrPod(
 		if err != nil {
 			return nil, err
 		}
-		registryConfig.Clusters[sourceCluster].Environment[env].TrafficPolicy = registry.TrafficPolicy{}
+		registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].TrafficPolicy = registry.TrafficPolicy{}
 		if gtp != nil {
-			registryConfig.Clusters[sourceCluster].Environment[env].TrafficPolicy.GlobalTrafficPolicy = *gtp
+			registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].TrafficPolicy.GlobalTrafficPolicy = *gtp
 		}
 		if od != nil {
-			registryConfig.Clusters[sourceCluster].Environment[env].TrafficPolicy.OutlierDetection = *od
+			registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].TrafficPolicy.OutlierDetection = *od
 		}
 		if ccc != nil {
-			registryConfig.Clusters[sourceCluster].Environment[env].TrafficPolicy.ClientConnectionConfig = *ccc
+			registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].TrafficPolicy.ClientConnectionConfig = *ccc
 		}
 
 		for key, serviceEntry := range serviceEntries {
 			if len(serviceEntry.Endpoints) == 0 || (!deployRolloutMigration[sourceCluster] && clustersToDeleteSE[sourceCluster]) {
 				if common.IsAdmiralStateSyncerMode() {
-					registryConfig.Clusters[sourceCluster].Environment[env] = &registry.IdentityConfigEnvironment{
+					registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType] = &registry.IdentityConfigEnvironment{
 						Name:      env,
 						Namespace: namespace,
-						Type:      common.Rollout,
-						Event:     admiral.Delete, // TODO: we need to handle DELETE operations in admiral operator
+						Type:      eventResourceType,
+						Event:     admiral.Delete,
+						//TODO: we need to handle DELETE operations in admiral operator
 					}
 					continue
 				}
@@ -601,13 +604,14 @@ func modifyServiceEntryForNewServiceOrPod(
 							sourceWeightedServices[sourceCluster],
 							cnames, ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								blueGreenService.Service.Name: &registry.RegistryServiceConfig{
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Rollout].Services = map[string]*registry.RegistryServiceConfig{
+								blueGreenService.Service.Name: {
 									Name:   blueGreenService.Service.Name,
 									Weight: -1,
 									Ports:  GetMeshPortsForRollout(sourceCluster, blueGreenService.Service, sourceRollouts[sourceCluster]),
 								},
 							}
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Rollout].Strategy = bluegreenStrategy
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -630,13 +634,14 @@ func modifyServiceEntryForNewServiceOrPod(
 						canaryService := sourceRollouts[sourceCluster].Spec.Strategy.Canary.CanaryService
 						// use only canary service for fqdn
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								canaryService: &registry.RegistryServiceConfig{
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Rollout].Services = map[string]*registry.RegistryServiceConfig{
+								canaryService: {
 									Name:   canaryService,
 									Weight: -1,
 									Ports:  meshPorts,
 								},
 							}
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Rollout].Strategy = canaryStrategy
 							continue
 						}
 						fqdn := canaryService + common.Sep + serviceInstance[appType[sourceCluster]].Namespace + common.GetLocalDomainSuffix()
@@ -660,7 +665,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseWeightedService(sourceWeightedServices[sourceCluster])
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Rollout].Services = parseWeightedService(sourceWeightedServices[sourceCluster])
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -689,7 +694,7 @@ func modifyServiceEntryForNewServiceOrPod(
 							break
 						}
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseMigrationService(migrationService)
+							registryConfig.Clusters[sourceCluster].Environment[env][eventResourceType].Services = parseMigrationService(migrationService)
 							continue
 						}
 						err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -705,13 +710,14 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry regular endpoints")
 						// call State Syncer's config syncer for deployment
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								localFqdn: &registry.RegistryServiceConfig{
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Deployment].Services = map[string]*registry.RegistryServiceConfig{
+								localFqdn: {
 									Name:   localFqdn,
 									Weight: 0,
 									Ports:  meshPorts,
 								},
 							}
+							registryConfig.Clusters[sourceCluster].Environment[env][common.Deployment].Strategy = deployToRolloutStrategy
 							continue
 						}
 						ep.Address = localFqdn

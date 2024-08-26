@@ -9,9 +9,8 @@ import (
 
 func GetSampleIdentityConfigEnvironment(env string, namespace string, identity string) *IdentityConfigEnvironment {
 	identityConfigEnvironment := &IdentityConfigEnvironment{
-		Name:        env,
-		Namespace:   namespace,
-		ServiceName: "app-1-spk-root-service",
+		Name:      env,
+		Namespace: namespace,
 		Services: map[string]*RegistryServiceConfig{
 			"app-1-spk-root-service": {
 				Name:   "app-1-spk-root-service",
@@ -92,10 +91,16 @@ func GetSampleIdentityConfig(identity string) IdentityConfig {
 	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf", identity)
 	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", identity)
 	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal", identity)
-	environments := map[string]*IdentityConfigEnvironment{
-		"prf": prfEnv,
-		"e2e": e2eEnv,
-		"qal": qalEnv,
+	environments := map[string]map[string]*IdentityConfigEnvironment{
+		"prf": {
+			"rollout": prfEnv,
+		},
+		"e2e": {
+			"rollout": e2eEnv,
+		},
+		"qal": {
+			"rollout": qalEnv,
+		},
 	}
 	clientAssets := map[string]string{
 		"sample": "sample",

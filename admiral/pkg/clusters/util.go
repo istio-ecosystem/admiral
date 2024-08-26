@@ -323,9 +323,11 @@ func getIngressPortName(meshPorts map[string]uint32) string {
 }
 
 func parseWeightedService(weightedServices map[string]*WeightedService) map[string]*registry.RegistryServiceConfig {
+	//TODO: all services with weights need to be added here
 	return nil
 }
 
 func parseMigrationService(services []*k8sV1.Service) map[string]*registry.RegistryServiceConfig {
+	//TODO: both deploy and rellout need to be in the environment config
 	return nil
 }

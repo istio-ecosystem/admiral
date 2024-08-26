@@ -134,11 +134,12 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 					}
 					// Fill the DependencyNamespaceCache
 					for _, clientAsset := range identityConfig.ClientAssets {
-						//TODO: How to deal with multiple services here?
 						cname := common.GetCnameVal([]string{identityConfigEnv.Name, strings.ToLower(identityConfig.IdentityName), common.GetHostnameSuffix()})
 						cnames[cname] = "1"
-						localFqdn := identityConfigEnv.ServiceName + common.Sep + identityConfigEnv.Namespace + common.GetLocalDomainSuffix()
-						rr.AdmiralCache.DependencyNamespaceCache.Put(clientAsset, identityConfigEnv.Namespace, localFqdn, cnames)
+						for _, service := range identityConfigEnv.Services {
+							localFqdn := service.Name + common.Sep + identityConfigEnv.Namespace + common.GetLocalDomainSuffix()
+							rr.AdmiralCache.DependencyNamespaceCache.Put(clientAsset, identityConfigEnv.Namespace, localFqdn, cnames)
+						}
 					}
 				}
 				// Fill the ClusterLocalityCache
