@@ -21,18 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ingressTLSDestination struct {
-	host string
-	port uint32
-}
-
 const (
 	vsRoutingLabel = "admiral.io/vs-routing"
-	// This can be stable/active/root service
-	defaultFQDN = "default"
-
-	previewFQDN = "preview"
-	canaryFQDN  = "canary"
 )
 
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
