@@ -121,6 +121,7 @@ func NewController(
 
 	var secretResolver resolver.SecretResolver
 	var err error
+
 	if admiralProfile == common.AdmiralProfileDefault {
 		log.Info("Initializing default secret resolver")
 		secretResolver, err = resolver.NewDefaultResolver()

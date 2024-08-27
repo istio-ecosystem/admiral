@@ -15,6 +15,13 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	defaultFQDN = "default"
+
+	previewFQDN = "preview"
+	canaryFQDN  = "canary"
+)
+
 // getBaseVirtualServiceForIngress generates the base virtual service for the ingress gateway
 // The destinations should be added separately, this func does not have the context of the destinations.
 func getBaseVirtualServiceForIngress(hosts, sniHosts []string) (*v1alpha3.VirtualService, error) {
