@@ -120,23 +120,38 @@ func removeSeEndpoints(eventCluster string, event admiral.EventType, clusterId s
 func GenerateServiceEntryForCanary(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
 	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, workloadIdentityKey string, san []string) error {
 
-	if destRollout.Spec.Strategy.Canary != nil && destRollout.Spec.Strategy.Canary.CanaryService != "" &&
-		destRollout.Spec.Strategy.Canary.TrafficRouting != nil && destRollout.Spec.Strategy.Canary.TrafficRouting.Istio != nil {
-		rolloutServices := GetAllServicesForRollout(rc, destRollout)
-		logrus.Debugf("number of services %d matched for rollout %s in namespace=%s and cluster=%s", len(rolloutServices), destRollout.Name, destRollout.Namespace, rc.ClusterID)
-		if rolloutServices == nil {
-			return nil
-		}
-		if _, ok := rolloutServices[destRollout.Spec.Strategy.Canary.CanaryService]; ok {
-			canaryGlobalFqdn := common.CanaryRolloutCanaryPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
-			admiralCache.CnameIdentityCache.Store(canaryGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
-			err := generateSECanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, serviceEntries, san, canaryGlobalFqdn)
-			if err != nil {
-				return err
-			}
+	canaryGlobalFqdn := getCanaryFQDNForRollout(ctxLogger, destRollout, rc)
+
+	if canaryGlobalFqdn != "" {
+		admiralCache.CnameIdentityCache.Store(canaryGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
+		err := generateSECanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, serviceEntries, san, canaryGlobalFqdn)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// getCanaryFQDNForRollout - returns the canary FQDN for the rollout
+// Example: canary.stage.greeting.canary.global
+func getCanaryFQDNForRollout(ctxLogger *logrus.Entry, destRollout *argo.Rollout, rc *RemoteController) string {
+
+	if destRollout.Spec.Strategy.Canary == nil || destRollout.Spec.Strategy.Canary.CanaryService == "" ||
+		destRollout.Spec.Strategy.Canary.TrafficRouting == nil || destRollout.Spec.Strategy.Canary.TrafficRouting.Istio == nil {
+		return ""
+	}
+
+	rolloutServices := GetAllServicesForRollout(rc, destRollout)
+	ctxLogger.Warnf("number of services %d matched for rollout %s in namespace=%s and cluster=%s", len(rolloutServices), destRollout.Name, destRollout.Namespace, rc.ClusterID)
+	if rolloutServices == nil {
+		return ""
+	}
+	if _, ok := rolloutServices[destRollout.Spec.Strategy.Canary.CanaryService]; !ok {
+		return ""
+	}
+
+	return common.CanaryRolloutCanaryPrefix + common.Sep +
+		common.GetCnameForRollout(destRollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 }
 
 // Returns all services that match the rollot selector, in case of canary strategy this should return a map with root, stable and canary services

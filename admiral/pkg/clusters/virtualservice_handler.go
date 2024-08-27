@@ -8,15 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
-	k8sAppsV1 "k8s.io/api/apps/v1"
-	k8sV1 "k8s.io/api/core/v1"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/google/uuid"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	constUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -25,8 +21,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ingressTLSDestination struct {
+	host string
+	port uint32
+}
+
 const (
 	vsRoutingLabel = "admiral.io/vs-routing"
+	// This can be stable/active/root service
+	defaultFQDN = "default"
+
+	previewFQDN = "preview"
+	canaryFQDN  = "canary"
 )
 
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
@@ -625,199 +631,6 @@ func deleteVirtualService(ctx context.Context, exist *v1alpha3.VirtualService, n
 			return fmt.Errorf("either VirtualService was already deleted, or it never existed")
 		}
 		return err
-	}
-	return nil
-}
-
-// getBaseVirtualServiceForIngress generates the base virtual service for the ingress gateway
-// The destinations should be added separately, this func does not have the context of the destinations.
-// TODO: Support for multiple hosts and sniHosts. Will be needed when additional endpoints are generated using GTPs
-func getBaseVirtualServiceForIngress(host, sniHost string) (*v1alpha3.VirtualService, error) {
-
-	if host == "" {
-		return nil, fmt.Errorf("host is empty")
-	}
-
-	if sniHost == "" {
-		return nil, fmt.Errorf("sniHost is empty")
-	}
-
-	gateways := common.GetVSRoutingGateways()
-	if len(gateways) == 0 {
-		return nil, fmt.Errorf("no gateways configured for ingress virtual service")
-	}
-
-	vs := networkingV1Alpha3.VirtualService{
-		// We are using the SNI host in hosts field as they need to match
-		Hosts:    []string{sniHost},
-		Gateways: gateways,
-		ExportTo: common.GetIngressVSExportToNamespace(),
-		Tls: []*networkingV1Alpha3.TLSRoute{
-			{
-				Match: []*networkingV1Alpha3.TLSMatchAttributes{
-					{
-						Port:     common.DefaultMtlsPort,
-						SniHosts: []string{sniHost},
-					},
-				},
-			},
-		},
-	}
-
-	// Explicitly labeling the VS for routing
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	return &v1alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      host + "-routing-vs",
-			Namespace: common.GetSyncNamespace(),
-			Labels:    vsLabels,
-		},
-		Spec: vs,
-	}, nil
-}
-
-// generateIngressVirtualServiceForDeployment generates the base virtual service for a given deployment
-// and adds it to the sourceIngressVirtualService map
-// sourceIngressVirtualService is a map of globalFQDN (.mesh) endpoint to VirtualService
-func generateIngressVirtualServiceForDeployment(
-	deployment *k8sAppsV1.Deployment,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService) error {
-	if deployment == nil {
-		return fmt.Errorf("deployment is nil")
-	}
-	workloadIdentityKey := common.GetWorkloadIdentifier()
-	cname := common.GetCname(deployment, workloadIdentityKey, common.GetHostnameSuffix())
-	if cname == "" {
-		return fmt.Errorf("cname is empty")
-	}
-	sniHost, err := generateSNIHost(cname)
-	if err != nil {
-		return err
-	}
-	baseVS, err := getBaseVirtualServiceForIngress(cname, sniHost)
-	if err != nil {
-		return err
-	}
-	sourceIngressVirtualService[cname] = baseVS
-	return nil
-}
-
-// generateIngressVirtualServiceForRollout generates the base virtual service for a given rollout
-// and adds it to the sourceIngressVirtualService map
-// sourceIngressVirtualService is a map of globalFQDN (.mesh) endpoint to VirtualService
-// TODO: Generate VS for canary and blue green strategies
-func generateIngressVirtualServiceForRollout(
-	rollout *argo.Rollout,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService) error {
-	if rollout == nil {
-		return fmt.Errorf("rollout is nil")
-	}
-	workloadIdentityKey := common.GetWorkloadIdentifier()
-	cname := common.GetCnameForRollout(rollout, workloadIdentityKey, common.GetHostnameSuffix())
-	if cname == "" {
-		return fmt.Errorf("cname is empty")
-	}
-	sniHost, err := generateSNIHost(cname)
-	if err != nil {
-		return err
-	}
-	baseVS, err := getBaseVirtualServiceForIngress(cname, sniHost)
-	if err != nil {
-		return err
-	}
-	sourceIngressVirtualService[cname] = baseVS
-	return nil
-}
-
-// generateSNIHost generates the SNI host for the virtual service in the format outbound_.80_._.<fqdn>
-// Example: outbound_.80_._.httpbin.global.mesh
-func generateSNIHost(fqdn string) (string, error) {
-	if fqdn == "" {
-		return "", fmt.Errorf("fqdn is empty")
-	}
-	return fmt.Sprintf("outbound_.%d_._.%s", common.DefaultServiceEntryPort, fqdn), nil
-}
-
-// addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices exported to
-// istio-system namespace.
-func addUpdateVirtualServicesForSourceIngress(
-	ctx context.Context,
-	ctxLogger *log.Entry,
-	remoteRegistry *RemoteRegistry,
-	sourceServices map[string]map[string]*k8sV1.Service,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService,
-	sourceDeployment map[string]*k8sAppsV1.Deployment,
-	sourceRollout map[string]*argo.Rollout) error {
-
-	if remoteRegistry == nil {
-		return fmt.Errorf("remoteRegistry is nil")
-	}
-
-	for sourceCluster, serviceInstance := range sourceServices {
-
-		destinationHostPort := make(map[string]uint32)
-		if serviceInstance[common.Deployment] != nil {
-			host := serviceInstance[common.Deployment].Name + "." + serviceInstance[common.Deployment].Namespace + ".svc.cluster.local"
-			protocolPortMap := common.GetMeshPortsForDeployments(sourceCluster, serviceInstance[common.Deployment], sourceDeployment[sourceCluster])
-			if port, ok := protocolPortMap[constUtil.Http]; ok {
-				destinationHostPort[host] = port
-			}
-		}
-		if serviceInstance[common.Rollout] != nil {
-			host := serviceInstance[common.Rollout].Name + "." + serviceInstance[common.Rollout].Namespace + ".svc.cluster.local"
-			protocolPortMap := GetMeshPortsForRollout(sourceCluster, serviceInstance[common.Deployment], sourceRollout[sourceCluster])
-			if port, ok := protocolPortMap[constUtil.Http]; ok {
-				destinationHostPort[host] = port
-			}
-		}
-
-		if len(destinationHostPort) == 0 {
-			return fmt.Errorf("no destination found for the ingress virtualservice")
-		}
-
-		rc := remoteRegistry.GetRemoteController(sourceCluster)
-
-		if rc == nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-				"", "", sourceCluster, "remote controller not initialized on this cluster")
-			continue
-		}
-
-		for fqdn, virtualService := range sourceIngressVirtualService {
-			if len(virtualService.Spec.Tls) == 0 {
-				return fmt.Errorf("no TLSRoute found in the ingress virtualservice with host %s", fqdn)
-			}
-			if len(virtualService.Spec.Tls) > 1 {
-				return fmt.Errorf("more than one TLSRoute found in the ingress virtualservice with host %s", fqdn)
-			}
-			routeDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
-			for host, port := range destinationHostPort {
-				routeDestination := &networkingV1Alpha3.RouteDestination{
-					Destination: &networkingV1Alpha3.Destination{
-						Host: host,
-						Port: &networkingV1Alpha3.PortSelector{
-							Number: port,
-						},
-					},
-				}
-				routeDestinations = append(routeDestinations, routeDestination)
-			}
-			virtualService.Spec.Tls[0].Route = routeDestinations
-
-			existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name)
-			if err != nil {
-				ctxLogger.Warn(err.Error())
-			}
-
-			ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
-			err = addUpdateVirtualService(
-				ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
-
-		}
 	}
 	return nil
 }
