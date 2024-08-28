@@ -183,8 +183,8 @@ func getFQDNFromSNIHost(sniHost string) (string, error) {
 }
 
 // getRouteDestination generates a RouteDestination object for the given host and port
-func getRouteDestination(host string, port uint32) *networkingV1Alpha3.RouteDestination {
-	return &networkingV1Alpha3.RouteDestination{
+func getRouteDestination(host string, port uint32, weight int32) *networkingV1Alpha3.RouteDestination {
+	routeDestination := &networkingV1Alpha3.RouteDestination{
 		Destination: &networkingV1Alpha3.Destination{
 			Host: host,
 			Port: &networkingV1Alpha3.PortSelector{
@@ -192,6 +192,10 @@ func getRouteDestination(host string, port uint32) *networkingV1Alpha3.RouteDest
 			},
 		},
 	}
+	if weight > 0 {
+		routeDestination.Weight = weight
+	}
+	return routeDestination
 }
 
 // populateVSRouteDestinationForDeployment populates the route destination map
@@ -220,7 +224,7 @@ func populateVSRouteDestinationForDeployment(
 	if destinations[defaultFQDN] == nil {
 		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
-	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort))
+	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
 	return nil
 }
 
@@ -315,7 +319,7 @@ func populateVSRouteDestinationForRollout(
 	if destinations[defaultFQDN] == nil {
 		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
-	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort))
+	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
 	return nil
 }
 
@@ -343,7 +347,7 @@ func populateDestinationsForBlueGreenStrategy(
 		if destinations[previewFQDN] == nil {
 			destinations[previewFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
-		destinations[previewFQDN] = append(destinations[previewFQDN], getRouteDestination(host, meshPort))
+		destinations[previewFQDN] = append(destinations[previewFQDN], getRouteDestination(host, meshPort, 0))
 	}
 	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
 	if activeService, ok := weightedServices[activeServiceName]; ok {
@@ -353,7 +357,7 @@ func populateDestinationsForBlueGreenStrategy(
 		if destinations[defaultFQDN] == nil {
 			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
-		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort))
+		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
 	}
 	return nil
 }
@@ -383,12 +387,16 @@ func populateDestinationsForCanaryStrategy(
 	// greater than 0.
 	// If not, then it would have only one service which has weight set to 100 and that would be
 	// considered as the default service.
+	weight := int32(0)
 	for serviceName, service := range weightedServices {
 		host := serviceName + common.Sep + service.Service.Namespace + common.GetLocalDomainSuffix()
 		if destinations[defaultFQDN] == nil {
 			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
-		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort))
+		if service.Weight > 0 {
+			weight = service.Weight
+		}
+		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, weight))
 	}
 
 	// Here we will create a separate canary destination for the canary FQDN
@@ -399,7 +407,7 @@ func populateDestinationsForCanaryStrategy(
 	if destinations[canaryFQDN] == nil {
 		destinations[canaryFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
-	destinations[canaryFQDN] = append(destinations[canaryFQDN], getRouteDestination(host, meshPort))
+	destinations[canaryFQDN] = append(destinations[canaryFQDN], getRouteDestination(host, meshPort, 0))
 
 	return nil
 }
