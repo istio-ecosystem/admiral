@@ -13,8 +13,9 @@
           "namespace": "foobar-ns",
           "services": null,
           "serviceName": "",
-          "type": "rollout",
-          "selectors": null,
+          "type": {
+            "rollout": null
+          },
           "ports": [
             {
               "number": 80,

@@ -23,9 +23,12 @@
               }
             }
           },
-          "type": "deployment",
-          "selectors": {
-            "app": "inbound-gw"
+          "type": {
+            "deployment": {
+              "selectors": {
+                "app": "inbound-gw"
+              }
+            }
           },
           "ports": [
             {

@@ -45,6 +45,7 @@ type SeDrTuple struct {
 }
 
 const (
+	intuitHostSuffix                             = "intuit"
 	resourceCreatedByAnnotationLabel             = "app.kubernetes.io/created-by"
 	resourceCreatedByAnnotationValue             = "admiral"
 	resourceCreatedByAnnotationCartographerValue = "cartographer"
@@ -54,6 +55,10 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
+	bluegreenStrategy                            = "bluegreen"
+	canaryStrategy                               = "canary"
+	deployToRolloutStrategy                      = "deployToRollout"
+	rolloutToDeployStrategy                      = "rolloutToDeploy"
 	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service on cluster %s due to error %w"
 )
 
@@ -213,9 +218,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			Locality:        getLocality(rc),
 			IngressEndpoint: ingressEndpoint,
 			IngressPort:     strconv.Itoa(port),
-			Environment: map[string]*registry.IdentityConfigEnvironment{
-				env: &registry.IdentityConfigEnvironment{},
-			},
+			Environment:     map[string]*registry.IdentityConfigEnvironment{},
 		}
 
 		// For Deployment <-> Rollout migration
@@ -290,7 +293,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      common.Deployment,
+				Type:      map[string]*registry.TypeConfig{common.Deployment: {Selectors: deployment.Spec.Selector.MatchLabels}},
 			}
 			if common.IsVSBasedRoutingEnabled() {
 				err := generateIngressVirtualServiceForDeployment(deployment, sourceIngressVirtualService)
@@ -349,7 +352,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      common.Rollout,
+				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
 			}
 
 			if common.IsVSBasedRoutingEnabled() {
@@ -432,7 +435,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 	}
 
-	//PID: use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity - DONE
+	// use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
 	cname = strings.TrimSpace(cname)
@@ -589,8 +592,13 @@ func modifyServiceEntryForNewServiceOrPod(
 					registryConfig.Clusters[sourceCluster].Environment[env] = &registry.IdentityConfigEnvironment{
 						Name:      env,
 						Namespace: namespace,
-						Type:      common.Rollout,
-						Event:     admiral.Delete, // TODO: we need to handle DELETE operations in admiral operator
+						Type: map[string]*registry.TypeConfig{
+							eventResourceType: {
+								Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
+							},
+						},
+						Event: admiral.Delete,
+						//TODO: we need to handle DELETE operations in admiral operator
 					}
 					continue
 				}
@@ -623,12 +631,13 @@ func modifyServiceEntryForNewServiceOrPod(
 							cnames, ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
 							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								blueGreenService.Service.Name: &registry.RegistryServiceConfig{
+								blueGreenService.Service.Name: {
 									Name:   blueGreenService.Service.Name,
 									Weight: -1,
 									Ports:  GetMeshPortsForRollout(sourceCluster, blueGreenService.Service, sourceRollouts[sourceCluster]),
 								},
 							}
+							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = bluegreenStrategy
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -652,12 +661,13 @@ func modifyServiceEntryForNewServiceOrPod(
 						// use only canary service for fqdn
 						if common.IsAdmiralStateSyncerMode() {
 							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								canaryService: &registry.RegistryServiceConfig{
+								canaryService: {
 									Name:   canaryService,
 									Weight: -1,
 									Ports:  meshPorts,
 								},
 							}
+							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = canaryStrategy
 							continue
 						}
 						fqdn := canaryService + common.Sep + serviceInstance[appType[sourceCluster]].Namespace + common.GetLocalDomainSuffix()
@@ -727,7 +737,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						// call State Syncer's config syncer for deployment
 						if common.IsAdmiralStateSyncerMode() {
 							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								localFqdn: &registry.RegistryServiceConfig{
+								localFqdn: {
 									Name:   localFqdn,
 									Weight: 0,
 									Ports:  meshPorts,

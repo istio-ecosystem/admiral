@@ -58,6 +58,9 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 		serverCluster := identityConfigCluster.Name
 		for _, identityConfigEnvironment := range identityConfigCluster.Environment {
 			env := identityConfigEnvironment.Name
+			if len(identityConfigEnvironment.Services) == 0 {
+				return serviceEntries, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
+			}
 			var tmpSe *networkingV1Alpha3.ServiceEntry
 			start = time.Now()
 			endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, ingressEndpoints, identityConfigEnvironment)
@@ -118,49 +121,51 @@ func getServiceEntryEndpoints(
 	serverCluster string,
 	ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry,
 	identityConfigEnvironment *registry.IdentityConfigEnvironment) ([]*networkingV1Alpha3.WorkloadEntry, error) {
-	if len(identityConfigEnvironment.Services) == 0 {
-		return nil, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
-	}
 	var err error
 	endpoint := ingressEndpoints[serverCluster]
 	endpoints := []*networkingV1Alpha3.WorkloadEntry{}
 	tmpEp := endpoint.DeepCopy()
-	tmpEp.Labels[typeLabel] = identityConfigEnvironment.Type
 	services := []*registry.RegistryServiceConfig{}
 	for _, service := range identityConfigEnvironment.Services {
 		services = append(services, service)
 	}
 	sort.Sort(registry.RegistryServiceConfigSorted(services))
 	// Deployment won't have weights, so just sort and take the first service to use as the endpoint
-	if identityConfigEnvironment.Type == common.Deployment {
-		if clientCluster == serverCluster {
-			tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-			tmpEp.Ports = services[0].Ports
-		}
-		endpoints = append(endpoints, tmpEp)
-	}
-	// Rollout without weights is treated the same as deployment so sort and take first service
-	// If any of the services have weights then add them to the list of endpoints
-	if identityConfigEnvironment.Type == common.Rollout {
-		for _, service := range services {
-			if service.Weight > 0 {
-				weightedEp := tmpEp.DeepCopy()
-				weightedEp.Weight = uint32(service.Weight)
-				if clientCluster == serverCluster {
-					weightedEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-					weightedEp.Ports = service.Ports
-				}
-				endpoints = append(endpoints, weightedEp)
-			}
-		}
-		// If we go through all the services associated with the rollout and none have applicable weights then endpoints is empty
-		// Treat the rollout like a deployment and sort and take the first service
-		if len(endpoints) == 0 {
+	for resourceType, _ := range identityConfigEnvironment.Type {
+		if resourceType == common.Deployment {
 			if clientCluster == serverCluster {
 				tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
 				tmpEp.Ports = services[0].Ports
 			}
+			tmpEp.Labels[typeLabel] = resourceType
 			endpoints = append(endpoints, tmpEp)
+		}
+		// Rollout without weights is treated the same as deployment so sort and take first service
+		// If any of the services have weights then add them to the list of endpoints
+		if resourceType == common.Rollout {
+			for _, service := range services {
+				if service.Weight > 0 {
+					weightedEp := tmpEp.DeepCopy()
+					weightedEp.Weight = uint32(service.Weight)
+					if clientCluster == serverCluster {
+						weightedEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+						weightedEp.Ports = service.Ports
+					}
+					weightedEp.Labels[typeLabel] = resourceType
+					endpoints = append(endpoints, weightedEp)
+				}
+			}
+			// If we go through all the services associated with the rollout and none have applicable weights then endpoints is empty
+			// Treat the rollout like a deployment and sort and take the first service
+			if len(endpoints) == 0 {
+				if clientCluster == serverCluster {
+					tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+					tmpEp.Ports = services[0].Ports
+
+				}
+				tmpEp.Labels[typeLabel] = resourceType
+				endpoints = append(endpoints, tmpEp)
+			}
 		}
 	}
 	// TODO: type is rollout, strategy is bluegreen, need a way to know which service is preview/desired, trigger another SE

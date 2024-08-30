@@ -23,9 +23,12 @@
               }
             }
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
+              }
+            }
           },
           "ports": [
             {
@@ -119,9 +122,12 @@
               }
             }
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
+              }
+            }
           },
           "ports": [
             {
@@ -215,9 +221,12 @@
               }
             }
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
+              }
+            }
           },
           "ports": [
             {

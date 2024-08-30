@@ -21,9 +21,12 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string, identity s
 				},
 			},
 		},
-		Type:      "rollout",
-		Selectors: map[string]string{"app": "app-1"},
-		Ports:     []*networking.ServicePort{{Name: "http", Number: uint32(80), Protocol: "http"}},
+		Type: map[string]*TypeConfig{
+			"rollout": {
+				Selectors: map[string]string{"app": "app1"},
+			},
+		},
+		Ports: []*networking.ServicePort{{Name: "http", Number: uint32(80), Protocol: "http"}},
 		TrafficPolicy: TrafficPolicy{
 			ClientConnectionConfig: v1alpha1.ClientConnectionConfig{
 				ObjectMeta: v1.ObjectMeta{

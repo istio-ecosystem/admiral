@@ -106,7 +106,11 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	common.InitializeConfig(admiralParams)
 	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
 	unweightedDeployment := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
-	unweightedDeployment.Type = common.Deployment
+	unweightedDeployment.Type = map[string]*registry.TypeConfig{
+		"deployment": {
+			Selectors: map[string]string{"app": "app1"},
+		},
+	}
 	weightedServices := map[string]*registry.RegistryServiceConfig{
 		"app-1-spk-root-service": {
 			Name: "app-1-spk-root-service",
