@@ -1836,3 +1836,155 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 	}
 
 }
+
+func TestGetMeshHTTPPortForRollout(t *testing.T) {
+
+	testCases := []struct {
+		name          string
+		ports         map[string]map[string]uint32
+		expectedError error
+		expectedPort  uint32
+	}{
+		{
+			name: "Given a nil ports map, " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("ports map is nil"),
+		},
+		{
+			name: "Given a empty ports map, " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return an error",
+			ports:         make(map[string]map[string]uint32),
+			expectedError: fmt.Errorf("ports map is empty"),
+		},
+		{
+			name: "Given a ports map with no valid rollout port " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return an error",
+			ports: map[string]map[string]uint32{
+				common.Deployment: {},
+			},
+			expectedError: fmt.Errorf("rollout ports not found"),
+		},
+		{
+			name: "Given a ports map with invalid port " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return an error",
+			ports: map[string]map[string]uint32{
+				common.Rollout: {"http": 0},
+			},
+			expectedError: fmt.Errorf("no valid port found for rollout"),
+		},
+		{
+			name: "Given a ports map with valid port " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return the port",
+			ports: map[string]map[string]uint32{
+				common.Rollout: {"http": 8080},
+			},
+			expectedError: nil,
+			expectedPort:  8080,
+		},
+		{
+			name: "Given a ports map with multiple ports " +
+				"When getMeshHTTPPortForRollout is invoked, " +
+				"Then it should return the first port",
+			ports: map[string]map[string]uint32{
+				common.Rollout: {"http2": 8090, "http": 8080},
+			},
+			expectedError: nil,
+			expectedPort:  8090,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getMeshHTTPPortForRollout(tc.ports)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedPort, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetMeshHTTPPortForDeployment(t *testing.T) {
+
+	testCases := []struct {
+		name          string
+		ports         map[string]map[string]uint32
+		expectedError error
+		expectedPort  uint32
+	}{
+		{
+			name: "Given a nil ports map, " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("ports map is nil"),
+		},
+		{
+			name: "Given a empty ports map, " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return an error",
+			ports:         make(map[string]map[string]uint32),
+			expectedError: fmt.Errorf("ports map is empty"),
+		},
+		{
+			name: "Given a ports map with no valid rollout port " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return an error",
+			ports: map[string]map[string]uint32{
+				common.Rollout: {},
+			},
+			expectedError: fmt.Errorf("deployment ports not found"),
+		},
+		{
+			name: "Given a ports map with invalid port " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return an error",
+			ports: map[string]map[string]uint32{
+				common.Deployment: {"http": 0},
+			},
+			expectedError: fmt.Errorf("no valid port found for deployment"),
+		},
+		{
+			name: "Given a ports map with valid port " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return the port",
+			ports: map[string]map[string]uint32{
+				common.Deployment: {"http": 8080},
+			},
+			expectedError: nil,
+			expectedPort:  8080,
+		},
+		{
+			name: "Given a ports map with multiple ports " +
+				"When getMeshHTTPPortForDeployment is invoked, " +
+				"Then it should return the first port",
+			ports: map[string]map[string]uint32{
+				common.Deployment: {"http2": 8090, "http": 8080},
+			},
+			expectedError: nil,
+			expectedPort:  8090,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getMeshHTTPPortForDeployment(tc.ports)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedPort, actual)
+			}
+		})
+	}
+
+}
