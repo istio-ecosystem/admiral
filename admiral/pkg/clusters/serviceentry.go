@@ -2409,12 +2409,11 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	previewGlobalFQDN := getPreviewFQDNForRollout(ctx, destRollout, rc)
+	previewGlobalFqdn := getPreviewFQDNForRollout(ctx, destRollout, rc)
 
-	if previewGlobalFQDN != "" {
+	if previewGlobalFqdn != "" {
 		ctxLogger.Infof(common.CtxLogFormat,
 			"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "Building ServiceEntry for BlueGreen")
-		previewGlobalFqdn := common.BlueGreenRolloutPreviewPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 		admiralCache.CnameIdentityCache.Store(previewGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
 		previewAddress, _ := getUniqueAddress(ctxLogger, ctx, admiralCache, previewGlobalFqdn)
 		if common.DisableIPGeneration() || len(previewAddress) != 0 {

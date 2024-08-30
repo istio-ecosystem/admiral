@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
@@ -56,7 +57,7 @@ func getBaseVirtualServiceForIngress(hosts, sniHosts []string) (*v1alpha3.Virtua
 	vs := networkingV1Alpha3.VirtualService{
 		Hosts:    sniHosts,
 		Gateways: gateways,
-		ExportTo: []string{"istio-system"},
+		ExportTo: common.GetIngressVSExportToNamespace(),
 		Tls:      tlsRoutes,
 	}
 
@@ -218,6 +219,9 @@ func populateVSRouteDestinationForDeployment(
 	if serviceInstance[common.Deployment] == nil {
 		return fmt.Errorf("service is not associated with a deployment")
 	}
+	if destinations == nil {
+		return fmt.Errorf("destinations map is nil")
+	}
 
 	host := serviceInstance[common.Deployment].Name + "." +
 		serviceInstance[common.Deployment].Namespace + ".svc.cluster.local"
@@ -287,6 +291,9 @@ func populateVSRouteDestinationForRollout(
 	if rollout == nil {
 		return fmt.Errorf("rollout is nil")
 	}
+	if destinations == nil {
+		return fmt.Errorf("destinations map is nil")
+	}
 
 	// Check if rollout has a bluegreen strategy
 	// If so, get the preview service svc.cluster.local destination
@@ -315,11 +322,17 @@ func populateVSRouteDestinationForRollout(
 	// bluegreen or istio canary strategy
 	// In this case we pick whatever service we got during the discovery
 	// phase and add it as a defaultFQDN
-	host := serviceInstance[common.Rollout].Name + "." + rollout.Namespace + ".svc.cluster.local"
+	host := serviceInstance[common.Rollout].Name + "." +
+		serviceInstance[common.Rollout].Namespace + ".svc.cluster.local"
 	if destinations[defaultFQDN] == nil {
 		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
 	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
+
+	if len(destinations[defaultFQDN]) > 1 {
+		sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+	}
+
 	return nil
 }
 
@@ -337,6 +350,11 @@ func populateDestinationsForBlueGreenStrategy(
 	if weightedServices == nil {
 		return fmt.Errorf("populateDestinationsForBlueGreenStrategy, weightedServices is nil for rollout %s",
 			rollout.Name)
+	}
+	if destinations == nil {
+		return fmt.Errorf("populateDestinationsForBlueGreenStrategy, destinations is nil for rollout %s",
+			rollout.Name)
+
 	}
 
 	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
@@ -377,9 +395,10 @@ func populateDestinationsForCanaryStrategy(
 	if rollout == nil {
 		return fmt.Errorf("populateDestinationsForCanaryStrategy, rollout is nil")
 	}
-	if weightedServices == nil {
-		return fmt.Errorf("populateDestinationsForCanaryStrategy, weightedServices is nil for rollout %s",
+	if destinations == nil {
+		return fmt.Errorf("populateDestinationsForCanaryStrategy, destinations is nil for rollout %s",
 			rollout.Name)
+
 	}
 
 	// Loop through the weightedService map and add cluster local service destinations
@@ -399,6 +418,10 @@ func populateDestinationsForCanaryStrategy(
 		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, weight))
 	}
 
+	if len(destinations[defaultFQDN]) > 1 {
+		sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+	}
+
 	// Here we will create a separate canary destination for the canary FQDN
 	// This is needed to provide users to validate their canary endpoints
 	serviceNamespace := serviceInstance.Namespace
@@ -408,6 +431,10 @@ func populateDestinationsForCanaryStrategy(
 		destinations[canaryFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
 	destinations[canaryFQDN] = append(destinations[canaryFQDN], getRouteDestination(host, meshPort, 0))
+
+	if len(destinations[canaryFQDN]) > 1 {
+		sort.Sort(RouteDestinationSorted(destinations[canaryFQDN]))
+	}
 
 	return nil
 }
@@ -427,7 +454,7 @@ func addUpdateVirtualServicesForSourceIngress(
 	}
 
 	if len(sourceClusterToDestinations) == 0 {
-		return fmt.Errorf("no destination found for the ingress virtualservice")
+		return fmt.Errorf("no route destination found for the ingress virtualservice")
 	}
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
@@ -468,6 +495,7 @@ func addUpdateVirtualServicesForSourceIngress(
 							ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
 								"", "", sourceCluster,
 								"skipped adding preview service, no valid route destinaton found")
+							matchesWithNoDestinations = append(matchesWithNoDestinations, i)
 							continue
 						}
 						routeDestinations = destination[previewFQDN]
@@ -477,13 +505,10 @@ func addUpdateVirtualServicesForSourceIngress(
 							ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
 								"", "", sourceCluster,
 								"skipped adding canary service, no valid route destinaton found")
+							matchesWithNoDestinations = append(matchesWithNoDestinations, i)
 							continue
 						}
 						routeDestinations = destination[canaryFQDN]
-					}
-					if len(routeDestinations) == 0 {
-						matchesWithNoDestinations = append(matchesWithNoDestinations, i)
-						continue
 					}
 					tlsRoute.Route = routeDestinations
 				}
@@ -491,6 +516,9 @@ func addUpdateVirtualServicesForSourceIngress(
 			}
 
 			// Remove the matches with no destinations
+			// Ideally this should not happen, but if we unable to discover services for
+			// their corresponding sniHost matches, then we should end up removing those matches
+			// from the VirtualService
 			for _, indexToBeDeleted := range matchesWithNoDestinations {
 				virtualService.Spec.Tls[indexToBeDeleted] = virtualService.Spec.Tls[len(virtualService.Spec.Tls)-1]
 				virtualService.Spec.Tls = virtualService.Spec.Tls[:len(virtualService.Spec.Tls)-1]
