@@ -1988,3 +1988,134 @@ func TestGetMeshHTTPPortForDeployment(t *testing.T) {
 	}
 
 }
+
+func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
+
+	meshPort := uint32(8080)
+	testCases := []struct {
+		name                      string
+		serviceInstance           map[string]*coreV1.Service
+		weightedServices          map[string]*WeightedService
+		meshDeployAndRolloutPorts map[string]map[string]uint32
+		rollout                   *v1alpha1.Rollout
+		expectedError             error
+		expectedRouteDestination  map[string][]*networkingV1Alpha3.RouteDestination
+	}{
+		{
+			name: "Given nil serviceInstance " +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should return an error",
+			serviceInstance: nil,
+			expectedError:   fmt.Errorf("serviceInstance is nil"),
+		},
+		{
+			name: "Given a rollout with bluegreen strategy " +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should return destinations with the active and preview services",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Rollout: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"preview-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "preview-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+				"active-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "active-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				defaultFQDN: {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				previewFQDN: {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given an empty route destinations map, " +
+				"When populateVSRouteDestinationForDeployment is invoked, " +
+				"Then it should populate the destinations",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Deployment: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Deployment: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:      "test-deployment-svc",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				defaultFQDN: {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getAllVSRouteDestinationsByCluster(
+				tc.serviceInstance,
+				tc.meshDeployAndRolloutPorts,
+				tc.weightedServices,
+				tc.rollout)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedRouteDestination, actual)
+			}
+		})
+	}
+
+}

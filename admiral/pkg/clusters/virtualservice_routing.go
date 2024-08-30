@@ -550,6 +550,10 @@ func getAllVSRouteDestinationsByCluster(
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
 
+	if serviceInstance == nil {
+		return nil, fmt.Errorf("serviceInstance is nil")
+	}
+
 	destinations := make(map[string][]*networkingV1Alpha3.RouteDestination)
 	if serviceInstance[common.Deployment] != nil {
 		meshPort, err := getMeshHTTPPortForDeployment(meshDeployAndRolloutPorts)
