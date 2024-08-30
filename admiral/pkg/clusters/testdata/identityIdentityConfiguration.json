@@ -14,7 +14,13 @@
           "services": null,
           "serviceName": "",
           "type": {
-            "rollout": null
+            "rollout": {
+              "strategy": "",
+              "selectors": {
+                "app": "identity",
+                "identity": "identity"
+              }
+            }
           },
           "ports": [
             {
