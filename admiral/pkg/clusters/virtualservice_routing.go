@@ -581,6 +581,9 @@ func getMeshHTTPPortForRollout(ports map[string]map[string]uint32) (uint32, erro
 	if ports == nil {
 		return 0, fmt.Errorf("ports map is nil")
 	}
+	if len(ports) == 0 {
+		return 0, fmt.Errorf("ports map is empty")
+	}
 	rolloutPorts, ok := ports[common.Rollout]
 	if !ok {
 		return 0, fmt.Errorf("rollout ports not found")
@@ -597,6 +600,9 @@ func getMeshHTTPPortForRollout(ports map[string]map[string]uint32) (uint32, erro
 func getMeshHTTPPortForDeployment(ports map[string]map[string]uint32) (uint32, error) {
 	if ports == nil {
 		return 0, fmt.Errorf("ports map is nil")
+	}
+	if len(ports) == 0 {
+		return 0, fmt.Errorf("ports map is empty")
 	}
 	deploymentPorts, ok := ports[common.Deployment]
 	if !ok {
