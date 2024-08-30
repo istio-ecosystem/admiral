@@ -241,32 +241,6 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			},
 		},
 	}
-	//rollout := &v1alpha1.Rollout{
-	//	Spec: v1alpha1.RolloutSpec{
-	//		Template: coreV1.PodTemplateSpec{
-	//			ObjectMeta: metaV1.ObjectMeta{
-	//				Annotations: map[string]string{
-	//					"identity":                 "test-identity",
-	//					"env":                      "test-env",
-	//					common.SidecarEnabledPorts: "8080",
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
-	//deployment := &v1.Deployment{
-	//	Spec: v1.DeploymentSpec{
-	//		Template: coreV1.PodTemplateSpec{
-	//			ObjectMeta: metaV1.ObjectMeta{
-	//				Annotations: map[string]string{
-	//					"identity":                 "test-identity",
-	//					"env":                      "test-env",
-	//					common.SidecarEnabledPorts: "8080",
-	//				},
-	//			},
-	//		},
-	//	},
-	//}
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type": "VirtualService",
