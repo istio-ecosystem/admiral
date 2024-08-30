@@ -23,9 +23,12 @@
               }
             }
           },
-          "type": "deployment",
-          "selectors": {
-            "app": "blackhole-gw"
+          "type": {
+            "deployment": {
+              "selectors": {
+                "app": "blackhole-gw"
+              }
+            }
           },
           "ports": [
             {
@@ -130,9 +133,12 @@
               }
             }
           },
-          "type": "deployment",
-          "selectors": {
-            "app": "blackhole-gw"
+          "type": {
+            "deployment": {
+              "selectors": {
+                "app": "blackhole-gw"
+              }
+            }
           },
           "ports": [
             {
