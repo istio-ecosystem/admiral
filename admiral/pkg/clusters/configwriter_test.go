@@ -105,6 +105,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	e2eEnv := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	host := "e2e.sample.mesh"
 	unweightedDeployment := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
 	unweightedDeployment.Type = map[string]*registry.TypeConfig{
 		"deployment": {
@@ -135,6 +136,12 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	}
 	weightedRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
 	weightedRollout.Services = weightedServices
+	weightedRollout.Type = map[string]*registry.TypeConfig{
+		"rollout": {
+			Selectors: map[string]string{"app": "app1"},
+			Strategy:  canaryStrategy,
+		},
+	}
 	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cluster1": {
 		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
@@ -233,7 +240,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			seEndpoints, err := getServiceEntryEndpoints(ctxLogger, c.clientCluster, c.serverCluster, c.ingressEndpoints, c.identityConfigEnvironment)
+			seEndpoints, err := getServiceEntryEndpoints(ctxLogger, c.clientCluster, c.serverCluster, host, c.ingressEndpoints, c.identityConfigEnvironment)
 			if err != nil {
 				t.Errorf("want=nil, got=%v", err)
 			}
