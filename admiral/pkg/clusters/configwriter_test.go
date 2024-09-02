@@ -252,6 +252,190 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 	}
 }
 
+func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
+	admiralParams := admiralParamsForConfigWriterTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	host := "e2e.sample.mesh"
+	canaryRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	canaryServices := map[string]*registry.RegistryServiceConfig{
+		"root": {
+			Name: "app-1-spk-root-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+		"desired": {
+			Name: "app-1-spk-desired-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+		"stable": {
+			Name: "app-1-spk-stable-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+	}
+	canaryRollout.Services = canaryServices
+	canaryRollout.Type = map[string]*registry.TypeConfig{
+		"rollout": {
+			Selectors: map[string]string{"app": "app1"},
+			Strategy:  canaryStrategy,
+		},
+	}
+
+	blueGreenRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
+	blueGreenServices := map[string]*registry.RegistryServiceConfig{
+		"preview": {
+			Name: "app-1-spk-preview-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+		"active": {
+			Name: "app-1-spk-active-service",
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+		},
+	}
+	blueGreenRollout.Services = blueGreenServices
+	blueGreenRollout.Type = map[string]*registry.TypeConfig{
+		"rollout": {
+			Selectors: map[string]string{"app": "app1"},
+			Strategy:  bluegreenStrategy,
+		},
+	}
+	ingressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{"cluster1": {
+		Address:  "abc-elb.us-west-2.elb.amazonaws.com.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(15443)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
+	}, "cluster2": {
+		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(15443)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
+	}}
+
+	localEndpointsWithDesiredService := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "app-1-spk-desired-service.ns-1-usw2-e2e.svc.cluster.local.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(8090)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+	}}
+	localEndpointsWithPreviewService := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "app-1-spk-preview-service.ns-1-usw2-e2e.svc.cluster.local.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(8090)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+	}}
+	localEndpointsWithActiveService := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "app-1-spk-active-service.ns-1-usw2-e2e.svc.cluster.local.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(8090)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+	}}
+	remoteEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
+		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
+		Locality: "us-west-2",
+		Ports:    map[string]uint32{"http": uint32(15443)},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+	}}
+	ctx := context.Background()
+	ctxLogger := common.GetCtxLogger(ctx, "sample", "")
+	testCases := []struct {
+		name                      string
+		identityConfigEnvironment *registry.IdentityConfigEnvironment
+		ingressEndpoints          map[string]*networkingV1Alpha3.WorkloadEntry
+		clientCluster             string
+		serverCluster             string
+		host                      string
+		expectedSEEndpoints       []*networkingV1Alpha3.WorkloadEntry
+	}{
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a desired service, " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed endpoint for canary host should be a local endpoint with desired service",
+			identityConfigEnvironment: canaryRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster1",
+			host:                      "canary.e2e.sample.mesh",
+			expectedSEEndpoints:       localEndpointsWithDesiredService,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a desired service, " +
+				"When the client cluster is the different from the server cluster" +
+				"Then the constructed endpoint for canary host should be a remote endpoint of cluster 2",
+			identityConfigEnvironment: canaryRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster2",
+			host:                      host,
+			expectedSEEndpoints:       remoteEndpoints,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a preview and active service for a bluegreen rollout, " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed endpoint for preview host should be a local endpoint with preview service",
+			identityConfigEnvironment: blueGreenRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster1",
+			host:                      "preview.e2e.sample.mesh",
+			expectedSEEndpoints:       localEndpointsWithPreviewService,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a preview and active service for a bluegreen rollout, " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed endpoint for host should be a local endpoint with active service",
+			identityConfigEnvironment: blueGreenRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster1",
+			host:                      host,
+			expectedSEEndpoints:       localEndpointsWithActiveService,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a preview and active service for a bluegreen rollout, " +
+				"When the client cluster is the different from the server cluster" +
+				"Then the constructed endpoint for  host should be a remote endpoint of cluster 2",
+			identityConfigEnvironment: blueGreenRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster2",
+			host:                      host,
+			expectedSEEndpoints:       remoteEndpoints,
+		},
+		{
+			name: "Given an IdentityConfigEnvironment and ingressEndpoint and a preview and active service for a bluegreen rollout, " +
+				"When the client cluster is the different from the server cluster" +
+				"Then the constructed endpoint for  host should be a remote endpoint of cluster 2",
+			identityConfigEnvironment: blueGreenRollout,
+			ingressEndpoints:          ingressEndpoints,
+			clientCluster:             "cluster1",
+			serverCluster:             "cluster2",
+			host:                      "preview.e2e.sample.mesh",
+			expectedSEEndpoints:       remoteEndpoints,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			seEndpoints, err := getServiceEntryEndpoints(ctxLogger, c.clientCluster, c.serverCluster, c.host, c.ingressEndpoints, c.identityConfigEnvironment)
+			if err != nil {
+				t.Errorf("want=nil, got=%v", err)
+			}
+			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.WorkloadEntry{})
+			if !cmp.Equal(seEndpoints, c.expectedSEEndpoints, opts) {
+				t.Errorf("want=%v, got=%v", c.expectedSEEndpoints, seEndpoints)
+			}
+		})
+	}
+}
+
 func TestGetExportTo(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
