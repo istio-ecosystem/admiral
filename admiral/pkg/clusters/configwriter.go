@@ -19,7 +19,7 @@ const (
 	typeLabel         = "type"
 	previewServiceKey = "preview"
 	activeServiceKey  = "active"
-	desiredServiceKey = "canary"
+	desiredServiceKey = "desired"
 	rootServiceKey    = "root"
 )
 
@@ -169,6 +169,9 @@ func getServiceEntryEndpoints(
 				if identityConfigEnvironment.Type[resourceType].Strategy == canaryStrategy {
 					if strings.HasPrefix(host, canaryStrategy) {
 						ep.Address = servicesMap[desiredServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+						ep.Ports = services[0].Ports
+						ep.Labels[typeLabel] = resourceType
+						endpoints = append(endpoints, ep)
 					} else {
 						for _, service := range services {
 							if service.Weight > 0 {
@@ -181,21 +184,12 @@ func getServiceEntryEndpoints(
 							}
 						}
 					}
-				} else {
-					if _, ok := servicesMap[rootServiceKey]; ok {
-						ep.Address = servicesMap[rootServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				} else if identityConfigEnvironment.Type[resourceType].Strategy == bluegreenStrategy {
+					if strings.HasPrefix(host, previewServiceKey) {
+						ep.Address = servicesMap[previewServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
 					} else {
-						ep.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+						ep.Address = servicesMap[activeServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
 					}
-
-					if identityConfigEnvironment.Type[resourceType].Strategy == bluegreenStrategy {
-						if strings.HasPrefix(host, previewServiceKey) {
-							ep.Address = servicesMap[previewServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-						} else {
-							ep.Address = servicesMap[activeServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-						}
-					}
-
 					ep.Ports = services[0].Ports
 					ep.Labels[typeLabel] = resourceType
 					endpoints = append(endpoints, ep)
@@ -206,7 +200,11 @@ func getServiceEntryEndpoints(
 		// Treat the rollout like a deployment and sort and take the first service
 		if len(endpoints) == 0 || resourceType == common.Deployment {
 			if clientCluster == serverCluster {
-				tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				if _, ok := servicesMap[rootServiceKey]; ok {
+					tmpEp.Address = servicesMap[rootServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				} else {
+					tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				}
 				tmpEp.Ports = services[0].Ports
 			}
 			tmpEp.Labels[typeLabel] = resourceType
