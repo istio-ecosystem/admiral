@@ -646,6 +646,30 @@ func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
 	expectedLocalServiceEntryQALForMigration := createMockServiceEntryWithTwoLocalEndpoints("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
 	expectedLocalServiceEntriesForMigration := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQALForMigration, &expectedLocalServiceEntryPRFForMigration, &expectedLocalServiceEntryE2EForMigration}
 
+	identityConfigForMigration2 := registry.GetSampleIdentityConfigWithRolloutAndDeployment("sample")
+	identityConfigForMigration2.Clusters["cluster2"].Environment["prf"].Type = map[string]*registry.TypeConfig{
+		"deployment": {
+			Selectors: map[string]string{"app": "app1"},
+		},
+	}
+	identityConfigForMigration2.Clusters["cluster2"].Environment["e2e"].Type = map[string]*registry.TypeConfig{
+		"deployment": {
+			Selectors: map[string]string{"app": "app1"},
+		},
+	}
+	identityConfigForMigration2.Clusters["cluster2"].Environment["qal"].Type = map[string]*registry.TypeConfig{
+		"deployment": {
+			Selectors: map[string]string{"app": "app1"},
+		},
+	}
+	expectedLocalServiceEntryPRFForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryPRFForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntryE2EForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryE2EForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntryQALForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryQALForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntriesForMigration2 := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQALForMigration2, &expectedLocalServiceEntryPRFForMigration2, &expectedLocalServiceEntryE2EForMigration2}
+
 	testCases := []struct {
 		name                   string
 		clientCluster          string
@@ -665,13 +689,23 @@ func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
 			expectedErr:            false,
 		},
 		{
-			name: "Given information to build an se has a rollout and deployment in the same namespace, " +
+			name: "Given information to build an se has a rollout and deployment in the same namespace, and remote cluster having a rollout " +
 				"When the client cluster is the same as the server cluster" +
 				"Then the constructed se should have 2 local endpoints and a remote endpoint and istio-system in exportTo",
 			clientCluster:          "cluster1",
 			event:                  admiral.Add,
 			identityConfig:         identityConfigForMigration,
 			expectedServiceEntries: expectedLocalServiceEntriesForMigration,
+			expectedErr:            false,
+		},
+		{
+			name: "Given information to build an se has a rollout and deployment in the same namespace, and remote cluster having a deployment " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed se should have 2 local endpoints and a remote endpoint and istio-system in exportTo",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfigForMigration2,
+			expectedServiceEntries: expectedLocalServiceEntriesForMigration2,
 			expectedErr:            false,
 		},
 	}
