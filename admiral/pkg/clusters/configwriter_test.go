@@ -696,15 +696,6 @@ func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
 	}
 }
 
-// run the above test 100 times
-func TestBenchmarkBuildServiceEntriesFromIdentityConfig(b *testing.T) {
-	sum := 1
-	for sum < 1000 {
-		TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(b)
-		sum++
-	}
-}
-
 type ServiceEntryListSorterByHost []*networkingV1Alpha3.ServiceEntry
 
 func (s ServiceEntryListSorterByHost) Len() int {
