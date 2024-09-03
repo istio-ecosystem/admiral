@@ -178,7 +178,7 @@ func getServiceEntryEndpoints(
 	for resourceType, _ := range identityConfigEnvironment.Type {
 		// Rollout without weights is treated the same as deployment so sort and take first service
 		// If any of the rolloutServicesMap have weights then add them to the list of endpointsMap
-		if resourceType == common.Rollout {
+		if resourceType == common.Rollout && len(rolloutServicesMap) > 0 {
 			ep := tmpEp.DeepCopy()
 			if clientCluster == serverCluster {
 				if identityConfigEnvironment.Type[resourceType].Strategy == canaryStrategy {
@@ -219,7 +219,7 @@ func getServiceEntryEndpoints(
 		if !endpointFromRollout || resourceType == common.Deployment {
 			tmpEpCopy := tmpEp.DeepCopy()
 			if clientCluster == serverCluster {
-				if resourceType == common.Rollout {
+				if resourceType == common.Rollout && len(rolloutServicesMap) > 0 {
 					if _, ok := rolloutServicesMap[rootServiceKey]; ok {
 						tmpEpCopy.Address = rolloutServicesMap[rootServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
 					} else {
@@ -227,7 +227,7 @@ func getServiceEntryEndpoints(
 					}
 					tmpEpCopy.Ports = rolloutServices[0].Ports
 				}
-				if resourceType == common.Deployment {
+				if resourceType == common.Deployment && len(deploymentServicesMap) > 0 {
 					tmpEpCopy.Address = deploymentServices[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
 					tmpEpCopy.Ports = deploymentServices[0].Ports
 				}
