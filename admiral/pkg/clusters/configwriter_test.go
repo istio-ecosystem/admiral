@@ -65,6 +65,62 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 	return serviceEntry
 }
 
+func createMockServiceEntryWithTwoEndpoints(env string, identity string, endpointAddress string, endpointPort int, exportTo []string) networkingV1Alpha3.ServiceEntry {
+	serviceEntry := networkingV1Alpha3.ServiceEntry{
+		Hosts:      []string{env + "." + strings.ToLower(identity) + ".mesh"},
+		Addresses:  nil,
+		Ports:      []*networkingV1Alpha3.ServicePort{{Number: uint32(common.DefaultServiceEntryPort), Name: util.Http, Protocol: util.Http}},
+		Location:   1,
+		Resolution: 2,
+		Endpoints: []*networkingV1Alpha3.WorkloadEntry{{Address: endpointAddress,
+			Locality: "us-west-2",
+			Ports:    map[string]uint32{"http": uint32(endpointPort)},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}},
+			{
+				Address:  "def-elb.us-east-2.elb.amazonaws.com.",
+				Locality: "us-east-2",
+				Ports:    map[string]uint32{"http": uint32(15443)},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			}},
+		WorkloadSelector: nil,
+		ExportTo:         exportTo,
+		SubjectAltNames:  []string{"spiffe://prefix/" + identity},
+	}
+	return serviceEntry
+}
+
+func createMockServiceEntryWithTwoLocalEndpoints(env string, identity string, endpointAddress1, endpointAddress2 string, endpointPort int, exportTo []string) networkingV1Alpha3.ServiceEntry {
+	serviceEntry := networkingV1Alpha3.ServiceEntry{
+		Hosts:      []string{env + "." + strings.ToLower(identity) + ".mesh"},
+		Addresses:  nil,
+		Ports:      []*networkingV1Alpha3.ServicePort{{Number: uint32(common.DefaultServiceEntryPort), Name: util.Http, Protocol: util.Http}},
+		Location:   1,
+		Resolution: 2,
+		Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+			{
+				Address:  endpointAddress1,
+				Locality: "us-west-2",
+				Ports:    map[string]uint32{"http": uint32(endpointPort)},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}},
+			{
+				Address:  endpointAddress2,
+				Locality: "us-west-2",
+				Ports:    map[string]uint32{"http": uint32(endpointPort)},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}},
+			{
+				Address:  "def-elb.us-east-2.elb.amazonaws.com.",
+				Locality: "us-east-2",
+				Ports:    map[string]uint32{"http": uint32(15443)},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			}},
+		WorkloadSelector: nil,
+		ExportTo:         exportTo,
+		SubjectAltNames:  []string{"spiffe://prefix/" + identity},
+	}
+	sort.Sort(WorkloadEntrySorted(serviceEntry.Endpoints))
+	return serviceEntry
+}
+
 func TestGetIngressEndpoints(t *testing.T) {
 	identityConfig := registry.GetSampleIdentityConfig("sample")
 	expectedIngressEndpoints := map[string]*networkingV1Alpha3.WorkloadEntry{
@@ -118,6 +174,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 		"app-1-spk-desired-service": {
 			Name:   "app-1-spk-desired-service",
@@ -125,6 +182,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 		"app-1-spk-stable-service": {
 			Name:   "app-1-spk-stable-service",
@@ -132,6 +190,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 	}
 	weightedRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
@@ -264,18 +323,21 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 		"desired": {
 			Name: "app-1-spk-desired-service",
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 		"stable": {
 			Name: "app-1-spk-stable-service",
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 	}
 	canaryRollout.Services = canaryServices
@@ -293,12 +355,14 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 		"active": {
 			Name: "app-1-spk-active-service",
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
+			Selectors: map[string]string{"app": "app1"},
 		},
 	}
 	blueGreenRollout.Services = blueGreenServices
@@ -561,6 +625,83 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 				t.Errorf("want=%v, \ngot=%v", c.expectedServiceEntries, serviceEntries)
 			}
 		})
+	}
+}
+
+func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
+	admiralParams := admiralParamsForConfigWriterTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
+	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
+	identityConfig := registry.GetSampleIdentityConfigWithRemoteEndpoints("sample")
+	expectedLocalServiceEntryPRF := createMockServiceEntryWithTwoEndpoints("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryE2E := createMockServiceEntryWithTwoEndpoints("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryQAL := createMockServiceEntryWithTwoEndpoints("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntries := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQAL, &expectedLocalServiceEntryPRF, &expectedLocalServiceEntryE2E}
+
+	identityConfigForMigration := registry.GetSampleIdentityConfigWithRolloutAndDeployment("sample")
+	expectedLocalServiceEntryPRFForMigration := createMockServiceEntryWithTwoLocalEndpoints("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryE2EForMigration := createMockServiceEntryWithTwoLocalEndpoints("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntryQALForMigration := createMockServiceEntryWithTwoLocalEndpoints("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
+	expectedLocalServiceEntriesForMigration := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQALForMigration, &expectedLocalServiceEntryPRFForMigration, &expectedLocalServiceEntryE2EForMigration}
+
+	testCases := []struct {
+		name                   string
+		clientCluster          string
+		event                  admiral.EventType
+		identityConfig         registry.IdentityConfig
+		expectedServiceEntries []*networkingV1Alpha3.ServiceEntry
+		expectedErr            bool
+	}{
+		{
+			name: "Given information to build an se, " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed se should have local endpoint and a remote endpoint and istio-system in exportTo",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfig,
+			expectedServiceEntries: expectedLocalServiceEntries,
+			expectedErr:            false,
+		},
+		{
+			name: "Given information to build an se has a rollout and deployment in the same namespace, " +
+				"When the client cluster is the same as the server cluster" +
+				"Then the constructed se should have 2 local endpoints and a remote endpoint and istio-system in exportTo",
+			clientCluster:          "cluster1",
+			event:                  admiral.Add,
+			identityConfig:         identityConfigForMigration,
+			expectedServiceEntries: expectedLocalServiceEntriesForMigration,
+			expectedErr:            false,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			serviceEntryBuilder := ServiceEntryBuilder{ClientCluster: c.clientCluster, RemoteRegistry: rr}
+
+			serviceEntries, err := serviceEntryBuilder.BuildServiceEntriesFromIdentityConfig(ctxLogger, c.identityConfig)
+
+			if err != nil && !c.expectedErr {
+				t.Errorf("want=%v, \ngot=%v", nil, err)
+			}
+			opts := cmpopts.IgnoreUnexported(networkingV1Alpha3.ServiceEntry{}, networkingV1Alpha3.ServicePort{}, networkingV1Alpha3.WorkloadEntry{})
+			// sort the service entries by name
+			sort.Sort(ServiceEntryListSorterByHost(serviceEntries))
+			sort.Sort(ServiceEntryListSorterByHost(c.expectedServiceEntries))
+			if !cmp.Equal(serviceEntries, c.expectedServiceEntries, opts) {
+				t.Errorf("want=%v, \ngot=%v", c.expectedServiceEntries, serviceEntries)
+			}
+
+		})
+	}
+}
+
+// run the above test 100 times
+func TestBenchmarkBuildServiceEntriesFromIdentityConfig(b *testing.T) {
+	sum := 1
+	for sum < 1000 {
+		TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(b)
+		sum++
 	}
 }
 
