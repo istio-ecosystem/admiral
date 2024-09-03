@@ -35,9 +35,10 @@ func (config *IdentityConfigCluster) PutClientAssets(clientAssets []string) erro
 }
 
 type RegistryServiceConfig struct {
-	Name   string            `json:"name"`
-	Weight int               `json:"weight"`
-	Ports  map[string]uint32 `json:"ports"`
+	Name      string            `json:"name"`
+	Weight    int               `json:"weight"`
+	Ports     map[string]uint32 `json:"ports"`
+	Selectors map[string]string `json:"selectors"`
 }
 
 type TrafficPolicy struct {
