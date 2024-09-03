@@ -124,6 +124,8 @@ func GenerateServiceEntryForCanary(ctxLogger *logrus.Entry, ctx context.Context,
 	canaryGlobalFqdn := getCanaryFQDNForRollout(ctxLogger, destRollout, rc)
 
 	if canaryGlobalFqdn != "" {
+		ctxLogger.Infof(common.CtxLogFormat,
+			"GenerateServiceEntryForCanary", destRollout.Name, destRollout.Namespace, "", "Building ServiceEntry for Canary")
 		admiralCache.CnameIdentityCache.Store(canaryGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
 		err := generateSECanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, serviceEntries, san, canaryGlobalFqdn)
 		if err != nil {
