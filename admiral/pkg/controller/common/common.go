@@ -707,9 +707,13 @@ func GenerateUniqueNameForVS(originNamespace string, vsName string) string {
 
 	if originNamespace == "" && vsName == "" {
 		return ""
-	} else if originNamespace == "" {
+	}
+
+	if originNamespace == "" {
 		return vsName
-	} else if vsName == "" {
+	}
+
+	if vsName == "" {
 		return originNamespace
 	}
 
