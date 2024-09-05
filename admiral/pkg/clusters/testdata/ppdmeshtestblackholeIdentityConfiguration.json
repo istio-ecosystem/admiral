@@ -15,13 +15,12 @@
           "namespace": "services-blackholed268-usw2-dev",
           "serviceName": "blackhole-root-service",
           "services": {
-            "blackhole-root-service": {
+            "default": [{
               "name": "blackhole-root-service",
-              "weight": -1,
               "ports": {
                 "http": 8090
               }
-            }
+            }]
           },
           "type": {
             "deployment": {
@@ -125,14 +124,13 @@
           "namespace": "services-blackholesh45-use2-dev",
           "serviceName": "blackhole-root-service",
           "services": {
-            "blackhole-root-service": {
-              "name": "blackhole-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
-              }
-            }
-          },
+            "default": [{
+                "name": "blackhole-root-service",
+                "ports": {
+                  "http": 8090
+                }
+              }]
+            },
           "type": {
             "deployment": {
               "selectors": {

@@ -630,12 +630,12 @@ func modifyServiceEntryForNewServiceOrPod(
 							sourceWeightedServices[sourceCluster],
 							cnames, ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								blueGreenService.Service.Name: {
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string][]*registry.RegistryServiceConfig{
+								testServiceKey: {{
 									Name:   blueGreenService.Service.Name,
 									Weight: -1,
 									Ports:  GetMeshPortsForRollout(sourceCluster, blueGreenService.Service, sourceRollouts[sourceCluster]),
-								},
+								}},
 							}
 							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = bluegreenStrategy
 							continue
@@ -660,12 +660,12 @@ func modifyServiceEntryForNewServiceOrPod(
 						canaryService := sourceRollouts[sourceCluster].Spec.Strategy.Canary.CanaryService
 						// use only canary service for fqdn
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								canaryService: {
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string][]*registry.RegistryServiceConfig{
+								testServiceKey: {{
 									Name:   canaryService,
 									Weight: -1,
 									Ports:  meshPorts,
-								},
+								}},
 							}
 							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = canaryStrategy
 							continue
@@ -736,12 +736,12 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry regular endpoints")
 						// call State Syncer's config syncer for deployment
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								localFqdn: {
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string][]*registry.RegistryServiceConfig{
+								"default": {{
 									Name:   localFqdn,
 									Weight: 0,
 									Ports:  meshPorts,
-								},
+								}},
 							}
 							continue
 						}

@@ -322,10 +322,10 @@ func getIngressPortName(meshPorts map[string]uint32) string {
 	return finalProtocol
 }
 
-func parseWeightedService(weightedServices map[string]*WeightedService) map[string]*registry.RegistryServiceConfig {
+func parseWeightedService(weightedServices map[string]*WeightedService) map[string][]*registry.RegistryServiceConfig {
 	return nil
 }
 
-func parseMigrationService(services []*k8sV1.Service) map[string]*registry.RegistryServiceConfig {
+func parseMigrationService(services []*k8sV1.Service) map[string][]*registry.RegistryServiceConfig {
 	return nil
 }

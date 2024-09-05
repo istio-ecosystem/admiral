@@ -15,13 +15,12 @@
           "namespace": "services-inboundd268-usw2-dev",
           "serviceName": "inbound-root-service",
           "services": {
-            "inbound-root-service": {
+            "default": [{
               "name": "inbound-root-service",
-              "weight": -1,
               "ports": {
                 "http": 8090
               }
-            }
+            }]
           },
           "type": {
             "deployment": {

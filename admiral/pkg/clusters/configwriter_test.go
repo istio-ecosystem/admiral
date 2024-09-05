@@ -57,7 +57,7 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 		Endpoints: []*networkingV1Alpha3.WorkloadEntry{{Address: endpointAddress,
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(endpointPort)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}}},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"}}},
 		WorkloadSelector: nil,
 		ExportTo:         exportTo,
 		SubjectAltNames:  []string{"spiffe://prefix/" + identity},
@@ -75,12 +75,12 @@ func createMockServiceEntryWithTwoEndpoints(env string, identity string, endpoin
 		Endpoints: []*networkingV1Alpha3.WorkloadEntry{{Address: endpointAddress,
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(endpointPort)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"}},
 			{
 				Address:  "def-elb.us-east-2.elb.amazonaws.com.",
 				Locality: "us-east-2",
 				Ports:    map[string]uint32{"http": uint32(15443)},
-				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			}},
 		WorkloadSelector: nil,
 		ExportTo:         exportTo,
@@ -101,17 +101,17 @@ func createMockServiceEntryWithTwoLocalEndpoints(env string, identity string, en
 				Address:  endpointAddress1,
 				Locality: "us-west-2",
 				Ports:    map[string]uint32{"http": uint32(endpointPort)},
-				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"}},
 			{
 				Address:  endpointAddress2,
 				Locality: "us-west-2",
 				Ports:    map[string]uint32{"http": uint32(endpointPort)},
-				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"}},
 			{
 				Address:  "def-elb.us-east-2.elb.amazonaws.com.",
 				Locality: "us-east-2",
 				Ports:    map[string]uint32{"http": uint32(15443)},
-				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			}},
 		WorkloadSelector: nil,
 		ExportTo:         exportTo,
@@ -168,29 +168,27 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 			Selectors: map[string]string{"app": "app1"},
 		},
 	}
-	weightedServices := map[string]*registry.RegistryServiceConfig{
-		"app-1-spk-root-service": {
-			Name: "app-1-spk-root-service",
-			Ports: map[string]uint32{
-				"http": 8090,
+	weightedServices := map[string][]*registry.RegistryServiceConfig{
+		"default": {
+
+			{
+				Name: "app-1-spk-stable-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
+				Weight:    75,
 			},
-			Selectors: map[string]string{"app": "app1"},
 		},
-		"app-1-spk-desired-service": {
-			Name:   "app-1-spk-desired-service",
-			Weight: 25,
-			Ports: map[string]uint32{
-				"http": 8090,
+		"canary": {
+			{
+				Name: "app-1-spk-desired-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
+				Weight:    25,
 			},
-			Selectors: map[string]string{"app": "app1"},
-		},
-		"app-1-spk-stable-service": {
-			Name:   "app-1-spk-stable-service",
-			Weight: 75,
-			Ports: map[string]uint32{
-				"http": 8090,
-			},
-			Selectors: map[string]string{"app": "app1"},
 		},
 	}
 	weightedRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
@@ -216,33 +214,33 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	remoteDeploymentEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	localEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	weightedEndpoints := []*networkingV1Alpha3.WorkloadEntry{
 		{
 			Address:  "app-1-spk-desired-service.ns-1-usw2-e2e.svc.cluster.local.",
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(8090)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			Weight:   25,
 		},
 		{
 			Address:  "app-1-spk-stable-service.ns-1-usw2-e2e.svc.cluster.local.",
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(8090)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			Weight:   75,
 		},
 	}
@@ -317,27 +315,31 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 	common.InitializeConfig(admiralParams)
 	host := "e2e.sample.mesh"
 	canaryRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
-	canaryServices := map[string]*registry.RegistryServiceConfig{
-		"root": {
-			Name: "app-1-spk-root-service",
-			Ports: map[string]uint32{
-				"http": 8090,
+	canaryServices := map[string][]*registry.RegistryServiceConfig{
+		"default": {
+			{
+				Name: "app-1-spk-root-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
 			},
-			Selectors: map[string]string{"app": "app1"},
+			{
+				Name: "app-1-spk-stable-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
+			},
 		},
-		"desired": {
-			Name: "app-1-spk-desired-service",
-			Ports: map[string]uint32{
-				"http": 8090,
+		"canary": {
+			{
+				Name: "app-1-spk-desired-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
 			},
-			Selectors: map[string]string{"app": "app1"},
-		},
-		"stable": {
-			Name: "app-1-spk-stable-service",
-			Ports: map[string]uint32{
-				"http": 8090,
-			},
-			Selectors: map[string]string{"app": "app1"},
 		},
 	}
 	canaryRollout.Services = canaryServices
@@ -349,20 +351,20 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 	}
 
 	blueGreenRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
-	blueGreenServices := map[string]*registry.RegistryServiceConfig{
-		"preview": {
-			Name: "app-1-spk-preview-service",
-			Ports: map[string]uint32{
-				"http": 8090,
-			},
-			Selectors: map[string]string{"app": "app1"},
+	blueGreenServices := map[string][]*registry.RegistryServiceConfig{
+		"canary": {
+			{Name: "app-1-spk-preview-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"}},
 		},
-		"active": {
-			Name: "app-1-spk-active-service",
-			Ports: map[string]uint32{
-				"http": 8090,
-			},
-			Selectors: map[string]string{"app": "app1"},
+		"default": {
+			{Name: "app-1-spk-active-service",
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"}},
 		},
 	}
 	blueGreenRollout.Services = blueGreenServices
@@ -388,25 +390,25 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 		Address:  "app-1-spk-desired-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	localEndpointsWithPreviewService := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "app-1-spk-preview-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	localEndpointsWithActiveService := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "app-1-spk-active-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	remoteEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	ctx := context.Background()
 	ctxLogger := common.GetCtxLogger(ctx, "sample", "")
@@ -563,7 +565,7 @@ func TestBuildServiceEntriesFromIdentityConfig(t *testing.T) {
 	identityConfigFailsExportTo := registry.GetSampleIdentityConfig("sample")
 	identityConfigFailsExportTo.ClientAssets["fake"] = "fake"
 	identityConfigFailsServiceEntryEndpoint := registry.GetSampleIdentityConfig("sample")
-	identityConfigFailsServiceEntryEndpoint.Clusters["cluster1"].Environment["e2e"].Services = make(map[string]*registry.RegistryServiceConfig)
+	identityConfigFailsServiceEntryEndpoint.Clusters["cluster1"].Environment["e2e"].Services = make(map[string][]*registry.RegistryServiceConfig)
 	testCases := []struct {
 		name                   string
 		clientCluster          string
@@ -663,11 +665,11 @@ func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
 		},
 	}
 	expectedLocalServiceEntryPRFForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
-	expectedLocalServiceEntryPRFForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntryPRFForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio"}
 	expectedLocalServiceEntryE2EForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("e2e", "sample", "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-e2e.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
-	expectedLocalServiceEntryE2EForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntryE2EForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio"}
 	expectedLocalServiceEntryQALForMigration2 := createMockServiceEntryWithTwoLocalEndpoints("qal", "sample", "app-1-spk-root-service.ns-1-usw2-qal.svc.cluster.local.", "app-1-spk-deploy-service.ns-1-usw2-qal.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})
-	expectedLocalServiceEntryQALForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"}
+	expectedLocalServiceEntryQALForMigration2.Endpoints[2].Labels = map[string]string{"security.istio.io/tlsMode": "istio"}
 	expectedLocalServiceEntriesForMigration2 := []*networkingV1Alpha3.ServiceEntry{&expectedLocalServiceEntryQALForMigration2, &expectedLocalServiceEntryPRFForMigration2, &expectedLocalServiceEntryE2EForMigration2}
 
 	testCases := []struct {

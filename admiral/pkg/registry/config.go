@@ -53,14 +53,14 @@ type TypeConfig struct {
 }
 
 type IdentityConfigEnvironment struct {
-	Name          string                            `json:"name"`
-	Namespace     string                            `json:"namespace"`
-	Services      map[string]*RegistryServiceConfig `json:"services"`
-	ServiceName   string                            `json:"serviceName"`
-	Type          map[string]*TypeConfig            `json:"type"`
-	Ports         []*networking.ServicePort         `json:"ports"`
-	TrafficPolicy TrafficPolicy                     `json:"trafficPolicy"`
-	Event         admiral.EventType                 `json:"event"`
+	Name          string                              `json:"name"`
+	Namespace     string                              `json:"namespace"`
+	Services      map[string][]*RegistryServiceConfig `json:"services"`
+	ServiceName   string                              `json:"serviceName"`
+	Type          map[string]*TypeConfig              `json:"type"`
+	Ports         []*networking.ServicePort           `json:"ports"`
+	TrafficPolicy TrafficPolicy                       `json:"trafficPolicy"`
+	Event         admiral.EventType                   `json:"event"`
 }
 
 type RegistryServiceConfigSorted []*RegistryServiceConfig
