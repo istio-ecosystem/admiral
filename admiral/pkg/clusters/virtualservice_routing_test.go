@@ -4,14 +4,10 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
-	testMocks "github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -20,99 +16,12 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 )
 
-// TODO: Refactor this test
-// The code has been refactored so this test will fail
 func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
 		vsRoutingLabel: "enabled",
-	}
-
-	newVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	newVSWithPreviewEndpoint := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.preview.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-	newVSWithCanaryEndpoint := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.canary.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
 	}
 
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
@@ -149,9 +58,11 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		LabelSet:              &common.LabelSet{},
-		SyncNamespace:         "test-sync-ns",
-		EnableSWAwareNSCaches: true,
+		LabelSet:                    &common.LabelSet{},
+		SyncNamespace:               "test-sync-ns",
+		EnableSWAwareNSCaches:       true,
+		IngressVSExportToNamespaces: []string{"istio-system"},
+		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -168,6 +79,10 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
 	rr.PutRemoteController("cluster-1", rc)
+
+	defaultFQDN := "outbound_.80_._.test-env.test-identity.global"
+	previewFQDN := "outbound_.80_._.preview.test-env.test-identity.global"
+	canaryFQDN := "outbound_.80_._.canary.test-env.test-identity.global"
 
 	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*networkingV1Alpha3.RouteDestination{
 		"cluster-1": {
@@ -249,7 +164,6 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 	testCases := []struct {
 		name                        string
 		remoteRegistry              *RemoteRegistry
-		sourceIngressVirtualService map[string]*apiNetworkingV1Alpha3.VirtualService
 		sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination
 		istioClient                 *istioFake.Clientset
 		expectedError               error
@@ -270,88 +184,14 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			expectedError:               fmt.Errorf("no route destination found for the ingress virtualservice"),
 		},
 		{
-			name: "Given a invalid sourceIngressVirtualService, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:              rr,
-			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": {
-					Spec: networkingV1Alpha3.VirtualService{},
-				},
-			},
-			expectedError: fmt.Errorf("no TLSRoute found in the ingress virtualservice with host test-env.test-identity.global"),
-		},
-		{
-			name: "Given a invalid VS in sourceIngressVirtualService with missing sniHost " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:              rr,
-			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": {
-					ObjectMeta: metaV1.ObjectMeta{
-						Name: "test-env.test-identity.global-routing-vs",
-					},
-					Spec: networkingV1Alpha3.VirtualService{
-						Tls: []*networkingV1Alpha3.TLSRoute{
-							{
-								Match: []*networkingV1Alpha3.TLSMatchAttributes{
-									{
-										Port: common.DefaultMtlsPort,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedError: fmt.Errorf(
-				"no SNIHosts found in the ingress virtualservice test-env.test-identity.global-routing-vs"),
-		},
-		{
-			name: "Given a invalid VS in sourceIngressVirtualService with multiple sniHost matches " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:              rr,
-			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": {
-					ObjectMeta: metaV1.ObjectMeta{
-						Name: "test-env.test-identity.global-routing-vs",
-					},
-					Spec: networkingV1Alpha3.VirtualService{
-						Tls: []*networkingV1Alpha3.TLSRoute{
-							{
-								Match: []*networkingV1Alpha3.TLSMatchAttributes{
-									{
-										Port: common.DefaultMtlsPort,
-										SniHosts: []string{
-											"outbound_.80_._.test-env.test-identity.global",
-											"outbound_.80_._.preview.test-env.test-identity.global",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedError: fmt.Errorf(
-				"more than one SNIHosts found in the ingress virtualservice test-env.test-identity.global-routing-vs"),
-		},
-		{
-			name: "Given a valid sourceIngressVirtualService and valid sourceClusterToDestinations " +
+			name: "Given a valid sourceClusterToDestinations " +
 				"And the VS is a new VS" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create the VS",
 			remoteRegistry:              rr,
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVS,
-			},
-			expectedError: nil,
+			expectedError:               nil,
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
@@ -359,7 +199,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
+					Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
 					Gateways: []string{"istio-system/passthrough-gateway"},
 					ExportTo: []string{"istio-system"},
 					Tls: []*networkingV1Alpha3.TLSRoute{
@@ -386,17 +226,14 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			},
 		},
 		{
-			name: "Given a valid sourceIngressVirtualService, and valid sourceClusterToDestination " +
+			name: "Given a valid sourceClusterToDestination " +
 				"And there is VS with same name already exists" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully update the VS",
 			remoteRegistry:              rr,
 			istioClient:                 istioClientWithExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": existingVS,
-			},
-			expectedError: nil,
+			expectedError:               nil,
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
@@ -404,7 +241,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
+					Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
 					Gateways: []string{"istio-system/passthrough-gateway"},
 					ExportTo: []string{"istio-system"},
 					Tls: []*networkingV1Alpha3.TLSRoute{
@@ -431,17 +268,14 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			},
 		},
 		{
-			name: "Given a valid sourceIngressVirtualService, and valid sourceClusterToDestination " +
+			name: "Given a valid sourceClusterToDestination " +
 				"And there is a preview endpoint in the sourceIngressVirtualService" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the preview endpoint route",
 			remoteRegistry:              rr,
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithPreviewSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVSWithPreviewEndpoint,
-			},
-			expectedError: nil,
+			expectedError:               nil,
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
@@ -449,28 +283,13 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
+					Hosts: []string{
+						"outbound_.80_._.preview.test-env.test-identity.global",
+						"outbound_.80_._.test-env.test-identity.global",
+					},
 					Gateways: []string{"istio-system/passthrough-gateway"},
 					ExportTo: []string{"istio-system"},
 					Tls: []*networkingV1Alpha3.TLSRoute{
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									Port:     common.DefaultMtlsPort,
-									SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-								},
-							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "test-rollout-active-svc.test-ns.svc.cluster.local",
-										Port: &networkingV1Alpha3.PortSelector{
-											Number: 8080,
-										},
-									},
-								},
-							},
-						},
 						{
 							Match: []*networkingV1Alpha3.TLSMatchAttributes{
 								{
@@ -489,22 +308,37 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 								},
 							},
 						},
+						{
+							Match: []*networkingV1Alpha3.TLSMatchAttributes{
+								{
+									Port:     common.DefaultMtlsPort,
+									SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
+								},
+							},
+							Route: []*networkingV1Alpha3.RouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-active-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 		},
 		{
-			name: "Given a valid sourceIngressVirtualService, and valid sourceClusterToDestination " +
+			name: "Given a valid sourceClusterToDestination " +
 				"And there is a canary endpoint in the sourceIngressVirtualService" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the canary endpoint routes with weights",
 			remoteRegistry:              rr,
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithCanarySvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVSWithCanaryEndpoint,
-			},
-			expectedError: nil,
+			expectedError:               nil,
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
@@ -512,10 +346,32 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
+					Hosts: []string{
+						"outbound_.80_._.canary.test-env.test-identity.global",
+						"outbound_.80_._.test-env.test-identity.global",
+					},
 					Gateways: []string{"istio-system/passthrough-gateway"},
 					ExportTo: []string{"istio-system"},
 					Tls: []*networkingV1Alpha3.TLSRoute{
+
+						{
+							Match: []*networkingV1Alpha3.TLSMatchAttributes{
+								{
+									Port:     common.DefaultMtlsPort,
+									SniHosts: []string{"outbound_.80_._.canary.test-env.test-identity.global"},
+								},
+							},
+							Route: []*networkingV1Alpha3.RouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
 						{
 							Match: []*networkingV1Alpha3.TLSMatchAttributes{
 								{
@@ -544,40 +400,19 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 								},
 							},
 						},
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									Port:     common.DefaultMtlsPort,
-									SniHosts: []string{"outbound_.80_._.canary.test-env.test-identity.global"},
-								},
-							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
-										Port: &networkingV1Alpha3.PortSelector{
-											Number: 8080,
-										},
-									},
-								},
-							},
-						},
 					},
 				},
 			},
 		},
 		{
-			name: "Given a sourceIngressVirtualService and  sourceClusterToDestination " +
+			name: "Given a valid sourceClusterToDestination " +
 				"And there is a preview endpoint match in the VS but there is no coresponding svc found" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then the VS created should not have the preview sniHost match in the VS",
 			remoteRegistry:              rr,
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVSWithPreviewEndpoint,
-			},
-			expectedError: nil,
+			expectedError:               nil,
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
@@ -585,7 +420,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
+					Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
 					Gateways: []string{"istio-system/passthrough-gateway"},
 					ExportTo: []string{"istio-system"},
 					Tls: []*networkingV1Alpha3.TLSRoute{
@@ -622,7 +457,6 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
-				tc.sourceIngressVirtualService,
 				tc.sourceClusterToDestinations)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
@@ -729,11 +563,22 @@ func TestGetFQDNFromSNIHost(t *testing.T) {
 
 func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
 	meshPort := uint32(8080)
 	testCases := []struct {
 		name                     string
 		serviceInstance          map[string]*coreV1.Service
 		destinations             map[string][]*networkingV1Alpha3.RouteDestination
+		deployment               *v1.Deployment
 		expectedError            error
 		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
 	}{
@@ -775,10 +620,23 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations: make(map[string][]*networkingV1Alpha3.RouteDestination),
+			deployment: &v1.Deployment{
+				ObjectMeta: metaV1.ObjectMeta{},
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -802,8 +660,21 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 					},
 				},
 			},
+			deployment: &v1.Deployment{
+				ObjectMeta: metaV1.ObjectMeta{},
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
 			destinations: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -816,7 +687,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -840,7 +711,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := populateVSRouteDestinationForDeployment(tc.serviceInstance, meshPort, tc.destinations)
+			err := populateVSRouteDestinationForDeployment(tc.serviceInstance, meshPort, tc.deployment, tc.destinations)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -854,6 +725,16 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 }
 
 func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -910,11 +791,25 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 				common.Rollout: {},
 			},
 			rollout: &v1alpha1.Rollout{
+				ObjectMeta: metaV1.ObjectMeta{
+					Annotations: map[string]string{
+						"identity": "test-identity",
+						"env":      "test-env",
+					},
+				},
 				Spec: v1alpha1.RolloutSpec{
 					Strategy: v1alpha1.RolloutStrategy{
 						BlueGreen: &v1alpha1.BlueGreenStrategy{
 							ActiveService:  "active-svc",
 							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
 						},
 					},
 				},
@@ -940,7 +835,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -950,7 +845,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 						},
 					},
 				},
-				previewFQDN: {
+				"outbound_.80_._.preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -984,6 +879,14 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 							},
 						},
 					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
 				},
 			},
 			weightedServices: map[string]*WeightedService{
@@ -1009,7 +912,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1029,7 +932,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 						Weight: 90,
 					},
 				},
-				canaryFQDN: {
+				"outbound_.80_._.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1061,12 +964,20 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 							CanaryService: "canary-svc",
 						},
 					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
 				},
 			},
 			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-rollout-svc.test-ns.svc.cluster.local",
@@ -1101,6 +1012,16 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 }
 
 func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1157,6 +1078,14 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 							PreviewService: "preview-svc",
 						},
 					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
 				},
 			},
 			weightedServices: map[string]*WeightedService{
@@ -1180,7 +1109,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -1190,7 +1119,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 						},
 					},
 				},
-				previewFQDN: {
+				"outbound_.80_._.preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -1224,6 +1153,16 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 }
 
 func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1274,6 +1213,12 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 				},
 			},
 			rollout: &v1alpha1.Rollout{
+				ObjectMeta: metaV1.ObjectMeta{
+					Annotations: map[string]string{
+						"identity": "test-identity",
+						"env":      "test-env",
+					},
+				},
 				Spec: v1alpha1.RolloutSpec{
 					Strategy: v1alpha1.RolloutStrategy{
 						Canary: &v1alpha1.CanaryStrategy{
@@ -1281,6 +1226,14 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 							CanaryService: "canary-svc",
 							TrafficRouting: &v1alpha1.RolloutTrafficRouting{
 								Istio: &v1alpha1.IstioTrafficRouting{},
+							},
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
 							},
 						},
 					},
@@ -1309,7 +1262,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1329,7 +1282,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 						Weight: 90,
 					},
 				},
-				canaryFQDN: {
+				"outbound_.80_._.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1363,384 +1316,6 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 
 }
 
-func TestGenerateIngressVirtualServiceForRollout(t *testing.T) {
-
-	admiralParams := common.AdmiralParams{
-		SyncNamespace: "test-sync-ns",
-		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
-		},
-		HostnameSuffix:              "global",
-		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
-		IngressVSExportToNamespaces: []string{"istio-system"},
-	}
-	common.ResetSync()
-	common.InitializeConfig(admiralParams)
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	validVSWithDefaultFQDN := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-	validVSWithPreviewFQDN := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts: []string{
-				"outbound_.80_._.test-env.test-identity.global",
-				"outbound_.80_._.preview.test-env.test-identity.global",
-			},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.preview.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-	validVSWithCanaryFQDN := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts: []string{
-				"outbound_.80_._.test-env.test-identity.global",
-				"outbound_.80_._.canary.test-env.test-identity.global",
-			},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.canary.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-	stop := make(chan struct{})
-	config := rest.Config{
-		Host: "localhost",
-	}
-	serviceController, _ := admiral.NewServiceController(
-		stop, &testMocks.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
-	rc := &RemoteController{
-		ServiceController: serviceController,
-	}
-	previewService := &coreV1.Service{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "previewService",
-			Namespace: "test-ns",
-		},
-		Spec: coreV1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
-			Ports: []coreV1.ServicePort{
-				{
-					Name: "http",
-					Port: 8080,
-				},
-			},
-		},
-	}
-	canaryService := &coreV1.Service{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "canaryService",
-			Namespace: "test-ns",
-		},
-		Spec: coreV1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
-			Ports: []coreV1.ServicePort{
-				{
-					Name: "http",
-					Port: 8080,
-				},
-			},
-		},
-	}
-	serviceController.Cache.Put(previewService)
-	serviceController.Cache.Put(canaryService)
-
-	testCases := []struct {
-		name                    string
-		rollout                 *v1alpha1.Rollout
-		expectedSourceIngressVS map[string]*apiNetworkingV1Alpha3.VirtualService
-		expectedError           error
-	}{
-		{
-			name: "Given a empty rollout, " +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should return an error",
-			expectedError: fmt.Errorf("rollout is nil"),
-		},
-		{
-			name: "Given a invalid rollout," +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should return an error",
-			rollout:       &v1alpha1.Rollout{},
-			expectedError: fmt.Errorf("cname is empty"),
-		},
-		{
-			name: "Given a valid rollout," +
-				"And has no bluegreen or canary strategy" +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should populate the sourceIngressVS with only contain default hostname",
-			rollout: &v1alpha1.Rollout{
-				Spec: v1alpha1.RolloutSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{"identity": "test-identity", "env": "test-env"},
-						},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVSWithDefaultFQDN,
-			},
-			expectedError: nil,
-		},
-		{
-			name: "Given a valid rollout," +
-				"And has bluegreen strategy" +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should populate the sourceIngressVS with default and preview hosts",
-			rollout: &v1alpha1.Rollout{
-				ObjectMeta: metaV1.ObjectMeta{Namespace: "test-ns"},
-				Spec: v1alpha1.RolloutSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{
-								"identity":                 "test-identity",
-								"env":                      "test-env",
-								common.SidecarEnabledPorts: "8080",
-							},
-						},
-					},
-					Strategy: v1alpha1.RolloutStrategy{
-						BlueGreen: &v1alpha1.BlueGreenStrategy{
-							PreviewService: "previewService",
-						},
-					},
-					Selector: &metaV1.LabelSelector{
-						MatchLabels: map[string]string{"app": "test"},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVSWithPreviewFQDN,
-			},
-			expectedError: nil,
-		},
-		{
-			name: "Given a valid rollout," +
-				"And has canary strategy" +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should populate the sourceIngressVS with default and canary hosts",
-			rollout: &v1alpha1.Rollout{
-				ObjectMeta: metaV1.ObjectMeta{Namespace: "test-ns"},
-				Spec: v1alpha1.RolloutSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{
-								"identity":                 "test-identity",
-								"env":                      "test-env",
-								common.SidecarEnabledPorts: "8080",
-							},
-						},
-					},
-					Strategy: v1alpha1.RolloutStrategy{
-						Canary: &v1alpha1.CanaryStrategy{
-							CanaryService: "canaryService",
-							TrafficRouting: &v1alpha1.RolloutTrafficRouting{
-								Istio: &v1alpha1.IstioTrafficRouting{},
-							},
-						},
-					},
-					Selector: &metaV1.LabelSelector{
-						MatchLabels: map[string]string{"app": "test"},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVSWithCanaryFQDN,
-			},
-			expectedError: nil,
-		},
-	}
-
-	ctxLogger := log.WithFields(log.Fields{
-		"type": "VirtualService",
-	})
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sourceIngressVS := make(map[string]*apiNetworkingV1Alpha3.VirtualService)
-			err := generateIngressVirtualServiceForRollout(
-				context.Background(),
-				ctxLogger,
-				tc.rollout,
-				sourceIngressVS,
-				rc)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedSourceIngressVS, sourceIngressVS)
-			}
-		})
-	}
-
-}
-
-func TestGenerateIngressVirtualServiceForDeployment(t *testing.T) {
-
-	admiralParams := common.AdmiralParams{
-		SyncNamespace: "test-sync-ns",
-		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
-		},
-		HostnameSuffix:              "global",
-		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
-		IngressVSExportToNamespaces: []string{"istio-system"},
-	}
-	common.ResetSync()
-	common.InitializeConfig(admiralParams)
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	validVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	testCases := []struct {
-		name                    string
-		deployment              *v1.Deployment
-		expectedSourceIngressVS map[string]*apiNetworkingV1Alpha3.VirtualService
-		expectedError           error
-	}{
-		{
-			name: "Given a empty deployment, " +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should return an error",
-			expectedError: fmt.Errorf("deployment is nil"),
-		},
-		{
-			name: "Given a invalid deployment," +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should return an error",
-			deployment:    &v1.Deployment{},
-			expectedError: fmt.Errorf("cname is empty"),
-		},
-		{
-			name: "Given a valid deployment," +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should populate the sourceIngressVS map correctly",
-			deployment: &v1.Deployment{
-				Spec: v1.DeploymentSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{"identity": "test-identity", "env": "test-env"},
-						},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVS,
-			},
-			expectedError: nil,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sourceIngressVS := make(map[string]*apiNetworkingV1Alpha3.VirtualService)
-			err := generateIngressVirtualServiceForDeployment(tc.deployment, sourceIngressVS)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedSourceIngressVS, sourceIngressVS)
-			}
-		})
-	}
-
-}
-
 func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
@@ -1754,56 +1329,26 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	validVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-host-routing-vs",
 			Namespace: "test-sync-ns",
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-sni-host"},
 			Gateways: []string{"istio-system/passthrough-gateway"},
 			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"test-sni-host"},
-						},
-					},
-				},
-			},
 		},
 	}
 
 	testCases := []struct {
 		name            string
-		hosts           []string
-		sniHosts        []string
 		routingGateways []string
 		expectedVS      *apiNetworkingV1Alpha3.VirtualService
 		expectedError   error
 	}{
 		{
-			name: "Given a empty host, " +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return an error",
-			sniHosts:      []string{"test-sni-host"},
-			expectedError: fmt.Errorf("host is empty"),
-		},
-		{
-			name: "Given a empty sniHost, " +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return an error",
-			hosts:         []string{"test-host"},
-			expectedError: fmt.Errorf("sniHost is empty"),
-		},
-		{
 			name: "Given a valid host and sniHost," +
 				"And gateways are not configured " +
 				"When getBaseVirtualServiceForIngress is invoked, " +
 				"Then it should return an error",
-			hosts:           []string{"test-host"},
-			sniHosts:        []string{"test-sni-host"},
 			routingGateways: []string{},
 			expectedError:   fmt.Errorf("no gateways configured for ingress virtual service"),
 		},
@@ -1811,8 +1356,6 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 			name: "Given a valid host and sniHost," +
 				"When getBaseVirtualServiceForIngress is invoked, " +
 				"Then it should return the expected VirtualService",
-			hosts:           []string{"test-host"},
-			sniHosts:        []string{"test-sni-host"},
 			routingGateways: []string{"istio-system/passthrough-gateway"},
 			expectedError:   nil,
 			expectedVS:      validVS,
@@ -1824,7 +1367,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 			admiralParams.VSRoutingGateways = tc.routingGateways
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
-			actual, err := getBaseVirtualServiceForIngress(tc.hosts, tc.sniHosts)
+			actual, err := getBaseVirtualServiceForIngress()
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -1891,7 +1434,7 @@ func TestGetMeshHTTPPortForRollout(t *testing.T) {
 				"When getMeshHTTPPortForRollout is invoked, " +
 				"Then it should return the first port",
 			ports: map[string]map[string]uint32{
-				common.Rollout: {"http2": 8090, "http": 8080},
+				common.Rollout: {"http2": 8090, "http": 0},
 			},
 			expectedError: nil,
 			expectedPort:  8090,
@@ -1967,7 +1510,7 @@ func TestGetMeshHTTPPortForDeployment(t *testing.T) {
 				"When getMeshHTTPPortForDeployment is invoked, " +
 				"Then it should return the first port",
 			ports: map[string]map[string]uint32{
-				common.Deployment: {"http2": 8090, "http": 8080},
+				common.Deployment: {"http2": 8090, "http": 0},
 			},
 			expectedError: nil,
 			expectedPort:  8090,
@@ -1991,6 +1534,16 @@ func TestGetMeshHTTPPortForDeployment(t *testing.T) {
 
 func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
 	meshPort := uint32(8080)
 	testCases := []struct {
 		name                      string
@@ -1998,6 +1551,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		weightedServices          map[string]*WeightedService
 		meshDeployAndRolloutPorts map[string]map[string]uint32
 		rollout                   *v1alpha1.Rollout
+		deployment                *v1.Deployment
 		expectedError             error
 		expectedRouteDestination  map[string][]*networkingV1Alpha3.RouteDestination
 	}{
@@ -2026,6 +1580,14 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 							PreviewService: "preview-svc",
 						},
 					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
 				},
 			},
 			weightedServices: map[string]*WeightedService{
@@ -2048,7 +1610,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2058,7 +1620,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 						},
 					},
 				},
-				previewFQDN: {
+				"outbound_.80_._.preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2077,6 +1639,18 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			meshDeployAndRolloutPorts: map[string]map[string]uint32{
 				common.Deployment: {"http": meshPort},
 			},
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
 			serviceInstance: map[string]*coreV1.Service{
 				common.Deployment: {
 					ObjectMeta: metaV1.ObjectMeta{
@@ -2087,7 +1661,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				defaultFQDN: {
+				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -2107,13 +1681,307 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				tc.serviceInstance,
 				tc.meshDeployAndRolloutPorts,
 				tc.weightedServices,
-				tc.rollout)
+				tc.rollout,
+				tc.deployment)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedRouteDestination, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetDefaultSNIHostFromDeployment(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	testCases := []struct {
+		name            string
+		deployment      *v1.Deployment
+		expectedError   error
+		expectedSNIHost string
+	}{
+		{
+			name: "Given a nil deployment " +
+				"When getDefaultSNIHostFromDeployment is invoked, " +
+				"Then it should return an error",
+			deployment:    nil,
+			expectedError: fmt.Errorf("deployment is nil"),
+		},
+		{
+			name: "Given an invalid deployment " +
+				"When getDefaultSNIHostFromDeployment is invoked, " +
+				"Then it should return an error",
+			deployment:    &v1.Deployment{},
+			expectedError: fmt.Errorf("cname is empty"),
+		},
+		{
+			name: "Given an valid deployment " +
+				"When getDefaultSNIHostFromDeployment is invoked, " +
+				"Then it should return a valid SNI host",
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			expectedError:   nil,
+			expectedSNIHost: "outbound_.80_._.test-env.test-identity.global",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getDefaultSNIHostFromDeployment(tc.deployment)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedSNIHost, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetDefaultSNIHostFromRollout(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	testCases := []struct {
+		name            string
+		rollout         *v1alpha1.Rollout
+		expectedError   error
+		expectedSNIHost string
+	}{
+		{
+			name: "Given a nil rollout " +
+				"When getDefaultSNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       nil,
+			expectedError: fmt.Errorf("rollout is nil"),
+		},
+		{
+			name: "Given an invalid rollout " +
+				"When getDefaultSNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       &v1alpha1.Rollout{},
+			expectedError: fmt.Errorf("cname is empty"),
+		},
+		{
+			name: "Given an valid rollout " +
+				"When getDefaultSNIHostFromRollout is invoked, " +
+				"Then it should return a valid SNI host",
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			expectedError:   nil,
+			expectedSNIHost: "outbound_.80_._.test-env.test-identity.global",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getDefaultSNIHostFromRollout(tc.rollout)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedSNIHost, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetCanarySNIHostFromRollout(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	testCases := []struct {
+		name            string
+		rollout         *v1alpha1.Rollout
+		expectedError   error
+		expectedSNIHost string
+	}{
+		{
+			name: "Given a nil rollout " +
+				"When getCanarySNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       nil,
+			expectedError: fmt.Errorf("rollout is nil"),
+		},
+		{
+			name: "Given an invalid rollout " +
+				"When getCanarySNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       &v1alpha1.Rollout{},
+			expectedError: fmt.Errorf("getCanaryFQDNForRollout, unable to get cname for rollout "),
+		},
+		{
+			name: "Given an valid rollout " +
+				"When getCanarySNIHostFromRollout is invoked, " +
+				"Then it should return a valid SNI host",
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						Canary: &v1alpha1.CanaryStrategy{
+							StableService: "stable-svc",
+							CanaryService: "canary-svc",
+							TrafficRouting: &v1alpha1.RolloutTrafficRouting{
+								Istio: &v1alpha1.IstioTrafficRouting{},
+							},
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			expectedError:   nil,
+			expectedSNIHost: "outbound_.80_._.canary.test-env.test-identity.global",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getCanarySNIHostFromRollout(tc.rollout)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedSNIHost, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetPreviewSNIHostFromRollout(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	testCases := []struct {
+		name            string
+		rollout         *v1alpha1.Rollout
+		expectedError   error
+		expectedSNIHost string
+	}{
+		{
+			name: "Given a nil rollout " +
+				"When getPreviewSNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       nil,
+			expectedError: fmt.Errorf("rollout is nil"),
+		},
+		{
+			name: "Given an invalid rollout " +
+				"When getPreviewSNIHostFromRollout is invoked, " +
+				"Then it should return an error",
+			rollout:       &v1alpha1.Rollout{},
+			expectedError: fmt.Errorf("getPreviewFQDNForRollout, unable to get cname for rollout "),
+		},
+		{
+			name: "Given an valid rollout " +
+				"When getPreviewSNIHostFromRollout is invoked, " +
+				"Then it should return a valid SNI host",
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			expectedError:   nil,
+			expectedSNIHost: "outbound_.80_._.preview.test-env.test-identity.global",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getPreviewSNIHostFromRollout(tc.rollout)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedSNIHost, actual)
 			}
 		})
 	}
