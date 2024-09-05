@@ -1673,6 +1673,104 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given an empty route destinations map" +
+				"And serviceInstance has both rollout" +
+				"When populateVSRouteDestinationForDeployment is invoked, " +
+				"Then it should populate the destinations with rollout service",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Rollout:    {"http": meshPort},
+				common.Deployment: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {},
+				common.Deployment: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:      "test-deployment-svc",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"preview-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "preview-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+				"active-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "active-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.preview.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
