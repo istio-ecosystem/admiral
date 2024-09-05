@@ -166,8 +166,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		isAdditionalEndpointGenerationEnabled bool
 		deployRolloutMigration                = make(map[string]bool)
 
-		// Holds the ingress virtualservices for the source cluster
-		sourceIngressVirtualService = make(map[string]*v1alpha3.VirtualService)
 		// Holds the VS destinations for the TLSRoutes
 		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
 	)
@@ -300,18 +298,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				Type:      map[string]*registry.TypeConfig{common.Deployment: {Selectors: deployment.Spec.Selector.MatchLabels}},
 				Services:  make(map[string][]*registry.RegistryServiceConfig),
 			}
-			if common.IsVSBasedRoutingEnabled() {
-				// Discovery phase: here we are building a base ingress
-				// virtualservice for the deployment.
-				err := generateIngressVirtualServiceForDeployment(deployment, sourceIngressVirtualService)
-				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
-					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForDeployment",
-						deployment.Name, deployment.Namespace, clusterId, err.Error())
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
-			}
-
 		}
 
 		if rollout != nil {
@@ -361,19 +347,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				Namespace: namespace,
 				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
 				Services:  make(map[string][]*registry.RegistryServiceConfig),
-			}
-
-			if common.IsVSBasedRoutingEnabled() {
-				// Discovery phase: here we are building a base ingress
-				// virtualservice for the rollout. The virtualservice could include
-				// preview/canary endpoint matches based on the strategy used in rollout.
-				err := generateIngressVirtualServiceForRollout(ctx, ctxLogger, rollout, sourceIngressVirtualService, rc)
-				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
-					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForRollout",
-						rollout.Name, rollout.Namespace, clusterId, err.Error())
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
 			}
 		}
 
@@ -809,8 +782,12 @@ func modifyServiceEntryForNewServiceOrPod(
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
-			destinations, err := getAllVSRouteDestinationsByCluster(serviceInstance, meshDeployAndRolloutPorts,
-				sourceWeightedServices[sourceCluster], sourceRollouts[sourceCluster])
+			destinations, err := getAllVSRouteDestinationsByCluster(
+				serviceInstance,
+				meshDeployAndRolloutPorts,
+				sourceWeightedServices[sourceCluster],
+				sourceRollouts[sourceCluster],
+				sourceDeployments[sourceCluster])
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
@@ -836,11 +813,10 @@ func modifyServiceEntryForNewServiceOrPod(
 	}
 	// If VS based routing is enabled, then generate VirtualServices for the source cluster's ingress
 	// This is done after the ServiceEntries are created for the source cluster
-	if common.IsVSBasedRoutingEnabled() && len(sourceIngressVirtualService) > 0 {
+	if common.IsVSBasedRoutingEnabled() {
 		// Writing phase: We update the base ingress virtualservices with the RouteDestinations
 		// gathered during the discovery phase and write them to the source cluster
-		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry,
-			sourceIngressVirtualService, sourceClusterToDestinations)
+		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
 		if err != nil {
 			modifySEerr = common.AppendError(modifySEerr, err)
 		}
@@ -2409,17 +2385,19 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 
 	san := getSanForRollout(destRollout, workloadIdentityKey)
 
-	previewGlobalFqdn := getPreviewFQDNForRollout(ctx, destRollout, rc)
-
-	if previewGlobalFqdn != "" {
+	if destRollout.Spec.Strategy.BlueGreen != nil && destRollout.Spec.Strategy.BlueGreen.PreviewService != "" {
 		ctxLogger.Infof(common.CtxLogFormat,
 			"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "Building ServiceEntry for BlueGreen")
-		admiralCache.CnameIdentityCache.Store(previewGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
-		previewAddress, _ := getUniqueAddress(ctxLogger, ctx, admiralCache, previewGlobalFqdn)
-		if common.DisableIPGeneration() || len(previewAddress) != 0 {
-			ctxLogger.Infof(common.CtxLogFormat,
-				"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "ServiceEntry previewGlobalFqdn="+previewGlobalFqdn+". previewAddress="+previewAddress)
-			generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout)
+		rolloutServices := getServiceForRollout(ctx, rc, destRollout)
+		if _, ok := rolloutServices[destRollout.Spec.Strategy.BlueGreen.PreviewService]; ok {
+			previewGlobalFqdn := common.BlueGreenRolloutPreviewPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
+			admiralCache.CnameIdentityCache.Store(previewGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
+			previewAddress, _ := getUniqueAddress(ctxLogger, ctx, admiralCache, previewGlobalFqdn)
+			if len(previewGlobalFqdn) != 0 && (common.DisableIPGeneration() || len(previewAddress) != 0) {
+				ctxLogger.Infof(common.CtxLogFormat,
+					"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "ServiceEntry previewGlobalFqdn="+previewGlobalFqdn+". previewAddress="+previewAddress)
+				generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout)
+			}
 		}
 	}
 
@@ -2437,25 +2415,6 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 	ctxLogger.Infof(common.CtxLogFormat,
 		"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "service entry generated")
 	return tmpSe, nil
-}
-
-// getPreviewFQDNForRollout returns preview FQDN for a rollout
-// Example: preview.stage.greeting.bluegreen.global
-func getPreviewFQDNForRollout(
-	ctx context.Context,
-	destRollout *argo.Rollout,
-	rc *RemoteController) string {
-
-	if destRollout.Spec.Strategy.BlueGreen == nil || destRollout.Spec.Strategy.BlueGreen.PreviewService == "" {
-		return ""
-	}
-	rolloutServices := getServiceForRollout(ctx, rc, destRollout)
-	if _, ok := rolloutServices[destRollout.Spec.Strategy.BlueGreen.PreviewService]; !ok {
-		return ""
-	}
-
-	return common.BlueGreenRolloutPreviewPrefix + common.Sep +
-		common.GetCnameForRollout(destRollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
 }
 
 func getSanForDeployment(destDeployment *k8sAppsV1.Deployment, workloadIdentityKey string) (san []string) {

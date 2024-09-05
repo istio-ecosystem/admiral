@@ -16,49 +16,18 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	defaultFQDN = "default"
-
-	previewFQDN = "preview"
-	canaryFQDN  = "canary"
-)
-
 // getBaseVirtualServiceForIngress generates the base virtual service for the ingress gateway
 // The destinations should be added separately, this func does not have the context of the destinations.
-func getBaseVirtualServiceForIngress(hosts, sniHosts []string) (*v1alpha3.VirtualService, error) {
-
-	if len(hosts) == 0 {
-		return nil, fmt.Errorf("host is empty")
-	}
-
-	if len(sniHosts) == 0 {
-		return nil, fmt.Errorf("sniHost is empty")
-	}
+func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 
 	gateways := common.GetVSRoutingGateways()
 	if len(gateways) == 0 {
 		return nil, fmt.Errorf("no gateways configured for ingress virtual service")
 	}
 
-	tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
-
-	for _, sniHost := range sniHosts {
-		tlsRoute := networkingV1Alpha3.TLSRoute{
-			Match: []*networkingV1Alpha3.TLSMatchAttributes{
-				{
-					Port:     common.DefaultMtlsPort,
-					SniHosts: []string{sniHost},
-				},
-			},
-		}
-		tlsRoutes = append(tlsRoutes, &tlsRoute)
-	}
-
 	vs := networkingV1Alpha3.VirtualService{
-		Hosts:    sniHosts,
 		Gateways: gateways,
 		ExportTo: common.GetIngressVSExportToNamespace(),
-		Tls:      tlsRoutes,
 	}
 
 	// Explicitly labeling the VS for routing
@@ -68,7 +37,6 @@ func getBaseVirtualServiceForIngress(hosts, sniHosts []string) (*v1alpha3.Virtua
 
 	return &v1alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      hosts[0] + "-routing-vs",
 			Namespace: common.GetSyncNamespace(),
 			Labels:    vsLabels,
 		},
@@ -76,89 +44,97 @@ func getBaseVirtualServiceForIngress(hosts, sniHosts []string) (*v1alpha3.Virtua
 	}, nil
 }
 
-// generateIngressVirtualServiceForDeployment generates the base virtual service for a given deployment
-// and adds it to the sourceIngressVirtualService map
-// sourceIngressVirtualService is a map of globalFQDN (.mesh) endpoint to VirtualService
-func generateIngressVirtualServiceForDeployment(
-	deployment *k8sAppsV1.Deployment,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService) error {
+// getDefaultSNIHostFromDeployment generates the SNI host from the identity and env
+// derived from the deployment
+//
+// Example: outbound_.80_._.stage.greeting.global
+func getDefaultSNIHostFromDeployment(
+	deployment *k8sAppsV1.Deployment) (string, error) {
+
 	if deployment == nil {
-		return fmt.Errorf("deployment is nil")
+		return "", fmt.Errorf("deployment is nil")
 	}
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	cname := common.GetCname(deployment, workloadIdentityKey, common.GetHostnameSuffix())
 	if cname == "" {
-		return fmt.Errorf("cname is empty")
+		return "", fmt.Errorf("cname is empty")
 	}
 	sniHost, err := generateSNIHost(cname)
 	if err != nil {
-		return err
+		return "", err
 	}
-	baseVS, err := getBaseVirtualServiceForIngress([]string{cname}, []string{sniHost})
-	if err != nil {
-		return err
-	}
-	sourceIngressVirtualService[cname] = baseVS
-	return nil
+	return sniHost, nil
 }
 
-// generateIngressVirtualServiceForRollout generates the base virtual service for a given rollout
-// and adds it to the sourceIngressVirtualService map
-// sourceIngressVirtualService is a map of globalFQDN (.mesh) endpoint to VirtualService
-func generateIngressVirtualServiceForRollout(
-	ctx context.Context,
-	ctxLogger *log.Entry,
-	rollout *argo.Rollout,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService,
-	rc *RemoteController) error {
+// getDefaultSNIHostFromRollout generates the default SNI host from the identity and env
+// derived from the rollout
+//
+// Example: outbound_.80_._.stage.greeting.global
+func getDefaultSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
+
 	if rollout == nil {
-		return fmt.Errorf("rollout is nil")
+		return "", fmt.Errorf("rollout is nil")
 	}
 	workloadIdentityKey := common.GetWorkloadIdentifier()
-
-	hosts := make([]string, 0)
-	sniHosts := make([]string, 0)
-
 	// Get default cname for rollout
 	cname := common.GetCnameForRollout(rollout, workloadIdentityKey, common.GetHostnameSuffix())
 	if cname == "" {
-		return fmt.Errorf("cname is empty")
+		return "", fmt.Errorf("cname is empty")
 	}
 	sniHost, err := generateSNIHost(cname)
 	if err != nil {
-		return err
+		return "", err
 	}
-	hosts = append(hosts, cname)
-	sniHosts = append(sniHosts, sniHost)
+	return sniHost, nil
+}
 
-	// Get preview fqdn for the rollout if any
-	previewCname := getPreviewFQDNForRollout(ctx, rollout, rc)
-	if previewCname != "" {
-		hosts = append(hosts, previewCname)
-		previewSNIHost, err := generateSNIHost(previewCname)
-		if err != nil {
-			return err
-		}
-		sniHosts = append(sniHosts, previewSNIHost)
-	}
+// getCanarySNIHostFromRollout generates the canary SNI host from the identity and env
+// derived from the rollout
+//
+// Example: outbound_.80_._.canary.stage.greeting.canary.global
+func getCanarySNIHostFromRollout(rollout *argo.Rollout) (string, error) {
 
-	// Get canary FQDN for the rollout if any
-	canaryCname := getCanaryFQDNForRollout(ctxLogger, rollout, rc)
-	if canaryCname != "" {
-		hosts = append(hosts, canaryCname)
-		canarySNIHost, err := generateSNIHost(canaryCname)
-		if err != nil {
-			return err
-		}
-		sniHosts = append(sniHosts, canarySNIHost)
+	if rollout == nil {
+		return "", fmt.Errorf("rollout is nil")
 	}
 
-	baseVS, err := getBaseVirtualServiceForIngress(hosts, sniHosts)
+	cName := common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+	if cName == "" {
+		return "", fmt.Errorf("getCanaryFQDNForRollout, unable to get cname for rollout %s", rollout.Name)
+	}
+	canaryCname := common.CanaryRolloutCanaryPrefix + common.Sep + cName
+
+	sniHost, err := generateSNIHost(canaryCname)
 	if err != nil {
-		return err
+		return "", err
 	}
-	sourceIngressVirtualService[cname] = baseVS
-	return nil
+
+	return sniHost, nil
+}
+
+// getPreviewSNIHostFromRollout generates the preview SNI host from the identity and env
+// derived from the rollout
+//
+// Example: outbound_.80_._.preview.stage.greeting.canary.global
+func getPreviewSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
+
+	if rollout == nil {
+		return "", fmt.Errorf("rollout is nil")
+	}
+
+	cName := common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+	if cName == "" {
+		return "", fmt.Errorf("getPreviewFQDNForRollout, unable to get cname for rollout %s", rollout.Name)
+	}
+
+	previewCname := common.BlueGreenRolloutPreviewPrefix + common.Sep + cName
+
+	sniHost, err := generateSNIHost(previewCname)
+	if err != nil {
+		return "", err
+	}
+
+	return sniHost, nil
 }
 
 // generateSNIHost generates the SNI host for the virtual service in the format outbound_.80_._.<fqdn>
@@ -200,8 +176,11 @@ func getRouteDestination(host string, port uint32, weight int32) *networkingV1Al
 }
 
 // populateVSRouteDestinationForDeployment populates the route destination map
-// with key as defaultFQDN and value as the slice of route destination of the svc.cluster.local service
-// Example: "default" ->
+// with key as SNI host and value as the slice of route destination of the svc.cluster.local service
+//
+// Example:
+//
+// "outbound_.80_._.stage.greeting.global" ->
 //
 //	 route:
 //	- destination:
@@ -211,6 +190,7 @@ func getRouteDestination(host string, port uint32, weight int32) *networkingV1Al
 func populateVSRouteDestinationForDeployment(
 	serviceInstance map[string]*k8sV1.Service,
 	meshPort uint32,
+	deployment *k8sAppsV1.Deployment,
 	destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
 
 	if serviceInstance == nil {
@@ -223,17 +203,22 @@ func populateVSRouteDestinationForDeployment(
 		return fmt.Errorf("destinations map is nil")
 	}
 
+	globalFQDN, err := getDefaultSNIHostFromDeployment(deployment)
+	if err != nil {
+		return err
+	}
+
 	host := serviceInstance[common.Deployment].Name + "." +
 		serviceInstance[common.Deployment].Namespace + ".svc.cluster.local"
-	if destinations[defaultFQDN] == nil {
-		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+	if destinations[globalFQDN] == nil {
+		destinations[globalFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
-	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
+	destinations[globalFQDN] = append(destinations[globalFQDN], getRouteDestination(host, meshPort, 0))
 	return nil
 }
 
 // populateVSRouteDestinationForRollout populates the route destination map
-// with key as default/preview/canary and value as the slice of route destination of
+// with key as SNI host and value as the slice of route destination of
 // bluegreen, canary or default service
 // Example BlueGreen:
 // "default" ->
@@ -310,8 +295,8 @@ func populateVSRouteDestinationForRollout(
 	// If so, get the canary service destination
 	// and add the stable service destination to the defaultFQDN
 	if IsCanaryIstioStrategy(rollout) {
-		err := populateDestinationsForCanaryStrategy(serviceInstance[common.Rollout], weightedServices,
-			rollout, meshPort, destinations)
+		err := populateDestinationsForCanaryStrategy(
+			serviceInstance[common.Rollout], weightedServices, rollout, meshPort, destinations)
 		if err != nil {
 			return err
 		}
@@ -322,6 +307,10 @@ func populateVSRouteDestinationForRollout(
 	// bluegreen or istio canary strategy
 	// In this case we pick whatever service we got during the discovery
 	// phase and add it as a defaultFQDN
+	defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+	if err != nil {
+		return err
+	}
 	host := serviceInstance[common.Rollout].Name + "." +
 		serviceInstance[common.Rollout].Namespace + ".svc.cluster.local"
 	if destinations[defaultFQDN] == nil {
@@ -359,6 +348,10 @@ func populateDestinationsForBlueGreenStrategy(
 
 	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
 	if weightedPreviewService, ok := weightedServices[previewServiceName]; ok {
+		previewFQDN, err := getPreviewSNIHostFromRollout(rollout)
+		if err != nil {
+			return err
+		}
 		previewServiceInstance := weightedPreviewService.Service
 		host := previewServiceInstance.Name + common.Sep +
 			previewServiceInstance.Namespace + common.GetLocalDomainSuffix()
@@ -369,6 +362,10 @@ func populateDestinationsForBlueGreenStrategy(
 	}
 	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
 	if activeService, ok := weightedServices[activeServiceName]; ok {
+		defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+		if err != nil {
+			return err
+		}
 		activeServiceInstance := activeService.Service
 		host := activeServiceInstance.Name + common.Sep +
 			activeServiceInstance.Namespace + common.GetLocalDomainSuffix()
@@ -376,6 +373,10 @@ func populateDestinationsForBlueGreenStrategy(
 			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
 		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
+
+		if len(destinations[defaultFQDN]) > 1 {
+			sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+		}
 	}
 	return nil
 }
@@ -399,6 +400,15 @@ func populateDestinationsForCanaryStrategy(
 		return fmt.Errorf("populateDestinationsForCanaryStrategy, destinations is nil for rollout %s",
 			rollout.Name)
 
+	}
+
+	defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+	if err != nil {
+		return err
+	}
+	canaryFQDN, err := getCanarySNIHostFromRollout(rollout)
+	if err != nil {
+		return err
 	}
 
 	// Loop through the weightedService map and add cluster local service destinations
@@ -432,10 +442,6 @@ func populateDestinationsForCanaryStrategy(
 	}
 	destinations[canaryFQDN] = append(destinations[canaryFQDN], getRouteDestination(host, meshPort, 0))
 
-	if len(destinations[canaryFQDN]) > 1 {
-		sort.Sort(RouteDestinationSorted(destinations[canaryFQDN]))
-	}
-
 	return nil
 }
 
@@ -446,7 +452,6 @@ func addUpdateVirtualServicesForSourceIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
-	sourceIngressVirtualService map[string]*v1alpha3.VirtualService,
 	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination) error {
 
 	if remoteRegistry == nil {
@@ -466,75 +471,77 @@ func addUpdateVirtualServicesForSourceIngress(
 			continue
 		}
 
-		for fqdn, virtualService := range sourceIngressVirtualService {
-			if len(virtualService.Spec.Tls) == 0 {
-				return fmt.Errorf("no TLSRoute found in the ingress virtualservice with host %s", fqdn)
-			}
-			matchesWithNoDestinations := make([]int, 0)
-			for i, tlsRoute := range virtualService.Spec.Tls {
-				tlsMatches := tlsRoute.Match
-				for _, tlsMatch := range tlsMatches {
-					if len(tlsMatch.SniHosts) == 0 {
-						return fmt.Errorf("no SNIHosts found in the ingress virtualservice %s",
-							virtualService.Name)
-					}
-					if len(tlsMatch.SniHosts) > 1 {
-						return fmt.Errorf("more than one SNIHosts found in the ingress virtualservice %s",
-							virtualService.Name)
-					}
-					routeDestinations := destination[defaultFQDN]
-					sniHost := tlsMatch.SniHosts[0]
-					hostWithoutSNIPrefix, err := getFQDNFromSNIHost(sniHost)
-					if err != nil {
-						ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-							virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
-						continue
-					}
-					if strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) {
-						if destination[previewFQDN] == nil {
-							ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-								"", "", sourceCluster,
-								"skipped adding preview service, no valid route destinaton found")
-							matchesWithNoDestinations = append(matchesWithNoDestinations, i)
-							continue
-						}
-						routeDestinations = destination[previewFQDN]
-					}
-					if strings.HasPrefix(hostWithoutSNIPrefix, common.CanaryRolloutCanaryPrefix) {
-						if destination[canaryFQDN] == nil {
-							ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-								"", "", sourceCluster,
-								"skipped adding canary service, no valid route destinaton found")
-							matchesWithNoDestinations = append(matchesWithNoDestinations, i)
-							continue
-						}
-						routeDestinations = destination[canaryFQDN]
-					}
-					tlsRoute.Route = routeDestinations
-				}
-
-			}
-
-			// Remove the matches with no destinations
-			// Ideally this should not happen, but if we unable to discover services for
-			// their corresponding sniHost matches, then we should end up removing those matches
-			// from the VirtualService
-			for _, indexToBeDeleted := range matchesWithNoDestinations {
-				virtualService.Spec.Tls[indexToBeDeleted] = virtualService.Spec.Tls[len(virtualService.Spec.Tls)-1]
-				virtualService.Spec.Tls = virtualService.Spec.Tls[:len(virtualService.Spec.Tls)-1]
-			}
-
-			existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name)
-			if err != nil {
-				ctxLogger.Warn(err.Error())
-			}
-
-			ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
-			err = addUpdateVirtualService(
-				ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
-
+		virtualService, err := getBaseVirtualServiceForIngress()
+		if err != nil {
+			return err
 		}
+
+		vsName := ""
+		vsHosts := make([]string, 0)
+		tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
+
+		for globalFQDN, routeDestinations := range destination {
+			hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+					"", "", sourceCluster, err.Error())
+				continue
+			}
+			if !strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) &&
+				!strings.HasPrefix(hostWithoutSNIPrefix, common.CanaryRolloutCanaryPrefix) {
+				vsName = hostWithoutSNIPrefix + "-routing-vs"
+			}
+			if routeDestinations == nil || len(routeDestinations) == 0 {
+				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+					"", "", sourceCluster,
+					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", hostWithoutSNIPrefix))
+				continue
+			}
+			tlsRoute := networkingV1Alpha3.TLSRoute{
+				Match: []*networkingV1Alpha3.TLSMatchAttributes{
+					{
+						Port:     common.DefaultMtlsPort,
+						SniHosts: []string{globalFQDN},
+					},
+				},
+				Route: routeDestinations,
+			}
+			tlsRoutes = append(tlsRoutes, &tlsRoute)
+			vsHosts = append(vsHosts, globalFQDN)
+		}
+
+		if len(vsHosts) == 0 {
+			return fmt.Errorf(
+				"skipped creating virtualservice on cluster %s, no valid hosts found", sourceCluster)
+		}
+		if len(tlsRoutes) == 0 {
+			return fmt.Errorf(
+				"skipped creating virtualservice on cluster %s, no valid tls routes found", sourceCluster)
+		}
+		sort.Strings(vsHosts)
+		virtualService.Spec.Hosts = vsHosts
+		sort.Slice(tlsRoutes, func(i, j int) bool {
+			return tlsRoutes[i].Match[0].SniHosts[0] < tlsRoutes[j].Match[0].SniHosts[0]
+		})
+		virtualService.Spec.Tls = tlsRoutes
+
+		// If we were unable to find the default host in the above loop,
+		// then we pick the first one
+		if vsName == "" {
+			vsName = vsHosts[0] + "-routing-vs"
+		}
+		virtualService.Name = vsName
+
+		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name)
+		if err != nil {
+			ctxLogger.Warn(err.Error())
+		}
+
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
+		err = addUpdateVirtualService(
+			ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
+
 	}
 
 	return nil
@@ -548,7 +555,8 @@ func getAllVSRouteDestinationsByCluster(
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
-	rollout *argo.Rollout) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
+	rollout *argo.Rollout,
+	deployment *k8sAppsV1.Deployment) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
@@ -561,7 +569,7 @@ func getAllVSRouteDestinationsByCluster(
 			return nil, err
 		}
 		err = populateVSRouteDestinationForDeployment(
-			serviceInstance, meshPort, destinations)
+			serviceInstance, meshPort, deployment, destinations)
 		if err != nil {
 			return nil, err
 		}
