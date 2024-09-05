@@ -12,15 +12,14 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string, identity s
 		Name:        env,
 		Namespace:   namespace,
 		ServiceName: "app-1-spk-root-service",
-		Services: map[string]*RegistryServiceConfig{
-			"root": {
-				Name:   "app-1-spk-root-service",
-				Weight: -1,
+		Services: map[string][]*RegistryServiceConfig{
+			"default": {{
+				Name: "app-1-spk-root-service",
 				Ports: map[string]uint32{
 					"http": 8090,
 				},
 				Selectors: map[string]string{"app": "app1"},
-			},
+			}},
 		},
 		Type: map[string]*TypeConfig{
 			"rollout": {
@@ -186,23 +185,23 @@ func GetSampleIdentityConfigWithRolloutAndDeployment(identity string) IdentityCo
 		Selectors: map[string]string{"app": "app1"},
 	}
 
-	services := map[string]*RegistryServiceConfig{
-		"deploysvc": {
-			Name:   "app-1-spk-deploy-service",
-			Weight: -1,
+	services := map[string][]*RegistryServiceConfig{
+		"default": {{
+			Name: "app-1-spk-deploy-service",
+
 			Ports: map[string]uint32{
 				"http": 8090,
 			},
 			Selectors: map[string]string{"deploy-app": "app1"},
 		},
-		"root": {
-			Name:   "app-1-spk-root-service",
-			Weight: -1,
-			Ports: map[string]uint32{
-				"http": 8090,
-			},
-			Selectors: map[string]string{"app": "app1"},
-		},
+			{
+				Name: "app-1-spk-root-service",
+
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
+			}},
 	}
 
 	e2eEnv.Services = services

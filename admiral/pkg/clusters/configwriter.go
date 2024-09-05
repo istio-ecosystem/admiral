@@ -2,7 +2,6 @@ package clusters
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,10 +17,10 @@ import (
 
 const (
 	typeLabel         = "type"
-	previewServiceKey = "preview"
-	activeServiceKey  = "active"
-	desiredServiceKey = "desired"
-	rootServiceKey    = "root"
+	testServiceKey    = "canary"
+	defaultServiceKey = "default"
+	canaryPrefix      = "canary"
+	previewPrefix     = "preview"
 )
 
 // IstioSEBuilder is an interface to construct Service Entry objects
@@ -111,10 +110,10 @@ func getMeshHosts(identity string, identityConfigEnvironment *registry.IdentityC
 	if identityConfigEnvironment.Type[common.Rollout] != nil {
 		strategy := identityConfigEnvironment.Type[common.Rollout].Strategy
 		if strategy == bluegreenStrategy {
-			meshHosts = append(meshHosts, common.GetCnameVal([]string{previewServiceKey, strings.ToLower(identity), common.GetHostnameSuffix()}))
+			meshHosts = append(meshHosts, common.GetCnameVal([]string{previewPrefix, strings.ToLower(identity), common.GetHostnameSuffix()}))
 		}
 		if strategy == canaryStrategy {
-			meshHosts = append(meshHosts, common.GetCnameVal([]string{canaryStrategy, strings.ToLower(identity), common.GetHostnameSuffix()}))
+			meshHosts = append(meshHosts, common.GetCnameVal([]string{canaryPrefix, strings.ToLower(identity), common.GetHostnameSuffix()}))
 		}
 	}
 	return meshHosts
@@ -151,123 +150,47 @@ func getServiceEntryEndpoints(
 	ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry,
 	identityConfigEnvironment *registry.IdentityConfigEnvironment) ([]*networkingV1Alpha3.WorkloadEntry, error) {
 	var err error
+	services := identityConfigEnvironment.Services
 	endpoint := ingressEndpoints[serverCluster]
-	endpointsMap := map[string]*networkingV1Alpha3.WorkloadEntry{}
 	endpoints := []*networkingV1Alpha3.WorkloadEntry{}
-	tmpEp := endpoint.DeepCopy()
-	rolloutServicesMap := map[string]*registry.RegistryServiceConfig{}
-	deploymentServicesMap := map[string]*registry.RegistryServiceConfig{}
-	rolloutServices := []*registry.RegistryServiceConfig{}
-	deploymentServices := []*registry.RegistryServiceConfig{}
-	endpointFromRollout := false
-	rolloutServices, deploymentServices = populateServiceObjects(identityConfigEnvironment, rolloutServicesMap, rolloutServices, deploymentServicesMap, deploymentServices)
-	// Deployment won't have weights, so just sort and take the first service to use as the endpoint
-	for resourceType, _ := range identityConfigEnvironment.Type {
-		// Rollout without weights is treated the same as deployment so sort and take first service
-		// If any of the rolloutServicesMap have weights then add them to the list of endpointsMap
-		if resourceType == common.Rollout && len(rolloutServicesMap) > 0 {
-			ep := tmpEp.DeepCopy()
-			if clientCluster == serverCluster {
-				if identityConfigEnvironment.Type[resourceType].Strategy == canaryStrategy {
-					if strings.HasPrefix(host, canaryStrategy) {
-						endpointFromRollout = handleCanaryStrategy(ep, rolloutServicesMap, identityConfigEnvironment, rolloutServices, resourceType, endpointsMap, endpointFromRollout)
-					} else {
-						for _, service := range rolloutServicesMap {
-							if service.Weight > 0 {
-								endpointFromRollout = handleWeightedRollout(ep, rolloutServices, service, identityConfigEnvironment, resourceType, endpointsMap, endpointFromRollout)
-							}
-						}
-					}
-				} else if identityConfigEnvironment.Type[resourceType].Strategy == bluegreenStrategy {
-					endpointFromRollout = handleBluegreenStrategy(host, ep, rolloutServicesMap, identityConfigEnvironment, rolloutServices, resourceType, endpointsMap, endpointFromRollout)
-				}
-			}
-		}
-		// If we go through all the rolloutServicesMap associated with the rollout and none have applicable weights then endpointsMap is empty
-		// Treat the rollout like a deployment and sort and take the first service
-		if !endpointFromRollout || resourceType == common.Deployment {
-			tmpEpCopy := tmpEp.DeepCopy()
-			if clientCluster == serverCluster {
-				if resourceType == common.Rollout && len(rolloutServicesMap) > 0 {
-					handleSimpleRollout(rolloutServicesMap, tmpEpCopy, identityConfigEnvironment, rolloutServices)
-				}
-				if resourceType == common.Deployment && len(deploymentServicesMap) > 0 {
-					tmpEpCopy.Address = deploymentServices[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-					tmpEpCopy.Ports = deploymentServices[0].Ports
-				}
-			}
-			tmpEpCopy.Labels[typeLabel] = resourceType
-			if _, ok := endpointsMap[tmpEpCopy.Address]; !ok {
-				endpointsMap[tmpEpCopy.Address] = tmpEpCopy
-			}
-		}
+
+	if services == nil {
+		return endpoints, fmt.Errorf("services are nil for identityConfigEnvironment %s", identityConfigEnvironment.Name)
 	}
 
-	for _, ep := range endpointsMap {
+	// Logic to determine which services should be against default (like whether have both rollout and deployment, and which service for which type) will move to state syncer
+	// Also state syncer will be responsible for setting the weight of the services, and removing services without weights if one has a weight
+	ep := endpoint.DeepCopy()
+	if clientCluster == serverCluster {
+		if strings.HasPrefix(host, canaryPrefix) || strings.HasPrefix(host, previewPrefix) {
+			ep.Address = services[testServiceKey][0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+			ep.Ports = services[testServiceKey][0].Ports
+			endpoints = append(endpoints, ep)
+		} else {
+			for _, service := range services[defaultServiceKey] {
+				tempEp := ep.DeepCopy()
+				tempEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				tempEp.Ports = service.Ports
+				if service.Weight > 0 {
+					tempEp.Weight = uint32(service.Weight)
+				}
+				endpoints = append(endpoints, tempEp)
+			}
+			for _, service := range services[testServiceKey] {
+				if service.Weight > 0 {
+					tempEp := ep.DeepCopy()
+					tempEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+					tempEp.Ports = service.Ports
+					tempEp.Weight = uint32(service.Weight)
+					endpoints = append(endpoints, tempEp)
+				}
+			}
+		}
+	} else {
 		endpoints = append(endpoints, ep)
 	}
 	sort.Sort(WorkloadEntrySorted(endpoints))
 	return endpoints, err
-}
-
-func populateServiceObjects(identityConfigEnvironment *registry.IdentityConfigEnvironment, rolloutServicesMap map[string]*registry.RegistryServiceConfig, rolloutServices []*registry.RegistryServiceConfig, deploymentServicesMap map[string]*registry.RegistryServiceConfig, deploymentServices []*registry.RegistryServiceConfig) ([]*registry.RegistryServiceConfig, []*registry.RegistryServiceConfig) {
-	for resourceType, _ := range identityConfigEnvironment.Type {
-		for serviceKey, service := range identityConfigEnvironment.Services {
-			if resourceType == common.Rollout && reflect.DeepEqual(service.Selectors, identityConfigEnvironment.Type[resourceType].Selectors) {
-				rolloutServicesMap[serviceKey] = service
-				rolloutServices = append(rolloutServices, service)
-			}
-			if resourceType == common.Deployment && reflect.DeepEqual(service.Selectors, identityConfigEnvironment.Type[resourceType].Selectors) {
-				deploymentServicesMap[serviceKey] = service
-				deploymentServices = append(deploymentServices, service)
-			}
-		}
-	}
-	sort.Sort(registry.RegistryServiceConfigSorted(rolloutServices))
-	sort.Sort(registry.RegistryServiceConfigSorted(deploymentServices))
-	return rolloutServices, deploymentServices
-}
-
-func handleSimpleRollout(rolloutServicesMap map[string]*registry.RegistryServiceConfig, tmpEpCopy *networkingV1Alpha3.WorkloadEntry, identityConfigEnvironment *registry.IdentityConfigEnvironment, rolloutServices []*registry.RegistryServiceConfig) {
-	if _, ok := rolloutServicesMap[rootServiceKey]; ok {
-		tmpEpCopy.Address = rolloutServicesMap[rootServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	} else {
-		tmpEpCopy.Address = rolloutServices[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	}
-	tmpEpCopy.Ports = rolloutServices[0].Ports
-}
-
-func handleBluegreenStrategy(host string, ep *networkingV1Alpha3.WorkloadEntry, rolloutServicesMap map[string]*registry.RegistryServiceConfig, identityConfigEnvironment *registry.IdentityConfigEnvironment, rolloutServices []*registry.RegistryServiceConfig, resourceType string, endpointsMap map[string]*networkingV1Alpha3.WorkloadEntry, endpointFromRollout bool) bool {
-	if strings.HasPrefix(host, previewServiceKey) {
-		ep.Address = rolloutServicesMap[previewServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	} else {
-		ep.Address = rolloutServicesMap[activeServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	}
-	ep.Ports = rolloutServices[0].Ports
-	ep.Labels[typeLabel] = resourceType
-	endpointsMap[ep.Address] = ep
-	endpointFromRollout = true
-	return endpointFromRollout
-}
-
-func handleWeightedRollout(ep *networkingV1Alpha3.WorkloadEntry, rolloutServices []*registry.RegistryServiceConfig, service *registry.RegistryServiceConfig, identityConfigEnvironment *registry.IdentityConfigEnvironment, resourceType string, endpointsMap map[string]*networkingV1Alpha3.WorkloadEntry, endpointFromRollout bool) bool {
-	weightedep := ep.DeepCopy()
-	weightedep.Ports = rolloutServices[0].Ports
-	weightedep.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	weightedep.Weight = uint32(service.Weight)
-	weightedep.Labels[typeLabel] = resourceType
-	endpointsMap[weightedep.Address] = weightedep
-	endpointFromRollout = true
-	return endpointFromRollout
-}
-
-func handleCanaryStrategy(ep *networkingV1Alpha3.WorkloadEntry, rolloutServicesMap map[string]*registry.RegistryServiceConfig, identityConfigEnvironment *registry.IdentityConfigEnvironment, rolloutServices []*registry.RegistryServiceConfig, resourceType string, endpointsMap map[string]*networkingV1Alpha3.WorkloadEntry, endpointFromRollout bool) bool {
-	ep.Address = rolloutServicesMap[desiredServiceKey].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-	ep.Ports = rolloutServices[0].Ports
-	ep.Labels[typeLabel] = resourceType
-	endpointsMap[ep.Address] = ep
-	endpointFromRollout = true
-	return endpointFromRollout
 }
 
 // getExportTo constructs a sorted list of unique namespaces for a given cluster, client assets,

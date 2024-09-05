@@ -14,27 +14,20 @@
           "name": "prf",
           "namespace": "ns-1-usw2-prf",
           "services": {
-            "root": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
-              }
-            },
-            "stable": {
+            "default": [{
               "name": "app-1-spk-stable-service",
-              "weight": 25,
+                "weight": 25,
               "ports": {
                 "http": 8090
               }
-            },
-            "desired": {
+            }],
+            "canary": [{
               "name": "app-1-spk-desired-service",
               "weight": 75,
               "ports": {
                 "http": 8090
               }
-            }
+            }]
           },
           "type": {
             "rollout": {
@@ -133,18 +126,18 @@
           "namespace": "ns-1-usw2-e2e",
           "strategy": "bluegreen",
           "services": {
-            "preview": {
+            "default": [{
+              "name": "app-1-spk-active-service",
+              "ports": {
+                "http": 8090
+              }
+            }],
+            "canary":[{
               "name": "app-1-spk-preview-service",
               "ports": {
                 "http": 8090
               }
-            },
-            "desired": {
-              "name": "app-1-spk-desired-service",
-              "ports": {
-                "http": 8090
-              }
-            }
+            }]
           },
           "type": {
             "rollout": {
@@ -237,13 +230,13 @@
           "name": "qal",
           "namespace": "ns-1-usw2-qal",
           "services": {
-            "app-1-spk-service": {
+            "default": [{
               "name": "app-1-spk-service",
-              "weight": -1,
+
               "ports": {
                 "http": 8090
               }
-            }
+            }]
           },
           "type": {
             "rollout": {
