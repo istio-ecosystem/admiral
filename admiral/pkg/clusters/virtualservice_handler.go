@@ -66,7 +66,6 @@ type SyncVirtualServiceResource func(
 	remoteRegistry *RemoteRegistry,
 	sourceCluster string,
 	syncNamespace string,
-	vsName string,
 ) error
 
 // VirtualServiceHandler responsible for handling Add/Update/Delete events for
@@ -167,8 +166,6 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 		return nil
 	}
 
-	vSName := common.GenerateUniqueNameForVS(virtualService.Namespace, virtualService.Name)
-
 	dependentClusters := vh.remoteRegistry.AdmiralCache.CnameDependentClusterCache.Get(spec.Hosts[0]).CopyJustValues()
 	if len(dependentClusters) > 0 {
 		// Add source clusters to the list of clusters to copy the virtual service
@@ -182,7 +179,6 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 			vh.remoteRegistry,
 			vh.clusterID,
 			syncNamespace,
-			vSName,
 		)
 		if err != nil {
 			log.Warnf(LogErrFormat, "Sync", common.VirtualServiceResourceType, virtualService.Name, dependentClusters, err.Error()+": sync to dependent clusters will not be retried")
@@ -203,7 +199,6 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 		vh.remoteRegistry,
 		vh.clusterID,
 		syncNamespace,
-		vSName,
 	)
 	if err != nil {
 		log.Warnf(LogErrFormat, "Sync", common.VirtualServiceResourceType, virtualService.Name, "*", err.Error()+": sync to remote clusters will not be retried")
@@ -264,12 +259,8 @@ func syncVirtualServicesToAllDependentClusters(
 	remoteRegistry *RemoteRegistry,
 	sourceCluster string,
 	syncNamespace string,
-	vSName string,
 ) error {
 	defer logElapsedTimeForVirtualService("syncVirtualServicesToAllDependentClusters="+string(event), "", virtualService)()
-	if vSName == "" {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster, "VirtualService generated name is empty")
-	}
 	if virtualService == nil {
 		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster, "VirtualService is nil")
 	}
@@ -289,7 +280,6 @@ func syncVirtualServicesToAllDependentClusters(
 				virtualServiceCopy,
 				event,
 				syncNamespace,
-				vSName,
 			)
 			if err != nil {
 				allClusterErrors = common.AppendError(allClusterErrors, err)
@@ -306,57 +296,47 @@ func syncVirtualServiceToDependentCluster(
 	remoteRegistry *RemoteRegistry,
 	virtualService *v1alpha3.VirtualService,
 	event common.Event,
-	syncNamespace string,
-	vSName string) error {
+	syncNamespace string) error {
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type":     "syncVirtualServiceToDependentCluster",
-		"identity": vSName,
+		"identity": virtualService.Name,
 		"txId":     uuid.New().String(),
 	})
 
 	defer logElapsedTimeForVirtualService("syncVirtualServiceToDependentCluster="+string(event), cluster, virtualService)()
 	rc := remoteRegistry.GetRemoteController(cluster)
 	if rc == nil {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, vSName,
+		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name,
 			cluster, "dependent controller not initialized for cluster")
 	}
-	ctxLogger.Infof(LogFormat, "Event", "VirtualService", vSName, cluster, "Processing")
+	ctxLogger.Infof(LogFormat, "Event", "VirtualService", virtualService.Name, cluster, "Processing")
 	if rc.VirtualServiceController == nil {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, vSName, cluster, "VirtualService controller not initialized for cluster")
+		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, cluster, "VirtualService controller not initialized for cluster")
 	}
-
 	if event == common.Delete {
-		// Best effort delete for existing virtual service with old name
-		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
-
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 		if err != nil {
 			if k8sErrors.IsNotFound(err) {
-				ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vSName, cluster, "Either VirtualService was already deleted, or it never existed")
+				ctxLogger.Infof(LogFormat, "Delete", "VirtualService", virtualService.Name, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
 			if isDeadCluster(err) {
-				ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
+				ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, virtualService.Name, cluster, "dead cluster")
 				return nil
 			}
-			return fmt.Errorf(LogErrFormat, "Delete", "VirtualService", vSName, cluster, err)
+			return fmt.Errorf(LogErrFormat, "Delete", "VirtualService", virtualService.Name, cluster, err)
 		}
-		ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vSName, cluster, "Success")
+		ctxLogger.Infof(LogFormat, "Delete", "VirtualService", virtualService.Name, cluster, "Success")
 		return nil
 	}
-
-	oldVSname := virtualService.Name
-	//Update vs name to be unique per namespace
-	virtualService.Name = vSName
-
-	exist, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metav1.GetOptions{})
+	exist, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, virtualService.Name, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
-		ctxLogger.Infof(LogFormat, "Get", common.VirtualServiceResourceType, vSName, cluster, "VirtualService does not exist")
+		ctxLogger.Infof(LogFormat, "Get", common.VirtualServiceResourceType, virtualService.Name, cluster, "VirtualService does not exist")
 		exist = nil
 	}
 	if isDeadCluster(err) {
-		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
+		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, virtualService.Name, cluster, "dead cluster")
 		return nil
 	}
 	//change destination host for all http routes <service_name>.<ns>. to same as host on the virtual service
@@ -377,12 +357,7 @@ func syncVirtualServiceToDependentCluster(
 		}
 	}
 	// nolint
-	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
-
-	// Best effort delete for existing virtual service with old name
-	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
-
-	return err
+	return addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 }
 
 func syncVirtualServicesToAllRemoteClusters(
@@ -392,12 +367,8 @@ func syncVirtualServicesToAllRemoteClusters(
 	event common.Event,
 	remoteRegistry *RemoteRegistry,
 	sourceCluster string,
-	syncNamespace string,
-	vSName string) error {
+	syncNamespace string) error {
 	defer logElapsedTimeForVirtualService("syncVirtualServicesToAllRemoteClusters="+string(event), "*", virtualService)()
-	if vSName == "" {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster, "VirtualService generated name is empty")
-	}
 	if virtualService == nil {
 		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster, "VirtualService is nil")
 	}
@@ -417,7 +388,6 @@ func syncVirtualServicesToAllRemoteClusters(
 				virtualServiceCopy,
 				event,
 				syncNamespace,
-				vSName,
 			)
 			if err != nil {
 				allClusterErrors = common.AppendError(allClusterErrors, err)
@@ -434,62 +404,49 @@ func syncVirtualServiceToRemoteCluster(
 	remoteRegistry *RemoteRegistry,
 	virtualService *v1alpha3.VirtualService,
 	event common.Event,
-	syncNamespace string,
-	vSName string) error {
+	syncNamespace string) error {
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type":     "syncVirtualServicesToAllRemoteClusters",
-		"identity": vSName,
+		"identity": virtualService.Name,
 		"txId":     uuid.New().String(),
 	})
 
 	defer logElapsedTimeForVirtualService("syncVirtualServiceToRemoteCluster="+string(event), cluster, virtualService)()
 	rc := remoteRegistry.GetRemoteController(cluster)
 	if rc == nil {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, vSName, cluster, "remote controller not initialized for cluster")
+		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, cluster, "remote controller not initialized for cluster")
 	}
 	if rc.VirtualServiceController == nil {
-		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, vSName, cluster, "VirtualService controller not initialized for cluster")
+		return fmt.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, cluster, "VirtualService controller not initialized for cluster")
 	}
-
 	if event == common.Delete {
-		// Best effort delete for existing virtual service with old name
-		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
-
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 		if err != nil {
 			if k8sErrors.IsNotFound(err) {
-				ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, "Either VirtualService was already deleted, or it never existed")
+				ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, virtualService.Name, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
 			if isDeadCluster(err) {
-				ctxLogger.Warnf(LogErrFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
+				ctxLogger.Warnf(LogErrFormat, "Delete", common.VirtualServiceResourceType, virtualService.Name, cluster, "dead cluster")
 				return nil
 			}
-
-			return fmt.Errorf(LogErrFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, err)
+			return fmt.Errorf(LogErrFormat, "Delete", common.VirtualServiceResourceType, virtualService.Name, cluster, err)
 		}
-		ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, "Success")
+		ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, virtualService.Name, cluster, "Success")
 		return nil
 	}
-	oldVSname := virtualService.Name
-	//Update vs name to be unique per namespace
-	virtualService.Name = vSName
-	exist, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metav1.GetOptions{})
+	exist, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, virtualService.Name, metav1.GetOptions{})
 	if k8sErrors.IsNotFound(err) {
-		ctxLogger.Infof(LogFormat, "Get", common.VirtualServiceResourceType, vSName, cluster, "VirtualService does not exist")
+		ctxLogger.Infof(LogFormat, "Get", common.VirtualServiceResourceType, virtualService.Name, cluster, "VirtualService does not exist")
 		exist = nil
 	}
 	if isDeadCluster(err) {
-		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
+		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, virtualService.Name, cluster, "dead cluster")
 		return nil
 	}
-	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
-
-	// Best effort delete of existing virtual service with old name
-	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
 	// nolint
-	return err
+	return addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 }
 
 func matchRolloutCanaryStrategy(rolloutStrategy argo.RolloutStrategy, virtualServiceName string) bool {

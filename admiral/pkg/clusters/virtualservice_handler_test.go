@@ -587,8 +587,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			},
 		}
 
-		vSName = common.GenerateUniqueNameForVS(workingVS.Namespace, workingVS.Name)
-
 		fakeIstioClientWithoutAnyVirtualServices         = istioFake.NewSimpleClientset()
 		fakeIstioClientWithoutKnownVirtualServices       = newFakeIstioClient(ctx, namespace1, workingVS)
 		nilVirtualServiceControllerForDependencyCluster1 = map[string]*RemoteController{
@@ -654,19 +652,19 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			"remoteRegistry is nil",
 		)
 		nilRemoteControllerForDepCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
 			"dependent controller not initialized for cluster",
 		)
 		nilRemoteControllerForDepCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
 			"dependent controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
 			"VirtualService controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
 			"VirtualService controller not initialized for cluster",
 		)
 	)
@@ -679,7 +677,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 		remoteRegistry          *RemoteRegistry
 		sourceCluster           string
 		syncNamespace           string
-		vSName                  string
 		assertFunc              func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T)
 		doSyncVSToSourceCluster bool
 		expectedErr             error
@@ -689,7 +686,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				"When, syncVirtualServicesToAllDependentClusters is invoked, " +
 				"Then, it should return '" + emptyVSErr.Error() + "' error",
 			sourceCluster: sourceCluster,
-			vSName:        vSName,
 			expectedErr:   emptyVSErr,
 		},
 		{
@@ -698,7 +694,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				"Then, it should return '" + emptyRemoteRegistryErr.Error() + "' error",
 			sourceCluster:  sourceCluster,
 			virtualService: workingVS,
-			vSName:         vSName,
 			expectedErr:    emptyRemoteRegistryErr,
 		},
 		{
@@ -709,7 +704,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nil),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			expectedErr:    nilRemoteControllerForDepCluster1Err,
 		},
 		{
@@ -722,18 +716,17 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       clusters1And2,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != vSName {
+						if vs == nil || vs.Name != workingVS.Name {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -749,7 +742,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nilVirtualServiceControllerForDependencyCluster1),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster1Err,
 		},
 		{
@@ -762,18 +754,17 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForDepCluster1AndNilForCluster2),
 			clusters:       clusters1And2,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != vSName {
+						if vs == nil || vs.Name != workingVS.Name {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -792,16 +783,15 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -819,16 +809,15 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -847,11 +836,10 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -869,11 +857,10 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -892,16 +879,15 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithoutAnyVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -920,16 +906,15 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithKnownVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -952,7 +937,6 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				c.remoteRegistry,
 				c.sourceCluster,
 				syncNamespace,
-				c.vSName,
 			)
 			if err != nil && c.expectedErr == nil {
 				t.Errorf("expected error to be nil but got %v", err)
@@ -990,7 +974,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				Namespace: namespace1,
 			},
 		}
-		vSName                                      = common.GenerateUniqueNameForVS(workingVS.Namespace, workingVS.Name)
 		fakeIstioClientWithoutAnyVirtualServices    = istioFake.NewSimpleClientset()
 		fakeIstioClientWithoutKnownVirtualServices  = newFakeIstioClient(ctx, namespace1, workingVS)
 		nilVirtualServiceControllerForKnownClusters = map[string]*RemoteController{
@@ -1049,28 +1032,24 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
 			"VirtualService is nil",
 		)
-		emptyVsNameErr = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
-			"VirtualService generated name is empty",
-		)
 		emptyRemoteRegistryErr = fmt.Errorf(
 			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
 			"remoteRegistry is nil",
 		)
 		nilRemoteControllerForDepCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
 			"remote controller not initialized for cluster",
 		)
 		nilRemoteControllerForDepCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
 			"remote controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
 			"VirtualService controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
 			"VirtualService controller not initialized for cluster",
 		)
 	)
@@ -1083,24 +1062,15 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 		remoteRegistry          *RemoteRegistry
 		sourceCluster           string
 		syncNamespace           string
-		vSName                  string
 		assertFunc              func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T)
 		doSyncVSToSourceCluster bool
 		expectedErr             error
 	}{
 		{
-			name: "Given a nil vsName is passed , " +
-				"When, syncVirtualServicesToAllRemoteClusters is invoked, " +
-				"Then, it should return '" + emptyVsNameErr.Error() + "' error",
-			sourceCluster: sourceCluster,
-			expectedErr:   emptyVsNameErr,
-		},
-		{
 			name: "Given a nil VirtualService is passed , " +
 				"When, syncVirtualServicesToAllRemoteClusters is invoked, " +
 				"Then, it should return '" + emptyVSErr.Error() + "' error",
 			sourceCluster: sourceCluster,
-			vSName:        vSName,
 			expectedErr:   emptyVSErr,
 		},
 		{
@@ -1109,7 +1079,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				"Then, it should return '" + emptyRemoteRegistryErr.Error() + "' error",
 			sourceCluster:  sourceCluster,
 			virtualService: workingVS,
-			vSName:         vSName,
 			expectedErr:    emptyRemoteRegistryErr,
 		},
 		{
@@ -1120,7 +1089,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nil),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			expectedErr:    nilRemoteControllerForDepCluster1Err,
 		},
 		{
@@ -1133,18 +1101,17 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1And2,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != vSName {
+						if vs == nil || vs.Name != workingVS.Name {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -1160,7 +1127,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nilVirtualServiceControllerForKnownClusters),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster1Err,
 		},
 		{
@@ -1173,7 +1139,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForDepCluster1AndNilForCluster2),
 			clusters:       cluster1And2,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster2Err,
 		},
 		{
@@ -1187,16 +1152,15 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1214,16 +1178,15 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1242,11 +1205,10 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1264,11 +1226,10 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1287,16 +1248,15 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithoutAnyVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != vSName {
+					if vs == nil || vs.Name != workingVS.Name {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1314,11 +1274,10 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
-			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1342,7 +1301,6 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				c.remoteRegistry,
 				c.sourceCluster,
 				syncNamespace,
-				c.vSName,
 			)
 			if err != nil && c.expectedErr == nil {
 				t.Errorf("expected error to be nil but got %v", err)
@@ -1564,8 +1522,7 @@ func newFakeSyncResource(err error) *fakeSyncResource {
 			event common.Event,
 			remoteRegistry *RemoteRegistry,
 			clusterId string,
-			syncNamespace string,
-			vSName string) error {
+			syncNamespace string) error {
 			f.called = true
 			return err
 		}
@@ -1583,7 +1540,6 @@ func checkSourceClusterInDependentList(err error) *fakeSyncResource {
 			_ common.Event,
 			_ *RemoteRegistry,
 			clusterId string,
-			_ string,
 			_ string) error {
 			for _, cluster := range dependentClusters {
 				if cluster == clusterId {
