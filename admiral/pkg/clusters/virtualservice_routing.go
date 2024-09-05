@@ -17,7 +17,7 @@ import (
 )
 
 // getBaseVirtualServiceForIngress generates the base virtual service for the ingress gateway
-// The destinations should be added separately, this func does not have the context of the destinations.
+// This is just the barebones of the ingress virtual service
 func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 
 	gateways := common.GetVSRoutingGateways()
@@ -48,8 +48,7 @@ func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 // derived from the deployment
 //
 // Example: outbound_.80_._.stage.greeting.global
-func getDefaultSNIHostFromDeployment(
-	deployment *k8sAppsV1.Deployment) (string, error) {
+func getDefaultSNIHostFromDeployment(deployment *k8sAppsV1.Deployment) (string, error) {
 
 	if deployment == nil {
 		return "", fmt.Errorf("deployment is nil")
@@ -221,7 +220,7 @@ func populateVSRouteDestinationForDeployment(
 // with key as SNI host and value as the slice of route destination of
 // bluegreen, canary or default service
 // Example BlueGreen:
-// "default" ->
+// "outbound_.80_._.stage.greeting.global" ->
 //
 // route:
 //   - destination:
@@ -229,7 +228,7 @@ func populateVSRouteDestinationForDeployment(
 //     port:
 //     number: 80
 //
-// "preview" ->
+// "outbound_.80_._.preview.stage.greeting.global" ->
 //
 // route:
 //   - destination:
@@ -239,7 +238,7 @@ func populateVSRouteDestinationForDeployment(
 //
 // Example Canary:
 //
-// "default" ->
+// "outbound_.80_._.stage.greeting.global" ->
 //
 //		route:
 //		- destination:
@@ -253,7 +252,7 @@ func populateVSRouteDestinationForDeployment(
 //		      number: 80
 //	     weight: 90
 //
-// "canary" ->
+// "outbound_.80_._.canary.stage.greeting.global" ->
 //
 //	route:
 //	- destination:
@@ -446,8 +445,8 @@ func populateDestinationsForCanaryStrategy(
 }
 
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices
-// This is where the base Ingress VirtualServices are updated with the route destinations
-// that were created during the discovery phase
+// This is where the VirtualServices are created using the services that were discovered during the
+// discovery phase.
 func addUpdateVirtualServicesForSourceIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
