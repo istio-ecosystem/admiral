@@ -791,6 +791,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
 			}

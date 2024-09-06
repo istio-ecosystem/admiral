@@ -208,7 +208,7 @@ func populateVSRouteDestinationForDeployment(
 	}
 
 	host := serviceInstance[common.Deployment].Name + "." +
-		serviceInstance[common.Deployment].Namespace + ".svc.cluster.local"
+		serviceInstance[common.Deployment].Namespace + common.DotLocalDomainSuffix
 	if destinations[globalFQDN] == nil {
 		destinations[globalFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
@@ -311,7 +311,7 @@ func populateVSRouteDestinationForRollout(
 		return err
 	}
 	host := serviceInstance[common.Rollout].Name + "." +
-		serviceInstance[common.Rollout].Namespace + ".svc.cluster.local"
+		serviceInstance[common.Rollout].Namespace + common.DotLocalDomainSuffix
 	if destinations[defaultFQDN] == nil {
 		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
@@ -410,6 +410,7 @@ func populateDestinationsForCanaryStrategy(
 		return err
 	}
 
+	canaryServiceName := rollout.Spec.Strategy.Canary.CanaryService
 	// Loop through the weightedService map and add cluster local service destinations
 	// This map should contain the canary or stable service if the VS associated has weights
 	// greater than 0.
@@ -434,7 +435,6 @@ func populateDestinationsForCanaryStrategy(
 	// Here we will create a separate canary destination for the canary FQDN
 	// This is needed to provide users to validate their canary endpoints
 	serviceNamespace := serviceInstance.Namespace
-	canaryServiceName := rollout.Spec.Strategy.Canary.CanaryService
 	host := canaryServiceName + common.Sep + serviceNamespace + common.GetLocalDomainSuffix()
 	if destinations[canaryFQDN] == nil {
 		destinations[canaryFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
@@ -475,7 +475,7 @@ func addUpdateVirtualServicesForSourceIngress(
 			return err
 		}
 
-		vsName := ""
+		var vsName string
 		vsHosts := make([]string, 0)
 		tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
 
@@ -540,7 +540,9 @@ func addUpdateVirtualServicesForSourceIngress(
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
 		err = addUpdateVirtualService(
 			ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
-
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -587,42 +589,33 @@ func getAllVSRouteDestinationsByCluster(
 	return destinations, nil
 }
 
-// getMeshHTTPPortForRollout gets the mesh http port for the rollout
-func getMeshHTTPPortForRollout(ports map[string]map[string]uint32) (uint32, error) {
+func getMeshHTTPPort(
+	resourceType string,
+	ports map[string]map[string]uint32) (uint32, error) {
 	if ports == nil {
 		return 0, fmt.Errorf("ports map is nil")
 	}
 	if len(ports) == 0 {
 		return 0, fmt.Errorf("ports map is empty")
 	}
-	rolloutPorts, ok := ports[common.Rollout]
+	deploymentPorts, ok := ports[resourceType]
 	if !ok {
-		return 0, fmt.Errorf("rollout ports not found")
-	}
-	for _, port := range rolloutPorts {
-		if port > 0 {
-			return port, nil
-		}
-	}
-	return 0, fmt.Errorf("no valid port found for rollout")
-}
-
-// getMeshHTTPPortForDeployment gets the mesh http port for the deployment
-func getMeshHTTPPortForDeployment(ports map[string]map[string]uint32) (uint32, error) {
-	if ports == nil {
-		return 0, fmt.Errorf("ports map is nil")
-	}
-	if len(ports) == 0 {
-		return 0, fmt.Errorf("ports map is empty")
-	}
-	deploymentPorts, ok := ports[common.Deployment]
-	if !ok {
-		return 0, fmt.Errorf("deployment ports not found")
+		return 0, fmt.Errorf("%s ports not found", resourceType)
 	}
 	for _, port := range deploymentPorts {
 		if port > 0 {
 			return port, nil
 		}
 	}
-	return 0, fmt.Errorf("no valid port found for deployment")
+	return 0, fmt.Errorf("no valid port found for %s", resourceType)
+}
+
+// getMeshHTTPPortForRollout gets the mesh http port for the rollout
+func getMeshHTTPPortForRollout(ports map[string]map[string]uint32) (uint32, error) {
+	return getMeshHTTPPort(common.Rollout, ports)
+}
+
+// getMeshHTTPPortForDeployment gets the mesh http port for the deployment
+func getMeshHTTPPortForDeployment(ports map[string]map[string]uint32) (uint32, error) {
+	return getMeshHTTPPort(common.Deployment, ports)
 }
