@@ -2587,7 +2587,7 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		}, {
-			name:                   "Given a deployment with invalid includeInboundPorts annotation service entry should not get created",
+			name:                   "Given a rollout with invalid includeInboundPorts annotation service entry should not get created",
 			assetIdentity:          rollout1Identity,
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
@@ -10060,7 +10060,7 @@ func TestStateSyncerConfiguration(t *testing.T) {
 					mock.Anything,
 				), true)
 			}
-			assert.Equal(t, c.assertFunc(), nil)
+			assert.Equal(t, nil, c.assertFunc())
 		})
 	}
 }
