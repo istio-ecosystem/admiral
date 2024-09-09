@@ -54,7 +54,6 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
-	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service on cluster %s due to error %w"
 )
 
 func createServiceEntryForDeployment(
@@ -163,6 +162,8 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		// Holds the VS destinations for the TLSRoutes
 		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
+		// Holds the DR hosts (*.svc.cluster.local) used for VS based routing
+		sourceClusterToDRHosts = make(map[string]map[string]string)
 	)
 
 	clusterName, ok := ctx.Value(common.ClusterName).(string)
@@ -772,8 +773,17 @@ func modifyServiceEntryForNewServiceOrPod(
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
 				modifySEerr = common.AppendError(modifySEerr, err)
+			} else if len(destinations) == 0 {
+				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster,
+					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
+				// Get the hosts to populate the DR
+				drHost := fmt.Sprintf("*.%s.%s", deploymentOrRolloutNS, common.DotLocalDomainSuffix)
+				sourceClusterToDRHosts[sourceCluster] = map[string]string{
+					deploymentOrRolloutNS + common.DotLocalDomainSuffix: drHost,
+				}
 			}
 		}
 	}
@@ -799,7 +809,21 @@ func modifyServiceEntryForNewServiceOrPod(
 		// gathered during the discovery phase and write them to the source cluster
 		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
 		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+				deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
 			modifySEerr = common.AppendError(modifySEerr, err)
+		} else {
+			err := addUpdateDestinationRuleForSourceIngress(
+				ctx,
+				ctxLogger,
+				remoteRegistry,
+				sourceClusterToDRHosts,
+				sourceIdentity)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+					deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
 		}
 	}
 
