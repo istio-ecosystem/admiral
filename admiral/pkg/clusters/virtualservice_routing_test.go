@@ -8,6 +8,7 @@ import (
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -2080,6 +2081,243 @@ func TestGetPreviewSNIHostFromRollout(t *testing.T) {
 			} else {
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedSNIHost, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetIngressDRLoadBalancerPolicy(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		admiralParams  common.AdmiralParams
+		expectedPolicy networkingV1Alpha3.LoadBalancerSettings_SimpleLB
+	}{
+		{
+			name: "Given a no ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return the default round robin LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+		},
+		{
+			name: "Given a random ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return random LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "random",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_RANDOM,
+		},
+		{
+			name: "Given a least request ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return least request LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "least_request",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
+		},
+		{
+			name: "Given a round robin ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return round robin LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "round_robin",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+		},
+		{
+			name: "Given a passthrough ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return passthrough LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "passthrough",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_PASSTHROUGH,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			common.ResetSync()
+			common.InitializeConfig(tc.admiralParams)
+			actual := getIngressDRLoadBalancerPolicy()
+			require.Equal(t, tc.expectedPolicy, actual)
+		})
+	}
+
+}
+
+func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
+
+	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test-ns.svc.cluster.local-routing-dr",
+			Namespace: util.IstioSystemNamespace,
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "*.test-ns.svc.cluster.local",
+			ExportTo: []string{util.IstioSystemNamespace},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+						Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
+					},
+				},
+				Tls: &networkingV1Alpha3.ClientTLSSettings{
+					SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+				},
+			},
+		},
+	}
+
+	admiralParams := common.AdmiralParams{
+		SANPrefix:                   "test-san-prefix",
+		IngressVSExportToNamespaces: []string{"istio-system"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	istioClientWithExistingDR := istioFake.NewSimpleClientset()
+	istioClientWithExistingDR.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
+		Create(context.Background(), existingDR, metaV1.CreateOptions{})
+
+	istioClientWithNoExistingDR := istioFake.NewSimpleClientset()
+
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "DestinationRule",
+	})
+
+	testCases := []struct {
+		name                     string
+		istioClient              *istioFake.Clientset
+		sourceClusterToDRHosts   map[string]map[string]string
+		sourceIdentity           string
+		expectedError            error
+		expectedDestinationRules *apiNetworkingV1Alpha3.DestinationRule
+	}{
+		{
+			name: "Given a empty sourceIdentity " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should return an error",
+			sourceIdentity: "",
+			expectedError:  fmt.Errorf("sourceIdentity is empty"),
+		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should create the destination rules",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithNoExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+									{
+										From: "*",
+										To:   map[string]uint32{"*": 100},
+									},
+								},
+							},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should create the destination rules",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+									{
+										From: "*",
+										To:   map[string]uint32{"*": 100},
+									},
+								},
+							},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rc := &RemoteController{
+				ClusterID:                 "cluster-1",
+				DestinationRuleController: &istio.DestinationRuleController{},
+			}
+			rc.DestinationRuleController.IstioClient = tc.istioClient
+			rr.PutRemoteController("cluster-1", rc)
+
+			err := addUpdateDestinationRuleForSourceIngress(
+				context.Background(),
+				ctxLogger,
+				rr,
+				tc.sourceClusterToDRHosts,
+				tc.sourceIdentity)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				actualDR, err := tc.istioClient.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
+					Get(context.Background(), "test-ns.svc.cluster.local-routing-dr", metaV1.GetOptions{})
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedDestinationRules.Spec.Host, actualDR.Spec.Host)
+				require.Equal(t, tc.expectedDestinationRules.Spec.TrafficPolicy, actualDR.Spec.TrafficPolicy)
+				require.Equal(t, tc.expectedDestinationRules.Spec.ExportTo, actualDR.Spec.ExportTo)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -618,4 +619,102 @@ func getMeshHTTPPortForRollout(ports map[string]map[string]uint32) (uint32, erro
 // getMeshHTTPPortForDeployment gets the mesh http port for the deployment
 func getMeshHTTPPortForDeployment(ports map[string]map[string]uint32) (uint32, error) {
 	return getMeshHTTPPort(common.Deployment, ports)
+}
+
+// addUpdateDestinationRuleForSourceIngress adds or updates the DestinationRule for the source ingress
+// This is where the DestinationRules are created for the cross-cluster VS based routing
+// The DestinationRule is created for the .svc.cluster.local hosts that were discovered during the discovery phase
+// on each source cluster
+func addUpdateDestinationRuleForSourceIngress(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceClusterToDRHosts map[string]map[string]string,
+	sourceIdentity string) error {
+
+	if sourceIdentity == "" {
+		return fmt.Errorf("sourceIdentity is empty")
+	}
+
+	san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
+
+	for sourceCluster, drHosts := range sourceClusterToDRHosts {
+
+		rc := remoteRegistry.GetRemoteController(sourceCluster)
+		if rc == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				"", "", sourceCluster, "remote controller not initialized on this cluster")
+			continue
+		}
+
+		for name, drHost := range drHosts {
+			drObj := networkingV1Alpha3.DestinationRule{
+				Host:     drHost,
+				ExportTo: common.GetIngressVSExportToNamespace(),
+				TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+					LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+						LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+							Simple: getIngressDRLoadBalancerPolicy(),
+						},
+						LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+							Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+								{
+									From: "*",
+									To:   map[string]uint32{"*": 100},
+								},
+							},
+						},
+					},
+					Tls: &networkingV1Alpha3.ClientTLSSettings{
+						SubjectAltNames: []string{san},
+					},
+				},
+			}
+			drName := fmt.Sprintf("%s-routing-dr", name)
+
+			newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
+
+			//Get existing DR
+			existingDR, err := rc.
+				DestinationRuleController.
+				IstioClient.
+				NetworkingV1alpha3().
+				DestinationRules(util.IstioSystemNamespace).Get(ctx, drName, metaV1.GetOptions{})
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat,
+					"addUpdateDestinationRuleForSourceIngress",
+					drName,
+					util.IstioSystemNamespace,
+					sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
+				existingDR = nil
+			}
+
+			err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
+			if err != nil {
+				return err
+			}
+
+		}
+
+	}
+	return nil
+}
+
+// getIngressDRLoadBalancerPolicy return the load balancer policy for the ingress destination rule
+// Default is networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN
+func getIngressDRLoadBalancerPolicy() networkingV1Alpha3.LoadBalancerSettings_SimpleLB {
+
+	switch common.GetIngressLBPolicy() {
+	case "round_robin":
+		return networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN
+	case "random":
+		return networkingV1Alpha3.LoadBalancerSettings_RANDOM
+	case "least_request":
+		return networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST
+	case "passthrough":
+		return networkingV1Alpha3.LoadBalancerSettings_PASSTHROUGH
+	default:
+		return networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN
+	}
+
 }
