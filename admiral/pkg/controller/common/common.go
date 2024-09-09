@@ -136,6 +136,7 @@ const (
 	ConfigMapResourceType  ResourceType = "ConfigMap"
 	SecretResourceType     ResourceType = "Secret"
 	NodeResourceType       ResourceType = "Node"
+	JobResourceType        ResourceType = "Job"
 
 	// Admiral Resource Types
 	DependencyResourceType          ResourceType = "Dependency"
