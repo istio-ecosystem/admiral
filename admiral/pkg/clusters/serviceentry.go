@@ -247,7 +247,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			clusterDeployRolloutPresent[rc.ClusterID] = make(map[string]bool)
 		}
 
-		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(partitionedIdentity, rc.ClusterID, rc.ClusterID)
+		UpdateIdentityClusterCache(remoteRegistry, partitionedIdentity, rc.ClusterID)
+
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheIdentityClusterCachePut",
 			deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
 

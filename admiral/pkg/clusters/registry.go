@@ -207,6 +207,11 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with DeploymentController initialization, err: %v", err)
 		}
 		logrus.Infof("starting RolloutController clusterID: %v", clusterID)
+		rc.JobController, err = admiral.NewJobController(stop, &JobHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+		if err != nil {
+			return fmt.Errorf("error with DeploymentController initialization, err: %v", err)
+		}
+		logrus.Infof("starting RolloutController clusterID: %v", clusterID)
 		if r.AdmiralCache == nil {
 			logrus.Warn("admiral cache was nil!")
 		} else if r.AdmiralCache.argoRolloutsEnabled {

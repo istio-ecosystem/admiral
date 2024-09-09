@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"sort"
 	"strings"
 
@@ -29,6 +30,14 @@ const (
 type WeightedService struct {
 	Weight  int32
 	Service *coreV1.Service
+}
+
+type K8sObjectMetadata struct {
+	Name string
+	Namespace string
+	Type string
+	Annotations map[string]string
+	Labels map[string]string
 }
 
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *admiralV1.Dependency) error {
@@ -322,4 +331,78 @@ func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service) string
 		}
 	}
 	return ""
+}
+
+func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType, obj *admiral.K8sObject,
+	remoteRegistry *RemoteRegistry, clusterName string) error {
+	log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, common.ReceivedStatus)
+	globalIdentifier := common.GetGlobalIdentifier(obj.Annotations, obj.Labels)
+	originalIdentifier := common.GetOriginalIdentifier(obj.Annotations, obj.Labels)
+	if len(globalIdentifier) == 0 {
+		log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
+		return nil
+	}
+
+	//if we have a deployment/rollout in this namespace skip processing to save some cycles
+	if DeploymentOrRolloutExistsInNamespace(remoteRegistry, globalIdentifier, obj.Namespace, clusterName) {
+		log.Infof(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as Deployment/Rollout already present in namespace for client=" + globalIdentifier)
+		return nil
+	}
+
+	ctx = context.WithValue(ctx, "clusterName", clusterName)
+	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
+
+	if remoteRegistry.AdmiralCache != nil {
+		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
+			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)
+		}
+		if common.EnableSWAwareNSCaches() {
+			if remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache != nil {
+				remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Put(globalIdentifier, clusterName, obj.Namespace, obj.Namespace)
+			}
+			if remoteRegistry.AdmiralCache.PartitionIdentityCache != nil && len(common.GetIdentityPartition(obj.Annotations, obj.Labels)) > 0 {
+				remoteRegistry.AdmiralCache.PartitionIdentityCache.Put(globalIdentifier, originalIdentifier)
+			}
+		}
+	}
+
+	UpdateIdentityClusterCache(remoteRegistry, globalIdentifier, clusterName)
+
+	//write SEs required for this client
+	depRecord := remoteRegistry.DependencyController.Cache.Get(globalIdentifier)
+
+	if depRecord == nil {
+		log.Warnf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as no dependency record found for client=" + globalIdentifier)
+		return nil
+	}
+
+	err := remoteRegistry.DependencyController.DepHandler.Added(ctx, depRecord)
+
+	if err != nil {
+		return fmt.Errorf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Error processing client discovery")
+	}
+
+	return nil
+}
+
+func UpdateIdentityClusterCache(remoteRegistry *RemoteRegistry, identity string, clusterId string) {
+	remoteRegistry.AdmiralCache.IdentityClusterCache.Put(identity, clusterId, clusterId)
+}
+
+func DeploymentOrRolloutExistsInNamespace (remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, namespace string) bool {
+	deployments := remoteRegistry.remoteControllers[clusterName].DeploymentController.Cache.GetByIdentity(globalIdentifier)
+	for _, deployment := range deployments {
+		if deployment.Deployment.Namespace == namespace {
+			return true
+		}
+	}
+
+	rollouts := remoteRegistry.remoteControllers[clusterName].RolloutController.Cache.GetByIdentity(globalIdentifier)
+	for _, rollout := range rollouts {
+		if rollout.Rollout.Namespace == namespace {
+			return true
+		}
+	}
+
+	return false
 }

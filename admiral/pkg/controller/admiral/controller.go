@@ -81,6 +81,15 @@ type Controller struct {
 	informer  cache.SharedIndexInformer
 }
 
+type K8sObject struct {
+	Name string
+	Namespace string
+	Type string
+	Annotations map[string]string //Spec.Template.Annotations
+	Labels map[string]string //Spec.Template.Labels
+	Status string
+}
+
 func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {
 	controller := Controller{
 		name:      name,
