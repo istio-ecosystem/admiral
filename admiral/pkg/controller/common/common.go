@@ -92,6 +92,7 @@ const (
 	MeshService              = "MESH_SERVICE"
 	Deployment               = "deployment"
 	Rollout                  = "rollout"
+	Job			             = "job"
 	GTP                      = "gtp"
 	EventType                = "eventType"
 	ProcessingInProgress     = "ProcessingInProgress"
