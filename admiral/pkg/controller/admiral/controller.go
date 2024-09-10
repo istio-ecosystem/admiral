@@ -3,6 +3,7 @@ package admiral
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/core/v1"
 	"reflect"
 	"strings"
 	"time"
@@ -465,8 +466,11 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 			return true
 		}
 		latestObjMeta, latestOk := objFromCache.(metav1.Object)
+		if servicesSlice, servicesSliceOk := objFromCache.([]*v1.Service); servicesSliceOk {
+			latestObjMeta, latestOk = getMatchingServiceFromServiceSlice(objMeta, servicesSlice)
+		}
 		if !latestOk || reflect.ValueOf(latestObjMeta).IsNil() {
-			ctxLogger.Errorf("task=shouldRetry message=unable to cast latest object from cache to metav1 object, obj received=%+v", objMeta)
+			ctxLogger.Errorf("task=shouldRetry message=unable to cast latest object from cache to metav1 object, obj is of type %+v,obj received=%+v", reflect.TypeOf(objFromCache), objMeta)
 			return true
 		}
 		// event 1 ==> processed
@@ -487,4 +491,13 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 	}
 	ctxLogger.Errorf("task=shouldRetry message=obj parsed=%v, retrying object, obj received=%+v", ok, objMeta)
 	return true
+}
+
+func getMatchingServiceFromServiceSlice(service metav1.Object, services []*v1.Service) (metav1.Object, bool) {
+	for _, s := range services {
+		if s.Namespace == service.GetNamespace() && s.Name == service.GetName() {
+			return interface{}(s).(metav1.Object), true
+		}
+	}
+	return nil, false
 }
