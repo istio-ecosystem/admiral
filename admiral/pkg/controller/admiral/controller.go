@@ -471,6 +471,7 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 		}
 		switch objFromCache.(type) {
 		case []*v1.Service:
+			// ServiceController returns a slice of services from Get() which needs extra processing before casting
 			servicesSlice, _ := objFromCache.([]*v1.Service)
 			latestObjMeta, latestOk = getMatchingServiceFromServiceSlice(objMeta, servicesSlice)
 		default:
