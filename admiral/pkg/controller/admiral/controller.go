@@ -455,6 +455,10 @@ func checkIfResourceVersionHasIncreased(ctxLogger *logrus.Entry, ctx context.Con
 }
 
 func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, delegator Delegator) bool {
+	var (
+		latestObjMeta metav1.Object
+		latestOk      bool
+	)
 	objMeta, ok := obj.(metav1.Object)
 	if ok {
 		if reflect.ValueOf(objMeta).IsNil() || reflect.ValueOf(delegator).IsNil() {
@@ -465,9 +469,12 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 			ctxLogger.Errorf("task=shouldRetry message=unable to fetch latest object from cache, obj received=%+v", objMeta)
 			return true
 		}
-		latestObjMeta, latestOk := objFromCache.(metav1.Object)
-		if servicesSlice, servicesSliceOk := objFromCache.([]*v1.Service); servicesSliceOk {
+		switch objFromCache.(type) {
+		case []*v1.Service:
+			servicesSlice, _ := objFromCache.([]*v1.Service)
 			latestObjMeta, latestOk = getMatchingServiceFromServiceSlice(objMeta, servicesSlice)
+		default:
+			latestObjMeta, latestOk = objFromCache.(metav1.Object)
 		}
 		if !latestOk || reflect.ValueOf(latestObjMeta).IsNil() {
 			ctxLogger.Errorf("task=shouldRetry message=unable to cast latest object from cache to metav1 object, obj is of type %+v,obj received=%+v", reflect.TypeOf(objFromCache), objMeta)
