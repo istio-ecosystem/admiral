@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"context"
+	v1 "k8s.io/api/core/v1"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -166,6 +167,20 @@ func TestShouldRetry(t *testing.T) {
 		ctx                = context.Background()
 		resourceName1      = "resource-name-1"
 		resourceNameSpace1 = "resource-namespace-1"
+		serviceSlice       = []*v1.Service{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName1 + "-canary",
+					Namespace: resourceNameSpace1,
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName1,
+					Namespace: resourceNameSpace1,
+				},
+			},
+		}
 	)
 	testCases := []struct {
 		name                  string
@@ -236,6 +251,21 @@ func TestShouldRetry(t *testing.T) {
 			},
 			delegator:      nil,
 			expectedResult: true,
+		},
+		{
+			name: "Given an update event, " +
+				"When the controller is a service controller, " +
+				"When the controller returns a slice of services from the cache, " +
+				"Then the func should look through the cache for the matching service.",
+			obj: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName1,
+					Namespace: resourceNameSpace1,
+				},
+			},
+			delegator:             NewMockDelegator(),
+			latestObjInKubernetes: interface{}(serviceSlice),
+			expectedResult:        true,
 		},
 	}
 
