@@ -1504,9 +1504,14 @@ func AddServiceEntriesWithDrWorker(
 							compareLabels)
 						util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileServiceEntry", "", "", cluster, "", start)
 
+						valid := validateLocalityInServiceEntry(newServiceEntry)
 						if seReconciliationRequired {
 							err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
+						}
+						if !valid {
+							ctxLogger.Errorf(LogErrFormat, "ValidateLocalityInServiceEntry", "", seDr.SeName, cluster, "failed to validate locality in service entry")
+							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("failed to validate locality in service entry"))
 						}
 						util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheAddUpdateServiceEntry", "", "", cluster, "", start) // TODO: log service entry name
 
@@ -1603,6 +1608,16 @@ func AddServiceEntriesWithDrWorker(
 		}
 		errors <- addSEorDRToAClusterError
 	}
+}
+
+func validateLocalityInServiceEntry(entry *v1alpha3.ServiceEntry) bool {
+	// loop through all endpoints and check locality
+	for _, ep := range entry.Spec.Endpoints {
+		if ep.Locality == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func getClusterRegion(rr *RemoteRegistry, cluster string, rc *RemoteController) (string, error) {

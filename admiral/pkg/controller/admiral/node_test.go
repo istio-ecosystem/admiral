@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -75,7 +76,7 @@ func TestNewNodeController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config, loader.GetFakeClientLoader())
+	nodeController, err := NewNodeController(stop, &handler, config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -94,7 +95,7 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config, loader.GetFakeClientLoader())
+	nodeController, err := NewNodeController(stop, &handler, config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
