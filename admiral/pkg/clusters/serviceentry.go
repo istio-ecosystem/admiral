@@ -1505,7 +1505,7 @@ func AddServiceEntriesWithDrWorker(
 						util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileServiceEntry", "", "", cluster, "", start)
 
 						valid := validateLocalityInServiceEntry(newServiceEntry)
-						if seReconciliationRequired {
+						if seReconciliationRequired && valid {
 							err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
 						}
