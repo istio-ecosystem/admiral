@@ -353,9 +353,9 @@ func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
 
 	if remoteRegistry.AdmiralCache != nil {
-		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
-			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)
-		}
+
+		UpdateIdentityClusterCache(remoteRegistry, globalIdentifier, clusterName)
+
 		if common.EnableSWAwareNSCaches() {
 			if remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache != nil {
 				remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Put(globalIdentifier, clusterName, obj.Namespace, obj.Namespace)
@@ -365,8 +365,6 @@ func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType
 			}
 		}
 	}
-
-	UpdateIdentityClusterCache(remoteRegistry, globalIdentifier, clusterName)
 
 	//write SEs required for this client
 	depRecord := remoteRegistry.DependencyController.Cache.Get(globalIdentifier)
@@ -386,7 +384,9 @@ func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType
 }
 
 func UpdateIdentityClusterCache(remoteRegistry *RemoteRegistry, identity string, clusterId string) {
-	remoteRegistry.AdmiralCache.IdentityClusterCache.Put(identity, clusterId, clusterId)
+	if remoteRegistry.AdmiralCache != nil && remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
+		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(identity, clusterId, clusterId)
+	}
 }
 
 func DeploymentOrRolloutExistsInNamespace (remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, namespace string) bool {

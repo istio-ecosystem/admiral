@@ -18,17 +18,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-type JobHandler interface {
-	Added(ctx context.Context, obj *K8sObject) error
-	Updated(ctx context.Context, obj *K8sObject) error
-	Deleted(ctx context.Context, obj *K8sObject) error
-}
 
 //Job controller discovers jobs as mesh clients (its assumed that k8s Job doesn't have any ingress communication)
 
 type JobController struct {
 	K8sClient   kubernetes.Interface
-	JobHandler  JobHandler
+	JobHandler  ClientDiscoveryHandler
 	informer    cache.SharedIndexInformer
 	Cache       *jobCache
 }
@@ -63,7 +58,7 @@ func (p *jobCache) getK8sObjectFromJob(job *v12.Job) *K8sObject{
 	}
 }
 
-func (p *jobCache) Put(job *K8sObject) *K8sObject {
+func (p *jobCache) Put(job *K8sObject) (*K8sObject, bool) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
@@ -74,16 +69,16 @@ func (p *jobCache) Put(job *K8sObject) *K8sObject {
 			Jobs: map[string]*K8sObject{job.Namespace: job},
 		}
 		p.cache[identity] = existingJobs
-		return job
+		return job, true
 	} else {
 		jobInCache := existingJobs.Jobs[job.Namespace]
 		if jobInCache == nil {
 			existingJobs.Jobs[job.Namespace] = job
 			p.cache[identity] = existingJobs
-			return job
+			return job, true
 		}
 	}
-	return nil
+	return nil, false
 }
 
 func (p *jobCache) GetByIdentity(key string) *JobEntry {
@@ -111,6 +106,23 @@ func (p *jobCache) Get(key string, namespace string) *K8sObject {
 	return nil
 }
 
+func (p *jobCache) GetJobProcessStatus(job *v12.Job) (string, error) {
+	defer p.mutex.Unlock()
+	p.mutex.Lock()
+
+	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
+
+	jce, ok := p.cache[identity]
+	if ok {
+		jobFromNamespace, ok := jce.Jobs[job.Namespace]
+		if ok {
+			return jobFromNamespace.Status, nil
+		}
+	}
+
+	return common.NotProcessed, nil
+}
+
 func (p *jobCache) UpdateJobProcessStatus(job *v12.Job, status string) error {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
@@ -133,7 +145,7 @@ func (p *jobCache) UpdateJobProcessStatus(job *v12.Job, status string) error {
 		}
 	}
 
-	return fmt.Errorf(LogCacheFormat, "Update", "Job",
+	return fmt.Errorf(LogCacheFormat, "UpdateStatus", "Job",
 		job.Name, job.Namespace, "", "nothing to update, job not found in cache")
 }
 
@@ -159,7 +171,7 @@ func (p *JobController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{
 	return false, nil
 }
 
-func NewJobController(stopCh <-chan struct{}, handler JobHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*JobController, error) {
+func NewJobController(stopCh <-chan struct{}, handler ClientDiscoveryHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*JobController, error) {
 
 	jobController := JobController{}
 	jobController.JobHandler = handler
@@ -201,9 +213,9 @@ func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error 
 	}
 	if !common.ShouldIgnore(job.Annotations, job.Labels) {
 		k8sObj := j.Cache.getK8sObjectFromJob(job)
-		newK8sObj := j.Cache.Put(k8sObj)
-		if newK8sObj != nil {
-			j.JobHandler.Added(ctx, k8sObj)
+		newK8sObj, isNew := j.Cache.Put(k8sObj)
+		if isNew {
+			j.JobHandler.Added(ctx, newK8sObj)
 		} else {
 			log.Infof("Ignoring job %v as it was already processed", job.Name)
 		}
@@ -217,11 +229,11 @@ func (p *JobController) Deleted(ctx context.Context, obj interface{}) error {
 }
 
 func (d *JobController) GetProcessItemStatus(obj interface{}) (string, error) {
-	job, ok := obj.(*K8sObject)
+	job, ok := obj.(*v12.Job)
 	if !ok {
 		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *K8sObject", obj)
 	}
-	return job.Status, nil
+	return d.Cache.GetJobProcessStatus(job)
 }
 
 func (d *JobController) UpdateProcessItemStatus(obj interface{}, status string) error {
@@ -248,6 +260,14 @@ func (d *JobController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	}
 }
 
-func (d *JobController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
+func (j *JobController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
+	job, ok := obj.(*v12.Job)
+	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
+	if ok && isRetry {
+		return j.Cache.Get(identity, job.Namespace), nil
+	}
+	if ok && j.K8sClient != nil {
+		return j.K8sClient.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, meta_v1.GetOptions{})
+	}
 	return nil, fmt.Errorf("kubernetes client is not initialized, txId=%s", ctx.Value("txId"))
 }

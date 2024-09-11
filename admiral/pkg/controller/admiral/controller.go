@@ -90,6 +90,10 @@ type K8sObject struct {
 	Status string
 }
 
+type ClientDiscoveryHandler interface {
+	Added(ctx context.Context, obj *K8sObject) error
+}
+
 func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {
 	controller := Controller{
 		name:      name,

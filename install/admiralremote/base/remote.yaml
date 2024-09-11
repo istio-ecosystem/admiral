@@ -30,7 +30,7 @@ rules:
     resources: ['rollouts', 'workflows']
     verbs: [ "get", "list", "watch"]
   - apiGroups: ['batch']
-    resources: [ 'jobs']
+    resources: [ 'jobs', 'cronjobs']
     verbs: ['get', 'watch', 'list']
   - apiGroups: ['numaflow.numaproj.io']
     resources: [ 'vertices', 'monovertices']

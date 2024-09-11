@@ -93,6 +93,8 @@ const (
 	Deployment               = "deployment"
 	Rollout                  = "rollout"
 	Job			             = "job"
+	Vertex			         = "vertex"
+	MonoVertex			     = "monovertex"
 	GTP                      = "gtp"
 	EventType                = "eventType"
 	ProcessingInProgress     = "ProcessingInProgress"
@@ -708,11 +710,17 @@ func GetMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 func ShouldIgnore(annotations map[string]string, labels map[string]string) bool {
 	labelSet := GetLabelSet()
 
+	//if admiral ignore label set
 	if labels[labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
 		return true
 	}
 
+	//if sidecar not injected
 	if annotations[labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
+		return true
+	}
+
+	if annotations[AdmiralIgnoreAnnotation] == "true" {
 		return true
 	}
 
