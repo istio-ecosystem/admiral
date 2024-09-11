@@ -46,6 +46,7 @@ require (
 require (
 	github.com/cheekybits/is v0.0.0-20150225183255-68e9c0620927 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.27.0 // indirect
@@ -66,7 +67,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -100,12 +100,9 @@ replace (
 	github.com/fsnotify/fsnotify => github.com/fsnotify/fsnotify v1.5.1
 	github.com/go-check/check => github.com/go-check/check v0.0.0-20180628173108-788fd7840127
 	github.com/prometheus/common => github.com/prometheus/common v0.26.0
-	k8s.io/api => k8s.io/api v0.24.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.2
-	k8s.io/apimachinery => k8s.io/apimachinery v0.24.2
 	k8s.io/apiserver => k8s.io/apiserver v0.24.2
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.2
-	k8s.io/client-go => k8s.io/client-go v0.24.2
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.24.2
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.24.2
 	k8s.io/code-generator => k8s.io/code-generator v0.24.2
@@ -116,7 +113,6 @@ replace (
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.24.2
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.24.2
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.24.2
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230525220651-2546d827e515
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.24.2
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.24.2
 	k8s.io/kubectl => k8s.io/kubectl v0.24.2
