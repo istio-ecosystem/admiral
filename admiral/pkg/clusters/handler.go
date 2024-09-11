@@ -32,14 +32,6 @@ type WeightedService struct {
 	Service *coreV1.Service
 }
 
-type K8sObjectMetadata struct {
-	Name string
-	Namespace string
-	Type string
-	Annotations map[string]string
-	Labels map[string]string
-}
-
 func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCache *common.MapOfMaps, dr *admiralV1.Dependency) error {
 	for _, dIdentity := range dr.Spec.Destinations {
 		identityDependencyCache.Put(dIdentity, sourceIdentity, sourceIdentity)
@@ -333,7 +325,7 @@ func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service) string
 	return ""
 }
 
-func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType, obj *admiral.K8sObject,
+func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType, obj *common.K8sObject,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
 	log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, common.ReceivedStatus)
 	globalIdentifier := common.GetGlobalIdentifier(obj.Annotations, obj.Labels)

@@ -12,7 +12,7 @@ type ClientDiscoveryHandler struct {
 	ClusterID      string
 }
 
-func (cdh *ClientDiscoveryHandler) Added(ctx context.Context, obj *admiral.K8sObject) error {
+func (cdh *ClientDiscoveryHandler) Added(ctx context.Context, obj *common.K8sObject) error {
 	err := HandleEventForClientDiscovery (ctx, admiral.Add, obj, cdh.RemoteRegistry, cdh.ClusterID)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Add, common.JobResourceType, obj.Name, cdh.ClusterID, err)

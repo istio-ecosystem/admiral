@@ -29,7 +29,7 @@ type MonoVertexController struct {
 
 type MonoVertexEntry struct {
 	Identity string
-	MonoVertices map[string]*K8sObject
+	MonoVertices map[string]*common.K8sObject
 }
 
 type monoVertexCache struct {
@@ -46,8 +46,8 @@ func NewMonoVertexCache() *monoVertexCache {
 }
 
 
-func (p *monoVertexCache) getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVertex) *K8sObject{
-	return &K8sObject{
+func (p *monoVertexCache) getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVertex) *common.K8sObject{
+	return &common.K8sObject{
 		Name: monoVertex.Name,
 		Namespace: monoVertex.Namespace,
 		Annotations: monoVertex.Annotations,
@@ -57,7 +57,7 @@ func (p *monoVertexCache) getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVer
 	}
 }
 
-func (p *monoVertexCache) Put(monoVertex *K8sObject) (*K8sObject, bool) {
+func (p *monoVertexCache) Put(monoVertex *common.K8sObject) (*common.K8sObject, bool) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(monoVertex.Annotations, monoVertex.Labels)
@@ -65,7 +65,7 @@ func (p *monoVertexCache) Put(monoVertex *K8sObject) (*K8sObject, bool) {
 	if existingMonoVertices == nil {
 		existingMonoVertices = &MonoVertexEntry{
 			Identity: identity,
-			MonoVertices: map[string]*K8sObject{monoVertex.Namespace: monoVertex},
+			MonoVertices: map[string]*common.K8sObject{monoVertex.Namespace: monoVertex},
 		}
 		p.cache[identity] = existingMonoVertices
 		return monoVertex, true
@@ -91,7 +91,7 @@ func (p *monoVertexCache) GetByIdentity(key string) *MonoVertexEntry {
 	}
 }
 
-func (p *monoVertexCache) Get(key string, namespace string) *K8sObject {
+func (p *monoVertexCache) Get(key string, namespace string) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -230,7 +230,7 @@ func (p *MonoVertexController) Deleted(ctx context.Context, obj interface{}) err
 func (d *MonoVertexController) GetProcessItemStatus(obj interface{}) (string, error) {
 	monoVertex, ok := obj.(v1alpha1.MonoVertex)
 	if !ok {
-		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *K8sObject", obj)
+		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *common.K8sObject", obj)
 	}
 	return d.Cache.GetMonoVertexProcessStatus(monoVertex)
 }

@@ -29,7 +29,7 @@ type VertexController struct {
 
 type VertexEntry struct {
 	Identity string
-	Vertices map[string]*K8sObject
+	Vertices map[string]*common.K8sObject
 }
 
 type vertexCache struct {
@@ -46,8 +46,8 @@ func NewVertexCache() *vertexCache {
 }
 
 
-func (p *vertexCache) getK8sObjectFromVertex(vertex v1alpha1.Vertex) *K8sObject{
-	return &K8sObject{
+func (p *vertexCache) getK8sObjectFromVertex(vertex v1alpha1.Vertex) *common.K8sObject{
+	return &common.K8sObject{
 		Name: vertex.Name,
 		Namespace: vertex.Namespace,
 		Annotations: vertex.Spec.Metadata.Annotations,
@@ -57,7 +57,7 @@ func (p *vertexCache) getK8sObjectFromVertex(vertex v1alpha1.Vertex) *K8sObject{
 	}
 }
 
-func (p *vertexCache) Put(vertex *K8sObject) (*K8sObject, bool) {
+func (p *vertexCache) Put(vertex *common.K8sObject) (*common.K8sObject, bool) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(vertex.Annotations, vertex.Labels)
@@ -65,7 +65,7 @@ func (p *vertexCache) Put(vertex *K8sObject) (*K8sObject, bool) {
 	if existingVertices == nil {
 		existingVertices = &VertexEntry{
 			Identity: identity,
-			Vertices: map[string]*K8sObject{vertex.Namespace: vertex},
+			Vertices: map[string]*common.K8sObject{vertex.Namespace: vertex},
 		}
 		p.cache[identity] = existingVertices
 		return vertex, true
@@ -91,7 +91,7 @@ func (p *vertexCache) GetByIdentity(key string) *VertexEntry {
 	}
 }
 
-func (p *vertexCache) Get(key string, namespace string) *K8sObject {
+func (p *vertexCache) Get(key string, namespace string) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -230,7 +230,7 @@ func (p *VertexController) Deleted(ctx context.Context, obj interface{}) error {
 func (d *VertexController) GetProcessItemStatus(obj interface{}) (string, error) {
 	vertex, ok := obj.(v1alpha1.Vertex)
 	if !ok {
-		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *K8sObject", obj)
+		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *common.K8sObject", obj)
 	}
 	return d.Cache.GetVertexProcessStatus(vertex)
 }

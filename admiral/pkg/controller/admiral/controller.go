@@ -81,17 +81,8 @@ type Controller struct {
 	informer  cache.SharedIndexInformer
 }
 
-type K8sObject struct {
-	Name string
-	Namespace string
-	Type string
-	Annotations map[string]string //Spec.Template.Annotations
-	Labels map[string]string //Spec.Template.Labels
-	Status string
-}
-
 type ClientDiscoveryHandler interface {
-	Added(ctx context.Context, obj *K8sObject) error
+	Added(ctx context.Context, obj *common.K8sObject) error
 }
 
 func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegator Delegator, informer cache.SharedIndexInformer) Controller {

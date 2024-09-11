@@ -458,3 +458,12 @@ func (s *ProxiedServiceInfo) String() string {
 func (s *ProxiedServiceEnvironment) String() string {
 	return fmt.Sprintf("{Environment:%s, DnsName: %s, CNames: %s}", s.Environment, s.DnsName, s.CNames)
 }
+
+type K8sObject struct {
+	Name string
+	Namespace string
+	Type string
+	Annotations map[string]string
+	Labels map[string]string
+	Status string
+}

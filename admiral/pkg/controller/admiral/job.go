@@ -30,7 +30,7 @@ type JobController struct {
 
 type JobEntry struct {
 	Identity string
-	Jobs map[string]*K8sObject
+	Jobs map[string]*common.K8sObject
 }
 
 type jobCache struct {
@@ -47,8 +47,8 @@ func NewJobCache() *jobCache {
 }
 
 
-func (p *jobCache) getK8sObjectFromJob(job *v12.Job) *K8sObject{
-	return &K8sObject{
+func (p *jobCache) getK8sObjectFromJob(job *v12.Job) *common.K8sObject{
+	return &common.K8sObject{
 		Name: job.Name,
 		Namespace: job.Namespace,
 		Annotations: job.Spec.Template.Annotations,
@@ -58,7 +58,7 @@ func (p *jobCache) getK8sObjectFromJob(job *v12.Job) *K8sObject{
 	}
 }
 
-func (p *jobCache) Put(job *K8sObject) (*K8sObject, bool) {
+func (p *jobCache) Put(job *common.K8sObject) (*common.K8sObject, bool) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
@@ -66,7 +66,7 @@ func (p *jobCache) Put(job *K8sObject) (*K8sObject, bool) {
 	if existingJobs == nil {
 		existingJobs = &JobEntry{
 			Identity: identity,
-			Jobs: map[string]*K8sObject{job.Namespace: job},
+			Jobs: map[string]*common.K8sObject{job.Namespace: job},
 		}
 		p.cache[identity] = existingJobs
 		return job, true
@@ -92,7 +92,7 @@ func (p *jobCache) GetByIdentity(key string) *JobEntry {
 	}
 }
 
-func (p *jobCache) Get(key string, namespace string) *K8sObject {
+func (p *jobCache) Get(key string, namespace string) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -231,7 +231,7 @@ func (p *JobController) Deleted(ctx context.Context, obj interface{}) error {
 func (d *JobController) GetProcessItemStatus(obj interface{}) (string, error) {
 	job, ok := obj.(*v12.Job)
 	if !ok {
-		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *K8sObject", obj)
+		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *common.K8sObject", obj)
 	}
 	return d.Cache.GetJobProcessStatus(job)
 }
