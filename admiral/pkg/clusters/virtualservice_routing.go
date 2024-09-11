@@ -8,6 +8,7 @@ import (
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
@@ -553,19 +554,25 @@ func addUpdateVirtualServicesForSourceIngress(
 // getAllVSRouteDestinationsByCluster generates the route destinations for each source cluster
 // This is during the discovery phase where the route destinations are created for each source cluster
 // For a given identity and env, we are going to build a map of all possible services across deployments
-// and rollouts. This map will be used to create the route destinations for the VirtualService
+// and rollouts. IN addition, it also adds additional endpoints created using GTP DNS Prefix.
+// This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
-	deployment *k8sAppsV1.Deployment) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
+	deployment *k8sAppsV1.Deployment,
+	remoteRegistry *RemoteRegistry,
+	sourceIdentity string,
+	env string) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
 	}
 
 	destinations := make(map[string][]*networkingV1Alpha3.RouteDestination)
+
+	// Populate the route destinations(svc.cluster.local services) for the deployment
 	if serviceInstance[common.Deployment] != nil {
 		meshPort, err := getMeshHTTPPortForDeployment(meshDeployAndRolloutPorts)
 		if err != nil {
@@ -577,6 +584,8 @@ func getAllVSRouteDestinationsByCluster(
 			return nil, err
 		}
 	}
+
+	// Populate the route destinations(svc.cluster.local services) for the rollout
 	if serviceInstance[common.Rollout] != nil {
 		meshPort, err := getMeshHTTPPortForRollout(meshDeployAndRolloutPorts)
 		if err != nil {
@@ -588,7 +597,87 @@ func getAllVSRouteDestinationsByCluster(
 			return nil, err
 		}
 	}
+
+	// Get the global traffic policy for the env and identity
+	// and add the additional endpoints/hosts to the destination map
+	globalTrafficPolicy, err := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
+	if err != nil {
+		return nil, err
+	}
+	if globalTrafficPolicy != nil {
+		// Add the global traffic policy destinations to the destination map
+		gtpDestinations, err := getDestinationsForGTPDNSPrefixes(globalTrafficPolicy, destinations, env)
+		if err != nil {
+			return nil, err
+		}
+		for fqdn, routeDestinations := range gtpDestinations {
+			destinations[fqdn] = routeDestinations
+		}
+	}
+
 	return destinations, nil
+}
+
+func getDestinationsForGTPDNSPrefixes(
+	globalTrafficPolicy *v1alpha1.GlobalTrafficPolicy,
+	destinations map[string][]*networkingV1Alpha3.RouteDestination,
+	env string) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
+
+	if globalTrafficPolicy == nil {
+		return nil, fmt.Errorf("globaltrafficpolicy is nil")
+	}
+	if destinations == nil {
+		return nil, fmt.Errorf("destinations map is nil")
+	}
+
+	gtpDestinations := make(map[string][]*networkingV1Alpha3.RouteDestination)
+	for globalFQDN, routeDestinations := range destinations {
+
+		if routeDestinations == nil {
+			return nil, fmt.Errorf("route destinations is nil for globalFQDN %s", globalFQDN)
+		}
+
+		hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
+		if err != nil {
+			return nil, err
+		}
+
+		if strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) {
+			continue
+		}
+
+		for _, policy := range globalTrafficPolicy.Spec.Policy {
+			if policy.DnsPrefix == common.Default || policy.DnsPrefix == env {
+				continue
+			}
+			newDNSPrefixedSNIHost, err := generateSNIHost(policy.DnsPrefix + common.Sep + hostWithoutSNIPrefix)
+			if err != nil {
+				return nil, err
+			}
+			newRD, err := copyRouteDestinations(routeDestinations)
+			if err != nil {
+				return nil, err
+			}
+			gtpDestinations[newDNSPrefixedSNIHost] = newRD
+		}
+
+	}
+
+	return gtpDestinations, nil
+}
+
+func copyRouteDestinations(
+	routeDestination []*networkingV1Alpha3.RouteDestination) ([]*networkingV1Alpha3.RouteDestination, error) {
+	if routeDestination == nil {
+		return nil, fmt.Errorf("routeDestination is nil")
+	}
+	newRouteDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
+	for _, rd := range routeDestination {
+		var newRD = &networkingV1Alpha3.RouteDestination{}
+		rd.DeepCopyInto(newRD)
+		newRouteDestinations = append(newRouteDestinations, newRD)
+	}
+	return newRouteDestinations, nil
 }
 
 func getMeshHTTPPort(

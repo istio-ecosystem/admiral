@@ -3,10 +3,13 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	v1alpha12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -1538,13 +1541,47 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "env",
+			AdmiralCRDIdentityLabel: "identity",
 		},
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
+
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1alpha12.GlobalTrafficPolicy)
+	gtpCache.mutex = &sync.Mutex{}
+
+	gtpCache.Put(&v1alpha12.GlobalTrafficPolicy{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:        "test-gtp",
+			Annotations: map[string]string{"env": "test-env"},
+			Labels:      map[string]string{"identity": "test-identity"},
+		},
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{
+				{
+					DnsPrefix: "default",
+				},
+				{
+					DnsPrefix: "test-env",
+				},
+				{
+					DnsPrefix: "west",
+				},
+				{
+					DnsPrefix: "east",
+				},
+			},
+		},
+	})
+
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr.AdmiralCache = &AdmiralCache{
+		GlobalTrafficCache: gtpCache,
+	}
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1556,6 +1593,8 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		deployment                *v1.Deployment
 		expectedError             error
 		expectedRouteDestination  map[string][]*networkingV1Alpha3.RouteDestination
+		sourceIdentity            string
+		env                       string
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -1636,7 +1675,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		},
 		{
 			name: "Given an empty route destinations map, " +
-				"When populateVSRouteDestinationForDeployment is invoked, " +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
 				"Then it should populate the destinations",
 			meshDeployAndRolloutPorts: map[string]map[string]uint32{
 				common.Deployment: {"http": meshPort},
@@ -1678,8 +1717,8 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		{
 			name: "Given an empty route destinations map" +
 				"And serviceInstance has both rollout" +
-				"When populateVSRouteDestinationForDeployment is invoked, " +
-				"Then it should populate the destinations with rollout service",
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should populate the destinations with deployment and rollout service",
 			meshDeployAndRolloutPorts: map[string]map[string]uint32{
 				common.Rollout:    {"http": meshPort},
 				common.Deployment: {"http": meshPort},
@@ -1773,6 +1812,144 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given an empty route destinations map and valid sourceIdenity and env" +
+				"And serviceInstance has both rollout and deployment" +
+				"And there is corresponding GTP" +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should populate the destinations with deployment, rollout service" +
+				"And additional GTP dns prefixed endpoints sans preview",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Rollout:    {"http": meshPort},
+				common.Deployment: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {},
+				common.Deployment: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:      "test-deployment-svc",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"preview-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "preview-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+				"active-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "active-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			sourceIdentity: "test-identity",
+			env:            "test-env",
+			expectedError:  nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.east.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.preview.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1782,13 +1959,23 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				tc.meshDeployAndRolloutPorts,
 				tc.weightedServices,
 				tc.rollout,
-				tc.deployment)
+				tc.deployment,
+				rr,
+				tc.sourceIdentity,
+				tc.env)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				require.Nil(t, err)
-				require.Equal(t, tc.expectedRouteDestination, actual)
+				for fqdn, destinations := range tc.expectedRouteDestination {
+					require.NotNil(t, actual[fqdn])
+					require.Equal(t, len(destinations), len(actual[fqdn]))
+					for i := 0; i < len(destinations); i++ {
+						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
+					}
+				}
 			}
 		})
 	}
@@ -2322,6 +2509,179 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				require.Equal(t, tc.expectedDestinationRules.Spec.Host, actualDR.Spec.Host)
 				require.Equal(t, tc.expectedDestinationRules.Spec.TrafficPolicy, actualDR.Spec.TrafficPolicy)
 				require.Equal(t, tc.expectedDestinationRules.Spec.ExportTo, actualDR.Spec.ExportTo)
+			}
+		})
+	}
+
+}
+
+func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
+
+	meshPort := uint32(8080)
+	testCases := []struct {
+		name                        string
+		gtp                         *v1alpha12.GlobalTrafficPolicy
+		routeDestination            map[string][]*networkingV1Alpha3.RouteDestination
+		expectedError               error
+		expectedGTPRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+	}{
+		{
+			name: "Given nil gtp " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("globaltrafficpolicy is nil"),
+		},
+		{
+			name: "Given nil route destinations " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an error",
+			gtp:           &v1alpha12.GlobalTrafficPolicy{},
+			expectedError: fmt.Errorf("destinations map is nil"),
+		},
+		{
+			name: "Given empty route destinations " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an empty gtpRouteDestinations",
+			gtp:                         &v1alpha12.GlobalTrafficPolicy{},
+			routeDestination:            make(map[string][]*networkingV1Alpha3.RouteDestination),
+			expectedError:               nil,
+			expectedGTPRouteDestination: make(map[string][]*networkingV1Alpha3.RouteDestination),
+		},
+		{
+			name: "Given a valid destination map with nil destination " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an error",
+			routeDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": nil,
+			},
+			gtp: &v1alpha12.GlobalTrafficPolicy{},
+			expectedError: fmt.Errorf(
+				"route destinations is nil for globalFQDN outbound_.80_._.test-env.test-identity.global"),
+		},
+		{
+			name: "Given a valid params " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an empty gtpRouteDestinations",
+			gtp: &v1alpha12.GlobalTrafficPolicy{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:        "test-gtp",
+					Annotations: map[string]string{"env": "test-env"},
+					Labels:      map[string]string{"identity": "test-identity"},
+				},
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							DnsPrefix: "default",
+						},
+						{
+							DnsPrefix: "test-env",
+						},
+						{
+							DnsPrefix: "west",
+						},
+						{
+							DnsPrefix: "east",
+						},
+					},
+				},
+			},
+			routeDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.preview.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedGTPRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.east.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.east.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getDestinationsForGTPDNSPrefixes(
+				tc.gtp,
+				tc.routeDestination,
+				"test-env")
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				for fqdn, destinations := range tc.expectedGTPRouteDestination {
+					require.NotNil(t, actual[fqdn])
+					require.Equal(t, len(destinations), len(actual[fqdn]))
+					for i := 0; i < len(destinations); i++ {
+						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
+					}
+				}
 			}
 		})
 	}
