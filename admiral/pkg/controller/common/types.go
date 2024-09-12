@@ -126,6 +126,11 @@ type AdmiralParams struct {
 	IngressVSExportToNamespaces []string
 	IngressLBPolicy             string
 	VSRoutingEnabledClusters    []string
+
+	//Client discovery (types requiring mesh egress only)
+	EnableClientDiscovery		bool
+	ClientDiscoveryClustersForJobs []string
+	DiscoveryClustersForNumaflow []string
 }
 
 func (b AdmiralParams) String() string {

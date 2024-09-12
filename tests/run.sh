@@ -23,6 +23,7 @@ fi
 
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
+$install_dir/scripts/install_numaflow.sh
 $install_dir/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 $install_dir/scripts/install_sample_services.sh $install_dir
 
