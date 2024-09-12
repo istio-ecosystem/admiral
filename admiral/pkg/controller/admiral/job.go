@@ -209,7 +209,7 @@ func (d *JobController) Updated(ctx context.Context, obj interface{}, oldObj int
 func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error {
 	job, ok := obj.(*v12.Job)
 	if !ok {
-		return nil
+		return fmt.Errorf("failed to covert informer object to Job")
 	}
 	if !common.ShouldIgnore(job.Annotations, job.Labels) {
 		k8sObj := j.Cache.getK8sObjectFromJob(job)

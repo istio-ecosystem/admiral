@@ -208,7 +208,7 @@ func (d *MonoVertexController) Updated(ctx context.Context, obj interface{}, old
 func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj interface{}) error {
 	monoVertex, ok := obj.(v1alpha1.MonoVertex)
 	if !ok {
-		return nil
+		return fmt.Errorf("failed to covert informer object to MonoVertex")
 	}
 	if !common.ShouldIgnore(monoVertex.Annotations, monoVertex.Labels) {
 		k8sObj := j.Cache.getK8sObjectFromMonoVertex(monoVertex)

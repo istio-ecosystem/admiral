@@ -208,7 +208,7 @@ func (d *VertexController) Updated(ctx context.Context, obj interface{}, oldObj 
 func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) error {
 	vertex, ok := obj.(v1alpha1.Vertex)
 	if !ok {
-		return nil
+		return fmt.Errorf("failed to covert informer object to Vertex")
 	}
 	if !common.ShouldIgnore(vertex.Annotations, vertex.Labels) {
 		k8sObj := j.Cache.getK8sObjectFromVertex(vertex)
