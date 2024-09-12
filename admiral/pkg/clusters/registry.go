@@ -215,22 +215,34 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 				return fmt.Errorf("error with RolloutController initialization, err: %v", err)
 			}
 		}
-		logrus.Infof("starting JobController clusterID: %v", clusterID)
-		rc.JobController, err = admiral.NewJobController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with JobController initialization, err: %v", err)
-		}
 
-		logrus.Infof("starting VertexController clusterID: %v", clusterID)
-		rc.VertexController, err = admiral.NewVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with VertexController initialization, err: %v", err)
-		}
+		if common.IsClientDiscoveryEnabled() {
 
-		logrus.Infof("starting MonoVertexController clusterID: %v", clusterID)
-		rc.MonoVertexController, err = admiral.NewMonoVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
-		if err != nil {
-			return fmt.Errorf("error with MonoVertexController initialization, err: %v", err)
+			clustersForJobs := common.GetClientDiscoveryClustersForJobs()
+
+			if len(clustersForJobs) == 0 || common.IsPresent(clustersForJobs, clusterID) {
+				logrus.Infof("starting JobController clusterID: %v", clusterID)
+				rc.JobController, err = admiral.NewJobController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with JobController initialization, err: %v", err)
+				}
+			}
+
+			clustersForNumaflow := common.GetClientDiscoveryClustersForNumaflow()
+
+			if len(clustersForNumaflow) == 0 || common.IsPresent(clustersForNumaflow, clusterID) {
+				logrus.Infof("starting VertexController clusterID: %v", clusterID)
+				rc.VertexController, err = admiral.NewVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with VertexController initialization, err: %v", err)
+				}
+
+				logrus.Infof("starting MonoVertexController clusterID: %v", clusterID)
+				rc.MonoVertexController, err = admiral.NewMonoVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with MonoVertexController initialization, err: %v", err)
+				}
+			}
 		}
 
 	}
@@ -260,6 +272,11 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 	r.PutRemoteController(clusterID, &rc)
 	return nil
+}
+
+func isInClusterList(enabledClusters []string, clusterName string) bool {
+
+	return false
 }
 
 func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod util.ResyncIntervals) error {
