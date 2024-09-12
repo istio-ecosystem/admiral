@@ -68,8 +68,11 @@ func process(ctx context.Context, obj interface{}) (string, error) {
 
 func (d *NodeController) Added(ctx context.Context, obj interface{}) error {
 	region, err := process(ctx, obj)
-	if err != nil || region == "" {
+	if err != nil {
 		return err
+	}
+	if region == "" {
+		return fmt.Errorf("received empty region for node %v", obj)
 	}
 	d.Locality = &Locality{Region: region}
 	return nil
@@ -77,8 +80,11 @@ func (d *NodeController) Added(ctx context.Context, obj interface{}) error {
 
 func (d *NodeController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
 	region, err := process(ctx, obj)
-	if err != nil || region == "" {
+	if err != nil {
 		return err
+	}
+	if region == "" {
+		return fmt.Errorf("received empty region for node %v", obj)
 	}
 	d.Locality = &Locality{Region: region}
 	return nil
