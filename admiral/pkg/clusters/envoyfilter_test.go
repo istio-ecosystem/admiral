@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -262,6 +263,7 @@ func getRegistry(filterVersion string) *RemoteRegistry {
 		DependenciesNamespace:      "default",
 		EnvoyFilterVersion:         filterVersion,
 		Profile:                    common.AdmiralProfileDefault,
+		GatewayAssetAliases:        []string{"Intuit.platform.servicesgateway.servicesgateway", "mock.gateway"},
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -327,4 +329,57 @@ func TestGetPlugin(t *testing.T) {
 
 	plugin := getPlugin(routingPolicyFoo)
 	assert.Equal(t, "plugin: test", plugin)
+}
+
+func TestGetWorkloadSelectorLabels(t *testing.T) {
+	getRegistry("1.13,1.17")
+	testCases := []struct {
+		name         string
+		identifier   string
+		expectedList map[string]string
+	}{
+		{
+			name: "Given gateway asset alias" +
+				"Should create a map containing the partition and original identifier",
+			identifier: "sw1.intuit.platform.servicesgateway.servicesgateway",
+			expectedList: map[string]string{
+				common.GetPartitionIdentifier(): "sw1",
+				common.AssetAlias:               "Intuit.platform.servicesgateway.servicesgateway",
+			},
+		},
+		{
+			name: "Given non gateway asset alias" +
+				"Should create a map containing only the asset alias",
+			identifier: "Intuit.platform.services.payment",
+			expectedList: map[string]string{
+				common.AssetAlias: "Intuit.platform.services.payment",
+			},
+		},
+		{
+			name: "Given invalid identifier" +
+				"Should create a map containing only the asset alias",
+			identifier: "",
+			expectedList: map[string]string{
+				common.AssetAlias: "",
+			},
+		},
+		{
+			name: "Given GW identifier without partition" +
+				"Should create a map containing only the asset alias",
+			identifier: "Intuit.platform.servicesgateway.servicesgateway",
+			expectedList: map[string]string{
+				common.AssetAlias: "Intuit.platform.servicesgateway.servicesgateway",
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			labels := GetWorkloadSelectorLabels(c.identifier)
+			if !reflect.DeepEqual(labels, c.expectedList) {
+				t.Errorf("Wanted: %#v, got: %#v", c.expectedList, labels)
+			}
+		})
+	}
+
 }
