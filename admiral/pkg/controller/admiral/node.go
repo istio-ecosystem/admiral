@@ -72,7 +72,8 @@ func (d *NodeController) Added(ctx context.Context, obj interface{}) error {
 		return err
 	}
 	if region == "" {
-		return fmt.Errorf("received empty region for node %v", obj)
+		log.Debugf("received empty region for node %v", obj)
+		return nil
 	}
 	d.Locality = &Locality{Region: region}
 	return nil
@@ -84,7 +85,8 @@ func (d *NodeController) Updated(ctx context.Context, obj interface{}, oldObj in
 		return err
 	}
 	if region == "" {
-		return fmt.Errorf("received empty region for node %v", obj)
+		log.Debugf("received empty region for node %v", obj)
+		return nil
 	}
 	d.Locality = &Locality{Region: region}
 	return nil
