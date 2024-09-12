@@ -8202,7 +8202,8 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 		Hosts: []string{"test.mesh"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			&istioNetworkingV1Alpha3.WorkloadEntry{
-				Address: "aws-lb.1.com",
+				Address:  "aws-lb.1.com",
+				Locality: "us-west-2",
 			},
 		},
 	}
@@ -8210,7 +8211,8 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 		Hosts: []string{"test-existing-and-desired.mesh"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			&istioNetworkingV1Alpha3.WorkloadEntry{
-				Address: "aws-lb.1.com",
+				Address:  "aws-lb.1.com",
+				Locality: "us-west-2",
 			},
 		},
 	}
@@ -10062,5 +10064,77 @@ func TestStateSyncerConfiguration(t *testing.T) {
 			}
 			assert.Equal(t, nil, c.assertFunc())
 		})
+	}
+}
+
+func TestValidateLocalityInServiceEntry(t *testing.T) {
+	testCases := []struct {
+		name     string
+		entry    *v1alpha3.ServiceEntry
+		expected bool
+	}{
+		{
+			"AllEndpointsWithLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2"},
+						{Locality: "us-east-2"},
+					},
+				},
+			},
+			true,
+		},
+		{
+			"NoEndpoints",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
+				},
+			},
+			true,
+		},
+		{
+			"SingleEndpointLocalitySet",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2"},
+					},
+				},
+			},
+			true,
+		},
+		{
+			"SomeEndpointsMissingLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2"},
+						{Address: "abc.foo.com."},
+					},
+				},
+			},
+			false,
+		},
+		{
+			"AllEndpointsWithoutLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com."},
+						{Address: "def.foo.com."},
+					},
+				},
+			},
+			false,
+		},
+	}
+
+	for _, tt := range testCases {
+		result := validateLocalityInServiceEntry(tt.entry)
+		if result != tt.expected {
+			t.Errorf("Test failed: %s \nExpected: %v \nGot: %v", tt.name, tt.expected, result)
+		}
 	}
 }

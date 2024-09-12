@@ -3,6 +3,7 @@ package admiral
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -34,7 +35,7 @@ type Locality struct {
 	Region string
 }
 
-func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest.Config, clientLoader loader.ClientLoader) (*NodeController, error) {
+func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*NodeController, error) {
 
 	nodeController := NodeController{}
 	nodeController.NodeHandler = handler
@@ -48,7 +49,7 @@ func NewNodeController(stopCh <-chan struct{}, handler NodeHandler, config *rest
 
 	nodeController.informer = k8sV1Informers.NewNodeInformer(
 		nodeController.K8sClient,
-		0,
+		resyncPeriod,
 		cache.Indexers{},
 	)
 
@@ -70,6 +71,10 @@ func (d *NodeController) Added(ctx context.Context, obj interface{}) error {
 	if err != nil {
 		return err
 	}
+	if region == "" {
+		log.Debugf("received empty region for node %v", obj)
+		return nil
+	}
 	d.Locality = &Locality{Region: region}
 	return nil
 }
@@ -78,6 +83,10 @@ func (d *NodeController) Updated(ctx context.Context, obj interface{}, oldObj in
 	region, err := process(ctx, obj)
 	if err != nil {
 		return err
+	}
+	if region == "" {
+		log.Debugf("received empty region for node %v", obj)
+		return nil
 	}
 	d.Locality = &Locality{Region: region}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -42,8 +43,21 @@ func TestNodeAddedTypeAssertion(t *testing.T) {
 		},
 		{
 			name: "Given context and Node " +
-				"When Node param is of type *v1.Node " +
+				"When Node param is of type *v1.Node with Locality label" +
 				"Then func should not return an error",
+			node: &k8sV1.Node{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{
+						common.NodeRegionLabel: "us-west-2",
+					},
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "Given context and Node " +
+				"When Node param is of type *v1.Node with no locality label" +
+				"Then func should return an error",
 			node:          &k8sV1.Node{},
 			expectedError: nil,
 		},
@@ -75,7 +89,7 @@ func TestNewNodeController(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config, loader.GetFakeClientLoader())
+	nodeController, err := NewNodeController(stop, &handler, config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -94,7 +108,7 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	stop := make(chan struct{})
 	handler := test.MockNodeHandler{}
 
-	nodeController, err := NewNodeController(stop, &handler, config, loader.GetFakeClientLoader())
+	nodeController, err := NewNodeController(stop, &handler, config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 
 	if err != nil {
 		t.Errorf("Unexpected err %v", err)
@@ -113,6 +127,11 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	assert.Equal(t, "us-west-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
 
 	nodeObj.Labels[common.NodeRegionLabel] = "us-east-2"
+	_ = nodeController.Updated(ctx, nodeObj, nodeObj)
+	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
+
+	// Verify that another update of node without a region label does not change the region
+	nodeObj.Labels = map[string]string{}
 	_ = nodeController.Updated(ctx, nodeObj, nodeObj)
 	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
 

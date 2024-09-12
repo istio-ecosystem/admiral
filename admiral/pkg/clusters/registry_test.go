@@ -153,7 +153,7 @@ func createMockRemoteController(f func(interface{})) (*RemoteController, error) 
 	if err != nil {
 		return nil, err
 	}
-	n, err := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config, loader.GetFakeClientLoader())
+	n, err := admiral.NewNodeController(stop, &test.MockNodeHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
 	if err != nil {
 		return nil, err
 	}
