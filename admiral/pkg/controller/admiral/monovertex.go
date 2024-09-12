@@ -46,12 +46,12 @@ func NewMonoVertexCache() *monoVertexCache {
 }
 
 
-func getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVertex) *common.K8sObject{
+func getK8sObjectFromMonoVertex(monoVertex *v1alpha1.MonoVertex) *common.K8sObject{
 	return &common.K8sObject{
 		Name: monoVertex.Name,
 		Namespace: monoVertex.Namespace,
-		Annotations: monoVertex.Annotations,
-		Labels: monoVertex.Labels,
+		Annotations: monoVertex.Spec.Metadata.Annotations,
+		Labels: monoVertex.Spec.Metadata.Labels,
 		Status: common.NotProcessed,
 		Type: common.MonoVertex,
 	}
@@ -105,15 +105,16 @@ func (p *monoVertexCache) Get(key string, namespace string) *common.K8sObject {
 	return nil
 }
 
-func (p *monoVertexCache) GetMonoVertexProcessStatus(monoVertex v1alpha1.MonoVertex) (string, error) {
+func (p *monoVertexCache) GetMonoVertexProcessStatus(monoVertex *v1alpha1.MonoVertex) (string, error) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	identity := common.GetGlobalIdentifier(monoVertex.Annotations, monoVertex.Labels)
+	monoVertexObj := getK8sObjectFromMonoVertex(monoVertex)
+	identity := common.GetGlobalIdentifier(monoVertexObj.Annotations, monoVertexObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {
-		monoVertexFromNamespace, ok := jce.MonoVertices[monoVertex.Namespace]
+		monoVertexFromNamespace, ok := jce.MonoVertices[monoVertexObj.Namespace]
 		if ok {
 			return monoVertexFromNamespace.Status, nil
 		}
@@ -122,7 +123,7 @@ func (p *monoVertexCache) GetMonoVertexProcessStatus(monoVertex v1alpha1.MonoVer
 	return common.NotProcessed, nil
 }
 
-func (p *monoVertexCache) UpdateMonoVertexProcessStatus(monoVertex v1alpha1.MonoVertex, status string) error {
+func (p *monoVertexCache) UpdateMonoVertexProcessStatus(monoVertex *v1alpha1.MonoVertex, status string) error {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -154,11 +155,11 @@ func (p *MonoVertexController) DoesGenerationMatch(ctxLogger *log.Entry, obj int
 			fmt.Sprintf("generation check is disabled"))
 		return false, nil
 	}
-	monoVertexNew, ok := obj.(v1alpha1.MonoVertex)
+	monoVertexNew, ok := obj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return false, fmt.Errorf("type assertion failed, %v is not of type *MonoVertex", obj)
 	}
-	monoVertexOld, ok := oldObj.(v1alpha1.MonoVertex)
+	monoVertexOld, ok := oldObj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return false, fmt.Errorf("type assertion failed, %v is not of type *MonoVertex", oldObj)
 	}
@@ -206,7 +207,7 @@ func (d *MonoVertexController) Updated(ctx context.Context, obj interface{}, old
 }
 
 func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj interface{}) error {
-	monoVertex, ok := obj.(v1alpha1.MonoVertex)
+	monoVertex, ok := obj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to MonoVertex")
 	}
@@ -228,7 +229,7 @@ func (p *MonoVertexController) Deleted(ctx context.Context, obj interface{}) err
 }
 
 func (d *MonoVertexController) GetProcessItemStatus(obj interface{}) (string, error) {
-	monoVertex, ok := obj.(v1alpha1.MonoVertex)
+	monoVertex, ok := obj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *common.K8sObject", obj)
 	}
@@ -236,7 +237,7 @@ func (d *MonoVertexController) GetProcessItemStatus(obj interface{}) (string, er
 }
 
 func (d *MonoVertexController) UpdateProcessItemStatus(obj interface{}, status string) error {
-	monoVertex, ok := obj.(v1alpha1.MonoVertex)
+	monoVertex, ok := obj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *MonoVertex", obj)
 	}
@@ -244,7 +245,7 @@ func (d *MonoVertexController) UpdateProcessItemStatus(obj interface{}, status s
 }
 
 func (d *MonoVertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
-	monoVertex, ok := obj.(v1alpha1.MonoVertex)
+	monoVertex, ok := obj.(*v1alpha1.MonoVertex)
 	if !ok {
 		return
 	}
@@ -256,8 +257,9 @@ func (d *MonoVertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 }
 
 func (j *MonoVertexController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
-	monoVertex, ok := obj.(v1alpha1.MonoVertex)
-	identity := common.GetGlobalIdentifier(monoVertex.Annotations, monoVertex.Labels)
+	monoVertex, ok := obj.(*v1alpha1.MonoVertex)
+	monoVertexObj := getK8sObjectFromMonoVertex(monoVertex)
+	identity := common.GetGlobalIdentifier(monoVertexObj.Annotations, monoVertexObj.Labels)
 	if ok && isRetry {
 		return j.Cache.Get(identity, monoVertex.Namespace), nil
 	}

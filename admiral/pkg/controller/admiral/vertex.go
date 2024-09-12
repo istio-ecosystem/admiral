@@ -46,7 +46,7 @@ func NewVertexCache() *vertexCache {
 }
 
 
-func getK8sObjectFromVertex(vertex v1alpha1.Vertex) *common.K8sObject{
+func getK8sObjectFromVertex(vertex *v1alpha1.Vertex) *common.K8sObject{
 	return &common.K8sObject{
 		Name: vertex.Name,
 		Namespace: vertex.Namespace,
@@ -60,6 +60,7 @@ func getK8sObjectFromVertex(vertex v1alpha1.Vertex) *common.K8sObject{
 func (p *vertexCache) Put(vertex *common.K8sObject) (*common.K8sObject, bool) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
+
 	identity := common.GetGlobalIdentifier(vertex.Annotations, vertex.Labels)
 	existingVertices := p.cache[identity]
 	if existingVertices == nil {
@@ -105,15 +106,16 @@ func (p *vertexCache) Get(key string, namespace string) *common.K8sObject {
 	return nil
 }
 
-func (p *vertexCache) GetVertexProcessStatus(vertex v1alpha1.Vertex) (string, error) {
+func (p *vertexCache) GetVertexProcessStatus(vertex *v1alpha1.Vertex) (string, error) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	identity := common.GetGlobalIdentifier(vertex.Annotations, vertex.Labels)
+	vertexObj := getK8sObjectFromVertex(vertex)
+	identity := common.GetGlobalIdentifier(vertexObj.Annotations, vertexObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {
-		vertexFromNamespace, ok := jce.Vertices[vertex.Namespace]
+		vertexFromNamespace, ok := jce.Vertices[vertexObj.Namespace]
 		if ok {
 			return vertexFromNamespace.Status, nil
 		}
@@ -122,23 +124,24 @@ func (p *vertexCache) GetVertexProcessStatus(vertex v1alpha1.Vertex) (string, er
 	return common.NotProcessed, nil
 }
 
-func (p *vertexCache) UpdateVertexProcessStatus(vertex v1alpha1.Vertex, status string) error {
+func (p *vertexCache) UpdateVertexProcessStatus(vertex *v1alpha1.Vertex, status string) error {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	identity := common.GetGlobalIdentifier(vertex.Annotations, vertex.Labels)
+	vertexObj := getK8sObjectFromVertex(vertex)
+
+	identity := common.GetGlobalIdentifier(vertexObj.Annotations, vertexObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {
-		vertexFromNamespace, ok := jce.Vertices[vertex.Namespace]
+		vertexFromNamespace, ok := jce.Vertices[vertexObj.Namespace]
 		if ok {
 			vertexFromNamespace.Status = status
 			p.cache[jce.Identity] = jce
 			return nil
 		} else {
-			newVertex := getK8sObjectFromVertex(vertex)
-			newVertex.Status = status
-			jce.Vertices[vertex.Namespace] = newVertex
+			vertexObj.Status = status
+			jce.Vertices[vertex.Namespace] = vertexObj
 			p.cache[jce.Identity] = jce
 			return nil
 		}
@@ -154,11 +157,11 @@ func (p *VertexController) DoesGenerationMatch(ctxLogger *log.Entry, obj interfa
 			fmt.Sprintf("generation check is disabled"))
 		return false, nil
 	}
-	vertexNew, ok := obj.(v1alpha1.Vertex)
+	vertexNew, ok := obj.(*v1alpha1.Vertex)
 	if !ok {
 		return false, fmt.Errorf("type assertion failed, %v is not of type *Vertex", obj)
 	}
-	vertexOld, ok := oldObj.(v1alpha1.Vertex)
+	vertexOld, ok := oldObj.(*v1alpha1.Vertex)
 	if !ok {
 		return false, fmt.Errorf("type assertion failed, %v is not of type *Vertex", oldObj)
 	}
@@ -206,7 +209,7 @@ func (d *VertexController) Updated(ctx context.Context, obj interface{}, oldObj 
 }
 
 func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) error {
-	vertex, ok := obj.(v1alpha1.Vertex)
+	vertex, ok := obj.(*v1alpha1.Vertex)
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to Vertex")
 	}
@@ -228,7 +231,7 @@ func (p *VertexController) Deleted(ctx context.Context, obj interface{}) error {
 }
 
 func (d *VertexController) GetProcessItemStatus(obj interface{}) (string, error) {
-	vertex, ok := obj.(v1alpha1.Vertex)
+	vertex, ok := obj.(*v1alpha1.Vertex)
 	if !ok {
 		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *common.K8sObject", obj)
 	}
@@ -236,7 +239,7 @@ func (d *VertexController) GetProcessItemStatus(obj interface{}) (string, error)
 }
 
 func (d *VertexController) UpdateProcessItemStatus(obj interface{}, status string) error {
-	vertex, ok := obj.(v1alpha1.Vertex)
+	vertex, ok := obj.(*v1alpha1.Vertex)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *Vertex", obj)
 	}
@@ -244,7 +247,7 @@ func (d *VertexController) UpdateProcessItemStatus(obj interface{}, status strin
 }
 
 func (d *VertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
-	vertex, ok := obj.(v1alpha1.Vertex)
+	vertex, ok := obj.(*v1alpha1.Vertex)
 	if !ok {
 		return
 	}
@@ -256,8 +259,9 @@ func (d *VertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 }
 
 func (j *VertexController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
-	vertex, ok := obj.(v1alpha1.Vertex)
-	identity := common.GetGlobalIdentifier(vertex.Annotations, vertex.Labels)
+	vertex, ok := obj.(*v1alpha1.Vertex)
+	vertexObj := getK8sObjectFromVertex(vertex)
+	identity := common.GetGlobalIdentifier(vertexObj.Annotations, vertexObj.Labels)
 	if ok && isRetry {
 		return j.Cache.Get(identity, vertex.Namespace), nil
 	}
