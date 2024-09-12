@@ -46,7 +46,7 @@ func NewVertexCache() *vertexCache {
 }
 
 
-func (p *vertexCache) getK8sObjectFromVertex(vertex v1alpha1.Vertex) *common.K8sObject{
+func getK8sObjectFromVertex(vertex v1alpha1.Vertex) *common.K8sObject{
 	return &common.K8sObject{
 		Name: vertex.Name,
 		Namespace: vertex.Namespace,
@@ -136,7 +136,7 @@ func (p *vertexCache) UpdateVertexProcessStatus(vertex v1alpha1.Vertex, status s
 			p.cache[jce.Identity] = jce
 			return nil
 		} else {
-			newVertex := p.getK8sObjectFromVertex(vertex)
+			newVertex := getK8sObjectFromVertex(vertex)
 			newVertex.Status = status
 			jce.Vertices[vertex.Namespace] = newVertex
 			p.cache[jce.Identity] = jce
@@ -211,7 +211,7 @@ func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) 
 		return fmt.Errorf("failed to covert informer object to Vertex")
 	}
 	if !common.ShouldIgnore(vertex.Annotations, vertex.Labels) {
-		k8sObj := j.Cache.getK8sObjectFromVertex(vertex)
+		k8sObj := getK8sObjectFromVertex(vertex)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			j.VertexHandler.Added(ctx, newK8sObj)

@@ -47,7 +47,7 @@ func NewJobCache() *jobCache {
 }
 
 
-func (p *jobCache) getK8sObjectFromJob(job *v12.Job) *common.K8sObject{
+func getK8sObjectFromJob(job *v12.Job) *common.K8sObject{
 	return &common.K8sObject{
 		Name: job.Name,
 		Namespace: job.Namespace,
@@ -137,7 +137,7 @@ func (p *jobCache) UpdateJobProcessStatus(job *v12.Job, status string) error {
 			p.cache[jce.Identity] = jce
 			return nil
 		} else {
-			newJob := p.getK8sObjectFromJob(job)
+			newJob := getK8sObjectFromJob(job)
 			newJob.Status = status
 			jce.Jobs[job.Namespace] = newJob
 			p.cache[jce.Identity] = jce
@@ -212,7 +212,7 @@ func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error 
 		return fmt.Errorf("failed to covert informer object to Job")
 	}
 	if !common.ShouldIgnore(job.Annotations, job.Labels) {
-		k8sObj := j.Cache.getK8sObjectFromJob(job)
+		k8sObj := getK8sObjectFromJob(job)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			j.JobHandler.Added(ctx, newK8sObj)

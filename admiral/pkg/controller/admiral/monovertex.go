@@ -46,7 +46,7 @@ func NewMonoVertexCache() *monoVertexCache {
 }
 
 
-func (p *monoVertexCache) getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVertex) *common.K8sObject{
+func getK8sObjectFromMonoVertex(monoVertex v1alpha1.MonoVertex) *common.K8sObject{
 	return &common.K8sObject{
 		Name: monoVertex.Name,
 		Namespace: monoVertex.Namespace,
@@ -136,7 +136,7 @@ func (p *monoVertexCache) UpdateMonoVertexProcessStatus(monoVertex v1alpha1.Mono
 			p.cache[jce.Identity] = jce
 			return nil
 		} else {
-			newMonoVertex := p.getK8sObjectFromMonoVertex(monoVertex)
+			newMonoVertex := getK8sObjectFromMonoVertex(monoVertex)
 			newMonoVertex.Status = status
 			jce.MonoVertices[monoVertex.Namespace] = newMonoVertex
 			p.cache[jce.Identity] = jce
@@ -211,7 +211,7 @@ func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj inter
 		return fmt.Errorf("failed to covert informer object to MonoVertex")
 	}
 	if !common.ShouldIgnore(monoVertex.Annotations, monoVertex.Labels) {
-		k8sObj := j.Cache.getK8sObjectFromMonoVertex(monoVertex)
+		k8sObj := getK8sObjectFromMonoVertex(monoVertex)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			j.MonoVertexHandler.Added(ctx, newK8sObj)
