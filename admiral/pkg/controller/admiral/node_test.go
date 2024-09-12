@@ -43,10 +43,23 @@ func TestNodeAddedTypeAssertion(t *testing.T) {
 		},
 		{
 			name: "Given context and Node " +
-				"When Node param is of type *v1.Node " +
+				"When Node param is of type *v1.Node with Locality label" +
 				"Then func should not return an error",
-			node:          &k8sV1.Node{},
+			node: &k8sV1.Node{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{
+						common.NodeRegionLabel: "us-west-2",
+					},
+				},
+			},
 			expectedError: nil,
+		},
+		{
+			name: "Given context and Node " +
+				"When Node param is of type *v1.Node with no locality label" +
+				"Then func should return an error",
+			node:          &k8sV1.Node{},
+			expectedError: fmt.Errorf("received empty region for node %v", &k8sV1.Node{}),
 		},
 	}
 
@@ -116,6 +129,12 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	nodeObj.Labels[common.NodeRegionLabel] = "us-east-2"
 	_ = nodeController.Updated(ctx, nodeObj, nodeObj)
 	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
+
+	// Verify that another update of node without a region label does not change the region
+	nodeObj.Labels = map[string]string{}
+	err = nodeController.Updated(ctx, nodeObj, nodeObj)
+	assert.Equal(t, "us-east-2", nodeController.Locality.Region, "region expected %v, got: %v", region, nodeController.Locality.Region)
+	assert.Contains(t, err.Error(), "received empty region for node")
 
 	_ = nodeController.Deleted(ctx, nodeObj)
 	//delete should make no difference
