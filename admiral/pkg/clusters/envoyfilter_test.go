@@ -341,18 +341,18 @@ func TestGetWorkloadSelectorLabels(t *testing.T) {
 		{
 			name: "Given gateway asset alias" +
 				"Should create a map containing the partition and original identifier",
-			identifier: "sw1.intuit.platform.servicesgateway.servicesgateway",
+			identifier: "sw1.org.platform.servicesgateway.servicesgateway",
 			expectedList: map[string]string{
 				common.GetPartitionIdentifier(): "sw1",
-				common.AssetAlias:               "Intuit.platform.servicesgateway.servicesgateway",
+				common.AssetAlias:               "Org.platform.servicesgateway.servicesgateway",
 			},
 		},
 		{
 			name: "Given non gateway asset alias" +
 				"Should create a map containing only the asset alias",
-			identifier: "Intuit.platform.services.payment",
+			identifier: "Org.platform.services.payment",
 			expectedList: map[string]string{
-				common.AssetAlias: "Intuit.platform.services.payment",
+				common.AssetAlias: "Org.platform.services.payment",
 			},
 		},
 		{
@@ -366,9 +366,9 @@ func TestGetWorkloadSelectorLabels(t *testing.T) {
 		{
 			name: "Given GW identifier without partition" +
 				"Should create a map containing only the asset alias",
-			identifier: "Intuit.platform.servicesgateway.servicesgateway",
+			identifier: "Org.platform.servicesgateway.servicesgateway",
 			expectedList: map[string]string{
-				common.AssetAlias: "Intuit.platform.servicesgateway.servicesgateway",
+				common.AssetAlias: "Org.platform.servicesgateway.servicesgateway",
 			},
 		},
 	}
