@@ -67,7 +67,7 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 
 	for _, version := range versionsArray {
 		envoyFilterName := fmt.Sprintf("%s-dr-%s-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), routingPolicyNameSha, dependentIdentitySha, version)
-		envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, map[string]string{common.AssetAlias: workloadIdentityKey}, version, envoyFilterName)
+		envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, GetWorkloadSelectorLabels(workloadIdentityKey), version, envoyFilterName)
 
 		log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "version +"+version)
 
@@ -122,6 +122,22 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 	}
 	return filterList, err
 }
+
+func GetWorkloadSelectorLabels(assetAlias string) map[string]string {
+	if common.IsAGateway(assetAlias) {
+		partition, originalAssetAlias := common.GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(assetAlias)
+		if partition != "" && originalAssetAlias != "" {
+			return map[string]string{
+				common.GetPartitionIdentifier(): partition,
+				common.AssetAlias:               originalAssetAlias,
+			}
+		}
+	}
+	return map[string]string{
+		common.AssetAlias: assetAlias,
+	}
+}
+
 func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelectorLabels map[string]string, filterVersion string, filterName string) *v1alpha3.EnvoyFilter {
 	var envoyFilterStringConfig string
 	var wasmPath string

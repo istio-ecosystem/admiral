@@ -727,3 +727,31 @@ func GenerateUniqueNameForVS(originNamespace string, vsName string) string {
 	return newVSName
 
 }
+
+func IsAGateway(item string) bool {
+	gwAssetAliases := GetGatewayAssetAliases()
+	for _, gw := range gwAssetAliases {
+		if strings.HasSuffix(strings.ToLower(item), Sep+strings.ToLower(gw)) {
+			return true
+		}
+	}
+	return false
+}
+
+func GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(partitionedIdentifier string) (string, string) {
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = swx.org.platform.servicesgateway.servicesgateway
+	// returns swx, Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Org.platform.servicesgateway.servicesgateway
+	// returns "", Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Abc.foo.bar
+	// returns "", Abc.foo.bar
+	gwAssetAliases := GetGatewayAssetAliases()
+	for _, gw := range gwAssetAliases {
+		if strings.HasSuffix(strings.ToLower(partitionedIdentifier), Sep+strings.ToLower(gw)) {
+			return strings.TrimSuffix(partitionedIdentifier, Sep+strings.ToLower(gw)), gw
+		}
+	}
+	return "", partitionedIdentifier
+}
