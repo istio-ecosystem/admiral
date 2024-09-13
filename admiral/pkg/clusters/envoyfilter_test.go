@@ -263,7 +263,7 @@ func getRegistry(filterVersion string) *RemoteRegistry {
 		DependenciesNamespace:      "default",
 		EnvoyFilterVersion:         filterVersion,
 		Profile:                    common.AdmiralProfileDefault,
-		GatewayAssetAliases:        []string{"Intuit.platform.servicesgateway.servicesgateway", "mock.gateway"},
+		GatewayAssetAliases:        []string{"Org.platform.servicesgateway.servicesgateway", "mock.gateway"},
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
