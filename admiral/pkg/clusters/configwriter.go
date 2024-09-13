@@ -125,7 +125,10 @@ func getServiceEntryEndpoints(
 	endpoint := ingressEndpoints[serverCluster]
 	endpoints := []*networkingV1Alpha3.WorkloadEntry{}
 	tmpEp := endpoint.DeepCopy()
-	tmpEp.Labels[typeLabel] = identityConfigEnvironment.Type
+	if tmpEp.Labels == nil {
+		tmpEp.Labels = make(map[string]string)
+	}
+	tmpEp.Labels["security.istio.io/tlsMode"] = "istio"
 	services := []*registry.RegistryServiceConfig{}
 	for _, service := range identityConfigEnvironment.Services {
 		services = append(services, service)

@@ -35,7 +35,7 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 		Resolution:      networking.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*networking.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Deployment}},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -48,7 +48,7 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 		Resolution:      networking.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*networking.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout}},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -61,7 +61,7 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 		Resolution:      networking.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*networking.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout}},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -74,8 +74,8 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 		Resolution:      networking.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*networking.WorkloadEntry{
-			{Address: "east.elb.aws.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"type": common.Deployment}},
-			{Address: "west.elb.aws.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout}},
+			{Address: "east.elb.aws.com", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"}},
+			{Address: "west.elb.aws.com", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -157,13 +157,13 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-west-2",
 					Ports:    meshPorts[common.Deployment],
-					Labels:   map[string]string{"type": common.Deployment},
+					Labels:   map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-west-2",
 					Ports:    meshPorts[common.Rollout],
-					Labels:   map[string]string{"type": common.Rollout},
+					Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 				},
 			},
 			expectedErr: nil,
@@ -182,18 +182,19 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-east-2",
 					Ports:    meshPorts[common.Deployment],
-					Labels:   map[string]string{"type": common.Deployment},
+					Labels:   map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-east-2",
 					Ports:    meshPorts[common.Rollout],
-					Labels:   map[string]string{"type": common.Rollout},
+					Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "west.elb.aws.com",
 					Locality: "us-west-2",
 					Ports:    map[string]uint32{"http": 0},
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 			expectedErr: nil,
@@ -214,12 +215,13 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-east-2",
 					Ports:    meshPorts[common.Rollout],
-					Labels:   map[string]string{"type": common.Rollout},
+					Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "west.elb.aws.com",
 					Locality: "us-west-2",
 					Ports:    map[string]uint32{"http": 0},
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 			expectedErr: nil,
@@ -240,18 +242,19 @@ func TestUpdateEndpointsForDeployToRolloutMigration(t *testing.T) {
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-east-2",
 					Ports:    meshPorts[common.Deployment],
-					Labels:   map[string]string{"type": common.Deployment},
+					Labels:   map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "foobar.foobar-ns.svc.cluster.local",
 					Locality: "us-east-2",
 					Ports:    meshPorts[common.Rollout],
-					Labels:   map[string]string{"type": common.Rollout},
+					Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 				},
 				{
 					Address:  "west.elb.aws.com",
 					Locality: "us-west-2",
 					Ports:    map[string]uint32{"http": 0},
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 			expectedErr: nil,

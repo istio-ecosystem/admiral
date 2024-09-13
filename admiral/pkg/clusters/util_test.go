@@ -907,6 +907,7 @@ func generateSEGivenIdentity(deployment1Identity string) *istioNetworkingV1Alpha
 					"http": 0,
 				},
 				Locality: "us-west-2",
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			},
 		},
 		SubjectAltNames: []string{"spiffe://prefix/" + deployment1Identity},

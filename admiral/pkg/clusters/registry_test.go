@@ -111,7 +111,7 @@ func TestCopyServiceEntry(t *testing.T) {
 func TestCopyEndpoint(t *testing.T) {
 	setupForRegistryTests()
 	se := networking.WorkloadEntry{
-		Address: "127.0.0.1",
+		Address: "127.0.0.1", Labels: map[string]string{"security.istio.io/tlsMode": "istio"},
 	}
 
 	r := copyEndpoint(&se)
