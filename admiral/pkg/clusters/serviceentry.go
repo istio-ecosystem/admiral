@@ -1504,7 +1504,7 @@ func AddServiceEntriesWithDrWorker(
 							compareLabels)
 						util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileServiceEntry", "", "", cluster, "", start)
 
-						valid, validityError := validateServiceEntry(newServiceEntry)
+						valid, validityError := validateServiceEntryEndpoints(newServiceEntry)
 						if seReconciliationRequired && valid && validityError == nil {
 							err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
@@ -1610,7 +1610,7 @@ func AddServiceEntriesWithDrWorker(
 	}
 }
 
-func validateServiceEntry(entry *v1alpha3.ServiceEntry) (bool, error) {
+func validateServiceEntryEndpoints(entry *v1alpha3.ServiceEntry) (bool, error) {
 	// loop through all endpoints and check locality and istio mode labels
 	var errorStrings []string
 

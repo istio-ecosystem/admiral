@@ -10188,7 +10188,7 @@ func TestValidateLocalityInServiceEntry(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-		result, err := validateServiceEntry(tt.entry)
+		result, err := validateServiceEntryEndpoints(tt.entry)
 		if result != tt.expected {
 			t.Errorf("Test failed: %s \nExpected: %v \nGot: %v", tt.name, tt.expected, result)
 		}
