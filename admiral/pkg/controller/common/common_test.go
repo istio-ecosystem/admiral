@@ -51,7 +51,7 @@ func initConfig(fqdn bool, fqdnLocal bool) {
 		EnableAbsoluteFQDNForLocalEndpoints: fqdnLocal,
 		EnableSWAwareNSCaches:               true,
 		ExportToIdentityList:                []string{"*"},
-		GatewayAssetAliases:                 []string{"mock.gateway", "Intuit.platform.servicesgateway.servicesgateway"},
+		GatewayAssetAliases:                 []string{"mock.gateway", "Org.platform.servicesgateway.servicesgateway"},
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -1250,7 +1250,7 @@ func TestIsAGateway(t *testing.T) {
 		{
 			name: "Given valid GW asset name" +
 				"Should return true",
-			asset:    "sw1.intuit.platform.servicesgateway.servicesgateway",
+			asset:    "sw1.org.platform.servicesgateway.servicesgateway",
 			expected: true,
 		},
 		{
@@ -1288,23 +1288,23 @@ func TestGetPartitionAndOriginalIdentifierFromPartitionedIdentifier(t *testing.T
 		{
 			name: "Given valid partitioned identifier" +
 				"Should return partition and original identifier",
-			identifier:                 "sw1.intuit.platform.servicesgateway.servicesgateway",
+			identifier:                 "sw1.org.platform.servicesgateway.servicesgateway",
 			expectedPartition:          "sw1",
-			expectedOriginalIdentifier: "Intuit.platform.servicesgateway.servicesgateway",
+			expectedOriginalIdentifier: "Org.platform.servicesgateway.servicesgateway",
 		},
 		{
 			name: "Given gateway asset alias" +
 				"Should return partition and original identifier",
-			identifier:                 "Intuit.platform.servicesgateway.servicesgateway",
+			identifier:                 "Org.platform.servicesgateway.servicesgateway",
 			expectedPartition:          "",
-			expectedOriginalIdentifier: "Intuit.platform.servicesgateway.servicesgateway",
+			expectedOriginalIdentifier: "Org.platform.servicesgateway.servicesgateway",
 		},
 		{
 			name: "Given non partitioned identifier" +
 				"Should return empty partition and original identifier",
-			identifier:                 "Intuit.foo.bar",
+			identifier:                 "Org.foo.bar",
 			expectedPartition:          "",
-			expectedOriginalIdentifier: "Intuit.foo.bar",
+			expectedOriginalIdentifier: "Org.foo.bar",
 		},
 	}
 

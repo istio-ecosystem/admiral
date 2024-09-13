@@ -739,6 +739,14 @@ func IsAGateway(item string) bool {
 }
 
 func GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(partitionedIdentifier string) (string, string) {
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = swx.org.platform.servicesgateway.servicesgateway
+	// returns swx, Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Org.platform.servicesgateway.servicesgateway
+	// returns "", Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Abc.foo.bar
+	// returns "", Abc.foo.bar
 	gwAssetAliases := GetGatewayAssetAliases()
 	for _, gw := range gwAssetAliases {
 		if strings.HasSuffix(strings.ToLower(partitionedIdentifier), Sep+strings.ToLower(gw)) {
