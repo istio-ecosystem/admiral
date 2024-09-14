@@ -149,7 +149,7 @@ func TestGetDestinationRule(t *testing.T) {
 	}
 
 	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
-		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
+		{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}}, {Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}}
 	noGtpDr := v1alpha3.DestinationRule{
 		Host:          "qa.myservice.global",
@@ -442,7 +442,7 @@ func TestGetDestinationRuleActivePassive(t *testing.T) {
 	seSingleEndpoint := &v1alpha3.ServiceEntry{
 		Hosts: []string{"qa.myservice.global"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "west.com", Locality: "us-west-2"},
+			{Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		}}
 
 	noGtpDrSingleEndpoint := v1alpha3.DestinationRule{
@@ -484,8 +484,8 @@ func TestGetDestinationRuleActivePassive(t *testing.T) {
 	seMultipleEndpoint := &v1alpha3.ServiceEntry{
 		Hosts: []string{"qa.myservice.global"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "east.com", Locality: "us-east-2"},
-			{Address: "west.com", Locality: "us-west-2"},
+			{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		}}
 
 	noGtpDrMultipleEndpointWest := v1alpha3.DestinationRule{
@@ -766,7 +766,7 @@ func TestCalculateDistribution(t *testing.T) {
 	seSingleEndpoint := &v1alpha3.ServiceEntry{
 		Hosts: []string{"qa.myservice.global"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "west.com", Locality: "us-west-2"},
+			{Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		}}
 
 	singleEndpointDistribution := []*v1alpha3.LocalityLoadBalancerSetting_Distribute{
@@ -778,8 +778,8 @@ func TestCalculateDistribution(t *testing.T) {
 	seMultipleEndpoint := &v1alpha3.ServiceEntry{
 		Hosts: []string{"qa.myservice.global"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "east.com", Locality: "us-east-2"},
-			{Address: "west.com", Locality: "us-west-2"},
+			{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		}}
 
 	multipleEndpointDistribution := []*v1alpha3.LocalityLoadBalancerSetting_Distribute{
@@ -906,19 +906,19 @@ func TestGetOutlierDetection(t *testing.T) {
 	}
 
 	se := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
-		{Address: "east.com", Locality: "us-east-2"}, {Address: "west.com", Locality: "us-west-2"},
+		{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}}, {Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}}
 
 	seOneHostRemote := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
-		{Address: "east.com", Locality: "us-east-2"},
+		{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}}
 
 	seOneHostLocal := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
-		{Address: "hello.ns.svc.cluster.local", Locality: "us-east-2"},
+		{Address: "hello.ns.svc.cluster.local", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}}
 
 	seOneHostRemoteIp := &v1alpha3.ServiceEntry{Hosts: []string{"qa.myservice.global"}, Endpoints: []*v1alpha3.WorkloadEntry{
-		{Address: "95.45.25.34", Locality: "us-east-2"},
+		{Address: "95.45.25.34", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}}
 
 	//Struct of test case info. Name is required.

@@ -38,8 +38,8 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 	twoEndpointSeUpdated := v1alpha3.ServiceEntry{
@@ -51,8 +51,8 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 90}, Locality: "us-west-2"},
-			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 90}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 	oneEndpointSe := v1alpha3.ServiceEntry{
@@ -64,7 +64,7 @@ func TestSkipDestructiveUpdate(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 	newSeTwoEndpoints := &v1alpha32.ServiceEntry{
@@ -196,8 +196,8 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "dummy.admiral.global-east", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -210,7 +210,7 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+			{Address: "dummy.admiral.global-west", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -223,8 +223,8 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 		Resolution:      v1alpha3.ServiceEntry_DNS,
 		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
 		Endpoints: []*v1alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-			{Address: "test.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "test.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -340,21 +340,21 @@ func TestAddUpdateServiceEntry(t *testing.T) {
 
 func TestValidateServiceEntryEndpoints(t *testing.T) {
 	twoValidEndpoints := []*v1alpha3.WorkloadEntry{
-		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	oneValidEndpoints := []*v1alpha3.WorkloadEntry{
-		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	dummyEndpoints := []*v1alpha3.WorkloadEntry{
-		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
+		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	validAndInvalidEndpoints := []*v1alpha3.WorkloadEntry{
-		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"},
+		{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	twoValidEndpointsSe := &v1alpha32.ServiceEntry{
@@ -430,22 +430,22 @@ func TestValidateServiceEntryEndpoints(t *testing.T) {
 			name:                      "Validate SE with valid endpoint",
 			serviceEntry:              oneValidEndpointsSe,
 			expectedAreEndpointsValid: true,
-			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"}},
+			expectedValidEndpoints:    []*v1alpha3.WorkloadEntry{{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}}},
 		},
 		{
 			name:                      "Validate endpoint with multiple valid endpoints",
 			serviceEntry:              twoValidEndpointsSe,
 			expectedAreEndpointsValid: true,
 			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
-				{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2"},
-				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"}},
+				{Address: "valid1.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}}},
 		},
 		{
 			name:                      "Validate endpoint with mix of valid and dummy endpoints",
 			serviceEntry:              validAndInvalidEndpointsSe,
 			expectedAreEndpointsValid: false,
 			expectedValidEndpoints: []*v1alpha3.WorkloadEntry{
-				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2"}},
+				{Address: "valid2.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}}},
 		},
 	}
 

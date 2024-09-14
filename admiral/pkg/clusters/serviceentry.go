@@ -1504,14 +1504,14 @@ func AddServiceEntriesWithDrWorker(
 							compareLabels)
 						util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileServiceEntry", "", "", cluster, "", start)
 
-						valid := validateLocalityInServiceEntry(newServiceEntry)
-						if seReconciliationRequired && valid {
+						valid, validityError := validateServiceEntryEndpoints(newServiceEntry)
+						if seReconciliationRequired && valid && validityError == nil {
 							err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
 						}
-						if !valid {
-							ctxLogger.Errorf(LogErrFormat, "ValidateLocalityInServiceEntry", "", seDr.SeName, cluster, "failed to validate locality in service entry")
-							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("failed to validate locality in service entry"))
+						if !valid || validityError != nil {
+							ctxLogger.Errorf(LogErrFormat, "ValidateLocalityInServiceEntry", "", seDr.SeName, cluster, fmt.Errorf("failed to validate the service entry, received error: %v", validityError))
+							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("failed to validate locality in service entry, received error: %v", validityError))
 						}
 						util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheAddUpdateServiceEntry", "", "", cluster, "", start) // TODO: log service entry name
 
@@ -1610,14 +1610,24 @@ func AddServiceEntriesWithDrWorker(
 	}
 }
 
-func validateLocalityInServiceEntry(entry *v1alpha3.ServiceEntry) bool {
-	// loop through all endpoints and check locality
+func validateServiceEntryEndpoints(entry *v1alpha3.ServiceEntry) (bool, error) {
+	// loop through all endpoints and check locality and istio mode labels
+	var errorStrings []string
+
 	for _, ep := range entry.Spec.Endpoints {
 		if ep.Locality == "" {
-			return false
+			errorStrings = append(errorStrings, fmt.Sprintf("locality not set for endpoint with address %s", ep.Address))
+		}
+		if ep.Labels == nil || ep.Labels["security.istio.io/tlsMode"] != "istio" {
+			errorStrings = append(errorStrings, fmt.Sprintf("istio mode not set for endpoint with address %s", ep.Address))
 		}
 	}
-	return true
+
+	if len(errorStrings) > 0 {
+		return false, fmt.Errorf(strings.Join(errorStrings, ", "))
+	}
+
+	return true, nil
 }
 
 func getClusterRegion(rr *RemoteRegistry, cluster string, rc *RemoteController) (string, error) {

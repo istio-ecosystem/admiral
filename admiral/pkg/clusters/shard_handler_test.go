@@ -159,7 +159,7 @@ func TestShardHandler_Added(t *testing.T) {
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			{Address: "abc-elb.us-east-2.elb.amazonaws.com.",
 				Ports:    map[string]uint32{"http": 15443},
-				Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"},
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				Locality: "us-east-2"},
 		},
 		ExportTo:        []string{common.NamespaceIstioSystem, "services-inboundd268-usw2-dev"},

@@ -57,7 +57,7 @@ func createMockServiceEntry(env string, identity string, endpointAddress string,
 		Endpoints: []*networkingV1Alpha3.WorkloadEntry{{Address: endpointAddress,
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(endpointPort)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"}}},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"}}},
 		WorkloadSelector: nil,
 		ExportTo:         exportTo,
 		SubjectAltNames:  []string{"spiffe://prefix/" + identity},
@@ -146,33 +146,33 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	remoteDeploymentEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "def-elb.us-west-2.elb.amazonaws.com.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(15443)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "deployment"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	localEndpoints := []*networkingV1Alpha3.WorkloadEntry{{
 		Address:  "app-1-spk-root-service.ns-1-usw2-e2e.svc.cluster.local.",
 		Locality: "us-west-2",
 		Ports:    map[string]uint32{"http": uint32(8090)},
-		Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+		Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 	}}
 	weightedEndpoints := []*networkingV1Alpha3.WorkloadEntry{
 		{
 			Address:  "app-1-spk-desired-service.ns-1-usw2-e2e.svc.cluster.local.",
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(8090)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			Weight:   25,
 		},
 		{
 			Address:  "app-1-spk-stable-service.ns-1-usw2-e2e.svc.cluster.local.",
 			Locality: "us-west-2",
 			Ports:    map[string]uint32{"http": uint32(8090)},
-			Labels:   map[string]string{"security.istio.io/tlsMode": "istio", "type": "rollout"},
+			Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			Weight:   75,
 		},
 	}
