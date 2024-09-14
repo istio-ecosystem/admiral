@@ -34,7 +34,7 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 					Address:  deployLocalFqdn,
 					Locality: ep.Locality,
 					Ports:    meshPorts[common.Deployment],
-					Labels:   map[string]string{"type": common.Deployment},
+					Labels:   map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"},
 				}
 				uniqueEndpointsList = append(uniqueEndpointsList, deployEp)
 				requiredServices = append(requiredServices, serviceInstance[common.Deployment])
@@ -45,7 +45,7 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 					Address:  rolloutFqdn,
 					Locality: ep.Locality,
 					Ports:    meshPorts[common.Rollout],
-					Labels:   map[string]string{"type": common.Rollout},
+					Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 				}
 				uniqueEndpointsList = append(uniqueEndpointsList, rolloutEp)
 				requiredServices = append(requiredServices, serviceInstance[common.Rollout])
@@ -53,7 +53,7 @@ func UpdateEndpointsForDeployToRolloutMigration(serviceInstance map[string]*k8sV
 		} else {
 			// TODO: check when will this be applicable, and then
 			// update the required service accordingly
-			ep.Labels = nil
+			delete(ep.Labels, "type")
 			uniqueEndpointsList = append(uniqueEndpointsList, ep)
 		}
 	}
