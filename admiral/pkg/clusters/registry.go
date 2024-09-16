@@ -192,7 +192,7 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with OutlierDetectionController initialization, err: %v", err)
 		}
 		logrus.Infof("starting NodeController clusterID: %v", clusterID)
-		rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, r.ClientLoader)
+		rc.NodeController, err = admiral.NewNodeController(stop, &NodeHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, resyncPeriod.UniversalReconcileInterval, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with NodeController controller initialization, err: %v", err)
 		}

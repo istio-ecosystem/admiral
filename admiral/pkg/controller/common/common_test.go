@@ -51,6 +51,7 @@ func initConfig(fqdn bool, fqdnLocal bool) {
 		EnableAbsoluteFQDNForLocalEndpoints: fqdnLocal,
 		EnableSWAwareNSCaches:               true,
 		ExportToIdentityList:                []string{"*"},
+		GatewayAssetAliases:                 []string{"mock.gateway", "Org.platform.servicesgateway.servicesgateway"},
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -1177,6 +1178,141 @@ func TestGetGtpIdentityPartition(t *testing.T) {
 			iVal := GetGtpIdentityPartition(&c.gtp)
 			if !(iVal == c.expected) {
 				t.Errorf("Wanted identity partition value: %s, got: %s", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestGenerateUniqueNameForVS(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     string
+		vsName   string
+		nsName   string
+		expected string
+	}{
+		{
+			name: "Given valid namespace name and virtual service name" +
+				"Should return valid vsname ",
+			vsName:   "test-vs",
+			nsName:   "test-ns",
+			expected: "test-ns-test-vs",
+		},
+		{
+			name: "Given valid namespace name and nil virtual service name" +
+				"Should return valid vsname with only namespace name ",
+			vsName:   "",
+			nsName:   "test-ns",
+			expected: "test-ns",
+		},
+		{
+			name: "Given nil namespace name and valid virtual service name" +
+				"Should return valid vsname with only vs name ",
+			vsName:   "test-vs",
+			nsName:   "",
+			expected: "test-vs",
+		},
+		{
+			name: "Given valid namespace name and virtual service name over 250 chars long" +
+				"Should return valid truncated vsname",
+			vsName:   "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123",
+			nsName:   "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123",
+			expected: "mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiwqqza123-mbjwbsaabyxpitryeptqtgcwfkseodgqgvoccktivzfqlzdbxhctplqhqixuxpeqjcsrgzaxxbfphasmrkpkyeosxxljmsqalmfublwcecztwgdtkulcrfwiw",
+		},
+		{
+			name: "Given nil namespace name and nil virtual service name" +
+				"Should return nil vsname ",
+			vsName:   "",
+			nsName:   "",
+			expected: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GenerateUniqueNameForVS(c.nsName, c.vsName)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %s, got: %s", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestIsAGateway(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     string
+		asset    string
+		expected bool
+	}{
+		{
+			name: "Given valid GW asset name" +
+				"Should return true",
+			asset:    "sw1.org.platform.servicesgateway.servicesgateway",
+			expected: true,
+		},
+		{
+			name: "Given valid asset name that is not GW" +
+				"Should return false",
+			asset:    "foo.bar",
+			expected: false,
+		},
+		{
+			name: "Given nil asset name" +
+				"Should return false",
+			expected: false,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := IsAGateway(c.asset)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %t, got: %t", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestGetPartitionAndOriginalIdentifierFromPartitionedIdentifier(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name                       string
+		identifier                 string
+		expectedPartition          string
+		expectedOriginalIdentifier string
+	}{
+		{
+			name: "Given valid partitioned identifier" +
+				"Should return partition and original identifier",
+			identifier:                 "sw1.org.platform.servicesgateway.servicesgateway",
+			expectedPartition:          "sw1",
+			expectedOriginalIdentifier: "Org.platform.servicesgateway.servicesgateway",
+		},
+		{
+			name: "Given gateway asset alias" +
+				"Should return partition and original identifier",
+			identifier:                 "Org.platform.servicesgateway.servicesgateway",
+			expectedPartition:          "",
+			expectedOriginalIdentifier: "Org.platform.servicesgateway.servicesgateway",
+		},
+		{
+			name: "Given non partitioned identifier" +
+				"Should return empty partition and original identifier",
+			identifier:                 "Org.foo.bar",
+			expectedPartition:          "",
+			expectedOriginalIdentifier: "Org.foo.bar",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			partition, originalIdentifier := GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(c.identifier)
+			if !(partition == c.expectedPartition && originalIdentifier == c.expectedOriginalIdentifier) {
+				t.Errorf("Wanted partition: %s, original identifier: %s, got: %s, %s", c.expectedPartition, c.expectedOriginalIdentifier, partition, originalIdentifier)
 			}
 		})
 	}

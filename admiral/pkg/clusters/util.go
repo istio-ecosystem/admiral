@@ -20,6 +20,8 @@ import (
 )
 
 type WorkloadEntrySorted []*networking.WorkloadEntry
+type RouteDestinationSorted []*networking.RouteDestination
+type TLSRoutesSorted []*networking.TLSRoute
 
 func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 	destRollout *argo.Rollout) map[string]uint32 {
@@ -353,4 +355,16 @@ func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPort
 		Selectors: migrationServices[common.Rollout].Spec.Selector,
 	})
 	return services
+}
+
+func (r RouteDestinationSorted) Len() int {
+	return len(r)
+}
+
+func (r RouteDestinationSorted) Less(i, j int) bool {
+	return r[i].Destination.Host < r[j].Destination.Host
+}
+
+func (r RouteDestinationSorted) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
 }

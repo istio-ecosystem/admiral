@@ -161,6 +161,10 @@ func getServiceEntryEndpoints(
 	// Logic to determine which services should be against default (like whether have both rollout and deployment, and which service for which type) will move to state syncer
 	// Also state syncer will be responsible for setting the weight of the services, and removing services without weights if one has a weight
 	ep := endpoint.DeepCopy()
+	if ep.Labels == nil {
+		ep.Labels = make(map[string]string)
+	}
+	ep.Labels["security.istio.io/tlsMode"] = "istio"
 	if clientCluster == serverCluster {
 		if strings.HasPrefix(host, canaryPrefix) || strings.HasPrefix(host, previewPrefix) {
 			ep.Address = services[testServiceKey][0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()

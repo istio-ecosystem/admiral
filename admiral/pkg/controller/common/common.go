@@ -702,3 +702,56 @@ func GetMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 	}
 	return ports
 }
+
+func GenerateUniqueNameForVS(originNamespace string, vsName string) string {
+
+	if originNamespace == "" && vsName == "" {
+		return ""
+	}
+
+	if originNamespace == "" {
+		return vsName
+	}
+
+	if vsName == "" {
+		return originNamespace
+	}
+
+	newVSName := originNamespace + "-" + vsName
+	if len(newVSName) > 250 {
+		newVSName = newVSName[:250]
+	}
+	//"op=%v type=%v name=%v namespace=%s cluster=%s message=%v"
+	logrus.Debugf(LogFormatAdv, "VirtualService", newVSName, originNamespace, "", "New VS name generated")
+
+	return newVSName
+
+}
+
+func IsAGateway(item string) bool {
+	gwAssetAliases := GetGatewayAssetAliases()
+	for _, gw := range gwAssetAliases {
+		if strings.HasSuffix(strings.ToLower(item), Sep+strings.ToLower(gw)) {
+			return true
+		}
+	}
+	return false
+}
+
+func GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(partitionedIdentifier string) (string, string) {
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = swx.org.platform.servicesgateway.servicesgateway
+	// returns swx, Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Org.platform.servicesgateway.servicesgateway
+	// returns "", Org.platform.servicesgateway.servicesgateway
+
+	// Given gwAssetAliases = [Org.platform.servicesgateway.servicesgateway], partitionedIdentifier = Abc.foo.bar
+	// returns "", Abc.foo.bar
+	gwAssetAliases := GetGatewayAssetAliases()
+	for _, gw := range gwAssetAliases {
+		if strings.HasSuffix(strings.ToLower(partitionedIdentifier), Sep+strings.ToLower(gw)) {
+			return strings.TrimSuffix(partitionedIdentifier, Sep+strings.ToLower(gw)), gw
+		}
+	}
+	return "", partitionedIdentifier
+}
