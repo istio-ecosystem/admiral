@@ -17,7 +17,7 @@ import (
 
 const (
 	typeLabel         = "type"
-	testServiceKey    = "canary"
+	testServiceKey    = "testSvc"
 	defaultServiceKey = "default"
 	canaryPrefix      = "canary"
 	previewPrefix     = "preview"
@@ -74,7 +74,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 				var tmpSe *networkingV1Alpha3.ServiceEntry
 				endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, host, ingressEndpoints, identityConfigEnvironment)
 				util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
-				if err != nil {
+				if len(endpoints) == 0 || err != nil {
 					return serviceEntries, err
 				}
 				if se, ok := seMap[env][host]; !ok {
@@ -160,12 +160,42 @@ func getServiceEntryEndpoints(
 
 	// Logic to determine which services should be against default (like whether have both rollout and deployment, and which service for which type) will move to state syncer
 	// Also state syncer will be responsible for setting the weight of the services, and removing services without weights if one has a weight
+
+	// Services will have 2 keys at max - default and testSvc
+	// a. Non istio canary rollout will have only default - which will have root svc
+	// b. Istio canary rollout:
+	// 1. If weights present - Default key will have stable, canary svc with weights. The latter can be part of testSvc key as well
+	// 2. If no weights present - Default key will have stable svc, testSvc will have canary svc
+	// c. Blue green rollout will have default key with stable svc, testSvc with preview svc
+	// d. Deployment will have default key with root svc
+
+	// Service structure sample:
+	/*
+			"services": {
+		            "default": [{
+		              "name": "app-1-spk-stable-service",
+		                "weight": 25,
+		              "ports": {
+		                "http": 8090
+		              }
+		            }],
+		            "canary": [{
+		              "name": "app-1-spk-desired-service",
+		              "weight": 75,
+		              "ports": {
+		                "http": 8090
+		              }
+		            }]
+		          },
+	*/
 	ep := endpoint.DeepCopy()
 	if clientCluster == serverCluster {
 		if strings.HasPrefix(host, canaryPrefix) || strings.HasPrefix(host, previewPrefix) {
-			ep.Address = services[testServiceKey][0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-			ep.Ports = services[testServiceKey][0].Ports
-			endpoints = append(endpoints, ep)
+			if services[testServiceKey] != nil {
+				ep.Address = services[testServiceKey][0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				ep.Ports = services[testServiceKey][0].Ports
+				endpoints = append(endpoints, ep)
+			}
 		} else {
 			for _, service := range services[defaultServiceKey] {
 				tempEp := ep.DeepCopy()
