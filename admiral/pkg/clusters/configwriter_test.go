@@ -180,7 +180,7 @@ func TestGetServiceEntryEndpoints(t *testing.T) {
 				Weight:    75,
 			},
 		},
-		"canary": {
+		"test": {
 			{
 				Name: "app-1-spk-desired-service",
 				Ports: map[string]uint32{
@@ -332,7 +332,7 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 				Selectors: map[string]string{"app": "app1"},
 			},
 		},
-		"canary": {
+		"test": {
 			{
 				Name: "app-1-spk-desired-service",
 				Ports: map[string]uint32{
@@ -352,7 +352,7 @@ func TestGetServiceEntryEndpointsForCanaryAndBlueGreen(t *testing.T) {
 
 	blueGreenRollout := registry.GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", "sample")
 	blueGreenServices := map[string][]*registry.RegistryServiceConfig{
-		"canary": {
+		"test": {
 			{Name: "app-1-spk-preview-service",
 				Ports: map[string]uint32{
 					"http": 8090,
