@@ -21,7 +21,7 @@
                 "http": 8090
               }
             }],
-            "canary": [{
+            "test": [{
               "name": "app-1-spk-desired-service",
               "weight": 75,
               "ports": {
@@ -132,7 +132,7 @@
                 "http": 8090
               }
             }],
-            "canary":[{
+            "test":[{
               "name": "app-1-spk-preview-service",
               "ports": {
                 "http": 8090

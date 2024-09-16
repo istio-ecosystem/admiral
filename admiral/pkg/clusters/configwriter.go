@@ -17,7 +17,7 @@ import (
 
 const (
 	typeLabel         = "type"
-	testServiceKey    = "testSvc"
+	testServiceKey    = "test"
 	defaultServiceKey = "default"
 	canaryPrefix      = "canary"
 	previewPrefix     = "preview"
