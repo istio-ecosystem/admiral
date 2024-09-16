@@ -165,7 +165,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		sourceClusters                        []string
 		isAdditionalEndpointGenerationEnabled bool
 		deployRolloutMigration                = make(map[string]bool)
-		sourceIngressVirtualService           = make(map[string]*v1alpha3.VirtualService)
+
+		// Holds the VS destinations for the TLSRoutes
+		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
 	)
 
 	clusterName, ok := ctx.Value(common.ClusterName).(string)
@@ -295,16 +297,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				Namespace: namespace,
 				Type:      map[string]*registry.TypeConfig{common.Deployment: {Selectors: deployment.Spec.Selector.MatchLabels}},
 			}
-			if common.IsVSBasedRoutingEnabled() {
-				err := generateIngressVirtualServiceForDeployment(deployment, sourceIngressVirtualService)
-				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
-					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForDeployment",
-						deployment.Name, deployment.Namespace, clusterId, err.Error())
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
-			}
-
 		}
 
 		if rollout != nil {
@@ -353,16 +345,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				Name:      env,
 				Namespace: namespace,
 				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
-			}
-
-			if common.IsVSBasedRoutingEnabled() {
-				err := generateIngressVirtualServiceForRollout(rollout, sourceIngressVirtualService)
-				if err != nil {
-					err = fmt.Errorf(ingressVSGenerationErrorMessage, clusterId, err)
-					ctxLogger.Errorf(common.CtxLogFormat, "generateIngressVirtualServiceForRollout",
-						rollout.Name, rollout.Namespace, clusterId, err.Error())
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
 			}
 		}
 
@@ -642,7 +624,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: serviceEntry},
+							isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -784,6 +767,25 @@ func modifyServiceEntryForNewServiceOrPod(
 		for _, val := range dependents {
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
+
+		if common.IsVSBasedRoutingEnabled() {
+			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
+			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
+			// endpoints.
+			destinations, err := getAllVSRouteDestinationsByCluster(
+				serviceInstance,
+				meshDeployAndRolloutPorts,
+				sourceWeightedServices[sourceCluster],
+				sourceRollouts[sourceCluster],
+				sourceDeployments[sourceCluster])
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			} else {
+				sourceClusterToDestinations[sourceCluster] = destinations
+			}
+		}
 	}
 
 	ctxLogger.Infof(common.CtxLogFormat, "ClientAssets",
@@ -800,11 +802,12 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
 		return nil, nil
 	}
-	// If VS based routing is enabled, generate VirtualServices for the source cluster's ingress
+	// If VS based routing is enabled, then generate VirtualServices for the source cluster's ingress
 	// This is done after the ServiceEntries are created for the source cluster
-	if common.IsVSBasedRoutingEnabled() && len(sourceIngressVirtualService) > 0 {
-		err := addUpdateVirtualServicesForSourceIngress(
-			ctx, ctxLogger, remoteRegistry, sourceServices, sourceIngressVirtualService, sourceDeployments, sourceRollouts)
+	if common.IsVSBasedRoutingEnabled() {
+		// Writing phase: We update the base ingress virtualservices with the RouteDestinations
+		// gathered during the discovery phase and write them to the source cluster
+		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
 		if err != nil {
 			modifySEerr = common.AppendError(modifySEerr, err)
 		}
@@ -1511,9 +1514,14 @@ func AddServiceEntriesWithDrWorker(
 							compareLabels)
 						util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileServiceEntry", "", "", cluster, "", start)
 
-						if seReconciliationRequired {
+						valid, validityError := validateServiceEntryEndpoints(newServiceEntry)
+						if seReconciliationRequired && valid && validityError == nil {
 							err = addUpdateServiceEntry(ctxLogger, ctx, newServiceEntry, oldServiceEntry, syncNamespace, rc)
 							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
+						}
+						if !valid || validityError != nil {
+							ctxLogger.Errorf(LogErrFormat, "ValidateLocalityInServiceEntry", "", seDr.SeName, cluster, fmt.Errorf("failed to validate the service entry, received error: %v", validityError))
+							addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("failed to validate locality in service entry, received error: %v", validityError))
 						}
 						util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheAddUpdateServiceEntry", "", "", cluster, "", start) // TODO: log service entry name
 
@@ -1610,6 +1618,26 @@ func AddServiceEntriesWithDrWorker(
 		}
 		errors <- addSEorDRToAClusterError
 	}
+}
+
+func validateServiceEntryEndpoints(entry *v1alpha3.ServiceEntry) (bool, error) {
+	// loop through all endpoints and check locality and istio mode labels
+	var errorStrings []string
+
+	for _, ep := range entry.Spec.Endpoints {
+		if ep.Locality == "" {
+			errorStrings = append(errorStrings, fmt.Sprintf("locality not set for endpoint with address %s", ep.Address))
+		}
+		if ep.Labels == nil || ep.Labels["security.istio.io/tlsMode"] != "istio" {
+			errorStrings = append(errorStrings, fmt.Sprintf("istio mode not set for endpoint with address %s", ep.Address))
+		}
+	}
+
+	if len(errorStrings) > 0 {
+		return false, fmt.Errorf(strings.Join(errorStrings, ", "))
+	}
+
+	return true, nil
 }
 
 func getClusterRegion(rr *RemoteRegistry, cluster string, rc *RemoteController) (string, error) {

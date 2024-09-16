@@ -189,6 +189,10 @@ func getServiceEntryEndpoints(
 		          },
 	*/
 	ep := endpoint.DeepCopy()
+	if ep.Labels == nil {
+		ep.Labels = make(map[string]string)
+	}
+	ep.Labels["security.istio.io/tlsMode"] = "istio"
 	if clientCluster == serverCluster {
 		if strings.HasPrefix(host, canaryPrefix) || strings.HasPrefix(host, previewPrefix) {
 			if services[testServiceKey] != nil {

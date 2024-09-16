@@ -3,6 +3,7 @@ package admiral
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/core/v1"
 	"reflect"
 	"strings"
 	"time"
@@ -454,6 +455,10 @@ func checkIfResourceVersionHasIncreased(ctxLogger *logrus.Entry, ctx context.Con
 }
 
 func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, delegator Delegator) bool {
+	var (
+		latestObjMeta metav1.Object
+		latestOk      bool
+	)
 	objMeta, ok := obj.(metav1.Object)
 	if ok {
 		if reflect.ValueOf(objMeta).IsNil() || reflect.ValueOf(delegator).IsNil() {
@@ -464,9 +469,16 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 			ctxLogger.Errorf("task=shouldRetry message=unable to fetch latest object from cache, obj received=%+v", objMeta)
 			return true
 		}
-		latestObjMeta, latestOk := objFromCache.(metav1.Object)
+		switch objFromCache.(type) {
+		case []*v1.Service:
+			// ServiceController returns a slice of services from Get() which needs extra processing before casting
+			servicesSlice, _ := objFromCache.([]*v1.Service)
+			latestObjMeta, latestOk = getMatchingServiceFromServiceSlice(objMeta, servicesSlice)
+		default:
+			latestObjMeta, latestOk = objFromCache.(metav1.Object)
+		}
 		if !latestOk || reflect.ValueOf(latestObjMeta).IsNil() {
-			ctxLogger.Errorf("task=shouldRetry message=unable to cast latest object from cache to metav1 object, obj received=%+v", objMeta)
+			ctxLogger.Errorf("task=shouldRetry message=unable to cast latest object from cache to metav1 object, obj is of type %+v,obj received=%+v", reflect.TypeOf(objFromCache), objMeta)
 			return true
 		}
 		// event 1 ==> processed
@@ -487,4 +499,13 @@ func shouldRetry(ctxLogger *logrus.Entry, ctx context.Context, obj interface{}, 
 	}
 	ctxLogger.Errorf("task=shouldRetry message=obj parsed=%v, retrying object, obj received=%+v", ok, objMeta)
 	return true
+}
+
+func getMatchingServiceFromServiceSlice(service metav1.Object, services []*v1.Service) (metav1.Object, bool) {
+	for _, s := range services {
+		if s.Namespace == service.GetNamespace() && s.Name == service.GetName() {
+			return interface{}(s).(metav1.Object), true
+		}
+	}
+	return nil, false
 }

@@ -225,6 +225,7 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 							"http": 0,
 						},
 						Locality: "us-west-2",
+						Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 					},
 				},
 				SubjectAltNames: []string{"spiffe://prefix/" + deployment1Identity},
@@ -968,42 +969,42 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Hosts:     []string{"sw01.e2e.foo.global"},
 		Addresses: []string{"240.0.0.1"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	newSE := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.newse.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	newCanarySE := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"canary.dev.newse.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	newSeWithEmptyHosts := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	newPreviewSE := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"preview.dev.newse.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 	newPrefixedSE := istioNetworkingV1Alpha3.ServiceEntry{
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{"e2e.foo.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -1011,7 +1012,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{"e2e.bar.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -1019,7 +1020,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{"canary.e2e.bar.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -1027,14 +1028,14 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{"canary.e2e.bar1.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	se := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.bar.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -1046,14 +1047,14 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 	dummyEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.dummy.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
 	dummyEndpointSeForNonSourceCluster := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.dummy.non.source.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -1068,6 +1069,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 					Network:  "mesh1",
 					Locality: "us-west",
 					Weight:   100,
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 		},
@@ -1089,6 +1091,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 					Network:  "mesh1",
 					Locality: "us-west",
 					Weight:   100,
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 		},
@@ -1812,7 +1815,7 @@ func TestAddServiceEntriesWithDrWithoutDatabaseClient(t *testing.T) {
 	dummyEndpointSe := istioNetworkingV1Alpha3.ServiceEntry{
 		Hosts: []string{"dev.dummy.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Network: "mesh1", Locality: "us-west", Weight: 100, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 		},
 	}
 
@@ -1830,7 +1833,7 @@ func TestAddServiceEntriesWithDrWithoutDatabaseClient(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{"e2e.bar.global"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Network: "mesh1", Locality: "us-west", Weight: 100},
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Network: "mesh1", Locality: "us-west", Weight: 100},
 		},
 	}
 
@@ -2039,8 +2042,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{host},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
-			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-west-2"},
+			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-east-2"},
 		},
 	}
 
@@ -2048,8 +2051,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		Addresses: []string{"240.10.1.0"},
 		Hosts:     []string{hostCanary},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
-			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-west-2"},
+			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-east-2"},
 		},
 	}
 
@@ -2057,8 +2060,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		Hosts:     []string{"test.bar.mesh"},
 		Addresses: []string{"240.0.10.11"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-west-2"},
-			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{}, Locality: "us-east-2"},
+			{Address: "127.0.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-west-2"},
+			{Address: "240.20.0.1", Ports: map[string]uint32{"https": 80}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Locality: "us-east-2"},
 		},
 	}
 
@@ -2473,6 +2476,7 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 							"http": 0,
 						},
 						Locality: "us-west-2",
+						Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 					},
 				},
 				SubjectAltNames: []string{"spiffe://prefix/" + deployment1Identity},
@@ -3907,7 +3911,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	rollout.Spec.Template.Annotations[common.SidecarEnabledPorts] = "8080"
 
 	endpoint := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
+		Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Address: CLUSTER_INGRESS_1, Ports: map[string]uint32{"http": 15443},
 	}
 
 	meshPorts := map[string]uint32{"http": 8080}
@@ -3918,11 +3922,11 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 	}
 
 	activeWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Ports: meshPorts,
+		Address: ACTIVE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Ports: meshPorts, Labels: map[string]string{"security.istio.io/tlsMode": "istio"},
 	}
 
 	previewWantedEndpoints := &istioNetworkingV1Alpha3.WorkloadEntry{
-		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Ports: meshPorts,
+		Address: PREVIEW_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Ports: meshPorts, Labels: map[string]string{"security.istio.io/tlsMode": "istio"},
 	}
 
 	testCases := []struct {
@@ -3976,8 +3980,8 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 
 	se := &istioNetworkingV1Alpha3.ServiceEntry{
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-			{Labels: map[string]string{}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			{Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Address: CLUSTER_INGRESS_1, Weight: 10, Ports: map[string]uint32{"http": 15443}},
+			{Labels: map[string]string{"security.istio.io/tlsMode": "istio"}, Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
 		},
 	}
 
@@ -3993,14 +3997,14 @@ func TestUpdateEndpointsForWeightedServices(t *testing.T) {
 	}
 
 	wantedEndpoints := []*istioNetworkingV1Alpha3.WorkloadEntry{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 90, Ports: meshPorts},
-		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 10, Ports: meshPorts},
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 90, Ports: meshPorts, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		{Address: CANARY_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 10, Ports: meshPorts, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	wantedEndpointsZeroWeights := []*istioNetworkingV1Alpha3.WorkloadEntry{
-		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}},
-		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 100, Ports: meshPorts},
+		{Address: CLUSTER_INGRESS_2, Weight: 10, Ports: map[string]uint32{"http": 15443}, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		{Address: STABLE_SERVICE + common.Sep + NAMESPACE + common.GetLocalDomainSuffix(), Weight: 100, Ports: meshPorts, Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
 	}
 
 	testCases := []struct {
@@ -5576,6 +5580,7 @@ func TestGetWorkloadData(t *testing.T) {
 					Network:  "mesh1",
 					Locality: "us-west",
 					Weight:   100,
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 		},
@@ -5820,6 +5825,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 					Network:  "mesh1",
 					Locality: "us-west",
 					Weight:   100,
+					Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 				},
 			},
 		},
@@ -6231,7 +6237,7 @@ func TestDeployRolloutMigration(t *testing.T) {
 						Ports: map[string]uint32{
 							"http": 8090,
 						},
-						Labels:   map[string]string{"type": common.Deployment},
+						Labels:   map[string]string{"type": common.Deployment, "security.istio.io/tlsMode": "istio"},
 						Locality: "us-west-2",
 					},
 					{
@@ -6239,7 +6245,7 @@ func TestDeployRolloutMigration(t *testing.T) {
 						Ports: map[string]uint32{
 							"http": 8090,
 						},
-						Labels:   map[string]string{"type": common.Rollout},
+						Labels:   map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"},
 						Locality: "us-west-2",
 					},
 				},
@@ -6599,7 +6605,8 @@ func TestReconcileServiceEntry(t *testing.T) {
 					"http": 15443,
 				},
 				Labels: map[string]string{
-					"deployment": "deployment",
+					"deployment":                "deployment",
+					"security.istio.io/tlsMode": "istio",
 				},
 				Locality: "us-east-2",
 			},
@@ -6609,7 +6616,8 @@ func TestReconcileServiceEntry(t *testing.T) {
 					"http": 15443,
 				},
 				Labels: map[string]string{
-					"deployment": "deployment",
+					"deployment":                "deployment",
+					"security.istio.io/tlsMode": "istio",
 				},
 				Locality: "us-west-2",
 			},
@@ -6626,7 +6634,8 @@ func TestReconcileServiceEntry(t *testing.T) {
 					"http": 15443,
 				},
 				Labels: map[string]string{
-					"deployment": "deployment",
+					"deployment":                "deployment",
+					"security.istio.io/tlsMode": "istio",
 				},
 				Locality: "us-west-2",
 			},
@@ -6636,7 +6645,8 @@ func TestReconcileServiceEntry(t *testing.T) {
 					"http": 15443,
 				},
 				Labels: map[string]string{
-					"deployment": "deployment",
+					"deployment":                "deployment",
+					"security.istio.io/tlsMode": "istio",
 				},
 				Locality: "us-east-2",
 			},
@@ -8202,7 +8212,9 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 		Hosts: []string{"test.mesh"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			&istioNetworkingV1Alpha3.WorkloadEntry{
-				Address: "aws-lb.1.com",
+				Address:  "aws-lb.1.com",
+				Locality: "us-west-2",
+				Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
 			},
 		},
 	}
@@ -8210,7 +8222,8 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 		Hosts: []string{"test-existing-and-desired.mesh"},
 		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
 			&istioNetworkingV1Alpha3.WorkloadEntry{
-				Address: "aws-lb.1.com",
+				Address:  "aws-lb.1.com",
+				Locality: "us-west-2",
 			},
 		},
 	}
@@ -10062,5 +10075,129 @@ func TestStateSyncerConfiguration(t *testing.T) {
 			}
 			assert.Equal(t, c.assertFunc(), nil)
 		})
+	}
+}
+
+func TestValidateLocalityInServiceEntry(t *testing.T) {
+	testCases := []struct {
+		name        string
+		entry       *v1alpha3.ServiceEntry
+		expected    bool
+		expectedErr interface{}
+	}{
+		{
+			"AllEndpointsWithLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+						{Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"NoEndpoints",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"SingleEndpointLocalitySet",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"SomeEndpointsMissingLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+						{Address: "abc.foo.com.", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			false,
+			[]string{"locality not set for endpoint with address abc.foo.com."},
+		},
+		{
+			"AllEndpointsWithoutLocalityAndMode",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com."},
+						{Address: "def.foo.com."},
+					},
+				},
+			},
+			false,
+			[]string{"locality not set for endpoint with address abc.foo.com.", "istio mode not set for endpoint with address abc.foo.com.", "locality not set for endpoint with address def.foo.com.", "istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithoutIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2"},
+						{Address: "def.foo.com.", Locality: "us-east-2"},
+					},
+				},
+			},
+			false,
+			[]string{"istio mode not set for endpoint with address abc.foo.com.", "istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithPartiallyIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+						{Address: "def.foo.com.", Locality: "us-east-2"},
+					},
+				},
+			},
+			false,
+			[]string{"istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+						{Address: "def.foo.com.", Locality: "us-east-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		result, err := validateServiceEntryEndpoints(tt.entry)
+		if result != tt.expected {
+			t.Errorf("Test failed: %s \nExpected: %v \nGot: %v", tt.name, tt.expected, result)
+		}
+		if tt.expectedErr == nil {
+			assert.Nil(t, err)
+		} else {
+			for i, expectedErr := range tt.expectedErr.([]string) {
+				assert.Contains(t, err.Error(), expectedErr, "Error %d: %s", i, expectedErr)
+			}
+		}
 	}
 }

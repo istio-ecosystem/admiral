@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -16,12 +15,9 @@ import (
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	apiNetworkingV1Alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istioFake "istio.io/client-go/pkg/clientset/versioned/fake"
-	v1 "k8s.io/api/apps/v1"
-	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -587,6 +583,8 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			},
 		}
 
+		vSName = common.GenerateUniqueNameForVS(workingVS.Namespace, workingVS.Name)
+
 		fakeIstioClientWithoutAnyVirtualServices         = istioFake.NewSimpleClientset()
 		fakeIstioClientWithoutKnownVirtualServices       = newFakeIstioClient(ctx, namespace1, workingVS)
 		nilVirtualServiceControllerForDependencyCluster1 = map[string]*RemoteController{
@@ -652,19 +650,19 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			"remoteRegistry is nil",
 		)
 		nilRemoteControllerForDepCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
 			"dependent controller not initialized for cluster",
 		)
 		nilRemoteControllerForDepCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
 			"dependent controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
 			"VirtualService controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
 			"VirtualService controller not initialized for cluster",
 		)
 	)
@@ -677,6 +675,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 		remoteRegistry          *RemoteRegistry
 		sourceCluster           string
 		syncNamespace           string
+		vSName                  string
 		assertFunc              func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T)
 		doSyncVSToSourceCluster bool
 		expectedErr             error
@@ -686,6 +685,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				"When, syncVirtualServicesToAllDependentClusters is invoked, " +
 				"Then, it should return '" + emptyVSErr.Error() + "' error",
 			sourceCluster: sourceCluster,
+			vSName:        vSName,
 			expectedErr:   emptyVSErr,
 		},
 		{
@@ -694,6 +694,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				"Then, it should return '" + emptyRemoteRegistryErr.Error() + "' error",
 			sourceCluster:  sourceCluster,
 			virtualService: workingVS,
+			vSName:         vSName,
 			expectedErr:    emptyRemoteRegistryErr,
 		},
 		{
@@ -704,6 +705,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nil),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			expectedErr:    nilRemoteControllerForDepCluster1Err,
 		},
 		{
@@ -716,17 +718,18 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       clusters1And2,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != workingVS.Name {
+						if vs == nil || vs.Name != vSName {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -742,6 +745,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nilVirtualServiceControllerForDependencyCluster1),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster1Err,
 		},
 		{
@@ -754,17 +758,18 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForDepCluster1AndNilForCluster2),
 			clusters:       clusters1And2,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != workingVS.Name {
+						if vs == nil || vs.Name != vSName {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -783,15 +788,16 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -809,15 +815,16 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -836,10 +843,11 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -857,10 +865,11 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -879,15 +888,16 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithoutAnyVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -906,15 +916,16 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithKnownVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -937,6 +948,7 @@ func TestSyncVirtualServicesToAllDependentClusters(t *testing.T) {
 				c.remoteRegistry,
 				c.sourceCluster,
 				syncNamespace,
+				c.vSName,
 			)
 			if err != nil && c.expectedErr == nil {
 				t.Errorf("expected error to be nil but got %v", err)
@@ -974,6 +986,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				Namespace: namespace1,
 			},
 		}
+		vSName                                      = common.GenerateUniqueNameForVS(workingVS.Namespace, workingVS.Name)
 		fakeIstioClientWithoutAnyVirtualServices    = istioFake.NewSimpleClientset()
 		fakeIstioClientWithoutKnownVirtualServices  = newFakeIstioClient(ctx, namespace1, workingVS)
 		nilVirtualServiceControllerForKnownClusters = map[string]*RemoteController{
@@ -1032,24 +1045,28 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
 			"VirtualService is nil",
 		)
+		emptyVsNameErr = fmt.Errorf(
+			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
+			"VirtualService generated name is empty",
+		)
 		emptyRemoteRegistryErr = fmt.Errorf(
 			LogFormat, "Event", common.VirtualServiceResourceType, "", sourceCluster,
 			"remoteRegistry is nil",
 		)
 		nilRemoteControllerForDepCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
 			"remote controller not initialized for cluster",
 		)
 		nilRemoteControllerForDepCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
 			"remote controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster1Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster1,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster1,
 			"VirtualService controller not initialized for cluster",
 		)
 		virtualServiceControllerNotInitializedForCluster2Err = fmt.Errorf(
-			LogFormat, "Event", common.VirtualServiceResourceType, workingVS.Name, dependentCluster2,
+			LogFormat, "Event", common.VirtualServiceResourceType, vSName, dependentCluster2,
 			"VirtualService controller not initialized for cluster",
 		)
 	)
@@ -1062,15 +1079,24 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 		remoteRegistry          *RemoteRegistry
 		sourceCluster           string
 		syncNamespace           string
+		vSName                  string
 		assertFunc              func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T)
 		doSyncVSToSourceCluster bool
 		expectedErr             error
 	}{
 		{
+			name: "Given a nil vsName is passed , " +
+				"When, syncVirtualServicesToAllRemoteClusters is invoked, " +
+				"Then, it should return '" + emptyVsNameErr.Error() + "' error",
+			sourceCluster: sourceCluster,
+			expectedErr:   emptyVsNameErr,
+		},
+		{
 			name: "Given a nil VirtualService is passed , " +
 				"When, syncVirtualServicesToAllRemoteClusters is invoked, " +
 				"Then, it should return '" + emptyVSErr.Error() + "' error",
 			sourceCluster: sourceCluster,
+			vSName:        vSName,
 			expectedErr:   emptyVSErr,
 		},
 		{
@@ -1079,6 +1105,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				"Then, it should return '" + emptyRemoteRegistryErr.Error() + "' error",
 			sourceCluster:  sourceCluster,
 			virtualService: workingVS,
+			vSName:         vSName,
 			expectedErr:    emptyRemoteRegistryErr,
 		},
 		{
@@ -1089,6 +1116,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nil),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			expectedErr:    nilRemoteControllerForDepCluster1Err,
 		},
 		{
@@ -1101,17 +1129,18 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1And2,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					// cluster with no nil pointer exception
 					if cluster == dependentCluster1 {
 						rc := remoteRegistry.GetRemoteController(cluster)
-						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+						vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 						if err != nil {
 							t.Errorf("expected nil, but got error: %v", err)
 							return
 						}
-						if vs == nil || vs.Name != workingVS.Name {
+						if vs == nil || vs.Name != vSName {
 							t.Errorf("expected VirtualService to be created, but it was not")
 						}
 					}
@@ -1127,6 +1156,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, nilVirtualServiceControllerForKnownClusters),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster1Err,
 		},
 		{
@@ -1139,6 +1169,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForDepCluster1AndNilForCluster2),
 			clusters:       cluster1And2,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			expectedErr:    virtualServiceControllerNotInitializedForCluster2Err,
 		},
 		{
@@ -1152,15 +1183,16 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1178,15 +1210,16 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1205,10 +1238,11 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1226,10 +1260,11 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForKnownClustersWithoutAnyVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1248,15 +1283,16 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithoutAnyVirtualServices),
 			clusters:       clustersContainingSourceCluster,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					vs, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if err != nil {
 						t.Errorf("expected nil, but got error: %v", err)
 						return
 					}
-					if vs == nil || vs.Name != workingVS.Name {
+					if vs == nil || vs.Name != vSName {
 						t.Errorf("expected VirtualService to be created, but it was not")
 					}
 				}
@@ -1274,10 +1310,11 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 			remoteRegistry: newRemoteRegistry(ctx, virtualServiceControllerForSourceClustersWithKnownVirtualServices),
 			clusters:       cluster1,
 			sourceCluster:  sourceCluster,
+			vSName:         vSName,
 			assertFunc: func(remoteRegistry *RemoteRegistry, clusters []string, t *testing.T) {
 				for _, cluster := range clusters {
 					rc := remoteRegistry.GetRemoteController(cluster)
-					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, workingVS.Name, metaV1.GetOptions{})
+					_, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Get(ctx, vSName, metaV1.GetOptions{})
 					if !k8sErrors.IsNotFound(err) {
 						t.Errorf("expected error to be Not Found, but got: %v", err)
 					}
@@ -1301,6 +1338,7 @@ func TestSyncVirtualServicesToAllRemoteClusters(t *testing.T) {
 				c.remoteRegistry,
 				c.sourceCluster,
 				syncNamespace,
+				c.vSName,
 			)
 			if err != nil && c.expectedErr == nil {
 				t.Errorf("expected error to be nil but got %v", err)
@@ -1522,7 +1560,8 @@ func newFakeSyncResource(err error) *fakeSyncResource {
 			event common.Event,
 			remoteRegistry *RemoteRegistry,
 			clusterId string,
-			syncNamespace string) error {
+			syncNamespace string,
+			vSName string) error {
 			f.called = true
 			return err
 		}
@@ -1540,6 +1579,7 @@ func checkSourceClusterInDependentList(err error) *fakeSyncResource {
 			_ common.Event,
 			_ *RemoteRegistry,
 			clusterId string,
+			_ string,
 			_ string) error {
 			for _, cluster := range dependentClusters {
 				if cluster == clusterId {
@@ -1780,570 +1820,4 @@ func TestAddUpdateVirtualService(t *testing.T) {
 			addUpdateVirtualService(ctxLogger, ctx, c.newVS, c.existingVS, namespace, rc, rr)
 		})
 	}
-}
-
-func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	newVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	existingVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-					Route: []*networkingV1Alpha3.RouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "test-env.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 8080,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	admiralParams := common.AdmiralParams{
-		LabelSet:              &common.LabelSet{},
-		SyncNamespace:         "test-sync-ns",
-		EnableSWAwareNSCaches: true,
-	}
-
-	istioClientWithExistingVS := istioFake.NewSimpleClientset()
-	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(admiralParams.SyncNamespace).
-		Create(context.Background(), existingVS, metaV1.CreateOptions{})
-
-	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
-	rc := &RemoteController{
-		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
-	}
-
-	rr := NewRemoteRegistry(context.Background(), admiralParams)
-	rr.PutRemoteController("cluster-1", rc)
-
-	sourceServices := make(map[string]map[string]*coreV1.Service)
-	sourceServices["cluster-1"] = make(map[string]*coreV1.Service)
-	sourceServices["cluster-1"][common.Deployment] = &coreV1.Service{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-deployment-svc",
-			Namespace: "test-ns",
-		},
-		Spec: coreV1.ServiceSpec{
-			Ports: []coreV1.ServicePort{
-				{
-					Name: "http",
-					Port: 8080,
-				},
-			},
-		},
-	}
-	sourceServices["cluster-1"][common.Rollout] = &coreV1.Service{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-rollout-svc",
-			Namespace: "test-ns",
-		},
-		Spec: coreV1.ServiceSpec{
-			Ports: []coreV1.ServicePort{
-				{
-					Name: "http",
-					Port: 8080,
-				},
-			},
-		},
-	}
-
-	rollout := &v1alpha1.Rollout{
-		Spec: v1alpha1.RolloutSpec{
-			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: metaV1.ObjectMeta{
-					Annotations: map[string]string{
-						"identity":                 "test-identity",
-						"env":                      "test-env",
-						common.SidecarEnabledPorts: "8080",
-					},
-				},
-			},
-		},
-	}
-	deployment := &v1.Deployment{
-		Spec: v1.DeploymentSpec{
-			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: metaV1.ObjectMeta{
-					Annotations: map[string]string{
-						"identity":                 "test-identity",
-						"env":                      "test-env",
-						common.SidecarEnabledPorts: "8080",
-					},
-				},
-			},
-		},
-	}
-
-	ctxLogger := log.WithFields(log.Fields{
-		"type": "VirtualService",
-	})
-
-	testCases := []struct {
-		name                        string
-		remoteRegistry              *RemoteRegistry
-		sourceServices              map[string]map[string]*coreV1.Service
-		sourceIngressVirtualService map[string]*apiNetworkingV1Alpha3.VirtualService
-		sourceDeployment            map[string]*v1.Deployment
-		sourceRollout               map[string]*v1alpha1.Rollout
-		istioClient                 *istioFake.Clientset
-		expectedError               error
-		expectedVS                  *apiNetworkingV1Alpha3.VirtualService
-	}{
-		{
-			name: "Given a nil remoteRegistry, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			expectedError: fmt.Errorf("remoteRegistry is nil"),
-		},
-		{
-			name: "Given a no sourceServices, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry: rr,
-			sourceServices: map[string]map[string]*coreV1.Service{"cluster-1": {}},
-			expectedError:  fmt.Errorf("no destination found for the ingress virtualservice"),
-		},
-		{
-			name: "Given a invalid sourceIngressVirtualService, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:   rr,
-			sourceServices:   sourceServices,
-			sourceRollout:    map[string]*v1alpha1.Rollout{"cluster-1": rollout},
-			sourceDeployment: map[string]*v1.Deployment{"cluster-1": deployment},
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": {
-					Spec: networkingV1Alpha3.VirtualService{},
-				},
-			},
-			expectedError: fmt.Errorf("no TLSRoute found in the ingress virtualservice with host test-env.test-identity.global"),
-		},
-		{
-			name: "Given a valid sourceIngressVirtualService, " +
-				"And the VS is a new VS" +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should successfully create the VS",
-			remoteRegistry:   rr,
-			sourceRollout:    map[string]*v1alpha1.Rollout{"cluster-1": rollout},
-			sourceDeployment: map[string]*v1.Deployment{"cluster-1": deployment},
-			istioClient:      istioClientWithNoExistingVS,
-			sourceServices:   sourceServices,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVS,
-			},
-			expectedError: nil,
-		},
-		{
-			name: "Given a valid sourceIngressVirtualService, " +
-				"And there is VS with same name already exists" +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should successfully update the VS",
-			remoteRegistry:   rr,
-			sourceRollout:    map[string]*v1alpha1.Rollout{"cluster-1": rollout},
-			sourceDeployment: map[string]*v1.Deployment{"cluster-1": deployment},
-			istioClient:      istioClientWithExistingVS,
-			sourceServices:   sourceServices,
-			sourceIngressVirtualService: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": newVS,
-			},
-			expectedError: nil,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			rc := rr.GetRemoteController("cluster-1")
-			rc.VirtualServiceController.IstioClient = tc.istioClient
-			rr.PutRemoteController("cluster-1", rc)
-			err := addUpdateVirtualServicesForSourceIngress(
-				context.Background(),
-				ctxLogger,
-				tc.remoteRegistry,
-				tc.sourceServices,
-				tc.sourceIngressVirtualService,
-				tc.sourceDeployment,
-				tc.sourceRollout)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-			}
-		})
-	}
-
-}
-
-func TestGenerateSNIHost(t *testing.T) {
-	testCases := []struct {
-		name            string
-		host            string
-		expectedSNIHost string
-		expectedError   error
-	}{
-		{
-			name: "Given an empty host, " +
-				"When generateSNIHost is invoked, " +
-				"Then it should return an error",
-			host:          "",
-			expectedError: fmt.Errorf("fqdn is empty"),
-		},
-		{
-			name: "Given a host, " +
-				"When generateSNIHost is invoked, " +
-				"Then it should return the SNI host",
-			host:            "test-env.test-identity.global",
-			expectedSNIHost: "outbound_.80_._.test-env.test-identity.global",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sniHost, err := generateSNIHost(tc.host)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedSNIHost, sniHost)
-			}
-		})
-	}
-}
-
-func TestGenerateIngressVirtualServiceForRollout(t *testing.T) {
-
-	admiralParams := common.AdmiralParams{
-		SyncNamespace: "test-sync-ns",
-		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
-		},
-		HostnameSuffix:              "global",
-		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
-		IngressVSExportToNamespaces: []string{"istio-system"},
-	}
-	common.ResetSync()
-	common.InitializeConfig(admiralParams)
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	validVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	testCases := []struct {
-		name                    string
-		rollout                 *v1alpha1.Rollout
-		expectedSourceIngressVS map[string]*apiNetworkingV1Alpha3.VirtualService
-		expectedError           error
-	}{
-		{
-			name: "Given a empty rollout, " +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should return an error",
-			expectedError: fmt.Errorf("rollout is nil"),
-		},
-		{
-			name: "Given a invalid rollout," +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should return an error",
-			rollout:       &v1alpha1.Rollout{},
-			expectedError: fmt.Errorf("cname is empty"),
-		},
-		{
-			name: "Given a valid rollout," +
-				"When generateIngressVirtualServiceForRollout is invoked, " +
-				"Then it should populate the sourceIngressVS map correctly",
-			rollout: &v1alpha1.Rollout{
-				Spec: v1alpha1.RolloutSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{"identity": "test-identity", "env": "test-env"},
-						},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVS,
-			},
-			expectedError: nil,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sourceIngressVS := make(map[string]*apiNetworkingV1Alpha3.VirtualService)
-			err := generateIngressVirtualServiceForRollout(tc.rollout, sourceIngressVS)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedSourceIngressVS, sourceIngressVS)
-			}
-		})
-	}
-
-}
-
-func TestGenerateIngressVirtualServiceForDeployment(t *testing.T) {
-
-	admiralParams := common.AdmiralParams{
-		SyncNamespace: "test-sync-ns",
-		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
-		},
-		HostnameSuffix:              "global",
-		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
-		IngressVSExportToNamespaces: []string{"istio-system"},
-	}
-	common.ResetSync()
-	common.InitializeConfig(admiralParams)
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	validVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"outbound_.80_._.test-env.test-identity.global"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"outbound_.80_._.test-env.test-identity.global"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	testCases := []struct {
-		name                    string
-		deployment              *v1.Deployment
-		expectedSourceIngressVS map[string]*apiNetworkingV1Alpha3.VirtualService
-		expectedError           error
-	}{
-		{
-			name: "Given a empty deployment, " +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should return an error",
-			expectedError: fmt.Errorf("deployment is nil"),
-		},
-		{
-			name: "Given a invalid deployment," +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should return an error",
-			deployment:    &v1.Deployment{},
-			expectedError: fmt.Errorf("cname is empty"),
-		},
-		{
-			name: "Given a valid deployment," +
-				"When generateIngressVirtualServiceForDeployment is invoked, " +
-				"Then it should populate the sourceIngressVS map correctly",
-			deployment: &v1.Deployment{
-				Spec: v1.DeploymentSpec{
-					Template: coreV1.PodTemplateSpec{
-						ObjectMeta: metaV1.ObjectMeta{
-							Annotations: map[string]string{"identity": "test-identity", "env": "test-env"},
-						},
-					},
-				},
-			},
-			expectedSourceIngressVS: map[string]*apiNetworkingV1Alpha3.VirtualService{
-				"test-env.test-identity.global": validVS,
-			},
-			expectedError: nil,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sourceIngressVS := make(map[string]*apiNetworkingV1Alpha3.VirtualService)
-			err := generateIngressVirtualServiceForDeployment(tc.deployment, sourceIngressVS)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedSourceIngressVS, sourceIngressVS)
-			}
-		})
-	}
-
-}
-
-func TestGetBaseVirtualServiceForIngress(t *testing.T) {
-
-	admiralParams := common.AdmiralParams{
-		SyncNamespace:               "test-sync-ns",
-		IngressVSExportToNamespaces: []string{"istio-system"},
-	}
-
-	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
-	}
-
-	validVS := &apiNetworkingV1Alpha3.VirtualService{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-host-routing-vs",
-			Namespace: "test-sync-ns",
-			Labels:    vsLabels,
-		},
-		Spec: networkingV1Alpha3.VirtualService{
-			Hosts:    []string{"test-sni-host"},
-			Gateways: []string{"istio-system/passthrough-gateway"},
-			ExportTo: []string{"istio-system"},
-			Tls: []*networkingV1Alpha3.TLSRoute{
-				{
-					Match: []*networkingV1Alpha3.TLSMatchAttributes{
-						{
-							Port:     common.DefaultMtlsPort,
-							SniHosts: []string{"test-sni-host"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	testCases := []struct {
-		name            string
-		host            string
-		sniHost         string
-		routingGateways []string
-		expectedVS      *apiNetworkingV1Alpha3.VirtualService
-		expectedError   error
-	}{
-		{
-			name: "Given a empty host, " +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return an error",
-			sniHost:       "test-sni-host",
-			expectedError: fmt.Errorf("host is empty"),
-		},
-		{
-			name: "Given a empty sniHost, " +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return an error",
-			host:          "test-host",
-			expectedError: fmt.Errorf("sniHost is empty"),
-		},
-		{
-			name: "Given a valid host and sniHost," +
-				"And gateways are not configured " +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return an error",
-			host:            "test-host",
-			sniHost:         "test-sni-host",
-			routingGateways: []string{},
-			expectedError:   fmt.Errorf("no gateways configured for ingress virtual service"),
-		},
-		{
-			name: "Given a valid host and sniHost," +
-				"When getBaseVirtualServiceForIngress is invoked, " +
-				"Then it should return the expected VirtualService",
-			host:            "test-host",
-			sniHost:         "test-sni-host",
-			routingGateways: []string{"istio-system/passthrough-gateway"},
-			expectedError:   nil,
-			expectedVS:      validVS,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			admiralParams.VSRoutingGateways = tc.routingGateways
-			common.ResetSync()
-			common.InitializeConfig(admiralParams)
-			actual, err := getBaseVirtualServiceForIngress(tc.host, tc.sniHost)
-			if tc.expectedError != nil {
-				require.NotNil(t, err)
-				require.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedVS, actual)
-			}
-		})
-	}
-
 }
