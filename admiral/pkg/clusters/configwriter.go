@@ -17,7 +17,7 @@ import (
 
 const (
 	typeLabel         = "type"
-	testServiceKey    = "canary"
+	testServiceKey    = "testSvc"
 	defaultServiceKey = "default"
 	canaryPrefix      = "canary"
 	previewPrefix     = "preview"
@@ -74,7 +74,7 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 				var tmpSe *networkingV1Alpha3.ServiceEntry
 				endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, host, ingressEndpoints, identityConfigEnvironment)
 				util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
-				if err != nil {
+				if len(endpoints) == 0 || err != nil {
 					return serviceEntries, err
 				}
 				if se, ok := seMap[env][host]; !ok {
