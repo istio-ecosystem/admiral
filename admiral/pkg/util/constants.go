@@ -13,4 +13,6 @@ const (
 	GlobalTrafficPolicy    = "globalTrafficPolicy"
 	OutlierDetection       = "outlierDetection"
 	ClientConnectionConfig = "clientConnectionConfig"
+
+	IstioSystemNamespace = "istio-system"
 )
