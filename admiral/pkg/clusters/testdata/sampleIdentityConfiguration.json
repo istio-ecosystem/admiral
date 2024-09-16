@@ -13,19 +13,34 @@
         "prf": {
           "name": "prf",
           "namespace": "ns-1-usw2-prf",
-          "serviceName": "app-1-spk-root-service",
           "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
+            "default": [{
+              "name": "app-1-spk-stable-service",
+                "weight": 25,
               "ports": {
                 "http": 8090
               }
-            }
+            }],
+            "test": [{
+              "name": "app-1-spk-desired-service",
+              "weight": 75,
+              "ports": {
+                "http": 8090
+              }
+            }]
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "strategy": "canary",
+              "selectors": {
+                "app": "app-1"
+              }
+            },
+            "deployment": {
+              "selectors": {
+                "app": "app-1"
+              }
+            }
           },
           "ports": [
             {
@@ -109,19 +124,28 @@
         "e2e": {
           "name": "e2e",
           "namespace": "ns-1-usw2-e2e",
-          "serviceName": "app-1-spk-root-service",
+          "strategy": "bluegreen",
           "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
+            "default": [{
+              "name": "app-1-spk-active-service",
               "ports": {
                 "http": 8090
               }
-            }
+            }],
+            "test":[{
+              "name": "app-1-spk-preview-service",
+              "ports": {
+                "http": 8090
+              }
+            }]
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "strategy": "canary",
+              "selectors": {
+                "app": "app-1"
+              }
+            }
           },
           "ports": [
             {
@@ -205,19 +229,22 @@
         "qal": {
           "name": "qal",
           "namespace": "ns-1-usw2-qal",
-          "serviceName": "app-1-spk-root-service",
           "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
+            "default": [{
+              "name": "app-1-spk-service",
+
               "ports": {
                 "http": 8090
               }
-            }
+            }]
           },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
+          "type": {
+            "rollout": {
+              "strategy": "canary",
+              "selectors": {
+                "app": "app-1"
+              }
+            }
           },
           "ports": [
             {

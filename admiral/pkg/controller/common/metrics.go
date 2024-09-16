@@ -15,7 +15,7 @@ func NewGaugeFrom(name string, help string) Gauge {
 	}
 	opts := prometheus.GaugeOpts{Name: name, Help: help}
 	g := prometheus.NewGauge(opts)
-	prometheus.MustRegister(g)
+	//	prometheus.MustRegister(g) // https://github.com/prometheus/client_golang/issues/716
 	return &PromGauge{g}
 }
 

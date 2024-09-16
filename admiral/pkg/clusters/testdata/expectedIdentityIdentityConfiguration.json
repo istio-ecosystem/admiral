@@ -13,8 +13,15 @@
           "namespace": "foobar-ns",
           "services": null,
           "serviceName": "",
-          "type": "rollout",
-          "selectors": null,
+          "type": {
+            "rollout": {
+              "strategy": "",
+              "selectors": {
+                "app": "identity",
+                "identity": "identity"
+              }
+            }
+          },
           "ports": [
             {
               "number": 80,
