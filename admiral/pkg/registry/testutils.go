@@ -12,18 +12,21 @@ func GetSampleIdentityConfigEnvironment(env string, namespace string, identity s
 		Name:        env,
 		Namespace:   namespace,
 		ServiceName: "app-1-spk-root-service",
-		Services: map[string]*RegistryServiceConfig{
-			"app-1-spk-root-service": {
-				Name:   "app-1-spk-root-service",
-				Weight: -1,
+		Services: map[string][]*RegistryServiceConfig{
+			"default": {{
+				Name: "app-1-spk-root-service",
 				Ports: map[string]uint32{
 					"http": 8090,
 				},
+				Selectors: map[string]string{"app": "app1"},
+			}},
+		},
+		Type: map[string]*TypeConfig{
+			"rollout": {
+				Selectors: map[string]string{"app": "app1"},
 			},
 		},
-		Type:      "rollout",
-		Selectors: map[string]string{"app": "app-1"},
-		Ports:     []*networking.ServicePort{{Name: "http", Number: uint32(80), Protocol: "http"}},
+		Ports: []*networking.ServicePort{{Name: "http", Number: uint32(80), Protocol: "http"}},
 		TrafficPolicy: TrafficPolicy{
 			ClientConnectionConfig: v1alpha1.ClientConnectionConfig{
 				ObjectMeta: v1.ObjectMeta{
@@ -112,6 +115,139 @@ func GetSampleIdentityConfig(identity string) IdentityConfig {
 		IdentityName: identity,
 		Clusters: map[string]*IdentityConfigCluster{
 			"cluster1": &cluster},
+		ClientAssets: clientAssets,
+	}
+	return identityConfig
+}
+
+func GetSampleIdentityConfigWithRemoteEndpoints(identity string) IdentityConfig {
+	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf", identity)
+	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", identity)
+	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal", identity)
+	environments := map[string]*IdentityConfigEnvironment{
+		"prf": prfEnv,
+		"e2e": e2eEnv,
+		"qal": qalEnv,
+	}
+	clientAssets := map[string]string{
+		"sample": "sample",
+	}
+	cluster := IdentityConfigCluster{
+		Name:            "cluster1",
+		Locality:        "us-west-2",
+		IngressEndpoint: "abc-elb.us-west-2.elb.amazonaws.com.",
+		IngressPort:     "15443",
+		IngressPortName: "http",
+		Environment:     environments,
+	}
+	cluster2 := IdentityConfigCluster{
+		Name:            "cluster2",
+		Locality:        "us-east-2",
+		IngressEndpoint: "def-elb.us-east-2.elb.amazonaws.com.",
+		IngressPort:     "15443",
+		IngressPortName: "http",
+		Environment:     environments,
+	}
+	identityConfig := IdentityConfig{
+		IdentityName: identity,
+		Clusters: map[string]*IdentityConfigCluster{
+			"cluster1": &cluster,
+			"cluster2": &cluster2,
+		},
+		ClientAssets: clientAssets,
+	}
+	return identityConfig
+}
+
+func GetSampleIdentityConfigWithRolloutAndDeployment(identity string) IdentityConfig {
+	prfEnv := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf", identity)
+	e2eEnv := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", identity)
+	qalEnv := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal", identity)
+
+	prfEnv.Type["deployment"] = &TypeConfig{
+		Selectors: map[string]string{"deploy-app": "app1"},
+	}
+	prfEnv.Type["rollout"] = &TypeConfig{
+		Selectors: map[string]string{"app": "app1"},
+	}
+
+	e2eEnv.Type["deployment"] = &TypeConfig{
+		Selectors: map[string]string{"deploy-app": "app1"},
+	}
+	e2eEnv.Type["rollout"] = &TypeConfig{
+		Selectors: map[string]string{"app": "app1"},
+	}
+
+	qalEnv.Type["deployment"] = &TypeConfig{
+		Selectors: map[string]string{"deploy-app": "app1"},
+	}
+	qalEnv.Type["rollout"] = &TypeConfig{
+		Selectors: map[string]string{"app": "app1"},
+	}
+
+	services := map[string][]*RegistryServiceConfig{
+		"default": {{
+			Name: "app-1-spk-deploy-service",
+
+			Ports: map[string]uint32{
+				"http": 8090,
+			},
+			Selectors: map[string]string{"deploy-app": "app1"},
+		},
+			{
+				Name: "app-1-spk-root-service",
+
+				Ports: map[string]uint32{
+					"http": 8090,
+				},
+				Selectors: map[string]string{"app": "app1"},
+			}},
+	}
+
+	e2eEnv.Services = services
+	prfEnv.Services = services
+	qalEnv.Services = services
+	environments := map[string]*IdentityConfigEnvironment{
+		"prf": prfEnv,
+		"e2e": e2eEnv,
+		"qal": qalEnv,
+	}
+	clientAssets := map[string]string{
+		"sample": "sample",
+	}
+	cluster := IdentityConfigCluster{
+		Name:            "cluster1",
+		Locality:        "us-west-2",
+		IngressEndpoint: "abc-elb.us-west-2.elb.amazonaws.com.",
+		IngressPort:     "15443",
+		IngressPortName: "http",
+		Environment:     environments,
+	}
+
+	prfEnv1 := GetSampleIdentityConfigEnvironment("prf", "ns-1-usw2-prf", identity)
+	e2eEnv1 := GetSampleIdentityConfigEnvironment("e2e", "ns-1-usw2-e2e", identity)
+	qalEnv1 := GetSampleIdentityConfigEnvironment("qal", "ns-1-usw2-qal", identity)
+
+	environments1 := map[string]*IdentityConfigEnvironment{
+		"prf": prfEnv1,
+		"e2e": e2eEnv1,
+		"qal": qalEnv1,
+	}
+
+	cluster2 := IdentityConfigCluster{
+		Name:            "cluster2",
+		Locality:        "us-east-2",
+		IngressEndpoint: "def-elb.us-east-2.elb.amazonaws.com.",
+		IngressPort:     "15443",
+		IngressPortName: "http",
+		Environment:     environments1,
+	}
+	identityConfig := IdentityConfig{
+		IdentityName: identity,
+		Clusters: map[string]*IdentityConfigCluster{
+			"cluster1": &cluster,
+			"cluster2": &cluster2,
+		},
 		ClientAssets: clientAssets,
 	}
 	return identityConfig

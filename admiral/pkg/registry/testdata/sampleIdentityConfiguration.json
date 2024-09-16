@@ -15,17 +15,25 @@
           "namespace": "ns-1-usw2-prf",
           "serviceName": "app-1-spk-root-service",
           "services": {
-            "app-1-spk-root-service": {
-              "name": "app-1-spk-root-service",
-              "weight": -1,
-              "ports": {
-                "http": 8090
+            "default": [
+                {
+                    "name": "app-1-spk-root-service",
+
+                    "ports": {
+                    "http": 8090
+                    },
+                    "selectors": {
+                    "app": "app1"
+                    }
+                }
+            ]
+          },
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
               }
             }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
           },
           "ports": [
             {
@@ -111,17 +119,23 @@
           "namespace": "ns-1-usw2-e2e",
           "serviceName": "app-1-spk-root-service",
           "services": {
-            "app-1-spk-root-service": {
+            "default": [{
               "name": "app-1-spk-root-service",
-              "weight": -1,
+
               "ports": {
                 "http": 8090
+              },
+              "selectors": {
+                "app": "app1"
+              }
+            }]
+          },
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
               }
             }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
           },
           "ports": [
             {
@@ -207,17 +221,23 @@
           "namespace": "ns-1-usw2-qal",
           "serviceName": "app-1-spk-root-service",
           "services": {
-            "app-1-spk-root-service": {
+            "default": [{
               "name": "app-1-spk-root-service",
-              "weight": -1,
+
               "ports": {
                 "http": 8090
+              },
+              "selectors": {
+                "app": "app1"
+              }
+            }]
+          },
+          "type": {
+            "rollout": {
+              "selectors": {
+                "app": "app1"
               }
             }
-          },
-          "type": "rollout",
-          "selectors": {
-            "app": "app-1"
           },
           "ports": [
             {
