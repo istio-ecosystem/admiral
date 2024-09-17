@@ -438,10 +438,18 @@ func GetIngressVSExportToNamespace() []string {
 	return wrapper.params.IngressVSExportToNamespaces
 }
 
-func IsVSBasedRoutingEnabled() bool {
+func DoVSRoutingForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	return wrapper.params.EnableVSRouting
+	if !wrapper.params.EnableVSRouting {
+		return false
+	}
+	for _, c := range wrapper.params.VSRoutingEnabledClusters {
+		if c == cluster {
+			return true
+		}
+	}
+	return false
 }
 
 func GetVSRoutingGateways() []string {
