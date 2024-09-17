@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -2167,6 +2168,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 					LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
 						Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
 					},
+					WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 				},
 				Tls: &networkingV1Alpha3.ClientTLSSettings{
 					SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
@@ -2242,6 +2244,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 									},
 								},
 							},
+							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 						},
 						Tls: &networkingV1Alpha3.ClientTLSSettings{
 							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
@@ -2283,6 +2286,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 									},
 								},
 							},
+							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 						},
 						Tls: &networkingV1Alpha3.ClientTLSSettings{
 							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},

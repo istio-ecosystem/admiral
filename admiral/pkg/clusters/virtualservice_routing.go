@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
@@ -664,6 +665,7 @@ func addUpdateDestinationRuleForSourceIngress(
 								},
 							},
 						},
+						WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 					},
 					Tls: &networkingV1Alpha3.ClientTLSSettings{
 						SubjectAltNames: []string{san},
