@@ -445,6 +445,9 @@ func DoVSRoutingForCluster(cluster string) bool {
 		return false
 	}
 	for _, c := range wrapper.params.VSRoutingEnabledClusters {
+		if c == "*" {
+			return true
+		}
 		if c == cluster {
 			return true
 		}

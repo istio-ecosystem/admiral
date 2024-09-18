@@ -448,20 +448,20 @@ func populateDestinationsForCanaryStrategy(
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices
 // This is where the VirtualServices are created using the services that were discovered during the
 // discovery phase.
-func addUpdateVirtualServicesForSourceIngress(
+func addUpdateVirtualServicesForIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination) error {
 
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
 		if !common.DoVSRoutingForCluster(sourceCluster) {
 			continue
-		}
-
-		if remoteRegistry == nil {
-			return fmt.Errorf("remoteRegistry is nil")
 		}
 
 		rc := remoteRegistry.GetRemoteController(sourceCluster)

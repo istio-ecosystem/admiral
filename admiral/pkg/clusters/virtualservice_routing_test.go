@@ -19,7 +19,7 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
+func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
 		vsRoutingLabel: "enabled",
@@ -449,7 +449,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			rc := rr.GetRemoteController("cluster-1")
 			rc.VirtualServiceController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
-			err := addUpdateVirtualServicesForSourceIngress(
+			err := addUpdateVirtualServicesForIngress(
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
