@@ -1952,9 +1952,12 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		},
 	}
 
+	ctxLogger := log.WithFields(log.Fields{})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := getAllVSRouteDestinationsByCluster(
+				ctxLogger,
 				tc.serviceInstance,
 				tc.meshDeployAndRolloutPorts,
 				tc.weightedServices,
@@ -2548,17 +2551,6 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 			expectedGTPRouteDestination: make(map[string][]*networkingV1Alpha3.RouteDestination),
 		},
 		{
-			name: "Given a valid destination map with nil destination " +
-				"When getDestinationsForGTPDNSPrefixes is invoked, " +
-				"Then it should return an error",
-			routeDestination: map[string][]*networkingV1Alpha3.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": nil,
-			},
-			gtp: &v1alpha12.GlobalTrafficPolicy{},
-			expectedError: fmt.Errorf(
-				"route destinations is nil for globalFQDN outbound_.80_._.test-env.test-identity.global"),
-		},
-		{
 			name: "Given a valid params " +
 				"When getDestinationsForGTPDNSPrefixes is invoked, " +
 				"Then it should return an empty gtpRouteDestinations",
@@ -2663,9 +2655,12 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 		},
 	}
 
+	ctxLogger := log.WithFields(log.Fields{})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := getDestinationsForGTPDNSPrefixes(
+				ctxLogger,
 				tc.gtp,
 				tc.routeDestination,
 				"test-env")

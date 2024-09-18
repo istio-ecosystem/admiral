@@ -557,6 +557,7 @@ func addUpdateVirtualServicesForSourceIngress(
 // and rollouts. IN addition, it also adds additional endpoints created using GTP DNS Prefix.
 // This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
+	ctxLogger *log.Entry,
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
@@ -606,7 +607,7 @@ func getAllVSRouteDestinationsByCluster(
 	}
 	if globalTrafficPolicy != nil {
 		// Add the global traffic policy destinations to the destination map
-		gtpDestinations, err := getDestinationsForGTPDNSPrefixes(globalTrafficPolicy, destinations, env)
+		gtpDestinations, err := getDestinationsForGTPDNSPrefixes(ctxLogger, globalTrafficPolicy, destinations, env)
 		if err != nil {
 			return nil, err
 		}
@@ -619,6 +620,7 @@ func getAllVSRouteDestinationsByCluster(
 }
 
 func getDestinationsForGTPDNSPrefixes(
+	ctxLogger *log.Entry,
 	globalTrafficPolicy *v1alpha1.GlobalTrafficPolicy,
 	destinations map[string][]*networkingV1Alpha3.RouteDestination,
 	env string) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
@@ -634,7 +636,9 @@ func getDestinationsForGTPDNSPrefixes(
 	for globalFQDN, routeDestinations := range destinations {
 
 		if routeDestinations == nil {
-			return nil, fmt.Errorf("route destinations is nil for globalFQDN %s", globalFQDN)
+			ctxLogger.Warnf(common.CtxLogFormat, "getDestinationsForGTPDNSPrefixes",
+				"", "", globalFQDN, "route destinations is nil")
+			continue
 		}
 
 		hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)

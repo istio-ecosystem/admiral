@@ -764,6 +764,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
 			destinations, err := getAllVSRouteDestinationsByCluster(
+				ctxLogger,
 				serviceInstance,
 				meshDeployAndRolloutPorts,
 				sourceWeightedServices[sourceCluster],
