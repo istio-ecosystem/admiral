@@ -450,7 +450,7 @@ func populateDestinationsForCanaryStrategy(
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices
 // This is where the VirtualServices are created using the services that were discovered during the
 // discovery phase.
-func addUpdateVirtualServicesForSourceIngress(
+func addUpdateVirtualServicesForIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
@@ -460,11 +460,12 @@ func addUpdateVirtualServicesForSourceIngress(
 		return fmt.Errorf("remoteRegistry is nil")
 	}
 
-	if len(sourceClusterToDestinations) == 0 {
-		return fmt.Errorf("no route destination found for the ingress virtualservice")
-	}
-
 	for sourceCluster, destination := range sourceClusterToDestinations {
+
+		if !common.DoVSRoutingForCluster(sourceCluster) {
+			continue
+		}
+
 		rc := remoteRegistry.GetRemoteController(sourceCluster)
 
 		if rc == nil {
@@ -726,13 +727,17 @@ func addUpdateDestinationRuleForSourceIngress(
 	sourceClusterToDRHosts map[string]map[string]string,
 	sourceIdentity string) error {
 
-	if sourceIdentity == "" {
-		return fmt.Errorf("sourceIdentity is empty")
-	}
-
-	san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
-
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
+
+		if !common.DoVSRoutingForCluster(sourceCluster) {
+			continue
+		}
+
+		if sourceIdentity == "" {
+			return fmt.Errorf("sourceIdentity is empty")
+		}
+
+		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
 
 		rc := remoteRegistry.GetRemoteController(sourceCluster)
 		if rc == nil {
@@ -783,6 +788,9 @@ func addUpdateDestinationRuleForSourceIngress(
 					sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
 				existingDR = nil
 			}
+
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				drName, util.IstioSystemNamespace, sourceCluster, "Add/Update ingress destinationrule")
 
 			err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
 			if err != nil {

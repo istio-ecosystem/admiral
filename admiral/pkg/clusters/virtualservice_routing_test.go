@@ -23,7 +23,7 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
+func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
 		vsRoutingLabel: "enabled",
@@ -68,6 +68,8 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 		EnableSWAwareNSCaches:       true,
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
+		EnableVSRouting:             true,
+		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -178,15 +180,8 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			name: "Given a nil remoteRegistry, " +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should return an error",
-			expectedError: fmt.Errorf("remoteRegistry is nil"),
-		},
-		{
-			name: "Given a no sourceClusterToDestinations, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:              rr,
-			sourceClusterToDestinations: map[string]map[string][]*networkingV1Alpha3.RouteDestination{},
-			expectedError:               fmt.Errorf("no route destination found for the ingress virtualservice"),
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("remoteRegistry is nil"),
 		},
 		{
 			name: "Given a valid sourceClusterToDestinations " +
@@ -458,7 +453,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			rc := rr.GetRemoteController("cluster-1")
 			rc.VirtualServiceController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
-			err := addUpdateVirtualServicesForSourceIngress(
+			err := addUpdateVirtualServicesForIngress(
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
@@ -2370,6 +2365,8 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	admiralParams := common.AdmiralParams{
 		SANPrefix:                   "test-san-prefix",
 		IngressVSExportToNamespaces: []string{"istio-system"},
+		EnableVSRouting:             true,
+		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2398,6 +2395,11 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a empty sourceIdentity " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should return an error",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
 			sourceIdentity: "",
 			expectedError:  fmt.Errorf("sourceIdentity is empty"),
 		},

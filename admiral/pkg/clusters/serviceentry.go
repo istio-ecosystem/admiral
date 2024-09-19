@@ -780,7 +780,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
 
-		if common.IsVSBasedRoutingEnabled() {
+		if common.DoVSRoutingForCluster(sourceCluster) {
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
@@ -804,7 +804,6 @@ func modifyServiceEntryForNewServiceOrPod(
 					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
-				// Get the hosts to populate the DR
 				drHost := fmt.Sprintf("*.%s.%s", deploymentOrRolloutNS, common.DotLocalDomainSuffix)
 				sourceClusterToDRHosts[sourceCluster] = map[string]string{
 					deploymentOrRolloutNS + common.DotLocalDomainSuffix: drHost,
@@ -827,28 +826,26 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
 		return nil, nil
 	}
-	// If VS based routing is enabled, then generate VirtualServices for the source cluster's ingress
-	// This is done after the ServiceEntries are created for the source cluster
-	if common.IsVSBasedRoutingEnabled() {
-		// Writing phase: We update the base ingress virtualservices with the RouteDestinations
-		// gathered during the discovery phase and write them to the source cluster
-		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+
+	// VS Based Routing
+	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
+	// gathered during the discovery phase and write them to the source cluster
+	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+	if err != nil {
+		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+			deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
+		modifySEerr = common.AppendError(modifySEerr, err)
+	} else {
+		err := addUpdateDestinationRuleForSourceIngress(
+			ctx,
+			ctxLogger,
+			remoteRegistry,
+			sourceClusterToDRHosts,
+			sourceIdentity)
 		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
 				deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
 			modifySEerr = common.AppendError(modifySEerr, err)
-		} else {
-			err := addUpdateDestinationRuleForSourceIngress(
-				ctx,
-				ctxLogger,
-				remoteRegistry,
-				sourceClusterToDRHosts,
-				sourceIdentity)
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-					deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
-				modifySEerr = common.AppendError(modifySEerr, err)
-			}
 		}
 	}
 

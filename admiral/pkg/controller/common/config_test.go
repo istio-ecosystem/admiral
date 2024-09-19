@@ -56,6 +56,76 @@ func setupForConfigTests() {
 	}
 }
 
+func TestDoVSRoutingForCluster(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                      string
+		cluster                   string
+		enableVSRouting           bool
+		enableVSRoutingForCluster []string
+		expected                  bool
+	}{
+		{
+			name: "Given enableVSRouting is false, enableVSRoutingForCluster is empty" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           false,
+			enableVSRoutingForCluster: []string{},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, enableVSRoutingForCluster is empty" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster doesn't exists in the list" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster2",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"cluster1"},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster does exists in the list" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"cluster1"},
+			expected:                  true,
+		},
+		{
+			name: "Given enableVSRouting is true, and all VS routing is enabled in all clusters using '*'" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"*"},
+			expected:                  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRouting = tc.enableVSRouting
+			p.VSRoutingEnabledClusters = tc.enableVSRoutingForCluster
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoVSRoutingForCluster(tc.cluster))
+		})
+	}
+
+}
+
 func TestConfigManagement(t *testing.T) {
 	setupForConfigTests()
 

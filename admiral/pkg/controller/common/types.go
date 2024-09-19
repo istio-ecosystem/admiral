@@ -129,6 +129,7 @@ type AdmiralParams struct {
 	VSRoutingGateways           []string
 	IngressVSExportToNamespaces []string
 	IngressLBPolicy             string
+	VSRoutingEnabledClusters    []string
 }
 
 func (b AdmiralParams) String() string {
