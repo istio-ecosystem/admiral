@@ -466,16 +466,22 @@ func addUpdateVirtualServicesForIngress(
 			continue
 		}
 
+		ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+			"", "", sourceCluster,
+			"Writing phase: addUpdateVirtualServicesForIngress VS based routing enabled for cluster")
+
 		rc := remoteRegistry.GetRemoteController(sourceCluster)
 
 		if rc == nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				"", "", sourceCluster, "remote controller not initialized on this cluster")
 			continue
 		}
 
 		virtualService, err := getBaseVirtualServiceForIngress()
 		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
 			return err
 		}
 
@@ -486,7 +492,7 @@ func addUpdateVirtualServicesForIngress(
 		for globalFQDN, routeDestinations := range destination {
 			hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
 			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 					"", "", sourceCluster, err.Error())
 				continue
 			}
@@ -495,7 +501,7 @@ func addUpdateVirtualServicesForIngress(
 				vsName = hostWithoutSNIPrefix + "-routing-vs"
 			}
 			if routeDestinations == nil || len(routeDestinations) == 0 {
-				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 					"", "", sourceCluster,
 					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", hostWithoutSNIPrefix))
 				continue
@@ -514,12 +520,18 @@ func addUpdateVirtualServicesForIngress(
 		}
 
 		if len(vsHosts) == 0 {
-			return fmt.Errorf(
+			err := fmt.Errorf(
 				"skipped creating virtualservice on cluster %s, no valid hosts found", sourceCluster)
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+			return err
 		}
 		if len(tlsRoutes) == 0 {
-			return fmt.Errorf(
+			err := fmt.Errorf(
 				"skipped creating virtualservice on cluster %s, no valid tls routes found", sourceCluster)
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+			return err
 		}
 		sort.Strings(vsHosts)
 		virtualService.Spec.Hosts = vsHosts
@@ -537,16 +549,21 @@ func addUpdateVirtualServicesForIngress(
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name)
 		if err != nil {
-			ctxLogger.Warn(err.Error())
+			ctxLogger.Warn(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
 		}
 
-		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
 		err = addUpdateVirtualService(
 			ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
 		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
 			return err
 		}
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+			virtualService.Name, virtualService.Namespace, sourceCluster, "virtualservice created successfully")
 	}
 
 	return nil
@@ -727,14 +744,25 @@ func addUpdateDestinationRuleForSourceIngress(
 	sourceClusterToDRHosts map[string]map[string]string,
 	sourceIdentity string) error {
 
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
 
 		if !common.DoVSRoutingForCluster(sourceCluster) {
 			continue
 		}
 
+		ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+			"", "", sourceCluster,
+			"Writing phase: addUpdateDestinationRuleForSourceIngress VS based routing enabled for cluster")
+
 		if sourceIdentity == "" {
-			return fmt.Errorf("sourceIdentity is empty")
+			err := fmt.Errorf("sourceIdentity is empty")
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				"", "", sourceCluster, err.Error())
+			return err
 		}
 
 		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
@@ -794,8 +822,13 @@ func addUpdateDestinationRuleForSourceIngress(
 
 			err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
 			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+					drName, util.IstioSystemNamespace, sourceCluster, err.Error())
 				return err
 			}
+
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
 
 		}
 
