@@ -50,4 +50,6 @@ fi
 # Testing routing policy
 ./test6.sh "sample" "1.13" $install_dir
 
+./client_discovery_test.sh
+
 ./cleanup.sh $istio_version
