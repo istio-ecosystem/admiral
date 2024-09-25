@@ -781,6 +781,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		if common.DoVSRoutingForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster,
+				"Discovery phase: VS based routing enabled for cluster")
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
@@ -832,7 +835,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
 	if err != nil {
-		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForSourceIngress",
+		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
 		modifySEerr = common.AppendError(modifySEerr, err)
 	} else {
