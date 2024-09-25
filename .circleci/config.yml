@@ -92,7 +92,7 @@ jobs:
           command:  |
             cd tests
             export IS_LOCAL=false
-            echo "SKIP" #./run.sh "1.25.2" "1.20.2" "../out"
+            ./run.sh "1.25.2" "1.20.2" "../out"
   publish-github-release:
     docker:
     - image: cimg/go:1.21

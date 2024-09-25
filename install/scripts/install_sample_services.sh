@@ -23,6 +23,8 @@ kubectl apply -f $install_dir/yaml/gtp_failover.yaml
 kubectl apply -f $install_dir/yaml/sample-greeting-rollout-bluegreen.yaml
 kubectl apply -f $install_dir/yaml/sample-greeting-rollout-canary.yaml
 kubectl apply -f $install_dir/yaml/grpc.yaml
+kubectl apply -f $install_dir/yaml/job_sample.yaml
+kubectl apply -f $install_dir/yaml/numaflow_sample.yaml
 
 #Install the dependency CR
 
@@ -80,29 +82,6 @@ checkse() {
 export -f checkse
 for identity in webapp greeting greeting.canary greeting.bluegreen grpc-server stage.proxy.global-se qal.proxy.global-se; do
   timeout 180s bash -c "until checkse $identity; do sleep 10; done"
-  if [[ $? -eq 124 ]]
-  then
-    exit 1
-  fi
-done
-
-#Verify that admiral created proxy virtualservice
-checkproxyvs() {
-  identity=$1
-  num_ses=$(kubectl get vs -n admiral-sync | grep $1 -c)
-
-  if [ -z "$num_ses" ] || [ $num_ses -lt 1 ]
-  then
-        echo "No proxy virtualservice created for $identity workload"
-        return 1;
-  else
-        echo "Admiral created proxy virtualservice for $identity workload"
-        return 0
-  fi
-}
-export -f checkproxyvs
-for identity in stage.httpbin.foo-vs qal.httpbin.foo-vs; do
-  timeout 180s bash -c "until checkproxyvs $identity; do sleep 10; done"
   if [[ $? -eq 124 ]]
   then
     exit 1

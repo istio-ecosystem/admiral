@@ -86,7 +86,7 @@ then
 #install istio core with DNS proxying enabled and multicluster enabled
 elif [ "$os" == "osx-arm64" ]; then
     # defalt image does not support iptable manipulation on apple silicon - https://stackoverflow.com/questions/72073613/istio-installation-failed-apple-silicon-m1
-    "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml --set hub=ghcr.io/resf/istio -y
+    "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml -y
 else
     "./istio-$istio_version/bin/istioctl" install -f cluster1.yaml -y
 fi

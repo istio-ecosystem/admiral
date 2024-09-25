@@ -37,3 +37,26 @@ spec:
   identityLabel: identity
   destinations:
     - httpbin
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: dependency
+  namespace: admiral
+spec:
+  source: job
+  identityLabel: identity
+  destinations:
+    - greeting
+
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: dependency
+  namespace: admiral
+spec:
+  source: monovertex
+  identityLabel: identity
+  destinations:
+    - greeting
