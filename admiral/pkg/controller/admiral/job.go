@@ -18,19 +18,18 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-
 //Job controller discovers jobs as mesh clients (its assumed that k8s Job doesn't have any ingress communication)
 
 type JobController struct {
-	K8sClient   kubernetes.Interface
-	JobHandler  ClientDiscoveryHandler
-	informer    cache.SharedIndexInformer
-	Cache       *jobCache
+	K8sClient  kubernetes.Interface
+	JobHandler ClientDiscoveryHandler
+	informer   cache.SharedIndexInformer
+	Cache      *jobCache
 }
 
 type JobEntry struct {
 	Identity string
-	Jobs map[string]*common.K8sObject
+	Jobs     map[string]*common.K8sObject
 }
 
 type jobCache struct {
@@ -46,15 +45,14 @@ func NewJobCache() *jobCache {
 	}
 }
 
-
-func getK8sObjectFromJob(job *v12.Job) *common.K8sObject{
+func getK8sObjectFromJob(job *v12.Job) *common.K8sObject {
 	return &common.K8sObject{
-		Name: job.Name,
-		Namespace: job.Namespace,
+		Name:        job.Name,
+		Namespace:   job.Namespace,
 		Annotations: job.Spec.Template.Annotations,
-		Labels: job.Spec.Template.Labels,
-		Status: common.NotProcessed,
-		Type: common.Job,
+		Labels:      job.Spec.Template.Labels,
+		Status:      common.NotProcessed,
+		Type:        common.Job,
 	}
 }
 
@@ -66,7 +64,7 @@ func (p *jobCache) Put(job *common.K8sObject) (*common.K8sObject, bool) {
 	if existingJobs == nil {
 		existingJobs = &JobEntry{
 			Identity: identity,
-			Jobs: map[string]*common.K8sObject{job.Namespace: job},
+			Jobs:     map[string]*common.K8sObject{job.Namespace: job},
 		}
 		p.cache[identity] = existingJobs
 		return job, true
@@ -211,7 +209,7 @@ func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error 
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to Job")
 	}
-	if !common.ShouldIgnore(job.Annotations, job.Labels) {
+	if !common.ShouldIgnore(job.Spec.Template.Annotations, job.Spec.Template.Labels) {
 		k8sObj := getK8sObjectFromJob(job)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {

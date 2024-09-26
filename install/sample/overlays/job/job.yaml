@@ -6,6 +6,11 @@ metadata:
     identity: job
 spec:
   template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+      labels:
+        identity: job
     spec:
       containers:
         - name: pi
