@@ -80,17 +80,6 @@ func (p *vertexCache) Put(vertex *common.K8sObject) (*common.K8sObject, bool) {
 	return nil, false
 }
 
-func (p *vertexCache) GetByIdentity(key string) *VertexEntry {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-	jce := p.cache[key]
-	if jce == nil {
-		return nil
-	} else {
-		return jce
-	}
-}
-
 func (p *vertexCache) Get(key string, namespace string) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()

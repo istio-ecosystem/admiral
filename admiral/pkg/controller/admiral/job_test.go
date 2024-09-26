@@ -434,3 +434,74 @@ func TestJobLogValueOfAdmiralIoIgnore(t *testing.T) {
 	d.LogValueOfAdmiralIoIgnore(job)
 	// No error should occur
 }
+
+func TestJobController_CacheGet(t *testing.T) {
+	common.ResetSync()
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+			DeploymentAnnotation:    "sidecar.istio.io/inject",
+			AdmiralIgnoreLabel:      "admiral-ignore",
+		},
+	}
+	common.InitializeConfig(admiralParams)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "clusterId", "test-cluster-k8s")
+
+	cache := jobCache{
+		cache: map[string]*JobEntry{},
+		mutex: &sync.Mutex{},
+	}
+
+	job := getJob("job-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "job1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromJob(job))
+	jobSameIdentityInDiffNamespace := getJob("job-ns-2", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "job1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromJob(jobSameIdentityInDiffNamespace))
+	job2 := getJob("job-ns-3", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "job2", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromJob(job2))
+
+	testCases := []struct {
+		name           string
+		expectedVertex *common.K8sObject
+		identity       string
+		namespace      string
+	}{
+		{
+			name:           "Expects job to be in the cache when right identity and namespace are passed",
+			expectedVertex: getK8sObjectFromJob(job),
+			identity:       "job1",
+			namespace:      "job-ns",
+		},
+		{
+			name:           "Expects job to be in the cache when same identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromJob(jobSameIdentityInDiffNamespace),
+			identity:       "job1",
+			namespace:      "job-ns-2",
+		},
+		{
+			name:           "Expects job to be in the cache when diff identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromJob(job2),
+			identity:       "job2",
+			namespace:      "job-ns-3",
+		},
+		{
+			name:           "Expects nil job in random namespace",
+			expectedVertex: nil,
+			identity:       "job2",
+			namespace:      "random",
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.name == "Expects ignored job identified by label to be removed from the cache" {
+				job.Spec.Template.Labels["admiral-ignore"] = "true"
+			}
+			jobObj := cache.Get(c.identity, c.namespace)
+			if !reflect.DeepEqual(c.expectedVertex, jobObj) {
+				t.Errorf("Expected rollout %+v but got %+v", c.expectedVertex, jobObj)
+			}
+		})
+	}
+}

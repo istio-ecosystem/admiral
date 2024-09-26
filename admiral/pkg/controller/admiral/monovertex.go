@@ -79,17 +79,6 @@ func (p *monoVertexCache) Put(monoVertex *common.K8sObject) (*common.K8sObject, 
 	return nil, false
 }
 
-func (p *monoVertexCache) GetByIdentity(key string) *MonoVertexEntry {
-	defer p.mutex.Unlock()
-	p.mutex.Lock()
-	jce := p.cache[key]
-	if jce == nil {
-		return nil
-	} else {
-		return jce
-	}
-}
-
 func (p *monoVertexCache) Get(key string, namespace string) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()

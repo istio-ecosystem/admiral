@@ -19,15 +19,15 @@ import (
 )
 
 func getMonoVertex(namespace string, annotations map[string]string, labels map[string]string) *v1alpha1.MonoVertex {
-	monovertex := &v1alpha1.MonoVertex{}
-	monovertex.Namespace = namespace
+	monomonoVertex := &v1alpha1.MonoVertex{}
+	monomonoVertex.Namespace = namespace
 	spec := v1alpha1.MonoVertexSpec{}
 	spec.Metadata = &v1alpha1.Metadata{
 		Annotations: annotations,
 		Labels:      labels,
 	}
-	monovertex.Spec = spec
-	return monovertex
+	monomonoVertex.Spec = spec
+	return monomonoVertex
 }
 
 func TestMonoVertexController_Added(t *testing.T) {
@@ -50,49 +50,49 @@ func TestMonoVertexController_Added(t *testing.T) {
 		cache: map[string]*MonoVertexEntry{},
 		mutex: &sync.Mutex{},
 	}
-	monovertexController := MonoVertexController{
+	monomonoVertexController := MonoVertexController{
 		MonoVertexHandler: &mdh,
 		Cache:             &cache,
 	}
-	monovertex := getMonoVertex("monovertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monovertex", "istio-injected": "true"})
-	monovertexWithBadLabels := getMonoVertex("monovertexWithBadLabels-ns", map[string]string{"admiral.io/env": "dev"}, map[string]string{"identity": "monovertexWithBadLabels", "random-label": "true"})
-	monovertexWithIgnoreLabels := getMonoVertex("monovertexWithIgnoreLabels-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monovertexWithIgnoreLabels", "istio-injected": "true", "admiral-ignore": "true"})
-	monovertexWithIgnoreAnnotations := getMonoVertex("monovertexWithIgnoreAnnotations-ns", map[string]string{"admiral.io/ignore": "true"}, map[string]string{"identity": "monovertexWithIgnoreAnnotations"})
-	monovertexWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore": "true"}
+	monomonoVertex := getMonoVertex("monomonoVertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertex", "istio-injected": "true"})
+	monomonoVertexWithBadLabels := getMonoVertex("monomonoVertexWithBadLabels-ns", map[string]string{"admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertexWithBadLabels", "random-label": "true"})
+	monomonoVertexWithIgnoreLabels := getMonoVertex("monomonoVertexWithIgnoreLabels-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertexWithIgnoreLabels", "istio-injected": "true", "admiral-ignore": "true"})
+	monomonoVertexWithIgnoreAnnotations := getMonoVertex("monomonoVertexWithIgnoreAnnotations-ns", map[string]string{"admiral.io/ignore": "true"}, map[string]string{"identity": "monomonoVertexWithIgnoreAnnotations"})
+	monomonoVertexWithIgnoreAnnotations.Annotations = map[string]string{"admiral.io/ignore": "true"}
 
 	testCases := []struct {
 		name                  string
-		monovertex            *v1alpha1.MonoVertex
+		monomonoVertex        *v1alpha1.MonoVertex
 		expectedMonoVertex    *common.K8sObject
 		id                    string
 		expectedCacheContains bool
 	}{
 		{
-			name:                  "Expects monovertex to be added to the cache when the correct label is present",
-			monovertex:            monovertex,
-			expectedMonoVertex:    getK8sObjectFromMonoVertex(monovertex),
-			id:                    "monovertex",
+			name:                  "Expects monomonoVertex to be added to the cache when the correct label is present",
+			monomonoVertex:        monomonoVertex,
+			expectedMonoVertex:    getK8sObjectFromMonoVertex(monomonoVertex),
+			id:                    "monomonoVertex",
 			expectedCacheContains: true,
 		},
 		{
-			name:                  "Expects monovertex to not be added to the cache when the correct label is not present",
-			monovertex:            monovertexWithBadLabels,
+			name:                  "Expects monomonoVertex to not be added to the cache when the correct label is not present",
+			monomonoVertex:        monomonoVertexWithBadLabels,
 			expectedMonoVertex:    nil,
-			id:                    "monovertexWithBadLabels",
+			id:                    "monomonoVertexWithBadLabels",
 			expectedCacheContains: false,
 		},
 		{
-			name:                  "Expects ignored monovertex identified by label to not be added to the cache",
-			monovertex:            monovertexWithIgnoreLabels,
+			name:                  "Expects ignored monomonoVertex identified by label to not be added to the cache",
+			monomonoVertex:        monomonoVertexWithIgnoreLabels,
 			expectedMonoVertex:    nil,
-			id:                    "monovertexWithIgnoreLabels",
+			id:                    "monomonoVertexWithIgnoreLabels",
 			expectedCacheContains: false,
 		},
 		{
-			name:                  "Expects ignored monovertex identified by monovertex annotation to not be added to the cache",
-			monovertex:            monovertexWithIgnoreAnnotations,
+			name:                  "Expects ignored monomonoVertex identified by monomonoVertex annotation to not be added to the cache",
+			monomonoVertex:        monomonoVertexWithIgnoreAnnotations,
 			expectedMonoVertex:    nil,
-			id:                    "monovertexWithIgnoreAnnotations",
+			id:                    "monomonoVertexWithIgnoreAnnotations",
 			expectedCacheContains: false,
 		},
 	}
@@ -101,21 +101,21 @@ func TestMonoVertexController_Added(t *testing.T) {
 	ns.Annotations = map[string]string{"admiral.io/ignore": "true"}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.name == "Expects ignored monovertex identified by label to be removed from the cache" {
-				monovertex.Spec.Metadata.Labels["admiral-ignore"] = "true"
+			if c.name == "Expects ignored monomonoVertex identified by label to be removed from the cache" {
+				monomonoVertex.Spec.Metadata.Labels["admiral-ignore"] = "true"
 			}
-			monovertexController.Added(ctx, c.monovertex)
-			monovertexClusterEntry := monovertexController.Cache.cache[c.id]
-			var monovertexsMap map[string]*common.K8sObject = nil
-			if monovertexClusterEntry != nil {
-				monovertexsMap = monovertexClusterEntry.MonoVertices
+			monomonoVertexController.Added(ctx, c.monomonoVertex)
+			monomonoVertexClusterEntry := monomonoVertexController.Cache.cache[c.id]
+			var monomonoVertexsMap map[string]*common.K8sObject = nil
+			if monomonoVertexClusterEntry != nil {
+				monomonoVertexsMap = monomonoVertexClusterEntry.MonoVertices
 			}
-			var monovertexObj *common.K8sObject = nil
-			if monovertexsMap != nil && len(monovertexsMap) > 0 {
-				monovertexObj = monovertexsMap[c.monovertex.Namespace]
+			var monomonoVertexObj *common.K8sObject = nil
+			if monomonoVertexsMap != nil && len(monomonoVertexsMap) > 0 {
+				monomonoVertexObj = monomonoVertexsMap[c.monomonoVertex.Namespace]
 			}
-			if !reflect.DeepEqual(c.expectedMonoVertex, monovertexObj) {
-				t.Errorf("Expected rollout %+v but got %+v", c.expectedMonoVertex, monovertexObj)
+			if !reflect.DeepEqual(c.expectedMonoVertex, monomonoVertexObj) {
+				t.Errorf("Expected rollout %+v but got %+v", c.expectedMonoVertex, monomonoVertexObj)
 			}
 		})
 	}
@@ -128,40 +128,40 @@ func TestMonoVertexControlle_DoesGenerationMatch(t *testing.T) {
 
 	testCases := []struct {
 		name                  string
-		monovertexNew         interface{}
-		monovertexOld         interface{}
+		monomonoVertexNew     interface{}
+		monomonoVertexOld     interface{}
 		enableGenerationCheck bool
 		expectedValue         bool
 		expectedError         error
 	}{
 		{
-			name: "Given context, new monovertex and old monovertex object " +
-				"When new monovertex is not of type *v1.MonoVertex " +
+			name: "Given context, new monomonoVertex and old monomonoVertex object " +
+				"When new monomonoVertex is not of type *v1.MonoVertex " +
 				"Then func should return an error",
-			monovertexNew:         struct{}{},
-			monovertexOld:         struct{}{},
+			monomonoVertexNew:     struct{}{},
+			monomonoVertexOld:     struct{}{},
 			enableGenerationCheck: true,
 			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *MonoVertex"),
 		},
 		{
-			name: "Given context, new monovertex and old monovertex object " +
-				"When old monovertex is not of type *v1.MonoVertex " +
+			name: "Given context, new monomonoVertex and old monomonoVertex object " +
+				"When old monomonoVertex is not of type *v1.MonoVertex " +
 				"Then func should return an error",
-			monovertexNew:         &v1alpha1.MonoVertex{},
-			monovertexOld:         struct{}{},
+			monomonoVertexNew:     &v1alpha1.MonoVertex{},
+			monomonoVertexOld:     struct{}{},
 			enableGenerationCheck: true,
 			expectedError:         fmt.Errorf("type assertion failed, {} is not of type *MonoVertex"),
 		},
 		{
-			name: "Given context, new monovertex and old monovertex object " +
-				"When monovertex generation check is enabled but the generation does not match " +
+			name: "Given context, new monomonoVertex and old monomonoVertex object " +
+				"When monomonoVertex generation check is enabled but the generation does not match " +
 				"Then func should return false ",
-			monovertexNew: &v1alpha1.MonoVertex{
+			monomonoVertexNew: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 2,
 				},
 			},
-			monovertexOld: &v1alpha1.MonoVertex{
+			monomonoVertexOld: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 1,
 				},
@@ -170,15 +170,15 @@ func TestMonoVertexControlle_DoesGenerationMatch(t *testing.T) {
 			expectedError:         nil,
 		},
 		{
-			name: "Given context, new monovertex and old monovertex object " +
-				"When monovertex generation check is disabled " +
+			name: "Given context, new monomonoVertex and old monomonoVertex object " +
+				"When monomonoVertex generation check is disabled " +
 				"Then func should return false ",
-			monovertexNew: &v1alpha1.MonoVertex{
+			monomonoVertexNew: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 2,
 				},
 			},
-			monovertexOld: &v1alpha1.MonoVertex{
+			monomonoVertexOld: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 1,
 				},
@@ -186,15 +186,15 @@ func TestMonoVertexControlle_DoesGenerationMatch(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "Given context, new monovertex and old monovertex object " +
-				"When monovertex generation check is enabled and the old and new monovertex generation is equal " +
+			name: "Given context, new monomonoVertex and old monomonoVertex object " +
+				"When monomonoVertex generation check is enabled and the old and new monomonoVertex generation is equal " +
 				"Then func should just return true",
-			monovertexNew: &v1alpha1.MonoVertex{
+			monomonoVertexNew: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 2,
 				},
 			},
-			monovertexOld: &v1alpha1.MonoVertex{
+			monomonoVertexOld: &v1alpha1.MonoVertex{
 				ObjectMeta: v1.ObjectMeta{
 					Generation: 2,
 				},
@@ -214,7 +214,7 @@ func TestMonoVertexControlle_DoesGenerationMatch(t *testing.T) {
 			admiralParams.EnableGenerationCheck = tc.enableGenerationCheck
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
-			actual, err := dc.DoesGenerationMatch(ctxLogger, tc.monovertexNew, tc.monovertexOld)
+			actual, err := dc.DoesGenerationMatch(ctxLogger, tc.monomonoVertexNew, tc.monomonoVertexOld)
 			if !ErrorEqualOrSimilar(err, tc.expectedError) {
 				t.Errorf("expected: %v, got: %v", tc.expectedError, err)
 			}
@@ -234,11 +234,11 @@ func TestNewMonoVertexController(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 	stop := make(chan struct{})
-	monovertexHandler := test.MockClientDiscoveryHandler{}
+	monomonoVertexHandler := test.MockClientDiscoveryHandler{}
 
-	monovertexCon, _ := NewMonoVertexController(stop, &monovertexHandler, config, 0, loader.GetFakeClientLoader())
+	monomonoVertexCon, _ := NewMonoVertexController(stop, &monomonoVertexHandler, config, 0, loader.GetFakeClientLoader())
 
-	if monovertexCon == nil {
+	if monomonoVertexCon == nil {
 		t.Errorf("MonoVertex controller should not be nil")
 	}
 }
@@ -253,28 +253,28 @@ func TestMonoVertexUpdateProcessItemStatus(t *testing.T) {
 		},
 	}
 	common.InitializeConfig(admiralParams)
-	monovertexInCache := getMonoVertex("namespace-1", map[string]string{}, map[string]string{"identity": "monovertex1", "env": "prd"})
-	monovertexInCache.Name = "monovertex1"
-	monovertexInCache2 := getMonoVertex("namespace-2", map[string]string{}, map[string]string{"identity": "monovertex2", "env": "prd"})
-	monovertexInCache2.Name = "monovertex2"
-	monovertexNotInCache := getMonoVertex("namespace-3", map[string]string{}, map[string]string{"identity": "monovertex3", "env": "prd"})
-	monovertexNotInCache.Name = "monovertex3"
+	monomonoVertexInCache := getMonoVertex("namespace-1", map[string]string{}, map[string]string{"identity": "monomonoVertex1", "env": "prd"})
+	monomonoVertexInCache.Name = "monomonoVertex1"
+	monomonoVertexInCache2 := getMonoVertex("namespace-2", map[string]string{}, map[string]string{"identity": "monomonoVertex2", "env": "prd"})
+	monomonoVertexInCache2.Name = "monomonoVertex2"
+	monomonoVertexNotInCache := getMonoVertex("namespace-3", map[string]string{}, map[string]string{"identity": "monomonoVertex3", "env": "prd"})
+	monomonoVertexNotInCache.Name = "monomonoVertex3"
 	var (
 		serviceAccount = &coreV1.ServiceAccount{}
 	)
 
-	// Populating the monovertex Cache
-	monovertexCache := &monoVertexCache{
+	// Populating the monomonoVertex Cache
+	monomonoVertexCache := &monoVertexCache{
 		cache: make(map[string]*MonoVertexEntry),
 		mutex: &sync.Mutex{},
 	}
 
-	monovertexController := &MonoVertexController{
-		Cache: monovertexCache,
+	monomonoVertexController := &MonoVertexController{
+		Cache: monomonoVertexCache,
 	}
 
-	monovertexCache.Put(getK8sObjectFromMonoVertex(monovertexInCache))
-	monovertexCache.Put(getK8sObjectFromMonoVertex(monovertexInCache2))
+	monomonoVertexCache.Put(getK8sObjectFromMonoVertex(monomonoVertexInCache))
+	monomonoVertexCache.Put(getK8sObjectFromMonoVertex(monomonoVertexInCache2))
 
 	testCases := []struct {
 		name           string
@@ -284,30 +284,30 @@ func TestMonoVertexUpdateProcessItemStatus(t *testing.T) {
 		expectedStatus string
 	}{
 		{
-			name: "Given monovertex cache has a valid monovertex in its cache, " +
+			name: "Given monomonoVertex cache has a valid monomonoVertex in its cache, " +
 				"And is processed" +
-				"Then, the status for the valid monovertex should be updated to processed",
-			obj:            monovertexInCache,
+				"Then, the status for the valid monomonoVertex should be updated to processed",
+			obj:            monomonoVertexInCache,
 			statusToSet:    common.Processed,
 			expectedErr:    nil,
 			expectedStatus: common.Processed,
 		},
 		{
-			name: "Given monovertex cache has a valid monovertex in its cache, " +
+			name: "Given monomonoVertex cache has a valid monomonoVertex in its cache, " +
 				"And is processed" +
-				"Then, the status for the valid monovertex should be updated to not processed",
-			obj:            monovertexInCache2,
+				"Then, the status for the valid monomonoVertex should be updated to not processed",
+			obj:            monomonoVertexInCache2,
 			statusToSet:    common.NotProcessed,
 			expectedErr:    nil,
 			expectedStatus: common.NotProcessed,
 		},
 		{
-			name: "Given monovertex cache does not has a valid monovertex in its cache, " +
-				"Then, the status for the valid monovertex should be not processed, " +
-				"And an error should be returned with the monovertex not found message",
-			obj:            monovertexNotInCache,
+			name: "Given monomonoVertex cache does not has a valid monomonoVertex in its cache, " +
+				"Then, the status for the valid monomonoVertex should be not processed, " +
+				"And an error should be returned with the monomonoVertex not found message",
+			obj:            monomonoVertexNotInCache,
 			statusToSet:    common.NotProcessed,
-			expectedErr:    fmt.Errorf(LogCacheFormat, "UpdateStatus", "MonoVertex", monovertexNotInCache.Name, monovertexNotInCache.Namespace, "", "nothing to update, monoVertex not found in cache"),
+			expectedErr:    fmt.Errorf(LogCacheFormat, "UpdateStatus", "MonoVertex", monomonoVertexNotInCache.Name, monomonoVertexNotInCache.Namespace, "", "nothing to update, monoVertex not found in cache"),
 			expectedStatus: common.NotProcessed,
 		},
 		{
@@ -322,11 +322,11 @@ func TestMonoVertexUpdateProcessItemStatus(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			err := monovertexController.UpdateProcessItemStatus(c.obj, c.statusToSet)
+			err := monomonoVertexController.UpdateProcessItemStatus(c.obj, c.statusToSet)
 			if !ErrorEqualOrSimilar(err, c.expectedErr) {
 				t.Errorf("expected: %v, got: %v", c.expectedErr, err)
 			}
-			status, _ := monovertexController.GetProcessItemStatus(c.obj)
+			status, _ := monomonoVertexController.GetProcessItemStatus(c.obj)
 			assert.Equal(t, c.expectedStatus, status)
 		})
 	}
@@ -345,23 +345,23 @@ func TestMonoVertexGetProcessItemStatus(t *testing.T) {
 	var (
 		serviceAccount = &coreV1.ServiceAccount{}
 	)
-	monovertexInCache := getMonoVertex("namespace-1", map[string]string{}, map[string]string{"identity": "monovertex1"})
-	monovertexInCache.Name = "debug-1"
-	monovertexNotInCache := getMonoVertex("namespace-2", map[string]string{}, map[string]string{"identity": "monovertex2"})
-	monovertexNotInCache.Name = "debug-2"
+	monomonoVertexInCache := getMonoVertex("namespace-1", map[string]string{}, map[string]string{"identity": "monomonoVertex1"})
+	monomonoVertexInCache.Name = "debug-1"
+	monomonoVertexNotInCache := getMonoVertex("namespace-2", map[string]string{}, map[string]string{"identity": "monomonoVertex2"})
+	monomonoVertexNotInCache.Name = "debug-2"
 
-	// Populating the monovertex Cache
-	monovertexCache := &monoVertexCache{
+	// Populating the monomonoVertex Cache
+	monomonoVertexCache := &monoVertexCache{
 		cache: make(map[string]*MonoVertexEntry),
 		mutex: &sync.Mutex{},
 	}
 
-	monovertexController := &MonoVertexController{
-		Cache: monovertexCache,
+	monomonoVertexController := &MonoVertexController{
+		Cache: monomonoVertexCache,
 	}
 
-	monovertexCache.Put(getK8sObjectFromMonoVertex(monovertexInCache))
-	monovertexCache.UpdateMonoVertexProcessStatus(monovertexInCache, common.Processed)
+	monomonoVertexCache.Put(getK8sObjectFromMonoVertex(monomonoVertexInCache))
+	monomonoVertexCache.UpdateMonoVertexProcessStatus(monomonoVertexInCache, common.Processed)
 
 	testCases := []struct {
 		name           string
@@ -370,16 +370,16 @@ func TestMonoVertexGetProcessItemStatus(t *testing.T) {
 		expectedResult string
 	}{
 		{
-			name: "Given monovertex cache has a valid monovertex in its cache, " +
+			name: "Given monomonoVertex cache has a valid monomonoVertex in its cache, " +
 				"And is processed" +
 				"Then, we should be able to get the status as processed",
-			obj:            monovertexInCache,
+			obj:            monomonoVertexInCache,
 			expectedResult: common.Processed,
 		},
 		{
-			name: "Given monovertex cache does not has a valid monovertex in its cache, " +
-				"Then, the status for the valid monovertex should not be updated",
-			obj:            monovertexNotInCache,
+			name: "Given monomonoVertex cache does not has a valid monomonoVertex in its cache, " +
+				"Then, the status for the valid monomonoVertex should not be updated",
+			obj:            monomonoVertexNotInCache,
 			expectedResult: common.NotProcessed,
 		},
 		{
@@ -394,7 +394,7 @@ func TestMonoVertexGetProcessItemStatus(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			res, err := monovertexController.GetProcessItemStatus(c.obj)
+			res, err := monomonoVertexController.GetProcessItemStatus(c.obj)
 			if !ErrorEqualOrSimilar(err, c.expectedErr) {
 				t.Errorf("expected: %v, got: %v", c.expectedErr, err)
 			}
@@ -406,7 +406,7 @@ func TestMonoVertexGetProcessItemStatus(t *testing.T) {
 func TestMonoVertexLogValueOfAdmiralIoIgnore(t *testing.T) {
 	// Test case 1: obj is not a MonoVertex object
 	d := &MonoVertexController{}
-	d.LogValueOfAdmiralIoIgnore("not a monovertex")
+	d.LogValueOfAdmiralIoIgnore("not a monomonoVertex")
 	// No error should occur
 
 	// Test case 2: K8sClient is nil
@@ -419,7 +419,7 @@ func TestMonoVertexLogValueOfAdmiralIoIgnore(t *testing.T) {
 
 	// Test case 3: AdmiralIgnoreAnnotation is set in MonoVertex object
 	d = &MonoVertexController{}
-	monovertex := &v1alpha1.MonoVertex{
+	monomonoVertex := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "test-ns",
 			Annotations: map[string]string{
@@ -427,6 +427,77 @@ func TestMonoVertexLogValueOfAdmiralIoIgnore(t *testing.T) {
 			},
 		},
 	}
-	d.LogValueOfAdmiralIoIgnore(monovertex)
+	d.LogValueOfAdmiralIoIgnore(monomonoVertex)
 	// No error should occur
+}
+
+func TestMonoVertexController_CacheGet(t *testing.T) {
+	common.ResetSync()
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+			DeploymentAnnotation:    "sidecar.istio.io/inject",
+			AdmiralIgnoreLabel:      "admiral-ignore",
+		},
+	}
+	common.InitializeConfig(admiralParams)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "clusterId", "test-cluster-k8s")
+
+	cache := monoVertexCache{
+		cache: map[string]*MonoVertexEntry{},
+		mutex: &sync.Mutex{},
+	}
+
+	monoVertex := getMonoVertex("monoVertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monoVertex1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromMonoVertex(monoVertex))
+	monoVertexSameIdentityInDiffNamespace := getMonoVertex("monoVertex-ns-2", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monoVertex1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromMonoVertex(monoVertexSameIdentityInDiffNamespace))
+	monoVertex2 := getMonoVertex("monoVertex-ns-3", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monoVertex2", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromMonoVertex(monoVertex2))
+
+	testCases := []struct {
+		name           string
+		expectedVertex *common.K8sObject
+		identity       string
+		namespace      string
+	}{
+		{
+			name:           "Expects monoVertex to be in the cache when right identity and namespace are passed",
+			expectedVertex: getK8sObjectFromMonoVertex(monoVertex),
+			identity:       "monoVertex1",
+			namespace:      "monoVertex-ns",
+		},
+		{
+			name:           "Expects monoVertex to be in the cache when same identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromMonoVertex(monoVertexSameIdentityInDiffNamespace),
+			identity:       "monoVertex1",
+			namespace:      "monoVertex-ns-2",
+		},
+		{
+			name:           "Expects monoVertex to be in the cache when diff identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromMonoVertex(monoVertex2),
+			identity:       "monoVertex2",
+			namespace:      "monoVertex-ns-3",
+		},
+		{
+			name:           "Expects nil monoVertex in random namespace",
+			expectedVertex: nil,
+			identity:       "monoVertex2",
+			namespace:      "random",
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.name == "Expects ignored monoVertex identified by label to be removed from the cache" {
+				monoVertex.Spec.Metadata.Labels["admiral-ignore"] = "true"
+			}
+			monoVertexObj := cache.Get(c.identity, c.namespace)
+			if !reflect.DeepEqual(c.expectedVertex, monoVertexObj) {
+				t.Errorf("Expected rollout %+v but got %+v", c.expectedVertex, monoVertexObj)
+			}
+		})
+	}
 }

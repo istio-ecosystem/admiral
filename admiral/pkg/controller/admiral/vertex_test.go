@@ -121,6 +121,77 @@ func TestVertexController_Added(t *testing.T) {
 	}
 }
 
+func TestVertexController_CacheGet(t *testing.T) {
+	common.ResetSync()
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+			DeploymentAnnotation:    "sidecar.istio.io/inject",
+			AdmiralIgnoreLabel:      "admiral-ignore",
+		},
+	}
+	common.InitializeConfig(admiralParams)
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "clusterId", "test-cluster-k8s")
+
+	cache := vertexCache{
+		cache: map[string]*VertexEntry{},
+		mutex: &sync.Mutex{},
+	}
+
+	vertex := getVertex("vertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "vertex1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromVertex(vertex))
+	vertexSameIdentityInDiffNamespace := getVertex("vertex-ns-2", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "vertex1", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromVertex(vertexSameIdentityInDiffNamespace))
+	vertex2 := getVertex("vertex-ns-3", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "vertex2", "istio-injected": "true"})
+	cache.Put(getK8sObjectFromVertex(vertex2))
+
+	testCases := []struct {
+		name           string
+		expectedVertex *common.K8sObject
+		identity       string
+		namespace      string
+	}{
+		{
+			name:           "Expects vertex to be in the cache when right identity and namespace are passed",
+			expectedVertex: getK8sObjectFromVertex(vertex),
+			identity:       "vertex1",
+			namespace:      "vertex-ns",
+		},
+		{
+			name:           "Expects vertex to be in the cache when same identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromVertex(vertexSameIdentityInDiffNamespace),
+			identity:       "vertex1",
+			namespace:      "vertex-ns-2",
+		},
+		{
+			name:           "Expects vertex to be in the cache when diff identity and diff namespace are passed",
+			expectedVertex: getK8sObjectFromVertex(vertex2),
+			identity:       "vertex2",
+			namespace:      "vertex-ns-3",
+		},
+		{
+			name:           "Expects nil vertex in random namespace",
+			expectedVertex: nil,
+			identity:       "vertex2",
+			namespace:      "random",
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.name == "Expects ignored vertex identified by label to be removed from the cache" {
+				vertex.Spec.Metadata.Labels["admiral-ignore"] = "true"
+			}
+			vertexObj := cache.Get(c.identity, c.namespace)
+			if !reflect.DeepEqual(c.expectedVertex, vertexObj) {
+				t.Errorf("Expected rollout %+v but got %+v", c.expectedVertex, vertexObj)
+			}
+		})
+	}
+}
+
 func TestVertexControlle_DoesGenerationMatch(t *testing.T) {
 	dc := VertexController{}
 
