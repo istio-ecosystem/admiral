@@ -126,7 +126,8 @@ func (p *monoVertexCache) UpdateMonoVertexProcessStatus(monoVertex *v1alpha1.Mon
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
-	identity := common.GetGlobalIdentifier(monoVertex.Annotations, monoVertex.Labels)
+	monoVertexObj := getK8sObjectFromMonoVertex(monoVertex)
+	identity := common.GetGlobalIdentifier(monoVertexObj.Annotations, monoVertexObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {

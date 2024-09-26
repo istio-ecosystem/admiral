@@ -6,5 +6,8 @@ namespace: sample-job
 bases:
   - ../../base
 
+patchesStrategicMerge:
+  - webapp.yaml
+
 resources:
   - job.yaml

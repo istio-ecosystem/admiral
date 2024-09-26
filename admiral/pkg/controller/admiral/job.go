@@ -107,8 +107,8 @@ func (p *jobCache) Get(key string, namespace string) *common.K8sObject {
 func (p *jobCache) GetJobProcessStatus(job *v12.Job) (string, error) {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
-
-	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
+	jobObj := getK8sObjectFromJob(job)
+	identity := common.GetGlobalIdentifier(jobObj.Annotations, jobObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {
@@ -124,8 +124,8 @@ func (p *jobCache) GetJobProcessStatus(job *v12.Job) (string, error) {
 func (p *jobCache) UpdateJobProcessStatus(job *v12.Job, status string) error {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
-
-	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
+	jobObj := getK8sObjectFromJob(job)
+	identity := common.GetGlobalIdentifier(jobObj.Annotations, jobObj.Labels)
 
 	jce, ok := p.cache[identity]
 	if ok {
@@ -260,8 +260,9 @@ func (d *JobController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 
 func (j *JobController) Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error) {
 	job, ok := obj.(*v12.Job)
-	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
 	if ok && isRetry {
+		jobObj := getK8sObjectFromJob(job)
+		identity := common.GetGlobalIdentifier(jobObj.Annotations, jobObj.Labels)
 		return j.Cache.Get(identity, job.Namespace), nil
 	}
 	if ok && j.K8sClient != nil {
