@@ -21,10 +21,10 @@ import (
 //Vertex controller discovers vertexs as mesh clients (its assumed that k8s Vertex doesn't have any ingress communication)
 
 type VertexController struct {
-	NumaflowClient   numaflow.Interface
+	NumaflowClient numaflow.Interface
 	VertexHandler  ClientDiscoveryHandler
-	informer    cache.SharedIndexInformer
-	Cache       *vertexCache
+	informer       cache.SharedIndexInformer
+	Cache          *vertexCache
 }
 
 type VertexEntry struct {
@@ -38,22 +38,21 @@ type vertexCache struct {
 	mutex *sync.Mutex
 }
 
-func NewVertexCache() *vertexCache {
+func newVertexCache() *vertexCache {
 	return &vertexCache{
 		cache: make(map[string]*VertexEntry),
 		mutex: &sync.Mutex{},
 	}
 }
 
-
-func getK8sObjectFromVertex(vertex *v1alpha1.Vertex) *common.K8sObject{
+func getK8sObjectFromVertex(vertex *v1alpha1.Vertex) *common.K8sObject {
 	return &common.K8sObject{
-		Name: vertex.Name,
-		Namespace: vertex.Namespace,
+		Name:        vertex.Name,
+		Namespace:   vertex.Namespace,
 		Annotations: vertex.Spec.Metadata.Annotations,
-		Labels: vertex.Spec.Metadata.Labels,
-		Status: common.NotProcessed,
-		Type: common.Vertex,
+		Labels:      vertex.Spec.Metadata.Labels,
+		Status:      common.NotProcessed,
+		Type:        common.Vertex,
 	}
 }
 
@@ -192,7 +191,7 @@ func NewVertexController(stopCh <-chan struct{}, handler ClientDiscoveryHandler,
 		cache.Indexers{},
 	)
 
-	vertexController.Cache = NewVertexCache()
+	vertexController.Cache = newVertexCache()
 
 	NewController("vertex-ctrl", config.Host, stopCh, &vertexController, vertexController.informer)
 
@@ -213,8 +212,8 @@ func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) 
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to Vertex")
 	}
-	if !common.ShouldIgnore(vertex.Annotations, vertex.Labels) {
-		k8sObj := getK8sObjectFromVertex(vertex)
+	k8sObj := getK8sObjectFromVertex(vertex)
+	if !common.ShouldIgnore(vertex.Spec.Metadata.Annotations, vertex.Spec.Metadata.Labels) {
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			j.VertexHandler.Added(ctx, newK8sObj)
@@ -254,7 +253,7 @@ func (d *VertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 
 	if vertex.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.Vertex,
-				vertex.Name, vertex.Namespace, "", "Value=true")
+			vertex.Name, vertex.Namespace, "", "Value=true")
 	}
 }
 

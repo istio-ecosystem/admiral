@@ -21,14 +21,14 @@ import (
 //MonoVertex controller discovers monoVertexs as mesh clients (its assumed that k8s MonoVertex doesn't have any ingress communication)
 
 type MonoVertexController struct {
-	NumaflowClient   numaflow.Interface
-	MonoVertexHandler  ClientDiscoveryHandler
-	informer    cache.SharedIndexInformer
-	Cache       *monoVertexCache
+	NumaflowClient    numaflow.Interface
+	MonoVertexHandler ClientDiscoveryHandler
+	informer          cache.SharedIndexInformer
+	Cache             *monoVertexCache
 }
 
 type MonoVertexEntry struct {
-	Identity string
+	Identity     string
 	MonoVertices map[string]*common.K8sObject
 }
 
@@ -38,22 +38,21 @@ type monoVertexCache struct {
 	mutex *sync.Mutex
 }
 
-func NewMonoVertexCache() *monoVertexCache {
+func newMonoVertexCache() *monoVertexCache {
 	return &monoVertexCache{
 		cache: make(map[string]*MonoVertexEntry),
 		mutex: &sync.Mutex{},
 	}
 }
 
-
-func getK8sObjectFromMonoVertex(monoVertex *v1alpha1.MonoVertex) *common.K8sObject{
+func getK8sObjectFromMonoVertex(monoVertex *v1alpha1.MonoVertex) *common.K8sObject {
 	return &common.K8sObject{
-		Name: monoVertex.Name,
-		Namespace: monoVertex.Namespace,
+		Name:        monoVertex.Name,
+		Namespace:   monoVertex.Namespace,
 		Annotations: monoVertex.Spec.Metadata.Annotations,
-		Labels: monoVertex.Spec.Metadata.Labels,
-		Status: common.NotProcessed,
-		Type: common.MonoVertex,
+		Labels:      monoVertex.Spec.Metadata.Labels,
+		Status:      common.NotProcessed,
+		Type:        common.MonoVertex,
 	}
 }
 
@@ -64,7 +63,7 @@ func (p *monoVertexCache) Put(monoVertex *common.K8sObject) (*common.K8sObject, 
 	existingMonoVertices := p.cache[identity]
 	if existingMonoVertices == nil {
 		existingMonoVertices = &MonoVertexEntry{
-			Identity: identity,
+			Identity:     identity,
 			MonoVertices: map[string]*common.K8sObject{monoVertex.Namespace: monoVertex},
 		}
 		p.cache[identity] = existingMonoVertices
@@ -190,7 +189,7 @@ func NewMonoVertexController(stopCh <-chan struct{}, handler ClientDiscoveryHand
 		cache.Indexers{},
 	)
 
-	monoVertexController.Cache = NewMonoVertexCache()
+	monoVertexController.Cache = newMonoVertexCache()
 
 	NewController("monoVertex-ctrl", config.Host, stopCh, &monoVertexController, monoVertexController.informer)
 
@@ -211,7 +210,7 @@ func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj inter
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to MonoVertex")
 	}
-	if !common.ShouldIgnore(monoVertex.Annotations, monoVertex.Labels) {
+	if !common.ShouldIgnore(monoVertex.Spec.Metadata.Annotations, monoVertex.Spec.Metadata.Labels) {
 		k8sObj := getK8sObjectFromMonoVertex(monoVertex)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
@@ -252,7 +251,7 @@ func (d *MonoVertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 
 	if monoVertex.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.MonoVertex,
-				monoVertex.Name, monoVertex.Namespace, "", "Value=true")
+			monoVertex.Name, monoVertex.Namespace, "", "Value=true")
 	}
 }
 
