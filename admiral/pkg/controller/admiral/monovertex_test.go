@@ -420,10 +420,13 @@ func TestMonoVertexLogValueOfAdmiralIoIgnore(t *testing.T) {
 	// Test case 3: AdmiralIgnoreAnnotation is set in MonoVertex object
 	d = &MonoVertexController{}
 	monomonoVertex := &v1alpha1.MonoVertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "test-ns",
-			Annotations: map[string]string{
-				common.AdmiralIgnoreAnnotation: "true",
+		Spec: v1alpha1.MonoVertexSpec{
+			AbstractPodTemplate: v1alpha1.AbstractPodTemplate{
+				Metadata: &v1alpha1.Metadata{
+					Annotations: map[string]string{
+						common.AdmiralIgnoreAnnotation: "true",
+					},
+				},
 			},
 		},
 	}

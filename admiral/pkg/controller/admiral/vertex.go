@@ -46,11 +46,17 @@ func newVertexCache() *vertexCache {
 }
 
 func getK8sObjectFromVertex(vertex *v1alpha1.Vertex) *common.K8sObject {
+	labels := make(map[string]string)
+	annotations := make(map[string]string)
+	if vertex.Spec.Metadata != nil {
+		labels = vertex.Spec.Metadata.Labels
+		annotations = vertex.Spec.Metadata.Annotations
+	}
 	return &common.K8sObject{
 		Name:        vertex.Name,
 		Namespace:   vertex.Namespace,
-		Annotations: vertex.Spec.Metadata.Annotations,
-		Labels:      vertex.Spec.Metadata.Labels,
+		Annotations: annotations,
+		Labels:      labels,
 		Status:      common.NotProcessed,
 		Type:        common.Vertex,
 	}
@@ -239,8 +245,8 @@ func (d *VertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	if !ok {
 		return
 	}
-
-	if vertex.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+	vetexObj := getK8sObjectFromVertex(vertex)
+	if vetexObj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.Vertex,
 			vertex.Name, vertex.Namespace, "", "Value=true")
 	}

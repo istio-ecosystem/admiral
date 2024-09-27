@@ -236,14 +236,10 @@ func (d *JobController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	if !ok {
 		return
 	}
-	if d.K8sClient != nil {
-		ns, err := d.K8sClient.CoreV1().Namespaces().Get(context.Background(), job.Namespace, meta_v1.GetOptions{})
-		if err != nil {
-			log.Warnf("Failed to get namespace object for job with namespace %v, err: %v", job.Namespace, err)
-		} else if (ns != nil && ns.Annotations[common.AdmiralIgnoreAnnotation] == "true") || job.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.Job,
-				job.Name, job.Namespace, "", "Value=true")
-		}
+	jobObj := getK8sObjectFromJob(job)
+	if jobObj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.MonoVertex,
+			job.Name, job.Namespace, "", "Value=true")
 	}
 }
 

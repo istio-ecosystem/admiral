@@ -491,10 +491,15 @@ func TestVertexLogValueOfAdmiralIoIgnore(t *testing.T) {
 	// Test case 3: AdmiralIgnoreAnnotation is set in Vertex object
 	d = &VertexController{}
 	vertex := &v1alpha1.Vertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "test-ns",
-			Annotations: map[string]string{
-				common.AdmiralIgnoreAnnotation: "true",
+		Spec: v1alpha1.VertexSpec{
+			AbstractVertex: v1alpha1.AbstractVertex{
+				AbstractPodTemplate: v1alpha1.AbstractPodTemplate{
+					Metadata: &v1alpha1.Metadata{
+						Annotations: map[string]string{
+							common.AdmiralIgnoreAnnotation: "true",
+						},
+					},
+				},
 			},
 		},
 	}

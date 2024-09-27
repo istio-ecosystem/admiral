@@ -46,11 +46,17 @@ func newMonoVertexCache() *monoVertexCache {
 }
 
 func getK8sObjectFromMonoVertex(monoVertex *v1alpha1.MonoVertex) *common.K8sObject {
+	labels := make(map[string]string)
+	annotations := make(map[string]string)
+	if monoVertex.Spec.Metadata != nil {
+		labels = monoVertex.Spec.Metadata.Labels
+		annotations = monoVertex.Spec.Metadata.Annotations
+	}
 	return &common.K8sObject{
 		Name:        monoVertex.Name,
 		Namespace:   monoVertex.Namespace,
-		Annotations: monoVertex.Spec.Metadata.Annotations,
-		Labels:      monoVertex.Spec.Metadata.Labels,
+		Annotations: annotations,
+		Labels:      labels,
 		Status:      common.NotProcessed,
 		Type:        common.MonoVertex,
 	}
@@ -238,8 +244,8 @@ func (d *MonoVertexController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	if !ok {
 		return
 	}
-
-	if monoVertex.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
+	monoVertexObj := getK8sObjectFromMonoVertex(monoVertex)
+	if monoVertexObj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 		log.Infof("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "admiralIoIgnoreAnnotationCheck", common.MonoVertex,
 			monoVertex.Name, monoVertex.Namespace, "", "Value=true")
 	}
