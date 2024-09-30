@@ -202,6 +202,7 @@ func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error 
 		k8sObj := getK8sObjectFromJob(job)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
+			newK8sObj.Status = common.ProcessingInProgress
 			j.JobHandler.Added(ctx, newK8sObj)
 		} else {
 			log.Infof("Ignoring job %v as it was already processed", job.Name)

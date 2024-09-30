@@ -325,7 +325,7 @@ func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service) string
 	return ""
 }
 
-func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType, obj *common.K8sObject,
+func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType, obj *common.K8sObject,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
 	log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, common.ReceivedStatus)
 	globalIdentifier := common.GetGlobalIdentifier(obj.Annotations, obj.Labels)
@@ -336,8 +336,8 @@ func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType
 	}
 
 	//if we have a deployment/rollout in this namespace skip processing to save some cycles
-	if DeploymentOrRolloutExistsInNamespace(remoteRegistry, globalIdentifier, obj.Namespace, clusterName) {
-		log.Infof(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as Deployment/Rollout already present in namespace for client=" + globalIdentifier)
+	if DeploymentOrRolloutExistsInNamespace(remoteRegistry, globalIdentifier, clusterName, obj.Namespace) {
+		log.Infof(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as Deployment/Rollout already present in namespace for client="+globalIdentifier)
 		return nil
 	}
 
@@ -362,7 +362,7 @@ func HandleEventForClientDiscovery (ctx context.Context, event admiral.EventType
 	depRecord := remoteRegistry.DependencyController.Cache.Get(globalIdentifier)
 
 	if depRecord == nil {
-		log.Warnf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as no dependency record found for client=" + globalIdentifier)
+		log.Warnf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as no dependency record found for client="+globalIdentifier)
 		return nil
 	}
 
@@ -381,7 +381,13 @@ func UpdateIdentityClusterCache(remoteRegistry *RemoteRegistry, identity string,
 	}
 }
 
-func DeploymentOrRolloutExistsInNamespace (remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, namespace string) bool {
+func DeploymentOrRolloutExistsInNamespace(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, namespace string) bool {
+
+	if remoteRegistry.remoteControllers[clusterName] == nil {
+		log.Warnf(LogFormatAdv, "Find", "deployment", "", namespace, clusterName, "Remote controller not initialized when trying to find "+globalIdentifier)
+		return false
+	}
+
 	deployments := remoteRegistry.remoteControllers[clusterName].DeploymentController.Cache.GetByIdentity(globalIdentifier)
 	for _, deployment := range deployments {
 		if deployment.Deployment.Namespace == namespace {

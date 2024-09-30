@@ -211,6 +211,7 @@ func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) 
 	if !common.ShouldIgnore(vertex.Spec.Metadata.Annotations, vertex.Spec.Metadata.Labels) {
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
+			newK8sObj.Status = common.ProcessingInProgress
 			j.VertexHandler.Added(ctx, newK8sObj)
 		} else {
 			log.Infof("Ignoring vertex %v as it was already processed", vertex.Name)

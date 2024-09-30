@@ -210,6 +210,7 @@ func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj inter
 		k8sObj := getK8sObjectFromMonoVertex(monoVertex)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
+			newK8sObj.Status = common.ProcessingInProgress
 			j.MonoVertexHandler.Added(ctx, newK8sObj)
 		} else {
 			log.Infof("Ignoring monoVertex %v as it was already processed", monoVertex.Name)
