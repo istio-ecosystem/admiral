@@ -925,8 +925,8 @@ func parseLabels(labels map[string]string) map[string]string {
 	return newLabels
 }
 
-func getExistingVS(ctxLogger *logrus.Entry, ctx context.Context, rc *RemoteController, vsName string) (*v1alpha3.VirtualService, error) {
-	existingVS, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(ctx, vsName, v12.GetOptions{})
+func getExistingVS(ctxLogger *logrus.Entry, ctx context.Context, rc *RemoteController, vsName, namespace string) (*v1alpha3.VirtualService, error) {
+	existingVS, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Get(ctx, vsName, v12.GetOptions{})
 	if err != nil && k8sErrors.IsNotFound(err) {
 		ctxLogger.Debugf(LogFormat, "get", common.VirtualServiceResourceType, vsName, rc.ClusterID, "virtualservice not found")
 		return nil, err
@@ -2072,7 +2072,7 @@ func createAdditionalEndpoints(
 
 	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
 
-	existingVS, err := getExistingVS(ctxLogger, ctx, rc, defaultVSName)
+	existingVS, err := getExistingVS(ctxLogger, ctx, rc, defaultVSName, common.GetSyncNamespace())
 	if err != nil {
 		ctxLogger.Warn(err.Error())
 	}

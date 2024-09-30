@@ -5,10 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
-	registryMocks "github.com/istio-ecosystem/admiral/admiral/pkg/registry/mocks"
-	"github.com/stretchr/testify/mock"
 	"os"
 	"reflect"
 	"strconv"
@@ -17,6 +13,11 @@ import (
 	"testing"
 	"time"
 	"unicode"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	registryMocks "github.com/istio-ecosystem/admiral/admiral/pkg/registry/mocks"
+	"github.com/stretchr/testify/mock"
 
 	"k8s.io/client-go/rest"
 
@@ -6535,7 +6536,7 @@ func TestGetExistingVS(t *testing.T) {
 			}
 
 			// Get the existing VirtualService
-			existingVS, err := getExistingVS(ctxLogger, ctx, rc, fakeVS.Name)
+			existingVS, err := getExistingVS(ctxLogger, ctx, rc, fakeVS.Name, common.GetSyncNamespace())
 
 			// Check the results
 			assert.Equal(t, expectedVS, existingVS, "Expected existingVS to match the fakeVS")

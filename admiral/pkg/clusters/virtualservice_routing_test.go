@@ -32,7 +32,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
+			Namespace: util.IstioSystemNamespace,
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
@@ -64,7 +64,6 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet:                    &common.LabelSet{},
-		SyncNamespace:               "test-sync-ns",
 		EnableSWAwareNSCaches:       true,
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
@@ -75,7 +74,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	common.InitializeConfig(admiralParams)
 
 	istioClientWithExistingVS := istioFake.NewSimpleClientset()
-	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(admiralParams.SyncNamespace).
+	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
 		Create(context.Background(), existingVS, metaV1.CreateOptions{})
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
@@ -195,7 +194,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -237,7 +236,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -279,7 +278,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -465,7 +464,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				require.Nil(t, err)
 				actualVS, err := tc.istioClient.
 					NetworkingV1alpha3().
-					VirtualServices("test-sync-ns").
+					VirtualServices(util.IstioSystemNamespace).
 					Get(context.Background(), "test-env.test-identity.global-routing-vs", metaV1.GetOptions{})
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedVS.Spec.Tls, actualVS.Spec.Tls)
@@ -1319,7 +1318,6 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
-		SyncNamespace:               "test-sync-ns",
 		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 
@@ -1329,7 +1327,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	validVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
-			Namespace: "test-sync-ns",
+			Namespace: util.IstioSystemNamespace,
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
