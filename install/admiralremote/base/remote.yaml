@@ -172,3 +172,33 @@ metadata:
   annotations:
     kubernetes.io/service-account.name: admiral
 type: kubernetes.io/service-account-token
+
+---
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: admiral-sync-write-vs-dr
+  namespace: istio-system
+rules:
+  - apiGroups: ["networking.istio.io"]
+    resources: ['virtualservices', 'destinationrules']
+    verbs: ["create", "update", "delete"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admiral-sync-write-vs-dr-binding
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: admiral-sync-write-vs-dr
+subjects:
+  - kind: ServiceAccount
+    name: admiral
+    namespace: admiral-sync
+
+---
