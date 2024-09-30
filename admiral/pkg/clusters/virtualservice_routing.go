@@ -40,7 +40,7 @@ func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 
 	return &v1alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
-			Namespace: common.GetSyncNamespace(),
+			Namespace: util.IstioSystemNamespace,
 			Labels:    vsLabels,
 		},
 		Spec: vs,
@@ -547,7 +547,7 @@ func addUpdateVirtualServicesForIngress(
 		}
 		virtualService.Name = vsName
 
-		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name)
+		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
 			ctxLogger.Warn(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
@@ -556,7 +556,7 @@ func addUpdateVirtualServicesForIngress(
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
 		err = addUpdateVirtualService(
-			ctxLogger, ctx, virtualService, existingVS, common.GetSyncNamespace(), rc, remoteRegistry)
+			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
