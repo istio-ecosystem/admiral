@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
+	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"sort"
 	"strings"
 
@@ -333,6 +334,17 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	if len(globalIdentifier) == 0 {
 		log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return nil
+	}
+	ctxLogger := common.GetCtxLogger(ctx, globalIdentifier, "")
+	if commonUtil.IsAdmiralReadOnly() {
+		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped as Admiral is in Read-only mode")
+		return nil
+	}
+
+	// Should not return early here for TrafficConfig persona, as cache should build up during warm up time
+	if IsCacheWarmupTime(remoteRegistry) && !common.IsPersonaTrafficConfig() {
+		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped during cache warm up state")
+		return fmt.Errorf(common.CtxLogFormat, event, "", globalIdentifier, "", "processing skipped during cache warm up state for env="+" identity="+globalIdentifier)
 	}
 
 	//if we have a deployment/rollout in this namespace skip processing to save some cycles

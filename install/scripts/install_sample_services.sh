@@ -15,6 +15,10 @@ then
     exit 1
 fi
 
+#Install the dependency CR
+
+kubectl apply -f $install_dir/yaml/sample_dep.yaml
+
 #Install test services
 
 kubectl apply -f $install_dir/yaml/sample.yaml
@@ -25,10 +29,6 @@ kubectl apply -f $install_dir/yaml/sample-greeting-rollout-canary.yaml
 kubectl apply -f $install_dir/yaml/grpc.yaml
 kubectl apply -f $install_dir/yaml/job_sample.yaml
 kubectl apply -f $install_dir/yaml/numaflow_sample.yaml
-
-#Install the dependency CR
-
-kubectl apply -f $install_dir/yaml/sample_dep.yaml
 
 #Install the dependencyProxy resource
 kubectl apply -f $install_dir/yaml/depProxyExample.yaml

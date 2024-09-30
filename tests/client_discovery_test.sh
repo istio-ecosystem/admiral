@@ -4,7 +4,7 @@
 ## Validates the mesh endpoints for greeting are exported to job and numaflow types as mesh clients
 
 #Test
-output=$(kubectl get se -n admiral-sync -o yaml | grep sample-job)
+output=$(kubectl get se stage.greeting.global-se -n admiral-sync -o yaml | grep sample-job)
 
 if [[ "$output" == *"sample-job"* ]]; then
   echo "PASS"
@@ -14,7 +14,7 @@ else
   exit 1
 fi
 
-output=$(kubectl get se -n admiral-sync -o yaml | grep sample-monovertex)
+output=$(kubectl get se stage.greeting.global-se -n admiral-sync -o yaml | grep sample-monovertex)
 
 if [[ "$output" == *"sample-monovertex"* ]]; then
   echo "PASS"
