@@ -236,7 +236,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	depObj := makeK8sDependencyObj(depName, "namespace1", dep)
 	dependencyController.Added(ctx, depObj)
 
-	newDepObj := dependencyController.Cache.Get(depName)
+	newDepObj := dependencyController.Cache.Get(depObj.Spec.Source)
 
 	if !cmp.Equal(depObj.Spec, newDepObj.Spec) {
 		t.Errorf("dep update failed, expected: %v got %v", depObj, newDepObj)
@@ -247,7 +247,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	updatedObj := makeK8sDependencyObj(depName, "namespace1", updatedDep)
 	dependencyController.Updated(ctx, makeK8sDependencyObj(depName, "namespace1", updatedDep), depObj)
 
-	updatedDepObj := dependencyController.Cache.Get(depName)
+	updatedDepObj := dependencyController.Cache.Get(updatedObj.Spec.Source)
 
 	if !cmp.Equal(updatedObj.Spec, updatedDepObj.Spec) {
 		t.Errorf("dep update failed, expected: %v got %v", updatedObj, updatedDepObj)
@@ -256,7 +256,7 @@ func TestDependencyAddUpdateAndDelete(t *testing.T) {
 	//test delete
 	dependencyController.Deleted(ctx, updatedDepObj)
 
-	deletedDepObj := dependencyController.Cache.Get(depName)
+	deletedDepObj := dependencyController.Cache.Get(updatedDepObj.Spec.Source)
 
 	if deletedDepObj != nil {
 		t.Errorf("dep delete failed")
@@ -272,11 +272,17 @@ func TestDependencyGetProcessItemStatus(t *testing.T) {
 				Name:      "dep-in-cache",
 				Namespace: "ns-1",
 			},
+			Spec: model.Dependency{
+				Source: "identity1",
+			},
 		}
 		dependencyNotInCache = &v1.Dependency{
 			ObjectMeta: v12.ObjectMeta{
 				Name:      "dep-not-in-cache",
 				Namespace: "ns-2",
+			},
+			Spec: model.Dependency{
+				Source: "identity2",
 			},
 		}
 	)
@@ -342,11 +348,17 @@ func TestDependencyUpdateProcessItemStatus(t *testing.T) {
 				Name:      "dep-in-cache",
 				Namespace: "ns-1",
 			},
+			Spec: model.Dependency{
+				Source: "identity1",
+			},
 		}
 		dependencyNotInCache = &v1.Dependency{
 			ObjectMeta: v12.ObjectMeta{
 				Name:      "dep-not-in-cache",
 				Namespace: "ns-2",
+			},
+			Spec: model.Dependency{
+				Source: "identity2",
 			},
 		}
 	)
