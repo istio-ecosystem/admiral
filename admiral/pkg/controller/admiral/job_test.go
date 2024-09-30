@@ -58,6 +58,8 @@ func TestJobController_Added(t *testing.T) {
 		Cache:      &cache,
 	}
 	job := getJob("job-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "job", "istio-injected": "true"})
+	expectedJob := getK8sObjectFromJob(job)
+	expectedJob.Status = common.ProcessingInProgress
 	jobWithBadLabels := getJob("jobWithBadLabels-ns", map[string]string{"admiral.io/env": "dev"}, map[string]string{"identity": "jobWithBadLabels", "random-label": "true"})
 	jobWithIgnoreLabels := getJob("jobWithIgnoreLabels-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "jobWithIgnoreLabels", "istio-injected": "true", "admiral-ignore": "true"})
 	jobWithIgnoreAnnotations := getJob("jobWithIgnoreAnnotations-ns", map[string]string{"admiral.io/ignore": "true"}, map[string]string{"identity": "jobWithIgnoreAnnotations"})
@@ -73,7 +75,7 @@ func TestJobController_Added(t *testing.T) {
 		{
 			name:                  "Expects job to be added to the cache when the correct label is present",
 			job:                   job,
-			expectedJob:           getK8sObjectFromJob(job),
+			expectedJob:           expectedJob,
 			id:                    "job",
 			expectedCacheContains: true,
 		},

@@ -55,6 +55,8 @@ func TestVertexController_Added(t *testing.T) {
 		Cache:         &cache,
 	}
 	vertex := getVertex("vertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "vertex", "istio-injected": "true"})
+	expectedVertex := getK8sObjectFromVertex(vertex)
+	expectedVertex.Status = common.ProcessingInProgress
 	vertexWithBadLabels := getVertex("vertexWithBadLabels-ns", map[string]string{"admiral.io/env": "dev"}, map[string]string{"identity": "vertexWithBadLabels", "random-label": "true"})
 	vertexWithIgnoreLabels := getVertex("vertexWithIgnoreLabels-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "vertexWithIgnoreLabels", "istio-injected": "true", "admiral-ignore": "true"})
 	vertexWithIgnoreAnnotations := getVertex("vertexWithIgnoreAnnotations-ns", map[string]string{"admiral.io/ignore": "true"}, map[string]string{"identity": "vertexWithIgnoreAnnotations"})
@@ -70,7 +72,7 @@ func TestVertexController_Added(t *testing.T) {
 		{
 			name:                  "Expects vertex to be added to the cache when the correct label is present",
 			vertex:                vertex,
-			expectedVertex:        getK8sObjectFromVertex(vertex),
+			expectedVertex:        expectedVertex,
 			id:                    "vertex",
 			expectedCacheContains: true,
 		},

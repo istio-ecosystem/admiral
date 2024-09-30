@@ -55,6 +55,8 @@ func TestMonoVertexController_Added(t *testing.T) {
 		Cache:             &cache,
 	}
 	monomonoVertex := getMonoVertex("monomonoVertex-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertex", "istio-injected": "true"})
+	expectedMonoVertex := getK8sObjectFromMonoVertex(monomonoVertex)
+	expectedMonoVertex.Status = common.ProcessingInProgress
 	monomonoVertexWithBadLabels := getMonoVertex("monomonoVertexWithBadLabels-ns", map[string]string{"admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertexWithBadLabels", "random-label": "true"})
 	monomonoVertexWithIgnoreLabels := getMonoVertex("monomonoVertexWithIgnoreLabels-ns", map[string]string{"sidecar.istio.io/inject": "true", "admiral.io/env": "dev"}, map[string]string{"identity": "monomonoVertexWithIgnoreLabels", "istio-injected": "true", "admiral-ignore": "true"})
 	monomonoVertexWithIgnoreAnnotations := getMonoVertex("monomonoVertexWithIgnoreAnnotations-ns", map[string]string{"admiral.io/ignore": "true"}, map[string]string{"identity": "monomonoVertexWithIgnoreAnnotations"})
@@ -70,7 +72,7 @@ func TestMonoVertexController_Added(t *testing.T) {
 		{
 			name:                  "Expects monomonoVertex to be added to the cache when the correct label is present",
 			monomonoVertex:        monomonoVertex,
-			expectedMonoVertex:    getK8sObjectFromMonoVertex(monomonoVertex),
+			expectedMonoVertex:    expectedMonoVertex,
 			id:                    "monomonoVertex",
 			expectedCacheContains: true,
 		},
