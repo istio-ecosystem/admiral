@@ -52,7 +52,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	if err != nil {
 		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
-
+	rr.DependencyController = wd.DepController
 	if !params.ArgoRolloutsEnabled {
 		logrus.Info("argo rollouts disabled")
 	}
