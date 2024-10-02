@@ -807,7 +807,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
-				drHost := fmt.Sprintf("*.%s.%s", deploymentOrRolloutNS, common.DotLocalDomainSuffix)
+				drHost := fmt.Sprintf("*.%s%s", deploymentOrRolloutNS, common.DotLocalDomainSuffix)
 				sourceClusterToDRHosts[sourceCluster] = map[string]string{
 					deploymentOrRolloutNS + common.DotLocalDomainSuffix: drHost,
 				}
