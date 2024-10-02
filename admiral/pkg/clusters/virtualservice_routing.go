@@ -356,7 +356,7 @@ func populateDestinationsForBlueGreenStrategy(
 		}
 		previewServiceInstance := weightedPreviewService.Service
 		host := previewServiceInstance.Name + common.Sep +
-			previewServiceInstance.Namespace + common.GetLocalDomainSuffix()
+			previewServiceInstance.Namespace + common.DotLocalDomainSuffix
 		if destinations[previewFQDN] == nil {
 			destinations[previewFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
@@ -370,7 +370,7 @@ func populateDestinationsForBlueGreenStrategy(
 		}
 		activeServiceInstance := activeService.Service
 		host := activeServiceInstance.Name + common.Sep +
-			activeServiceInstance.Namespace + common.GetLocalDomainSuffix()
+			activeServiceInstance.Namespace + common.DotLocalDomainSuffix
 		if destinations[defaultFQDN] == nil {
 			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
@@ -421,7 +421,7 @@ func populateDestinationsForCanaryStrategy(
 	// considered as the default service.
 	weight := int32(0)
 	for serviceName, service := range weightedServices {
-		host := serviceName + common.Sep + service.Service.Namespace + common.GetLocalDomainSuffix()
+		host := serviceName + common.Sep + service.Service.Namespace + common.DotLocalDomainSuffix
 		if destinations[defaultFQDN] == nil {
 			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 		}
@@ -438,7 +438,7 @@ func populateDestinationsForCanaryStrategy(
 	// Here we will create a separate canary destination for the canary FQDN
 	// This is needed to provide users to validate their canary endpoints
 	serviceNamespace := serviceInstance.Namespace
-	host := canaryServiceName + common.Sep + serviceNamespace + common.GetLocalDomainSuffix()
+	host := canaryServiceName + common.Sep + serviceNamespace + common.DotLocalDomainSuffix
 	if destinations[canaryFQDN] == nil {
 		destinations[canaryFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
 	}
