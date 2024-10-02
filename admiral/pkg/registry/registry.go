@@ -2,12 +2,17 @@ package registry
 
 import (
 	"encoding/json"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	IntuitTid = "intuit_tid"
 )
 
 // IdentityConfiguration is an interface to fetch configuration from a registry
@@ -20,7 +25,7 @@ type IdentityConfiguration interface {
 }
 
 type registryClient struct {
-	registryEndpoint string
+	client BaseClient
 }
 
 func NewRegistryClient(options ...func(client *registryClient)) *registryClient {
@@ -31,10 +36,44 @@ func NewRegistryClient(options ...func(client *registryClient)) *registryClient 
 	return registryClient
 }
 
-func WithRegistryEndpoint(registryEndpoint string) func(*registryClient) {
+func WithBaseClientConfig(clientConfig *Config) func(*registryClient) {
 	return func(c *registryClient) {
-		c.registryEndpoint = registryEndpoint
+		c.client = NewClient(clientConfig)
 	}
+}
+
+func (c *registryClient) PutClusterGateway(cluster, name, url, notes, tid string, labels []string) error {
+	r, err := http.NewRequest("PUT", url, nil)
+	authHeader := r.Header.Get("Authorization")
+	authData, err := ParsePrivateAuthHeader(authHeader)
+	response, err := c.client.MakePrivateAuthCall(url, authData, tid, r.Method, nil)
+	return nil
+	//sort labels?
+	//preferably put this in service handler where we check if common.IsIstioIngressGatewayService(svc)
+}
+
+func (c *registryClient) DeleteClusterGateway(cluster, name string) error {
+	return nil
+}
+
+func (c *registryClient) PutCustomData(cluster, namespace, key string, value interface{}) error {
+	return nil
+	// switch-case based on key (CCC/GTP/VS/OD/etc)
+	// traffic config?
+}
+
+func (c *registryClient) DeleteCustomData(cluster, namespace, key string) error {
+	return nil
+}
+
+func (c *registryClient) PutHostingData(cluster, namespace, key string, value interface{}) error {
+	return nil
+	// switch-case based on key (service/rollout/deployment)
+	// Where does sidecar and envoy filter go?
+}
+
+func (c *registryClient) DeleteHostingData(cluster, namespace, key string) error {
+	return nil
 }
 
 // GetIdentityConfigByIdentityName calls the registry API to fetch the IdentityConfig for
