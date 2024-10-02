@@ -15,8 +15,8 @@ const (
 	DefaultReqTimeoutSeconds          = 10
 	DefaultConnectionTimeoutSeconds   = 5
 	DefaultTlsHandShakeTimeoutSeconds = 5
-	AvisoAppId                        = "aviso_appId"
-	AvisoSecret                       = "aviso_secret"
+	StateSyncerAppId                  = "statesyncer_appId"
+	StateSyncerSecret                 = "statesyncer_secret"
 )
 
 type Config struct {
@@ -30,7 +30,7 @@ type Config struct {
 }
 
 type BaseClient interface {
-	MakePrivateAuthCall(url string, iam *IamInfo, tid string, method string, body []byte) (*http.Response, error)
+	MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error)
 	GetConfig() *Config
 	ExecuteRequest(req *http.Request) (*http.Response, error)
 	MakeNoAuthCall(url string, tid string, method string, body []byte) (*http.Response, error)
@@ -87,32 +87,19 @@ func (c *Client) MakeNoAuthCall(url string, tid string, method string, body []by
 	return makeCall(url, headers, method, body, c)
 }
 
-func (c *Client) MakePrivateAuthCall(url string, iam *IamInfo, tid string, method string, body []byte) (*http.Response, error) {
+func (c *Client) MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
 	headers := make(http.Header)
 
 	if len(tid) > 0 {
 		headers.Set("intuit_tid", tid)
 	}
+
 	authHeader := fmt.Sprintf(
 		"Intuit_IAM_Authentication intuit_appid=%s, "+
-			"intuit_app_secret=%s, "+
-			"intuit_token_type=IAM-Ticket, "+
-			"intuit_token=%s, "+
-			"intuit_userid=%s",
+			"intuit_app_secret=%s",
 		c.Config.AppId,
 		c.Config.AppSecret,
-		iam.Ticket,
-		iam.Authid,
 	)
-	if iam.Ticket == "" && iam.Authid == "" {
-		//No user context so remove it from the auth header
-		authHeader = fmt.Sprintf(
-			"Intuit_IAM_Authentication intuit_appid=%s, "+
-				"intuit_app_secret=%s",
-			c.Config.AppId,
-			c.Config.AppSecret,
-		)
-	}
 
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Authorization", authHeader)
@@ -151,7 +138,7 @@ func makeCall(url string, headers http.Header, method string, body []byte, c *Cl
  *   exist inside environment variables, fall back to files
  */
 func ReadSecret(key string) (string, error) {
-	if key != AvisoAppId && key != AvisoSecret {
+	if key != StateSyncerAppId && key != StateSyncerSecret {
 		return "", fmt.Errorf("invalid input value for ReadSecret function ")
 	}
 
@@ -170,10 +157,10 @@ func ReadSecret(key string) (string, error) {
 
 	if err != nil {
 		switch key {
-		case AvisoAppId:
-			return "", fmt.Errorf("aviso_appId.txt not found. Using the default appId")
-		case AvisoSecret:
-			return "", fmt.Errorf("error reading aviso secret :%v", err)
+		case StateSyncerAppId:
+			return "", fmt.Errorf("statesyncer_appId.txt not found. Using the default appId")
+		case StateSyncerSecret:
+			return "", fmt.Errorf("error reading statesyncer secret :%v", err)
 		}
 	}
 
