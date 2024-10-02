@@ -48,7 +48,7 @@ func TestParseIdentityConfigJSON(t *testing.T) {
 
 func TestIdentityConfigGetByIdentityName(t *testing.T) {
 	sampleIdentityConfig := GetSampleIdentityConfig("sample")
-	registryClient := NewRegistryClient(WithRegistryEndpoint("endpoint"))
+	registryClient := NewRegistryClient()
 	var jsonErr *json.SyntaxError
 	ctxLogger := log.WithContext(context.Background())
 	testCases := []struct {
@@ -94,7 +94,7 @@ func TestIdentityConfigGetByIdentityName(t *testing.T) {
 
 func TestGetIdentityConfigByClusterName(t *testing.T) {
 	sampleIdentityConfig := GetSampleIdentityConfig("sample")
-	registryClient := NewRegistryClient(WithRegistryEndpoint("endpoint"))
+	registryClient := NewRegistryClient()
 	var jsonErr *json.SyntaxError
 	ctxLogger := log.WithContext(context.Background())
 	testCases := []struct {
