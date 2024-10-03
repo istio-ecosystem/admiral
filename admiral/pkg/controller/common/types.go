@@ -119,6 +119,10 @@ type AdmiralParams struct {
 	OperatorIdentityValue    string
 	ShardIdentityValue       string
 	OperatorSecretFilterTags string
+	RegistryClientHost       string
+	RegistryClientAppId      string
+	RegistryClientAppSecret  string
+	RegistryClientBaseURI    string
 
 	// VS Based Routing
 	EnableVSRouting             bool

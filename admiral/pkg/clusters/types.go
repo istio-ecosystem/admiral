@@ -187,11 +187,12 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	}
 
 	if common.IsAdmiralOperatorMode() {
+		registryClientParams := common.GetRegistryClientConfig()
 		defaultRegistryClientConfig := &registry.Config{
-			Host:      "registry",
-			AppId:     "registryAppId",
-			AppSecret: "registryAppSecret",
-			BaseURI:   "registryBaseURI",
+			Host:      registryClientParams["Host"],
+			AppId:     registryClientParams["AppId"],
+			AppSecret: registryClientParams["AppSecret"],
+			BaseURI:   registryClientParams["BaseURI"],
 		}
 		rr.RegistryClient = registry.NewRegistryClient(registry.WithBaseClientConfig(defaultRegistryClientConfig))
 		rr.AdmiralCache.ClusterLocalityCache = common.NewMapOfMaps()
