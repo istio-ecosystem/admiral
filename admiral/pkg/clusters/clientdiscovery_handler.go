@@ -58,7 +58,6 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 		return nil
 	}
 
-	// Should not return early here for TrafficConfig persona, as cache should build up during warm up time
 	if IsCacheWarmupTime(remoteRegistry) {
 		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped during cache warm up state")
 		return fmt.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "processing skipped during cache warm up state for env="+" identity="+globalIdentifier)
@@ -77,7 +76,6 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 		log.Warnf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as no dependency record found for client="+globalIdentifier)
 		return nil
 	}
-	ctx = context.WithValue(ctx, "processAllDependencies", true)
 	err := remoteRegistry.DependencyController.DepHandler.Added(ctx, depRecord)
 
 	if err != nil {

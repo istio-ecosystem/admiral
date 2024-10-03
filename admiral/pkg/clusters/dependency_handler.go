@@ -87,15 +87,17 @@ func isIdentityMeshEnabled(identity string, remoteRegistry *RemoteRegistry) bool
 	return false
 }
 
-func getDestinationsToBeProcessed(
+func getDestinationsToBeProcessed(eventType admiral.EventType,
 	updatedDependency *v1.Dependency, remoteRegistry *RemoteRegistry) ([]string, bool) {
 	updatedDestinations := make([]string, 0)
 	existingDestination := remoteRegistry.AdmiralCache.SourceToDestinations.Get(updatedDependency.Spec.Source)
-
 	var nonMeshEnabledExists bool
 	lookup := make(map[string]bool)
-	for _, dest := range existingDestination {
-		lookup[dest] = true
+	//if this is an update, build a look up table to process only the diff
+	if eventType == admiral.Update {
+		for _, dest := range existingDestination {
+			lookup[dest] = true
+		}
 	}
 
 	for _, destination := range updatedDependency.Spec.Destinations {
@@ -122,7 +124,7 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 		return nil
 	}
 
-	destinations, hasNonMeshDestination := getDestinationsToBeProcessed(dependency, remoteRegistry)
+	destinations, hasNonMeshDestination := getDestinationsToBeProcessed(eventType, dependency, remoteRegistry)
 	log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("found %d new destinations: %v", len(destinations), destinations))
 
 	var processingErrors error
