@@ -754,7 +754,7 @@ func addUpdateDestinationRuleForSourceIngress(
 			continue
 		}
 
-		ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+		ctxLogger.Info(common.CtxLogFormat, "VSBasedRouting",
 			"", "", sourceCluster,
 			"Writing phase: addUpdateDestinationRuleForSourceIngress VS based routing enabled for cluster")
 
