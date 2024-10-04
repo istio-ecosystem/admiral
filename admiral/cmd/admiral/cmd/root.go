@@ -258,9 +258,9 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
-	rootCmd.PersistentFlags().StringArrayVar(&params.VSRoutingEnabledClusters, "vs_routing_enabled_clusters", []string{}, "The source clusters to enable VS based routing on")
-	rootCmd.PersistentFlags().StringArrayVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
-	rootCmd.PersistentFlags().StringArrayVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingEnabledClusters, "vs_routing_enabled_clusters", []string{}, "The source clusters to enable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
+	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")
 
 	return rootCmd

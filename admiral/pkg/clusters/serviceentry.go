@@ -782,7 +782,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		if common.DoVSRoutingForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
-				deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster,
+				deploymentOrRolloutName, namespace, sourceCluster,
 				"Discovery phase: VS based routing enabled for cluster")
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
@@ -799,17 +799,17 @@ func modifyServiceEntryForNewServiceOrPod(
 				env)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
+					deploymentOrRolloutName, namespace, sourceCluster, err)
 				modifySEerr = common.AppendError(modifySEerr, err)
 			} else if len(destinations) == 0 {
 				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster,
+					deploymentOrRolloutName, namespace, sourceCluster,
 					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
-				drHost := fmt.Sprintf("*.%s%s", deploymentOrRolloutNS, common.DotLocalDomainSuffix)
+				drHost := fmt.Sprintf("*.%s%s", namespace, common.DotLocalDomainSuffix)
 				sourceClusterToDRHosts[sourceCluster] = map[string]string{
-					deploymentOrRolloutNS + common.DotLocalDomainSuffix: drHost,
+					namespace + common.DotLocalDomainSuffix: drHost,
 				}
 			}
 		}
@@ -836,7 +836,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-			deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
+			deploymentOrRolloutName, namespace, "", err)
 		modifySEerr = common.AppendError(modifySEerr, err)
 	} else {
 		err := addUpdateDestinationRuleForSourceIngress(
@@ -847,7 +847,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceIdentity)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-				deploymentOrRolloutName, deploymentOrRolloutNS, "", err)
+				deploymentOrRolloutName, namespace, "", err)
 			modifySEerr = common.AppendError(modifySEerr, err)
 		}
 	}
