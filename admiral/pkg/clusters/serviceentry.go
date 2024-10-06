@@ -146,7 +146,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		clientConnectionSettings              = make(map[string][]*v1.ClientConnectionConfig)
 		gtps                                  = make(map[string][]*v1.GlobalTrafficPolicy)
 		weightedServices                      = make(map[string]*WeightedService)
-		cnames                                = make(map[string]string)
 		sourceServices                        = make(map[string]map[string]*k8sV1.Service)
 		sourceWeightedServices                = make(map[string]map[string]*WeightedService)
 		sourceDeployments                     = make(map[string]*k8sAppsV1.Deployment)
@@ -307,7 +306,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				deploymentOrRolloutNS, rc.ClusterID, "updating identity<->cluster mapping")
 			clusterDeployRolloutPresent[rc.ClusterID][common.Rollout] = true
 			cname = common.GetCnameForRollout(rollout, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
-			cnames[cname] = "1"
 			sourceRollouts[rc.ClusterID] = rollout
 			sourceClusters = append(sourceClusters, clusterId)
 			namespace = rollout.Namespace
@@ -603,7 +601,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						blueGreenService := updateEndpointsForBlueGreen(
 							sourceRollouts[sourceCluster],
 							sourceWeightedServices[sourceCluster],
-							cnames, ep, sourceCluster, key)
+							ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
 							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
 								blueGreenService.Service.Name: &registry.RegistryServiceConfig{
@@ -756,7 +754,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		for _, val := range dependents {
-			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
+			if remoteRegistry.AdmiralCache.IdentityClusterCache.Get(val) != nil && remoteRegistry.AdmiralCache.IdentityClusterCache.Get(val).CheckIfPresent(sourceCluster) {
+				remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, sourceCluster, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, map[string]string{cname: "1"})
+			}
 		}
 
 		if common.DoVSRoutingForCluster(sourceCluster) {
@@ -1072,7 +1072,7 @@ func sortClientConnectionConfigByCreationTime(ods []*v1.ClientConnectionConfig, 
 	})
 }
 
-func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService, cnames map[string]string,
+func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[string]*WeightedService,
 	ep *networking.WorkloadEntry, sourceCluster string, meshHost string) *WeightedService {
 	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
 	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
@@ -1080,14 +1080,12 @@ func updateEndpointsForBlueGreen(rollout *argo.Rollout, weightedServices map[str
 	if previewService, ok := weightedServices[previewServiceName]; strings.HasPrefix(meshHost, common.BlueGreenRolloutPreviewPrefix+common.Sep) && ok {
 		previewServiceInstance := previewService.Service
 		localFqdn := previewServiceInstance.Name + common.Sep + previewServiceInstance.Namespace + common.GetLocalDomainSuffix()
-		cnames[localFqdn] = "1"
 		ep.Address = localFqdn
 		ep.Ports = GetMeshPortsForRollout(sourceCluster, previewServiceInstance, rollout)
 		return previewService
 	} else if activeService, ok := weightedServices[activeServiceName]; ok {
 		activeServiceInstance := activeService.Service
 		localFqdn := activeServiceInstance.Name + common.Sep + activeServiceInstance.Namespace + common.GetLocalDomainSuffix()
-		cnames[localFqdn] = "1"
 		ep.Address = localFqdn
 		ep.Ports = GetMeshPortsForRollout(sourceCluster, activeServiceInstance, rollout)
 		return activeService
@@ -1140,10 +1138,11 @@ func modifySidecarForLocalClusterCommunication(
 	defer util.LogElapsedTime("modifySidecarForLocalClusterCommunication", sourceIdentity, sidecarNamespace, rc.ClusterID)
 	//get existing sidecar from the cluster
 	sidecarConfig := rc.SidecarController
-	sidecarEgressMap.Range(func(k string, v map[string]common.SidecarEgress) {
+	sidecarEgressMap.Range(func(k string, v map[string]map[string]common.SidecarEgress) {
 		if k == sourceIdentity {
-			sidecarEgress := v
-			if sidecarConfig == nil || sidecarEgress == nil {
+			serverClusterNsSidecarEgressMapping := v
+			serverNsSidecarEgressMapping := serverClusterNsSidecarEgressMapping[rc.ClusterID]
+			if sidecarConfig == nil || serverNsSidecarEgressMapping == nil {
 				return
 			}
 
@@ -1159,13 +1158,13 @@ func modifySidecarForLocalClusterCommunication(
 			//copy and add our new local FQDN
 			newSidecar := copySidecar(sidecar)
 			egressHosts := make(map[string]string)
-			for _, sidecarEgress := range sidecarEgress {
-				egressHost := sidecarEgress.Namespace + "/" + sidecarEgress.FQDN
-				egressHosts[egressHost] = egressHost
-				sidecarEgress.CNAMEs.Range(func(k, v string) {
-					scopedCname := sidecarEgress.Namespace + "/" + k
+			for _, serverSidecarEgress := range serverNsSidecarEgressMapping {
+				egressHost := serverSidecarEgress.Namespace + "/" + serverSidecarEgress.FQDN
+				egressHosts[egressHost] = egressHost //.local entry
+				/*serverSidecarEgress.CNAMEs.Range(func(k, v string) {
+					scopedCname := serverSidecarEgress.Namespace + "/" + k
 					egressHosts[scopedCname] = scopedCname
-				})
+				})*/
 			}
 
 			for egressHost := range egressHosts {

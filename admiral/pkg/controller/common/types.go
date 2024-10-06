@@ -34,7 +34,7 @@ type SidecarEgress struct {
 
 // maintains a map from workload identity -> map[namespace]SidecarEgress
 type SidecarEgressMap struct {
-	cache map[string]map[string]SidecarEgress
+	cache map[string]map[string]map[string]SidecarEgress
 	mutex *sync.Mutex
 }
 
@@ -182,7 +182,7 @@ type Context struct {
 
 func NewSidecarEgressMap() *SidecarEgressMap {
 	n := new(SidecarEgressMap)
-	n.cache = make(map[string]map[string]SidecarEgress)
+	n.cache = make(map[string]map[string]map[string]SidecarEgress)
 	n.mutex = &sync.Mutex{}
 	return n
 }
@@ -380,22 +380,27 @@ func (s *Map) GetKeys() []string {
 	return keys
 }
 
-func (s *SidecarEgressMap) Put(identity string, namespace string, fqdn string, cnames map[string]string) {
+func (s *SidecarEgressMap) Put(sidentity string, cluster string, namespace string, fqdn string, cnames map[string]string) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
-	var mapVal = s.cache[identity]
+	var mapVal = s.cache[sidentity]
 	if mapVal == nil {
-		mapVal = make(map[string]SidecarEgress)
+		mapVal = make(map[string]map[string]SidecarEgress)
+	}
+	nsMap, ok := mapVal[cluster]
+	if !ok {
+		nsMap = make(map[string]SidecarEgress)
 	}
 	cnameMap := NewMap()
 	for k, v := range cnames {
 		cnameMap.Put(k, v)
 	}
-	mapVal[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn, CNAMEs: cnameMap}
-	s.cache[identity] = mapVal
+	nsMap[namespace] = SidecarEgress{Namespace: namespace, FQDN: fqdn, CNAMEs: cnameMap}
+	mapVal[cluster] = nsMap
+	s.cache[sidentity] = mapVal
 }
 
-func (s *SidecarEgressMap) Get(key string) map[string]SidecarEgress {
+func (s *SidecarEgressMap) Get(key string) map[string]map[string]SidecarEgress {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	return s.cache[key]
@@ -408,7 +413,7 @@ func (s *SidecarEgressMap) Delete(key string) {
 }
 
 // Range is a thread safe iterator to iterate through the SidecarEgress map
-func (s *SidecarEgressMap) Range(fn func(k string, v map[string]SidecarEgress)) {
+func (s *SidecarEgressMap) Range(fn func(k string, v map[string]map[string]SidecarEgress)) {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	for k, v := range s.cache {

@@ -227,7 +227,7 @@ func TestMapRange(t *testing.T) {
 func TestSidecarEgressGet(t *testing.T) {
 
 	egressMap := NewSidecarEgressMap()
-	egressMap.Put("pkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey1", "dkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(3*time.Second))
 	defer cancel()
@@ -242,7 +242,7 @@ func TestSidecarEgressGet(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				egressMap.Put("pkey1", string(uuid.NewUUID()), "fqdn", map[string]string{"pkey2": "pkey2"})
+				egressMap.Put("pkey1", "dkey1", string(uuid.NewUUID()), "fqdn", map[string]string{"pkey2": "pkey2"})
 			}
 		}
 	}(ctx)
@@ -266,12 +266,12 @@ func TestSidecarEgressGet(t *testing.T) {
 func TestSidecarEgressRange(t *testing.T) {
 
 	egressMap := NewSidecarEgressMap()
-	egressMap.Put("pkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
-	egressMap.Put("pkey2", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
-	egressMap.Put("pkey3", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey1", "dkey1", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey2", "dkey2", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
+	egressMap.Put("pkey3", "dkey3", "pkey2", "fqdn", map[string]string{"pkey2": "pkey2"})
 
 	numOfIter := 0
-	egressMap.Range(func(k string, v map[string]SidecarEgress) {
+	egressMap.Range(func(k string, v map[string]map[string]SidecarEgress) {
 		assert.NotNil(t, v)
 		numOfIter++
 	})

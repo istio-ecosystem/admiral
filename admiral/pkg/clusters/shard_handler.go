@@ -138,7 +138,7 @@ func ProduceIdentityConfigsFromShard(ctxLogger *log.Entry, shard admiralapiv1.Sh
 						cname := common.GetCnameVal([]string{identityConfigEnv.Name, strings.ToLower(identityConfig.IdentityName), common.GetHostnameSuffix()})
 						cnames[cname] = "1"
 						localFqdn := identityConfigEnv.ServiceName + common.Sep + identityConfigEnv.Namespace + common.GetLocalDomainSuffix()
-						rr.AdmiralCache.DependencyNamespaceCache.Put(clientAsset, identityConfigEnv.Namespace, localFqdn, cnames)
+						rr.AdmiralCache.DependencyNamespaceCache.Put(clientAsset, identityConfigCluster.Name, identityConfigEnv.Namespace, localFqdn, cnames)
 					}
 				}
 				// Fill the ClusterLocalityCache

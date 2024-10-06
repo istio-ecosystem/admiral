@@ -2856,12 +2856,15 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 	sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).Create(context.TODO(), sidecar, metav1.CreateOptions{})
 
-	remoteController := &RemoteController{}
+	remoteController := &RemoteController{
+		ClusterID: "c1",
+	}
 	remoteController.SidecarController = sidecarController
 
 	sidecarCacheEgressMap := common.NewSidecarEgressMap()
 	sidecarCacheEgressMap.Put(
 		assetIdentity,
+		"c1",
 		identityNamespace,
 		assetFQDN,
 		nil,
@@ -2879,6 +2882,7 @@ func TestModifyNonExistingSidecarForLocalClusterCommunication(t *testing.T) {
 			default:
 				sidecarCacheEgressMap.Put(
 					assetIdentity,
+					"c1",
 					identityNamespace,
 					assetFQDN,
 					map[string]string{
@@ -2938,17 +2942,15 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 		}
 
 		sidecarController     = &istio.SidecarController{}
-		remoteController      = &RemoteController{}
+		remoteController      = &RemoteController{ClusterID: "c1"}
 		sidecarCacheEgressMap = common.NewSidecarEgressMap()
 	)
 	sidecarCacheEgressMap.Put(
 		assetIdentity,
+		"c1",
 		"test-dependency-namespace",
 		"test-local-fqdn",
-		map[string]string{
-			"test.myservice.global": "1",
-		},
-	)
+		map[string]string{})
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
 	defer cancel()
 
@@ -2966,7 +2968,6 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 	if createdSidecar != nil {
 		sidecarEgressMap := make(map[string]common.SidecarEgress)
 		cnameMap := common.NewMap()
-		cnameMap.Put("test.myservice.global", "1")
 		sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: cnameMap}
 		modifySidecarForLocalClusterCommunication(ctxLogger, ctx, identityNamespace, assetIdentity, sidecarCacheEgressMap, remoteController)
 
@@ -2976,7 +2977,7 @@ func TestModifyExistingSidecarForLocalClusterCommunication(t *testing.T) {
 			t.Fail()
 		}
 
-		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn", "test-dependency-namespace/test.myservice.global")
+		hostList := append(createdSidecar.Spec.Egress[0].Hosts, "test-dependency-namespace/test-local-fqdn")
 		createdSidecar.Spec.Egress[0].Hosts = hostList
 
 		// Egress host order doesn't matter but will cause tests to fail. Move these values to their own lists for comparision
@@ -3039,25 +3040,23 @@ func TestRetryUpdatingSidecar(t *testing.T) {
 			},
 		}
 		sidecarController     = &istio.SidecarController{}
-		remoteController      = &RemoteController{}
+		remoteController      = &RemoteController{ClusterID: "c1"}
 		sidecarCacheEgressMap = common.NewSidecarEgressMap()
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	sidecarCacheEgressMap.Put(
 		assetIdentity,
+		"c1",
 		"test-dependency-namespace",
 		"test-local-fqdn",
-		map[string]string{
-			"test.myservice.global": "1",
-		},
+		map[string]string{},
 	)
 	remoteController.SidecarController = sidecarController
 	sidecarController.IstioClient = istiofake.NewSimpleClientset()
 	createdSidecar, _ := sidecarController.IstioClient.NetworkingV1alpha3().Sidecars(identityNamespace).Create(context.TODO(), sidecar, metav1.CreateOptions{})
 	sidecarEgressMap := make(map[string]common.SidecarEgress)
 	cnameMap := common.NewMap()
-	cnameMap.Put("test.myservice.global", "1")
 	sidecarEgressMap["test-dependency-namespace"] = common.SidecarEgress{Namespace: "test-dependency-namespace", FQDN: "test-local-fqdn", CNAMEs: cnameMap}
 	newSidecar := copySidecar(createdSidecar)
 	egressHosts := make(map[string]string)
@@ -3962,7 +3961,7 @@ func TestUpdateEndpointsForBlueGreen(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			updateEndpointsForBlueGreen(c.rollout, c.weightedServices, map[string]string{}, c.inputEndpoint, "test", c.meshHost)
+			updateEndpointsForBlueGreen(c.rollout, c.weightedServices, c.inputEndpoint, "test", c.meshHost)
 			if c.inputEndpoint.Address != c.wantedEndpoints.Address {
 				t.Errorf("Wanted %s endpoint, got: %s", c.wantedEndpoints.Address, c.inputEndpoint.Address)
 			}
