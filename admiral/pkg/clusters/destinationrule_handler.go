@@ -576,7 +576,7 @@ func retryUpdatingDR(
 			for i := 1; i <= numRetries; i++ {
 				ctxLogger.Errorf(common.CtxLogFormat, "Update",
 					exist.Name, exist.Namespace, rc.ClusterID, fmt.Sprintf("error=%v retrying=%d/%d", err.Error(), i, numRetries))
-				updatedServiceEntry, err := rc.DestinationRuleController.IstioClient.
+				updatedDR, err := rc.DestinationRuleController.IstioClient.
 					NetworkingV1alpha3().
 					DestinationRules(namespace).
 					Get(ctx, exist.Name, metav1.GetOptions{})
@@ -586,15 +586,15 @@ func retryUpdatingDR(
 					continue
 				}
 				ctxLogger.Infof(common.CtxLogFormat, "Update", exist.Name, exist.Namespace, rc.ClusterID,
-					fmt.Sprintf("existingResourceVersion=%s resourceVersionUsedForUpdate=%s", updatedServiceEntry.ResourceVersion, exist.ResourceVersion))
+					fmt.Sprintf("existingResourceVersion=%s resourceVersionUsedForUpdate=%s", updatedDR.ResourceVersion, exist.ResourceVersion))
 				//nolint
-				updatedServiceEntry.Spec = exist.Spec
-				updatedServiceEntry.Labels = exist.Labels
-				updatedServiceEntry.Annotations = exist.Labels
+				updatedDR.Spec = exist.Spec
+				updatedDR.Labels = exist.Labels
+				updatedDR.Annotations = exist.Annotations
 				_, err = rc.DestinationRuleController.IstioClient.
 					NetworkingV1alpha3().
 					DestinationRules(namespace).
-					Update(ctx, exist, metaV1.UpdateOptions{})
+					Update(ctx, updatedDR, metaV1.UpdateOptions{})
 				if err == nil {
 					return nil
 				}
