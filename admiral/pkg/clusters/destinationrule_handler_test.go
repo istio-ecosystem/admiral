@@ -52,6 +52,7 @@ func TestRetryUpdatingDR(t *testing.T) {
 	admiralParams = common.GetAdmiralParams()
 	log.Info("admiralSyncNS: " + admiralParams.SyncNamespace)
 	// Create mock objects
+
 	exist := &v1alpha32.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
 			Namespace: admiralParams.SyncNamespace,
@@ -109,6 +110,93 @@ func TestRetryUpdatingDR(t *testing.T) {
 	if err == nil {
 		t.Error("Expected non-nil error, got nil")
 	}
+}
+
+func TestRetryUpdatingDROnConflict(t *testing.T) {
+	// Create a mock logger
+	logger := log.New()
+	admiralParams := common.AdmiralParams{
+		LabelSet:      &common.LabelSet{},
+		SyncNamespace: "test-sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	//Create a context with timeout for testing
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	admiralParams = common.GetAdmiralParams()
+	log.Info("admiralSyncNS: " + admiralParams.SyncNamespace)
+
+	// Create mock objects
+	existVersion := "12345"
+	exist := &v1alpha32.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Namespace: admiralParams.SyncNamespace,
+			Name:      "test-serviceentry-seRetriesTest",
+			Annotations: map[string]string{
+				"admiral.istio.io/ignore": "true",
+			},
+			ResourceVersion: existVersion,
+		},
+		Spec: v1alpha3.DestinationRule{
+			Host: "test-host",
+		},
+	}
+	namespace := admiralParams.SyncNamespace
+	rc := &RemoteController{
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: istioFake.NewSimpleClientset(),
+		},
+	}
+
+	_, err := rc.DestinationRuleController.IstioClient.
+		NetworkingV1alpha3().
+		DestinationRules(namespace).
+		Create(ctx, exist, metaV1.CreateOptions{})
+	if err != nil {
+		t.Error(err)
+	}
+
+	updatedObj := &v1alpha32.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Namespace: admiralParams.SyncNamespace,
+			Name:      "test-serviceentry-seRetriesTest",
+			Annotations: map[string]string{
+				"admiral.istio.io/ignore": "true",
+			},
+			ResourceVersion: "12344", // has different version than existing object
+		},
+		Spec: v1alpha3.DestinationRule{
+			Host: "test-host-other",
+		},
+	}
+
+	// workaround because fake client does not correctly handle resource version
+	conflictErr := k8sErrors.NewConflict(schema.GroupResource{}, "", nil)
+	rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().(*fakenetworkingv1alpha3.FakeNetworkingV1alpha3).PrependReactor("update", "destinationrules", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		updateAction, ok := action.(k8stesting.UpdateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		drObj, ok := updateAction.GetObject().(*v1alpha32.DestinationRule)
+		if !ok {
+			return false, nil, nil
+		}
+		if drObj.ResourceVersion != existVersion {
+			return true, drObj, k8sErrors.NewConflict(schema.GroupResource{}, fmt.Sprintf("object resource version actual: %s, expected: %s", drObj.ResourceVersion, existVersion), nil)
+		}
+		return false, nil, nil
+	})
+	err = retryUpdatingDR(logger.WithField("test", "conflict"), ctx, updatedObj, namespace, rc, conflictErr)
+	if err != nil {
+		t.Errorf("Expected nil error, got %v", err)
+		t.FailNow()
+	}
+	// check resource is updated properly with right spec
+	dr, err := rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(namespace).Get(ctx, exist.Name, metaV1.GetOptions{})
+	assert.Nil(t, err)
+	assert.Equal(t, "test-host-other", dr.Spec.Host)
 }
 
 func TestGetDestinationRule(t *testing.T) {
