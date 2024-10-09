@@ -29,7 +29,7 @@ spec:
 apiVersion: admiral.io/v1alpha1
 kind: Dependency
 metadata:
-  name: dependency-greeeting
+  name: dependency-greeting
   namespace: admiral
 spec:
   source: greeting
