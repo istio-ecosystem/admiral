@@ -58,6 +58,8 @@ func initConfig(fqdn bool, fqdnLocal bool) {
 	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.IdentityPartitionKey = "admiral.io/identityPartition"
+	p.LabelSet.DeploymentAnnotation = "sidecar.istio.io/inject"
+	p.LabelSet.AdmiralIgnoreLabel = "admiral.io/ignore"
 	InitializeConfig(p)
 }
 
@@ -1178,6 +1180,188 @@ func TestGetGtpIdentityPartition(t *testing.T) {
 			iVal := GetGtpIdentityPartition(&c.gtp)
 			if !(iVal == c.expected) {
 				t.Errorf("Wanted identity partition value: %s, got: %s", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestShouldIgnore(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     		string
+		annotations   	map[string]string
+		labels   		map[string]string
+		expected 		bool
+	}{
+		{
+			name: "Given valid admiral ignore label " +
+				"Should ignore the object ",
+			annotations:  map[string]string{"sidecar.istio.io/inject": "true"},
+			labels:   map[string]string{"admiral.io/ignore": "true", "app": "app"},
+			expected: true,
+		},
+		{
+			name: "Given istio injection is not enabled " +
+				"Should ignore the object ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app"},
+			expected: true,
+		},
+		{
+			name: "Given valid admiral ignore annotation " +
+				"Should ignore the object ",
+			annotations:  map[string]string{"admiral.io/ignore": "true", "sidecar.istio.io/inject": "true"},
+			labels:   map[string]string{"app": "app"},
+			expected: true,
+		},
+		{
+			name: "Given no admiral ignore set " +
+				"Should not ignore the object ",
+			annotations:   map[string]string{"sidecar.istio.io/inject": "true"},
+			labels:   map[string]string{"app": "app"},
+			expected: false,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := ShouldIgnore(c.annotations, c.labels)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %v, got: %v", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestGetIdentityPartition(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     		string
+		annotations   	map[string]string
+		labels   		map[string]string
+		expected 		string
+	}{
+		{
+			name: "Given valid identity partition on annotations " +
+				"Should return identity partition ",
+			annotations:  map[string]string{"admiral.io/identityPartition": "partition1"},
+			labels:   map[string]string{"app": "app"},
+			expected: "partition1",
+		},
+		{
+			name: "Given valid identity partition on labels " +
+				"Should return identity partition ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app", "admiral.io/identityPartition": "partition2"},
+			expected: "partition2",
+		},
+		{
+			name: "Given no valid identity partition present on labels or annotations " +
+				"Should return empty string ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app"},
+			expected: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GetIdentityPartition(c.annotations, c.labels)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %v, got: %v", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestGetGlobalIdentifier(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     		string
+		annotations   	map[string]string
+		labels   		map[string]string
+		expected 		string
+	}{
+		{
+			name: "Given valid identity partition on annotations and valid identity" +
+				"Should return global identifier with identity partition ",
+			annotations:  map[string]string{"admiral.io/identityPartition": "partition1"},
+			labels:   map[string]string{"app": "app", "identity": "identity1"},
+			expected: "partition1.identity1",
+		},
+		{
+			name: "Given valid identity partition on labels and valid identity " +
+				"Should return global identifier with identity partition ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app", "admiral.io/identityPartition": "partition2", "identity": "identity2"},
+			expected: "partition2.identity2",
+		},
+		{
+			name: "Given no valid identity partition present on labels or annotations and valid identity " +
+				"Should return identity string ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app", "identity": "identity3"},
+			expected: "identity3",
+		},
+		{
+			name: "Given no valid identity partition and no valid identity " +
+				"Should empty string ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app"},
+			expected: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GetGlobalIdentifier(c.annotations, c.labels)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %v, got: %v", c.expected, iVal)
+			}
+		})
+	}
+}
+
+func TestGetOriginalIdentifier(t *testing.T) {
+	initConfig(true, true)
+
+	testCases := []struct {
+		name     		string
+		annotations   	map[string]string
+		labels   		map[string]string
+		expected 		string
+	}{
+		{
+			name: "Given valid identity on annotations " +
+				"Should return identity ",
+			annotations:  map[string]string{"identity": "identity1"},
+			labels:   map[string]string{"app": "app"},
+			expected: "identity1",
+		},
+		{
+			name: "Given valid identity on labels " +
+				"Should return identity ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app", "identity": "identity2"},
+			expected: "identity2",
+		},
+		{
+			name: "Given no valid identity on labels or annotations " +
+				"Should return empty identity ",
+			annotations:  map[string]string{},
+			labels:   map[string]string{"app": "app"},
+			expected: "",
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			iVal := GetOriginalIdentifier(c.annotations, c.labels)
+			if !(iVal == c.expected) {
+				t.Errorf("Wanted value: %v, got: %v", c.expected, iVal)
 			}
 		})
 	}

@@ -92,6 +92,9 @@ const (
 	MeshService              = "MESH_SERVICE"
 	Deployment               = "deployment"
 	Rollout                  = "rollout"
+	Job                      = "job"
+	Vertex                   = "vertex"
+	MonoVertex               = "monovertex"
 	GTP                      = "gtp"
 	EventType                = "eventType"
 	ProcessingInProgress     = "ProcessingInProgress"
@@ -135,6 +138,7 @@ const (
 	ConfigMapResourceType  ResourceType = "ConfigMap"
 	SecretResourceType     ResourceType = "Secret"
 	NodeResourceType       ResourceType = "Node"
+	JobResourceType        ResourceType = "Job"
 
 	// Admiral Resource Types
 	DependencyResourceType          ResourceType = "Dependency"
@@ -701,6 +705,56 @@ func GetMeshPortsHelper(meshPorts string, destService *k8sV1.Service, clusterNam
 		}
 	}
 	return ports
+}
+
+func ShouldIgnore(annotations map[string]string, labels map[string]string) bool {
+	labelSet := GetLabelSet()
+
+	//if admiral ignore label set
+	if labels[labelSet.AdmiralIgnoreLabel] == "true" { //if we should ignore, do that and who cares what else is there
+		return true
+	}
+
+	//if sidecar not injected
+	if annotations[labelSet.DeploymentAnnotation] != "true" { //Not sidecar injected, we don't want to inject
+		return true
+	}
+
+	if annotations[AdmiralIgnoreAnnotation] == "true" {
+		return true
+	}
+
+	return false //labels are fine, we should not ignore
+}
+
+func GetIdentityPartition(annotations map[string]string, labels map[string]string) string {
+	identityPartition := annotations[GetPartitionIdentifier()]
+	if len(identityPartition) == 0 {
+		//In case partition is accidentally applied as Label
+		identityPartition = labels[GetPartitionIdentifier()]
+	}
+	return identityPartition
+}
+
+func GetGlobalIdentifier(annotations map[string]string, labels map[string]string) string {
+	identity := labels[GetWorkloadIdentifier()]
+	if len(identity) == 0 {
+		//TODO can this be removed now? This was for backward compatibility
+		identity = annotations[GetWorkloadIdentifier()]
+	}
+	if EnableSWAwareNSCaches() && len(identity) > 0 && len(GetIdentityPartition(annotations, labels)) > 0 {
+		identity = GetIdentityPartition(annotations, labels) + Sep + strings.ToLower(identity)
+	}
+	return identity
+}
+
+func GetOriginalIdentifier(annotations map[string]string, labels map[string]string) string {
+	identity := labels[GetWorkloadIdentifier()]
+	if len(identity) == 0 {
+		//TODO can this be removed now? This was for backward compatibility
+		identity = annotations[GetWorkloadIdentifier()]
+	}
+	return identity
 }
 
 func GenerateUniqueNameForVS(originNamespace string, vsName string) string {

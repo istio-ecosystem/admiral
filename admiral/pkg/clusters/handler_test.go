@@ -24,7 +24,15 @@ import (
 func admiralParamsForHandlerTests(argoEnabled bool) common.AdmiralParams {
 	return common.AdmiralParams{
 		ArgoRolloutsEnabled: argoEnabled,
-		LabelSet:            &common.LabelSet{},
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+			DeploymentAnnotation:    "sidecar.istio.io/inject",
+			AdmiralIgnoreLabel:      "admiral-ignore",
+		},
+		EnableSWAwareNSCaches:      true,
+		EnableDependencyProcessing: true,
 	}
 }
 
@@ -926,26 +934,4 @@ func TestGetServiceForRolloutBlueGreen(t *testing.T) {
 			}
 		})
 	}
-}
-
-func makeRemoteRegistry(
-	clusterNames []string, remoteController *RemoteController, cname string, dependentClusters []string) *RemoteRegistry {
-	var (
-		cache = common.NewMapOfMaps()
-		rr    = NewRemoteRegistry(context.TODO(), common.AdmiralParams{})
-	)
-	rr.AdmiralCache = &AdmiralCache{
-		CnameDependentClusterCache: cache,
-	}
-	for _, dependentCluster := range dependentClusters {
-		rr.AdmiralCache.CnameDependentClusterCache.Put(cname, dependentCluster, dependentCluster)
-	}
-	for _, clusterName := range clusterNames {
-		rr.PutRemoteController(
-			clusterName,
-			remoteController,
-		)
-	}
-
-	return rr
 }

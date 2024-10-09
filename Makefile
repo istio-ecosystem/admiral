@@ -162,6 +162,8 @@ gen-yaml:
 	kustomize build ./install/sample/overlays/rollout-canary > ./out/yaml/sample-greeting-rollout-canary.yaml
 	kustomize build ./install/sample/overlays/rollout-bluegreen > ./out/yaml/sample-greeting-rollout-bluegreen.yaml
 	kustomize build ./install/sample/overlays/remote > ./out/yaml/remotecluster_sample.yaml
+	kustomize build ./install/sample/overlays/job > ./out/yaml/job_sample.yaml
+	kustomize build ./install/sample/overlays/numaflow > ./out/yaml/numaflow_sample.yaml
 	cp ./install/sample/proxy.yaml ./out/yaml/proxy.yaml
 	cp ./install/sample/sample_dep.yaml ./out/yaml/sample_dep.yaml
 	cp ./install/sample/depProxyExample.yaml ./out/yaml/depProxyExample.yaml

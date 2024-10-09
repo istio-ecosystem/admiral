@@ -50,6 +50,7 @@ func admiralParamsForRegistryTests() common.AdmiralParams {
 		EnableRoutingPolicy:           true,
 		EnvoyFilterVersion:            "1.13",
 		Profile:                       common.AdmiralProfileDefault,
+		EnableClientDiscovery:         true,
 	}
 }
 

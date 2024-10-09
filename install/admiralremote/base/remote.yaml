@@ -27,8 +27,14 @@ rules:
     resources: ['globaltrafficpolicies', 'routingpolicies',"trafficonfigs", "outlierdetections"]
     verbs: [ "get", "list", "watch"]
   - apiGroups: ["argoproj.io"]
-    resources: ['rollouts']
+    resources: ['rollouts', 'workflows']
     verbs: [ "get", "list", "watch"]
+  - apiGroups: ['batch']
+    resources: [ 'jobs', 'cronjobs']
+    verbs: ['get', 'watch', 'list']
+  - apiGroups: ['numaflow.numaproj.io']
+    resources: [ 'vertices', 'monovertices']
+    verbs: ['get', 'watch', 'list']
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1

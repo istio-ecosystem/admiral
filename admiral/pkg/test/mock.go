@@ -5,6 +5,7 @@ import (
 	"errors"
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -423,5 +424,12 @@ func (m *MockShardHandler) Added(ctx context.Context, obj *admiralapiv1.Shard, c
 }
 
 func (m *MockShardHandler) Deleted(ctx context.Context, obj *admiralapiv1.Shard) error {
+	return nil
+}
+
+type MockClientDiscoveryHandler struct {
+}
+
+func (m *MockClientDiscoveryHandler) Added(ctx context.Context, obj *common.K8sObject) error {
 	return nil
 }

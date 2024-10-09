@@ -2,7 +2,7 @@
 apiVersion: admiral.io/v1alpha1
 kind: Dependency
 metadata:
-  name: dependency
+  name: dependency-webapp
   namespace: admiral
 spec:
   source: webapp
@@ -29,7 +29,7 @@ spec:
 apiVersion: admiral.io/v1alpha1
 kind: Dependency
 metadata:
-  name: dependency
+  name: dependency-greeting
   namespace: admiral
 spec:
   source: greeting
@@ -37,3 +37,26 @@ spec:
   identityLabel: identity
   destinations:
     - httpbin
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: dependency-job
+  namespace: admiral
+spec:
+  source: job
+  identityLabel: identity
+  destinations:
+    - greeting
+
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: dependency-monovertex
+  namespace: admiral
+spec:
+  source: monovertex
+  identityLabel: identity
+  destinations:
+    - greeting

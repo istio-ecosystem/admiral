@@ -566,7 +566,7 @@ func TestProcessDestinationService(t *testing.T) {
 
 			processDestinationService := &ProcessDestinationService{}
 
-			actualErr := processDestinationService.Process(context.TODO(), tc.dependency, tc.remoteRegistry, admiral.Add, tc.modifySEFunc)
+			actualErr := processDestinationService.Process(context.TODO(), tc.dependency, tc.remoteRegistry, admiral.Update, tc.modifySEFunc)
 
 			if tc.expectedError != nil {
 				assert.NotNil(t, actualErr)
@@ -589,6 +589,7 @@ func TestGetDestinationDiff(t *testing.T) {
 	identityClusterCacheWithAllMeshEnabled.Put("bar", "cluster1", "cluster1")
 	testCases := []struct {
 		name                     string
+		eventType                admiral.EventType
 		remoteRegistry           *RemoteRegistry
 		dependency               *v1.Dependency
 		expectedDestinations     []string
@@ -598,6 +599,7 @@ func TestGetDestinationDiff(t *testing.T) {
 			name: "Given valid params " +
 				"When the cache is empty" +
 				"Then the func should return all the destinations as is",
+			eventType: admiral.Update,
 			remoteRegistry: &RemoteRegistry{
 				AdmiralCache: &AdmiralCache{
 					SourceToDestinations: &sourceToDestinations{
@@ -620,6 +622,7 @@ func TestGetDestinationDiff(t *testing.T) {
 			name: "Given valid params" +
 				"When all the destinations are already in the cache" +
 				"Then the func should return an empty list",
+			eventType: admiral.Update,
 			remoteRegistry: &RemoteRegistry{
 				AdmiralCache: &AdmiralCache{
 					SourceToDestinations: &sourceToDestinations{
@@ -642,6 +645,7 @@ func TestGetDestinationDiff(t *testing.T) {
 			name: "Given valid params" +
 				"When there is an additional destination that is not in the cache" +
 				"Then the func should return only the one that is missing in the cache",
+			eventType: admiral.Update,
 			remoteRegistry: &RemoteRegistry{
 				AdmiralCache: &AdmiralCache{
 					SourceToDestinations: &sourceToDestinations{
@@ -664,6 +668,7 @@ func TestGetDestinationDiff(t *testing.T) {
 			name: "Given valid params" +
 				"When there is a NON mesh enabled service" +
 				"Then the function should return new services, and true",
+			eventType: admiral.Update,
 			remoteRegistry: &RemoteRegistry{
 				AdmiralCache: &AdmiralCache{
 					SourceToDestinations: &sourceToDestinations{
@@ -687,7 +692,7 @@ func TestGetDestinationDiff(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualDestinations, nonMeshEnabledExists := getDestinationsToBeProcessed(tc.dependency, tc.remoteRegistry)
+			actualDestinations, nonMeshEnabledExists := getDestinationsToBeProcessed(tc.eventType, tc.dependency, tc.remoteRegistry)
 			assert.Equal(t, tc.expectedDestinations, actualDestinations)
 			assert.Equal(t, tc.expectedIsNonMeshEnabled, nonMeshEnabledExists)
 		})
