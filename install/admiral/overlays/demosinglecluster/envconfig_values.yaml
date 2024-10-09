@@ -23,4 +23,8 @@ spec:
             - --envoy_filter_version
             - "1.13"
             - --enable_routing_policy=true
+            - --exportto_identity_list
+            - "*"
+            - --enable_sw_aware_ns_caches=true
+            - --enable_dependency_processing=true
           name: admiral

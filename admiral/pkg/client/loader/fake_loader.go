@@ -9,6 +9,8 @@ import (
 	admiralfake "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/fake"
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	istiofake "istio.io/client-go/pkg/clientset/versioned/fake"
+	numaflow "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
+	numaflowfake "github.com/numaproj/numaflow/pkg/client/clientset/versioned/fake"
 	"k8s.io/client-go/kubernetes"
 	kubefake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
@@ -22,6 +24,7 @@ var FakeAdmiralApiClient admiralapi.Interface = admiralapifake.NewSimpleClientse
 var FakeIstioClient istio.Interface = istiofake.NewSimpleClientset()
 var FakeKubeClient kubernetes.Interface = kubefake.NewSimpleClientset()
 var FakeArgoClient argo.Interface = argofake.NewSimpleClientset()
+var FakeNumaflowClient numaflow.Interface = numaflowfake.NewSimpleClientset()
 
 // fake clients for dependent clusters
 var FakeAdmiralClientMap map[string]admiral.Interface = make(map[string]admiral.Interface)
@@ -29,6 +32,7 @@ var FakeAdmiralApiClientMap map[string]admiralapi.Interface = make(map[string]ad
 var FakeIstioClientMap map[string]istio.Interface = make(map[string]istio.Interface)
 var FakeKubeClientMap map[string]kubernetes.Interface = make(map[string]kubernetes.Interface)
 var FakeArgoClientMap map[string]argo.Interface = make(map[string]argo.Interface)
+var FakeNumaflowClientMap map[string]numaflow.Interface = make(map[string]numaflow.Interface)
 
 type FakeClientLoader struct{}
 
@@ -89,6 +93,19 @@ func (loader *FakeClientLoader) LoadArgoClientFromConfig(config *rest.Config) (a
 		FakeArgoClientMap[config.Host] = argoClient
 	}
 	return argoClient, nil
+}
+
+func (loader *FakeClientLoader) LoadNumaflowClientFromPath(path string) (numaflow.Interface, error) {
+	return FakeNumaflowClient, nil
+}
+
+func (loader *FakeClientLoader) LoadNumaflowClientFromConfig(config *rest.Config) (numaflow.Interface, error) {
+	numaflowClient, ok := FakeNumaflowClientMap[config.Host]
+	if !ok {
+		numaflowClient = numaflowfake.NewSimpleClientset()
+		FakeNumaflowClientMap[config.Host] = numaflowClient
+	}
+	return numaflowClient, nil
 }
 
 func (loader *FakeClientLoader) LoadKubeClientFromPath(path string) (kubernetes.Interface, error) {

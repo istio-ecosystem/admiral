@@ -48,6 +48,9 @@ type RemoteController struct {
 	EnvoyFilterController            *admiral.EnvoyFilterController
 	OutlierDetectionController       *admiral.OutlierDetectionController
 	ClientConnectionConfigController *admiral.ClientConnectionConfigController
+	JobController 					 *admiral.JobController
+	VertexController 				 *admiral.VertexController
+	MonoVertexController			 *admiral.MonoVertexController
 	stop                             chan struct{}
 	//listener for normal types
 }

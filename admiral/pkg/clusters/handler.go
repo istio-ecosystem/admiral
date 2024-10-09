@@ -323,3 +323,33 @@ func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service) string
 	}
 	return ""
 }
+
+func UpdateIdentityClusterCache(remoteRegistry *RemoteRegistry, identity string, clusterId string) {
+	if remoteRegistry.AdmiralCache != nil && remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
+		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(identity, clusterId, clusterId)
+	}
+}
+
+func DeploymentOrRolloutExistsInNamespace(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, namespace string) bool {
+
+	if remoteRegistry.remoteControllers[clusterName] == nil {
+		log.Warnf(LogFormatAdv, "Find", "deployment", "", namespace, clusterName, "Remote controller not initialized when trying to find "+globalIdentifier)
+		return false
+	}
+
+	deployments := remoteRegistry.remoteControllers[clusterName].DeploymentController.Cache.GetByIdentity(globalIdentifier)
+	for _, deployment := range deployments {
+		if deployment.Deployment.Namespace == namespace {
+			return true
+		}
+	}
+
+	rollouts := remoteRegistry.remoteControllers[clusterName].RolloutController.Cache.GetByIdentity(globalIdentifier)
+	for _, rollout := range rollouts {
+		if rollout.Rollout.Namespace == namespace {
+			return true
+		}
+	}
+
+	return false
+}

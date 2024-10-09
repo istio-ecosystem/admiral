@@ -22,28 +22,31 @@ func setupForConfigTests() {
 				AdmiralCRDIdentityLabel: "identity",
 				IdentityPartitionKey:    "admiral.io/identityPartition",
 			},
-			EnableSAN:                    true,
-			SANPrefix:                    "prefix",
-			HostnameSuffix:               "mesh",
-			SyncNamespace:                "admiral-sync",
-			SecretFilterTags:             "admiral/sync",
-			CacheReconcileDuration:       time.Minute,
-			ClusterRegistriesNamespace:   "default",
-			DependenciesNamespace:        "default",
-			Profile:                      "default",
-			WorkloadSidecarName:          "default",
-			WorkloadSidecarUpdate:        "disabled",
-			MetricsEnabled:               true,
-			DeprecatedEnvoyFilterVersion: "1.10,1.17",
-			EnvoyFilterVersion:           "1.10,1.13,1.17",
-			CartographerFeatures:         map[string]string{"throttle_filter_gen": "disabled"},
-			DisableIPGeneration:          false,
-			EnableSWAwareNSCaches:        true,
-			ExportToIdentityList:         []string{"*"},
-			ExportToMaxNamespaces:        35,
-			AdmiralOperatorMode:          false,
-			OperatorSyncNamespace:        "admiral-sync",
-			OperatorSecretFilterTags:     "admiral/syncoperator",
+			EnableSAN:                      true,
+			SANPrefix:                      "prefix",
+			HostnameSuffix:                 "mesh",
+			SyncNamespace:                  "admiral-sync",
+			SecretFilterTags:               "admiral/sync",
+			CacheReconcileDuration:         time.Minute,
+			ClusterRegistriesNamespace:     "default",
+			DependenciesNamespace:          "default",
+			Profile:                        "default",
+			WorkloadSidecarName:            "default",
+			WorkloadSidecarUpdate:          "disabled",
+			MetricsEnabled:                 true,
+			DeprecatedEnvoyFilterVersion:   "1.10,1.17",
+			EnvoyFilterVersion:             "1.10,1.13,1.17",
+			CartographerFeatures:           map[string]string{"throttle_filter_gen": "disabled"},
+			DisableIPGeneration:            false,
+			EnableSWAwareNSCaches:          true,
+			ExportToIdentityList:           []string{"*"},
+			ExportToMaxNamespaces:          35,
+			AdmiralOperatorMode:            false,
+			OperatorSyncNamespace:          "admiral-sync",
+			OperatorSecretFilterTags:       "admiral/syncoperator",
+			DiscoveryClustersForNumaflow:   make([]string, 0),
+			ClientDiscoveryClustersForJobs: make([]string, 0),
+			EnableClientDiscovery:          true,
 		}
 		ResetSync()
 		initHappened = true
@@ -236,6 +239,18 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetOperatorSecretFilterTags() != "admiral/syncoperator" {
 		t.Errorf("operator secret filter tags mismatch, expected admiral/syncoperator, got %s", GetOperatorSecretFilterTags())
+	}
+
+	if IsClientDiscoveryEnabled() != true {
+		t.Errorf("client discovery enabled mismatch, expected true, got %v", IsClientDiscoveryEnabled())
+	}
+
+	if len(GetClientDiscoveryClustersForJobs()) != 0 {
+		t.Errorf("clusters for jobs client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForJobs())
+	}
+
+	if len(GetClientDiscoveryClustersForNumaflow()) != 0 {
+		t.Errorf("clusters for numaflow client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForNumaflow())
 	}
 }
 

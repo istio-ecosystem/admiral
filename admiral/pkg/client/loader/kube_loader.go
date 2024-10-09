@@ -5,6 +5,7 @@ import (
 	argo "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	admiral "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	numaflow "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	log "github.com/sirupsen/logrus"
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
@@ -83,6 +84,19 @@ func (loader *KubeClientLoader) LoadKubeClientFromPath(kubeConfigPath string) (k
 
 func (loader *KubeClientLoader) LoadKubeClientFromConfig(config *rest.Config) (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(config)
+}
+
+func (loader *KubeClientLoader) LoadNumaflowClientFromPath(kubeConfigPath string) (numaflow.Interface, error) {
+	config, err := getConfig(kubeConfigPath)
+	if err != nil || config == nil {
+		return nil, err
+	}
+
+	return loader.LoadNumaflowClientFromConfig(config)
+}
+
+func (loader *KubeClientLoader) LoadNumaflowClientFromConfig(config *rest.Config) (numaflow.Interface, error) {
+	return numaflow.NewForConfig(config)
 }
 
 func getConfig(kubeConfigPath string) (*rest.Config, error) {

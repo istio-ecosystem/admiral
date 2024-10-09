@@ -482,6 +482,24 @@ func GetExportToMaxNamespaces() int {
 	return wrapper.params.ExportToMaxNamespaces
 }
 
+func IsClientDiscoveryEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableClientDiscovery
+}
+
+func GetClientDiscoveryClustersForJobs() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ClientDiscoveryClustersForJobs
+}
+
+func GetClientDiscoveryClustersForNumaflow() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.DiscoveryClustersForNumaflow
+}
+
 func IsAdmiralStateSyncerMode() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
