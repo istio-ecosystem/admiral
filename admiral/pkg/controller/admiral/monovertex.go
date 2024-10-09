@@ -197,7 +197,7 @@ func (d *MonoVertexController) Added(ctx context.Context, obj interface{}) error
 }
 
 func (d *MonoVertexController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
-	//Not Required, to be handled via off boarding
+	//Not Required, this is a no-op as as Add event already handles registering this as a mesh client
 	return nil
 }
 
