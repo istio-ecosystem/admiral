@@ -161,7 +161,7 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
 		if len(blueGreenActiveService) == 0 {
 			//pick a service that ends in RolloutActiveServiceSuffix if one is available
-			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices)
+			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices, rollout.Spec.Selector)
 		}
 	} else if rolloutStrategy.Canary != nil {
 		//If istio canary perform below operations
@@ -259,11 +259,10 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 				since istio does not know the split info as there is no virtual service
 			*/
 
-			sName := GetServiceWithSuffixMatch(common.RolloutRootServiceSuffix, cachedServices)
+			sName := GetServiceWithSuffixMatch(common.RolloutRootServiceSuffix, cachedServices, rollout.Spec.Selector)
 			if len(sName) <= 0 {
 				//Fallback if root service not found
-				log.Infof("root service not found, falling back to stable for rollout=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
-				sName = GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices)
+				sName = GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices, rollout.Spec.Selector)
 			}
 
 			// If root and stable not found, exit canary logic and use generic logic to choose random service
