@@ -208,7 +208,7 @@ func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) 
 		return fmt.Errorf("failed to covert informer object to Vertex")
 	}
 	k8sObj := getK8sObjectFromVertex(vertex)
-	if !common.ShouldIgnore(vertex.Spec.Metadata.Annotations, vertex.Spec.Metadata.Labels) {
+	if vertex.Spec.Metadata != nil && !common.ShouldIgnore(vertex.Spec.Metadata.Annotations, vertex.Spec.Metadata.Labels) {
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			newK8sObj.Status = common.ProcessingInProgress

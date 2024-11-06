@@ -206,12 +206,12 @@ func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj inter
 	if !ok {
 		return fmt.Errorf("failed to covert informer object to MonoVertex")
 	}
-	if !common.ShouldIgnore(monoVertex.Spec.Metadata.Annotations, monoVertex.Spec.Metadata.Labels) {
+	if monoVertex.Spec.Metadata != nil && !common.ShouldIgnore(monoVertex.Spec.Metadata.Annotations, monoVertex.Spec.Metadata.Labels) {
 		k8sObj := getK8sObjectFromMonoVertex(monoVertex)
 		newK8sObj, isNew := j.Cache.Put(k8sObj)
 		if isNew {
 			newK8sObj.Status = common.ProcessingInProgress
-			j.MonoVertexHandler.Added(ctx, newK8sObj)
+			return j.MonoVertexHandler.Added(ctx, newK8sObj)
 		} else {
 			log.Infof("Ignoring monoVertex %v as it was already processed", monoVertex.Name)
 		}
