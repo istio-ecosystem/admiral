@@ -8,6 +8,7 @@ import (
 
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1alpha12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -2427,12 +2428,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
 							},
 							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
-								Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-									{
-										From: "*",
-										To:   map[string]uint32{"*": 100},
-									},
-								},
+								Enabled: &wrappers.BoolValue{Value: false},
 							},
 							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 						},
@@ -2469,12 +2465,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
 							},
 							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
-								Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-									{
-										From: "*",
-										To:   map[string]uint32{"*": 100},
-									},
-								},
+								Enabled: &wrappers.BoolValue{Value: false},
 							},
 							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 						},
