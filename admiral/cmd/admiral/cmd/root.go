@@ -260,8 +260,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
-	rootCmd.PersistentFlags().StringArrayVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
-	rootCmd.PersistentFlags().StringArrayVar(&params.DiscoveryClustersForNumaflow, "client_discovery_clusters_for_numaflow", []string{}, "List of clusters for client discovery for numaflow types")
+	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
+	rootCmd.PersistentFlags().StringSliceVar(&params.DiscoveryClustersForNumaflow, "client_discovery_clusters_for_numaflow", []string{}, "List of clusters for client discovery for numaflow types")
 
 	return rootCmd
 }
