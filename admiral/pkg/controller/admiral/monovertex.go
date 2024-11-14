@@ -62,7 +62,7 @@ func getK8sObjectFromMonoVertex(monoVertex *v1alpha1.MonoVertex) *common.K8sObje
 	}
 }
 
-func (p *monoVertexCache) Put(monoVertex *common.K8sObject) (*common.K8sObject, bool) {
+func (p *monoVertexCache) Put(monoVertex *common.K8sObject) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(monoVertex.Annotations, monoVertex.Labels)
@@ -73,16 +73,16 @@ func (p *monoVertexCache) Put(monoVertex *common.K8sObject) (*common.K8sObject, 
 			MonoVertices: map[string]*common.K8sObject{monoVertex.Namespace: monoVertex},
 		}
 		p.cache[identity] = existingMonoVertices
-		return monoVertex, true
+		return monoVertex
 	} else {
 		monoVertexInCache := existingMonoVertices.MonoVertices[monoVertex.Namespace]
 		if monoVertexInCache == nil {
 			existingMonoVertices.MonoVertices[monoVertex.Namespace] = monoVertex
 			p.cache[identity] = existingMonoVertices
-			return monoVertex, true
+			return monoVertex
 		}
 	}
-	return nil, false
+	return monoVertex
 }
 
 func (p *monoVertexCache) Get(key string, namespace string) *common.K8sObject {
@@ -208,13 +208,9 @@ func addUpdateMonoVertex(j *MonoVertexController, ctx context.Context, obj inter
 	}
 	if monoVertex.Spec.Metadata != nil && !common.ShouldIgnore(monoVertex.Spec.Metadata.Annotations, monoVertex.Spec.Metadata.Labels) {
 		k8sObj := getK8sObjectFromMonoVertex(monoVertex)
-		newK8sObj, isNew := j.Cache.Put(k8sObj)
-		if isNew {
-			newK8sObj.Status = common.ProcessingInProgress
-			return j.MonoVertexHandler.Added(ctx, newK8sObj)
-		} else {
-			log.Infof("Ignoring monoVertex %v as it was already processed", monoVertex.Name)
-		}
+		newK8sObj := j.Cache.Put(k8sObj)
+		newK8sObj.Status = common.ProcessingInProgress
+		return j.MonoVertexHandler.Added(ctx, newK8sObj)
 	}
 	return nil
 }

@@ -56,7 +56,7 @@ func getK8sObjectFromJob(job *v12.Job) *common.K8sObject {
 	}
 }
 
-func (p *jobCache) Put(job *common.K8sObject) (*common.K8sObject, bool) {
+func (p *jobCache) Put(job *common.K8sObject) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 	identity := common.GetGlobalIdentifier(job.Annotations, job.Labels)
@@ -67,16 +67,16 @@ func (p *jobCache) Put(job *common.K8sObject) (*common.K8sObject, bool) {
 			Jobs:     map[string]*common.K8sObject{job.Namespace: job},
 		}
 		p.cache[identity] = existingJobs
-		return job, true
+		return job
 	} else {
 		jobInCache := existingJobs.Jobs[job.Namespace]
 		if jobInCache == nil {
 			existingJobs.Jobs[job.Namespace] = job
 			p.cache[identity] = existingJobs
-			return job, true
+			return job
 		}
 	}
-	return nil, false
+	return job
 }
 
 func (p *jobCache) Get(key string, namespace string) *common.K8sObject {
@@ -200,13 +200,9 @@ func addUpdateJob(j *JobController, ctx context.Context, obj interface{}) error 
 	}
 	if !common.ShouldIgnore(job.Spec.Template.Annotations, job.Spec.Template.Labels) {
 		k8sObj := getK8sObjectFromJob(job)
-		newK8sObj, isNew := j.Cache.Put(k8sObj)
-		if isNew {
-			newK8sObj.Status = common.ProcessingInProgress
-			return j.JobHandler.Added(ctx, newK8sObj)
-		} else {
-			log.Infof("Ignoring job %v as it was already processed", job.Name)
-		}
+		newK8sObj := j.Cache.Put(k8sObj)
+		newK8sObj.Status = common.ProcessingInProgress
+		return j.JobHandler.Added(ctx, newK8sObj)
 	}
 	return nil
 }

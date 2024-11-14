@@ -62,7 +62,7 @@ func getK8sObjectFromVertex(vertex *v1alpha1.Vertex) *common.K8sObject {
 	}
 }
 
-func (p *vertexCache) Put(vertex *common.K8sObject) (*common.K8sObject, bool) {
+func (p *vertexCache) Put(vertex *common.K8sObject) *common.K8sObject {
 	defer p.mutex.Unlock()
 	p.mutex.Lock()
 
@@ -74,16 +74,16 @@ func (p *vertexCache) Put(vertex *common.K8sObject) (*common.K8sObject, bool) {
 			Vertices: map[string]*common.K8sObject{vertex.Namespace: vertex},
 		}
 		p.cache[identity] = existingVertices
-		return vertex, true
+		return vertex
 	} else {
 		vertexInCache := existingVertices.Vertices[vertex.Namespace]
 		if vertexInCache == nil {
 			existingVertices.Vertices[vertex.Namespace] = vertex
 			p.cache[identity] = existingVertices
-			return vertex, true
+			return vertex
 		}
 	}
-	return nil, false
+	return vertex
 }
 
 func (p *vertexCache) Get(key string, namespace string) *common.K8sObject {
@@ -209,13 +209,9 @@ func addUpdateVertex(j *VertexController, ctx context.Context, obj interface{}) 
 	}
 	k8sObj := getK8sObjectFromVertex(vertex)
 	if vertex.Spec.Metadata != nil && !common.ShouldIgnore(vertex.Spec.Metadata.Annotations, vertex.Spec.Metadata.Labels) {
-		newK8sObj, isNew := j.Cache.Put(k8sObj)
-		if isNew {
-			newK8sObj.Status = common.ProcessingInProgress
-			return j.VertexHandler.Added(ctx, newK8sObj)
-		} else {
-			log.Infof("Ignoring vertex %v as it was already processed", vertex.Name)
-		}
+		newK8sObj := j.Cache.Put(k8sObj)
+		newK8sObj.Status = common.ProcessingInProgress
+		return j.VertexHandler.Added(ctx, newK8sObj)
 	}
 	return nil
 }
