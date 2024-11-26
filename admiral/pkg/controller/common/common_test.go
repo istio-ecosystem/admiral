@@ -1189,38 +1189,38 @@ func TestShouldIgnore(t *testing.T) {
 	initConfig(true, true)
 
 	testCases := []struct {
-		name     		string
-		annotations   	map[string]string
-		labels   		map[string]string
-		expected 		bool
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    bool
 	}{
 		{
 			name: "Given valid admiral ignore label " +
 				"Should ignore the object ",
-			annotations:  map[string]string{"sidecar.istio.io/inject": "true"},
-			labels:   map[string]string{"admiral.io/ignore": "true", "app": "app"},
-			expected: true,
+			annotations: map[string]string{"sidecar.istio.io/inject": "true"},
+			labels:      map[string]string{"admiral.io/ignore": "true", "app": "app"},
+			expected:    true,
 		},
 		{
 			name: "Given istio injection is not enabled " +
 				"Should ignore the object ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app"},
-			expected: true,
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app"},
+			expected:    true,
 		},
 		{
 			name: "Given valid admiral ignore annotation " +
 				"Should ignore the object ",
-			annotations:  map[string]string{"admiral.io/ignore": "true", "sidecar.istio.io/inject": "true"},
-			labels:   map[string]string{"app": "app"},
-			expected: true,
+			annotations: map[string]string{"admiral.io/ignore": "true", "sidecar.istio.io/inject": "true"},
+			labels:      map[string]string{"app": "app"},
+			expected:    true,
 		},
 		{
 			name: "Given no admiral ignore set " +
 				"Should not ignore the object ",
-			annotations:   map[string]string{"sidecar.istio.io/inject": "true"},
-			labels:   map[string]string{"app": "app"},
-			expected: false,
+			annotations: map[string]string{"sidecar.istio.io/inject": "true"},
+			labels:      map[string]string{"app": "app"},
+			expected:    false,
 		},
 	}
 
@@ -1238,31 +1238,31 @@ func TestGetIdentityPartition(t *testing.T) {
 	initConfig(true, true)
 
 	testCases := []struct {
-		name     		string
-		annotations   	map[string]string
-		labels   		map[string]string
-		expected 		string
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    string
 	}{
 		{
 			name: "Given valid identity partition on annotations " +
 				"Should return identity partition ",
-			annotations:  map[string]string{"admiral.io/identityPartition": "partition1"},
-			labels:   map[string]string{"app": "app"},
-			expected: "partition1",
+			annotations: map[string]string{"admiral.io/identityPartition": "partition1"},
+			labels:      map[string]string{"app": "app"},
+			expected:    "partition1",
 		},
 		{
 			name: "Given valid identity partition on labels " +
 				"Should return identity partition ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app", "admiral.io/identityPartition": "partition2"},
-			expected: "partition2",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app", "admiral.io/identityPartition": "partition2"},
+			expected:    "partition2",
 		},
 		{
 			name: "Given no valid identity partition present on labels or annotations " +
 				"Should return empty string ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app"},
-			expected: "",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app"},
+			expected:    "",
 		},
 	}
 
@@ -1280,38 +1280,38 @@ func TestGetGlobalIdentifier(t *testing.T) {
 	initConfig(true, true)
 
 	testCases := []struct {
-		name     		string
-		annotations   	map[string]string
-		labels   		map[string]string
-		expected 		string
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    string
 	}{
 		{
 			name: "Given valid identity partition on annotations and valid identity" +
 				"Should return global identifier with identity partition ",
-			annotations:  map[string]string{"admiral.io/identityPartition": "partition1"},
-			labels:   map[string]string{"app": "app", "identity": "identity1"},
-			expected: "partition1.identity1",
+			annotations: map[string]string{"admiral.io/identityPartition": "partition1"},
+			labels:      map[string]string{"app": "app", "identity": "identity1"},
+			expected:    "partition1.identity1",
 		},
 		{
 			name: "Given valid identity partition on labels and valid identity " +
 				"Should return global identifier with identity partition ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app", "admiral.io/identityPartition": "partition2", "identity": "identity2"},
-			expected: "partition2.identity2",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app", "admiral.io/identityPartition": "partition2", "identity": "identity2"},
+			expected:    "partition2.identity2",
 		},
 		{
 			name: "Given no valid identity partition present on labels or annotations and valid identity " +
 				"Should return identity string ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app", "identity": "identity3"},
-			expected: "identity3",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app", "identity": "identity3"},
+			expected:    "identity3",
 		},
 		{
 			name: "Given no valid identity partition and no valid identity " +
 				"Should empty string ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app"},
-			expected: "",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app"},
+			expected:    "",
 		},
 	}
 
@@ -1329,31 +1329,31 @@ func TestGetOriginalIdentifier(t *testing.T) {
 	initConfig(true, true)
 
 	testCases := []struct {
-		name     		string
-		annotations   	map[string]string
-		labels   		map[string]string
-		expected 		string
+		name        string
+		annotations map[string]string
+		labels      map[string]string
+		expected    string
 	}{
 		{
 			name: "Given valid identity on annotations " +
 				"Should return identity ",
-			annotations:  map[string]string{"identity": "identity1"},
-			labels:   map[string]string{"app": "app"},
-			expected: "identity1",
+			annotations: map[string]string{"identity": "identity1"},
+			labels:      map[string]string{"app": "app"},
+			expected:    "identity1",
 		},
 		{
 			name: "Given valid identity on labels " +
 				"Should return identity ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app", "identity": "identity2"},
-			expected: "identity2",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app", "identity": "identity2"},
+			expected:    "identity2",
 		},
 		{
 			name: "Given no valid identity on labels or annotations " +
 				"Should return empty identity ",
-			annotations:  map[string]string{},
-			labels:   map[string]string{"app": "app"},
-			expected: "",
+			annotations: map[string]string{},
+			labels:      map[string]string{"app": "app"},
+			expected:    "",
 		},
 	}
 
@@ -1497,6 +1497,235 @@ func TestGetPartitionAndOriginalIdentifierFromPartitionedIdentifier(t *testing.T
 			partition, originalIdentifier := GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(c.identifier)
 			if !(partition == c.expectedPartition && originalIdentifier == c.expectedOriginalIdentifier) {
 				t.Errorf("Wanted partition: %s, original identifier: %s, got: %s, %s", c.expectedPartition, c.expectedOriginalIdentifier, partition, originalIdentifier)
+			}
+		})
+	}
+}
+
+func TestGetGtpPreferenceRegion(t *testing.T) {
+	testCases := []struct {
+		name           string
+		existingGtp    *admiralV1Alpha1.GlobalTrafficPolicy
+		newGtp         *admiralV1Alpha1.GlobalTrafficPolicy
+		expectedRegion string
+	}{
+		{
+			name: "Returns current region for same GTP",
+			existingGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+			newGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRegion: "",
+		},
+		{
+			name: "Returns error for different prefix count",
+			existingGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+			newGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-east-2",
+									Weight: 100,
+								},
+							},
+						},
+						{
+							LbType:    1,
+							DnsPrefix: "east",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRegion: "us-east-2",
+		},
+		{
+			name: "Returns no region for different weight",
+			existingGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
+						},
+					},
+				},
+			},
+			newGtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    1,
+							DnsPrefix: "west",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedRegion: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			region := GetGtpPreferenceRegion(tc.existingGtp, tc.newGtp)
+
+			if region != tc.expectedRegion {
+				t.Errorf("got region %s; want %s", region, tc.expectedRegion)
+			}
+		})
+	}
+}
+
+func TestMakeDnsPrefixRegionMapping(t *testing.T) {
+	testCases := []struct {
+		name     string
+		gtp      *admiralV1Alpha1.GlobalTrafficPolicy
+		expected map[string]string
+	}{
+		{
+			name: "valid mapping with 100 weight",
+			gtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    model.TrafficPolicy_FAILOVER,
+							DnsPrefix: "test-prefix",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: int32(100),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]string{"test-prefix": "us-west-2"},
+		},
+		{
+			name: "no mapping with weight less than 100",
+			gtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    model.TrafficPolicy_FAILOVER,
+							DnsPrefix: "test-prefix",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: int32(50),
+								},
+								{
+									Region: "us-east-2",
+									Weight: int32(50),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "empty policy",
+			gtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{},
+				},
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "non-failover lb type",
+			gtp: &admiralV1Alpha1.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							LbType:    model.TrafficPolicy_TOPOLOGY, // not FAILOVER
+							DnsPrefix: "test-prefix",
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-east-2",
+									Weight: int32(100),
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: map[string]string{},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := makeDnsPrefixRegionMapping(c.gtp)
+			if !reflect.DeepEqual(result, c.expected) {
+				t.Errorf("Wanted DNS region mapping: %v, got: %v", c.expected, result)
 			}
 		})
 	}

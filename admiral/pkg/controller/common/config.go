@@ -467,6 +467,12 @@ func DoGenerationCheck() bool {
 	return wrapper.params.EnableGenerationCheck
 }
 
+func PreventSplitBrain() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.PreventSplitBrain
+}
+
 func GetResyncIntervals() util.ResyncIntervals {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

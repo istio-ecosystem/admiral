@@ -452,7 +452,9 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	//cache the latest GTP in global cache to be reused during DR creation
 	start = time.Now()
-	err := updateGlobalGtpCache(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
+	gtpPreferenceRegion, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
+	ctx = context.WithValue(ctx, common.GtpPreferenceRegion, gtpPreferenceRegion)
+	ctxLogger.Infof("GTP preference region is set to %v", ctx.Value(common.GtpPreferenceRegion))
 	if err != nil {
 		modifySEerr = common.AppendError(modifySEerr, err)
 	}
@@ -480,7 +482,11 @@ func modifyServiceEntryForNewServiceOrPod(
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	start = time.Now()
 
-	for sourceCluster, serviceInstance := range sourceServices {
+	sourceClusterKeys := orderSourceClusters(ctx, remoteRegistry, sourceServices)
+	ctxLogger.Infof(common.CtxLogFormat, "OrderSourceClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", "sourceClusterKeys="+strings.Join(sourceClusterKeys, ","))
+
+	for _, sourceCluster := range sourceClusterKeys {
+		serviceInstance := sourceServices[sourceCluster]
 		resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 		if resourceLabels != nil {
 			// check if additional endpoint generation is required
@@ -858,6 +864,35 @@ func modifyServiceEntryForNewServiceOrPod(
 	return serviceEntries, modifySEerr
 }
 
+func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
+	clusterKeySlice := make([]string, 0, len(services))
+	clusterKeys := make(map[string]string, len(services))
+	gtpPreferenceRegion, ok := ctx.Value(common.GtpPreferenceRegion).(string)
+
+	if common.PreventSplitBrain() && gtpPreferenceRegion != "" && ok {
+		for cluster, _ := range services {
+			rc := rr.GetRemoteController(cluster)
+			if rc == nil {
+				continue
+			}
+			region, err := getClusterRegion(rr, cluster, rc)
+			if err != nil {
+				continue
+			}
+			if region == gtpPreferenceRegion {
+				clusterKeys[cluster] = cluster
+				clusterKeySlice = append(clusterKeySlice, cluster)
+			}
+		}
+	}
+	for cluster, _ := range services {
+		if _, ok := clusterKeys[cluster]; !ok {
+			clusterKeySlice = append(clusterKeySlice, cluster)
+		}
+	}
+	return clusterKeySlice
+}
+
 // Given an identity with a partition prefix, returns the identity without the prefix that is stored in the PartitionIdentityCache
 // If the identity did not have a partition prefix, returns the passed in identity
 func getNonPartitionedIdentity(admiralCache *AdmiralCache, sourceIdentity string) string {
@@ -1016,24 +1051,25 @@ func updateGlobalOutlierDetectionCache(ctxLogger *logrus.Entry, cache *AdmiralCa
 // Does two things;
 // i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
 // ii) Updates the global GTP cache with the selected GTP in i)
-func updateGlobalGtpCache(remoteRegistry *RemoteRegistry, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy, clusterName string, ctxLogger *logrus.Entry) error {
-	defer util.LogElapsedTimeForTask(ctxLogger, "updateGlobalGtpCache", "", "", "", "")()
+func updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry *RemoteRegistry, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy, clusterName string, ctxLogger *logrus.Entry) (string, error) {
+	defer util.LogElapsedTimeForTask(ctxLogger, "updateGlobalGtpCacheAndGetGtpPreferenceRegion", "", "", "", "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
+	var gtpPreferenceRegion string
 	for _, gtpsInCluster := range gtps {
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
 	}
+	oldGTP, _ := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(identity, env)
 	if len(gtpsOrdered) == 0 {
 		ctxLogger.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
-		oldGTP, _ := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(identity, env)
 		if oldGTP != nil {
 			err := handleDynamoDbUpdateForOldGtp(oldGTP, remoteRegistry, clusterName, env, identity, ctxLogger)
 			if err != nil {
 				ctxLogger.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
-				return fmt.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
+				return "", fmt.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
 			}
 		}
 		remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(identity, env)
-		return nil
+		return "", nil
 	} else if len(gtpsOrdered) > 1 {
 		ctxLogger.Infof("More than one GTP found for identity=%s in env=%s.", identity, env)
 		//sort by creation time and priority, gtp with highest priority and most recent at the beginning
@@ -1041,16 +1077,18 @@ func updateGlobalGtpCache(remoteRegistry *RemoteRegistry, identity, env string, 
 	}
 
 	mostRecentGtp := gtpsOrdered[0]
-
+	if oldGTP != nil && common.PreventSplitBrain() {
+		gtpPreferenceRegion = common.GetGtpPreferenceRegion(oldGTP, mostRecentGtp)
+	}
 	err := remoteRegistry.AdmiralCache.GlobalTrafficCache.Put(mostRecentGtp)
 
 	if err != nil {
 		ctxLogger.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
-		return fmt.Errorf("error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
+		return "", fmt.Errorf("error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
 	} else {
 		ctxLogger.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
 	}
-	return nil
+	return gtpPreferenceRegion, nil
 }
 
 func sortOutlierDetectionByCreationTime(ods []*v1.OutlierDetection, identity string, env string) {
