@@ -77,6 +77,7 @@ func admiralParamsForServiceEntryTests() common.AdmiralParams {
 		WorkloadSidecarName:               "default",
 		Profile:                           common.AdmiralProfileDefault,
 		DependentClusterWorkerConcurrency: 5,
+		PreventSplitBrain:                 true,
 	}
 }
 
@@ -4184,7 +4185,7 @@ func TestHandleDynamoDbUpdateForOldGtp(t *testing.T) {
 	}
 }
 
-func TestUpdateGlobalGtpCache(t *testing.T) {
+func TestupdateGlobalGtpCacheAndGetGtpPreferenceRegion(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
 		remoteRegistryWithoutGtpWithoutAdmiralClient = &RemoteRegistry{
@@ -4339,7 +4340,7 @@ func TestUpdateGlobalGtpCache(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			err := updateGlobalGtpCache(c.remoteRegistry, c.identity, c.env, c.gtps, "", ctxLogger)
+			_, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(c.remoteRegistry, c.identity, c.env, c.gtps, "", ctxLogger)
 			if c.expectedErr == nil {
 				if err != nil {
 					t.Errorf("expected error to be: nil, got: %v", err)
@@ -10200,5 +10201,92 @@ func TestValidateLocalityInServiceEntry(t *testing.T) {
 				assert.Contains(t, err.Error(), expectedErr, "Error %d: %s", i, expectedErr)
 			}
 		}
+	}
+}
+
+func TestOrderSourceClusters(t *testing.T) {
+	rc1 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-east-2",
+			},
+		},
+	}
+	rc2 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+	}
+	rc3 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-apse-2",
+			},
+		},
+	}
+
+	tests := []struct {
+		desc       string
+		gtpPrefReg string
+		rcMap      map[string]*RemoteController
+		services   map[string]map[string]*v1.Service
+		enabled    bool
+		expected   string
+	}{
+		{
+			desc:       "Empty services",
+			gtpPrefReg: "",
+			rcMap:      map[string]*RemoteController{},
+			services:   map[string]map[string]*v1.Service{},
+			expected:   "",
+		},
+		{
+			desc:       "Cluster in gtp preference region",
+			gtpPrefReg: "us-west-2",
+			rcMap:      map[string]*RemoteController{"cluster2": rc2, "cluster1": rc1, "cluster3": rc3},
+			services:   map[string]map[string]*v1.Service{"cluster1": {}, "cluster2": {}, "cluster3": {}},
+			enabled:    true,
+			expected:   "cluster2",
+		},
+	}
+
+	for _, tC := range tests {
+		t.Run(tC.desc, func(t *testing.T) {
+			common.ResetSync()
+			rr, _ := InitAdmiral(context.Background(), common.AdmiralParams{
+				KubeconfigPath: "testdata/fake.config",
+				LabelSet: &common.LabelSet{
+					GatewayApp:              "gatewayapp",
+					WorkloadIdentityKey:     "identity",
+					PriorityKey:             "priority",
+					EnvKey:                  "env",
+					AdmiralCRDIdentityLabel: "identity",
+				},
+				EnableSAN:                         true,
+				SANPrefix:                         "prefix",
+				HostnameSuffix:                    "mesh",
+				SyncNamespace:                     "ns",
+				CacheReconcileDuration:            0,
+				ClusterRegistriesNamespace:        "default",
+				DependenciesNamespace:             "default",
+				WorkloadSidecarName:               "default",
+				Profile:                           common.AdmiralProfileDefault,
+				DependentClusterWorkerConcurrency: 5,
+				PreventSplitBrain:                 tC.enabled,
+			})
+			for c, rc := range tC.rcMap {
+				rr.PutRemoteController(c, rc)
+			}
+			ctx := context.WithValue(context.Background(), common.GtpPreferenceRegion, tC.gtpPrefReg)
+			result := orderSourceClusters(ctx, rr, tC.services)
+
+			if tC.expected == "" {
+				assert.Equal(t, 0, len(result))
+			} else if !reflect.DeepEqual(result[0], tC.expected) {
+				t.Fatalf("Expected %v, but got %v", tC.expected, result)
+			}
+		})
 	}
 }

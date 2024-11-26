@@ -99,6 +99,7 @@ type AdmiralParams struct {
 	EnableSyncIstioResourcesToSourceClusters bool
 	DefaultWarmupDurationSecs                int64
 	EnableGenerationCheck                    bool
+	PreventSplitBrain                        bool
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -132,9 +133,9 @@ type AdmiralParams struct {
 	VSRoutingEnabledClusters    []string
 
 	//Client discovery (types requiring mesh egress only)
-	EnableClientDiscovery		bool
+	EnableClientDiscovery          bool
 	ClientDiscoveryClustersForJobs []string
-	DiscoveryClustersForNumaflow []string
+	DiscoveryClustersForNumaflow   []string
 }
 
 func (b AdmiralParams) String() string {
@@ -469,10 +470,10 @@ func (s *ProxiedServiceEnvironment) String() string {
 }
 
 type K8sObject struct {
-	Name string
-	Namespace string
-	Type string
+	Name        string
+	Namespace   string
+	Type        string
 	Annotations map[string]string
-	Labels map[string]string
-	Status string
+	Labels      map[string]string
+	Status      string
 }
