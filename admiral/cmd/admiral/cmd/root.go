@@ -241,6 +241,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
+	rootCmd.PersistentFlags().BoolVar(&params.PreventSplitBrain, "prevent_split_brain", true, "Enable/Disable Explicit Split Brain prevention logic")
 
 	//Admiral 2.0 flags
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")

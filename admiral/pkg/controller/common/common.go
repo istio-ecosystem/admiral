@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"sort"
 	"strconv"
 	"strings"
@@ -107,6 +108,7 @@ const (
 	Forget                   = "Forget"
 
 	ClusterName            = "clusterName"
+	GtpPreferenceRegion    = "gtpPreferenceRegion"
 	EventResourceType      = "eventResourceType"
 	OutlierDetection       = "OutlierDetection"
 	ClientConnectionConfig = "ClientConnectionConfig"
@@ -313,6 +315,34 @@ func GetGtpIdentityPartition(gtp *v1.GlobalTrafficPolicy) string {
 
 func GetGtpKey(gtp *v1.GlobalTrafficPolicy) string {
 	return ConstructKeyWithEnvAndIdentity(GetGtpEnv(gtp), GetGtpIdentity(gtp))
+}
+
+func GetGtpPreferenceRegion(existingGtp, newGtp *v1.GlobalTrafficPolicy) string {
+	existingGtpDnsRegionMapping := makeDnsPrefixRegionMapping(existingGtp)
+	newGtpDnsRegionMapping := makeDnsPrefixRegionMapping(newGtp)
+
+	for dnsprefix, region := range newGtpDnsRegionMapping {
+		if existingRegion, ok := existingGtpDnsRegionMapping[dnsprefix]; ok {
+			if existingRegion != region {
+				return region
+			}
+		}
+	}
+	return ""
+}
+
+func makeDnsPrefixRegionMapping(gtp *v1.GlobalTrafficPolicy) map[string]string {
+	dnsRegionMapping := make(map[string]string)
+	for _, tp := range gtp.Spec.Policy {
+		if tp.LbType == model.TrafficPolicy_FAILOVER {
+			for _, tg := range tp.Target {
+				if tg.Weight == int32(100) {
+					dnsRegionMapping[tp.DnsPrefix] = tg.Region
+				}
+			}
+		}
+	}
+	return dnsRegionMapping
 }
 
 func ConstructKeyWithEnvAndIdentity(env, identity string) string {
