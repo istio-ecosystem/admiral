@@ -70,5 +70,12 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	_, err := modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
+
+	if common.ClientInitiatedProcessingEnabled() {
+		rolloutProcessErr := processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
+		if rolloutProcessErr != nil {
+			return common.AppendError(err, rolloutProcessErr)
+		}
+	}
 	return err
 }

@@ -3,6 +3,8 @@ package clusters
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/prometheus/common/log"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -367,4 +370,161 @@ func (r RouteDestinationSorted) Less(i, j int) bool {
 
 func (r RouteDestinationSorted) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
+}
+
+func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+	var destinationsToBeProcessed []string
+
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+
+	var sourceClusterMap = common.NewMap()
+	sourceClusterMap.Put(clusterName, clusterName)
+
+	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+	return err
+}
+
+func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string) []string {
+	actualServerIdentities := remoteRegistry.AdmiralCache.SourceToDestinations.Get(globalIdentifier)
+	processedClientClusters := remoteRegistry.AdmiralCache.ClientClusterNamespaceServerCache.Get(clusterName)
+
+	if actualServerIdentities == nil {
+		return nil
+	}
+
+	if processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
+		destinationsToBeProcessed = actualServerIdentities
+	} else {
+		processedClientNamespaces := processedClientClusters.Get(clientNs)
+		for _, actualServerIdentity := range actualServerIdentities {
+			if processedClientNamespaces.Get(actualServerIdentity) == "" {
+				destinationsToBeProcessed = append(destinationsToBeProcessed, actualServerIdentity)
+			}
+		}
+	}
+	return destinationsToBeProcessed
+}
+
+func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *RemoteRegistry, eventType admiral.EventType, hasNonMeshDestination bool, sourceClusters *common.Map, destinations []string, sourceIdentity string, modifySE ModifySEFunc) error {
+	var message string
+	var processingErrors error
+	counter := 1
+	totalDestinations := len(destinations)
+
+	for _, destinationIdentity := range destinations {
+		if strings.Contains(strings.ToLower(destinationIdentity), strings.ToLower(common.ServicesGatewayIdentity)) &&
+			!hasNonMeshDestination {
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "",
+				fmt.Sprintf("All destinations are MESH enabled. Skipping processing: %v", destinationIdentity))
+			continue
+		}
+
+		// In case of self on-boarding skip the update for the destination as it is the same as the source
+		if strings.EqualFold(sourceIdentity, destinationIdentity) {
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "",
+				fmt.Sprintf("Destination identity is same as source identity. Skipping processing: %v.", destinationIdentity))
+			continue
+		}
+
+		destinationClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
+		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", fmt.Sprintf("processing destination %d/%d destinationIdentity=%s", counter, totalDestinations, destinationIdentity))
+		clusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
+		if destinationClusters == nil || destinationClusters.Len() == 0 {
+			listOfSourceClusters := strings.Join(sourceClusters.GetKeys(), ",")
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, listOfSourceClusters,
+				fmt.Sprintf("destinationClusters does not have any clusters. Skipping processing: %v.", destinationIdentity))
+			continue
+		}
+		if clusters == nil {
+			// When destination identity's cluster is not found, then
+			// skip calling modify SE because:
+			// 1. The destination identity might be NON MESH. Which means this error will always happen
+			//    and there is no point calling modifySE.
+			// 2. It could be that the IdentityClusterCache is not updated.
+			//    It is the deployment/rollout controllers responsibility to update the cache
+			//    without which the cache will always be empty. Now when deployment/rollout event occurs
+			//    that will result in calling modify SE and perform the same operations which this function is trying to do
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "",
+				fmt.Sprintf("no cluster found for destinationIdentity: %s. Skipping calling modifySE", destinationIdentity))
+			continue
+		}
+
+		for _, destinationClusterID := range clusters.GetKeys() {
+			message = fmt.Sprintf("processing cluster=%s for destinationIdentity=%s", destinationClusterID, destinationIdentity)
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", message)
+			rc := remoteRegistry.GetRemoteController(destinationClusterID)
+			if rc == nil {
+				processingErrors = common.AppendError(processingErrors,
+					fmt.Errorf("no remote controller found in cache for cluster %s", destinationClusterID))
+				continue
+			}
+			ctx = context.WithValue(ctx, "clusterName", destinationClusterID)
+
+			if rc.DeploymentController != nil {
+				deploymentEnvMap := rc.DeploymentController.Cache.GetByIdentity(destinationIdentity)
+				if len(deploymentEnvMap) != 0 {
+					ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
+					ctx = context.WithValue(ctx, common.DependentClusterOverride, sourceClusters)
+					for env := range deploymentEnvMap {
+						message = fmt.Sprintf("calling modifySE for env=%s destinationIdentity=%s", env, destinationIdentity)
+						log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", message)
+						_, err := modifySE(ctx, eventType, env, destinationIdentity, remoteRegistry)
+						if err != nil {
+							message = fmt.Sprintf("error occurred in modifySE func for env=%s destinationIdentity=%s", env, destinationIdentity)
+							log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", err.Error()+". "+message)
+							processingErrors = common.AppendError(processingErrors, err)
+						}
+					}
+					continue
+				}
+			}
+			if rc.RolloutController != nil {
+				rolloutEnvMap := rc.RolloutController.Cache.GetByIdentity(destinationIdentity)
+				if len(rolloutEnvMap) != 0 {
+					ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
+					ctx = context.WithValue(ctx, common.DependentClusterOverride, sourceClusters)
+					for env := range rolloutEnvMap {
+						message = fmt.Sprintf("calling modifySE for env=%s destinationIdentity=%s", env, destinationIdentity)
+						log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", message)
+						_, err := modifySE(ctx, eventType, env, destinationIdentity, remoteRegistry)
+						if err != nil {
+							message = fmt.Sprintf("error occurred in modifySE func for env=%s destinationIdentity=%s", env, destinationIdentity)
+							log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", err.Error()+". "+message)
+							processingErrors = common.AppendError(processingErrors, err)
+						}
+					}
+					continue
+				}
+			}
+			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", fmt.Sprintf("done processing destinationIdentity=%s", destinationIdentity))
+			log.Warnf(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "",
+				fmt.Sprintf("neither deployment or rollout controller initialized in cluster %s and destination identity %s", destinationClusterID, destinationIdentity))
+			counter++
+		}
+	}
+	return processingErrors
+}
+
+func getDestinationsToBeProcessed(eventType admiral.EventType,
+	updatedDependency *v1.Dependency, remoteRegistry *RemoteRegistry) ([]string, bool) {
+	updatedDestinations := make([]string, 0)
+	existingDestination := remoteRegistry.AdmiralCache.SourceToDestinations.Get(updatedDependency.Spec.Source)
+	var nonMeshEnabledExists bool
+	lookup := make(map[string]bool)
+	//if this is an update, build a look up table to process only the diff
+	if eventType == admiral.Update {
+		for _, dest := range existingDestination {
+			lookup[dest] = true
+		}
+	}
+
+	for _, destination := range updatedDependency.Spec.Destinations {
+		if !isIdentityMeshEnabled(destination, remoteRegistry) {
+			nonMeshEnabledExists = true
+		}
+		if ok := lookup[destination]; !ok {
+			updatedDestinations = append(updatedDestinations, destination)
+		}
+	}
+	return updatedDestinations, nonMeshEnabledExists
 }
