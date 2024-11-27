@@ -48,9 +48,9 @@ type RemoteController struct {
 	EnvoyFilterController            *admiral.EnvoyFilterController
 	OutlierDetectionController       *admiral.OutlierDetectionController
 	ClientConnectionConfigController *admiral.ClientConnectionConfigController
-	JobController 					 *admiral.JobController
-	VertexController 				 *admiral.VertexController
-	MonoVertexController			 *admiral.MonoVertexController
+	JobController                    *admiral.JobController
+	VertexController                 *admiral.VertexController
+	MonoVertexController             *admiral.MonoVertexController
 	stop                             chan struct{}
 	//listener for normal types
 }
@@ -80,6 +80,7 @@ type AdmiralCache struct {
 	IdentityClusterNamespaceCache       *common.MapOfMapOfMaps
 	CnameDependentClusterNamespaceCache *common.MapOfMapOfMaps
 	PartitionIdentityCache              *common.Map
+	ClientClusterNamespaceServerCache   *common.MapOfMapOfMaps
 }
 
 type RemoteRegistry struct {
@@ -149,6 +150,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		IdentitiesWithAdditionalEndpoints:   &sync.Map{},
 		IdentityClusterNamespaceCache:       common.NewMapOfMapOfMaps(),
 		CnameDependentClusterNamespaceCache: common.NewMapOfMapOfMaps(),
+		ClientClusterNamespaceServerCache:   common.NewMapOfMapOfMaps(),
 		PartitionIdentityCache:              common.NewMap(),
 	}
 	if common.GetAdmiralProfile() == common.AdmiralProfileDefault || common.GetAdmiralProfile() == common.AdmiralProfilePerf {
