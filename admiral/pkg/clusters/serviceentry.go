@@ -1418,7 +1418,7 @@ func AddServiceEntriesWithDrWorker(
 		start = time.Now()
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
-		var seDrSet = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
+		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
@@ -1672,6 +1672,10 @@ func AddServiceEntriesWithDrWorker(
 		}
 		if addSEorDRToAClusterError != nil {
 			addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("%s=%s", errorCluster, cluster))
+		} else {
+			for _, clientNs := range clientNamespaces {
+				rr.AdmiralCache.ClientClusterNamespaceServerCache.Put(cluster, clientNs, partitionedIdentity, partitionedIdentity)
+			}
 		}
 		errors <- addSEorDRToAClusterError
 	}
@@ -2183,7 +2187,7 @@ func isGeneratedByCartographer(annotations map[string]string) bool {
 
 func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region string, cluster string,
 	se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection,
-	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule) map[string]*SeDrTuple {
+	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule) (map[string]*SeDrTuple, []string) {
 	var (
 		defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 		defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -2194,7 +2198,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 	eventResourceType, ok := ctx.Value(common.EventResourceType).(string)
 	if !ok {
 		ctxLogger.Errorf(AlertLogMsg, ctx.Value(common.EventResourceType))
-		return nil
+		return nil, nil
 	}
 
 	event := admiral.Add
@@ -2202,7 +2206,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		event, ok = ctx.Value(common.EventType).(admiral.EventType)
 		if !ok {
 			ctxLogger.Errorf(AlertLogMsg, ctx.Value(common.EventType))
-			return nil
+			return nil, nil
 		}
 	}
 
@@ -2239,7 +2243,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				var newAddress, addressErr = getUniqueAddress(ctxLogger, ctx, cache, host)
 				if addressErr != nil {
 					ctxLogger.Errorf("failed while getting address for %v with error %v", seName, addressErr)
-					return nil
+					return nil, nil
 				}
 				if common.DisableIPGeneration() && len(newAddress) == 0 {
 					modifiedSe.Addresses = []string{}
@@ -2279,7 +2283,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		seDrSet[se.Hosts[0]] = seDr
 	}
 
-	return seDrSet
+	return seDrSet, se.ExportTo
 }
 
 func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int, appType string) *networking.WorkloadEntry {

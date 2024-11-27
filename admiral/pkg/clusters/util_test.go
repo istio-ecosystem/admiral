@@ -1139,3 +1139,81 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		remoteRegistry       *RemoteRegistry
+		globalIdentifier     string
+		clusterName          string
+		clientNs             string
+		initialDestinations  []string
+		expectedDestinations []string
+	}{
+		{
+			name: "When global identifier does not exist, return nil",
+			remoteRegistry: &RemoteRegistry{
+				AdmiralCache: &AdmiralCache{
+					SourceToDestinations: &sourceToDestinations{
+						sourceDestinations: make(map[string][]string),
+						mutex:              &sync.Mutex{},
+					},
+					ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+				},
+			},
+			globalIdentifier:     "doesNotExist",
+			clusterName:          "cluster1",
+			clientNs:             "clientNs",
+			initialDestinations:  []string{},
+			expectedDestinations: nil,
+		},
+		{
+			name: "When processed client clusters are empty, process all actual server identities",
+			remoteRegistry: &RemoteRegistry{
+				AdmiralCache: &AdmiralCache{
+					SourceToDestinations: &sourceToDestinations{
+						sourceDestinations: map[string][]string{"asset1": {"foo", "bar"}},
+						mutex:              &sync.Mutex{},
+					},
+					ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+				},
+			},
+			globalIdentifier:     "asset1",
+			clusterName:          "cluster1",
+			clientNs:             "clientNs",
+			initialDestinations:  []string{},
+			expectedDestinations: []string{"foo", "bar"},
+		},
+		{
+			name: "When some server identities are already processed, skip those",
+			remoteRegistry: &RemoteRegistry{
+				AdmiralCache: &AdmiralCache{
+					SourceToDestinations: &sourceToDestinations{
+						sourceDestinations: map[string][]string{"asset1": {"foo", "bar"}},
+						mutex:              &sync.Mutex{},
+					},
+					ClientClusterNamespaceServerCache: func() *common.MapOfMapOfMaps {
+						m := common.NewMapOfMapOfMaps()
+						m.Put("cluster1", "clientNs", "foo", "foo")
+						return m
+					}(),
+				},
+			},
+			globalIdentifier:     "asset1",
+			clusterName:          "cluster1",
+			clientNs:             "clientNs",
+			initialDestinations:  []string{},
+			expectedDestinations: []string{"bar"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualDestinations := getDestinationsToBeProcessedForClientInitiatedProcessing(tc.remoteRegistry, tc.globalIdentifier, tc.clusterName, tc.clientNs, tc.initialDestinations)
+			if !reflect.DeepEqual(tc.expectedDestinations, actualDestinations) {
+				t.Errorf("Test case %s failed: expected %v, got %v", tc.name, tc.expectedDestinations, actualDestinations)
+			}
+		})
+	}
+}
+
