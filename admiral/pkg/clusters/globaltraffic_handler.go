@@ -66,6 +66,9 @@ func (g *globalTrafficCache) Delete(identity string, environment string) error {
 
 func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	if common.IsAdmiralStateSyncerMode() {
+		gtp.RemoteRegistry.RegistryClient.PutCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string), obj)
+	}
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())
@@ -75,6 +78,9 @@ func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTraffi
 
 func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	if common.IsAdmiralStateSyncerMode() {
+		gtp.RemoteRegistry.RegistryClient.PutCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string), obj)
+	}
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())
@@ -84,6 +90,9 @@ func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTraf
 
 func (gtp *GlobalTrafficHandler) Deleted(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	if common.IsAdmiralStateSyncerMode() {
+		gtp.RemoteRegistry.RegistryClient.DeleteCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string))
+	}
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Delete, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())

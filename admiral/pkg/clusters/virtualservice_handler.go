@@ -87,6 +87,9 @@ func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.Virtua
 		}
 		return nil
 	}
+	if common.IsAdmiralStateSyncerMode() {
+		vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
+	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Add)
 }
 
@@ -102,6 +105,9 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 		}
 		return nil
 	}
+	if common.IsAdmiralStateSyncerMode() {
+		vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
+	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Update)
 }
 
@@ -116,6 +122,9 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 			log.Debugf(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
 		}
 		return nil
+	}
+	if common.IsAdmiralStateSyncerMode() {
+		vh.remoteRegistry.RegistryClient.DeleteCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string))
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Delete)
 }

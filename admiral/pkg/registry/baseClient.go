@@ -32,22 +32,17 @@ type Config struct {
 type BaseClient interface {
 	MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error)
 	GetConfig() *Config
-	ExecuteRequest(req *http.Request) (*http.Response, error)
-	MakeNoAuthCall(url string, tid string, method string, body []byte) (*http.Response, error)
 }
 
 type Client struct {
 	Config     *Config
 	HttpClient *http.Client
-	//Cache      *ExpireMap
 }
 
 func NewClient(config *Config) *Client {
 	c := Client{
 		Config: config,
 	}
-
-	//c.Cache = NewExpireMap(10000, 3600000) //one hour TTL
 
 	if c.Config.ReqTimeoutSeconds == 0 {
 		c.Config.ReqTimeoutSeconds = DefaultReqTimeoutSeconds
@@ -78,15 +73,6 @@ func NewClient(config *Config) *Client {
 	return &c
 }
 
-func (c *Client) MakeNoAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
-	headers := make(http.Header)
-	if len(tid) > 0 {
-		headers.Set("intuit_tid", tid)
-	}
-	headers.Set("Content-Type", "application/json")
-	return makeCall(url, headers, method, body, c)
-}
-
 func (c *Client) MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
 	headers := make(http.Header)
 
@@ -111,10 +97,6 @@ func (c *Client) GetConfig() *Config {
 	return c.Config
 }
 
-func (c *Client) ExecuteRequest(req *http.Request) (*http.Response, error) {
-	return c.HttpClient.Do(req)
-}
-
 func makeCall(url string, headers http.Header, method string, body []byte, c *Client) (*http.Response, error) {
 	var request *http.Request
 	var err error
@@ -133,10 +115,8 @@ func makeCall(url string, headers http.Header, method string, body []byte, c *Cl
 	return response, nil
 }
 
-/**
- *   Helper function to read secrets used for authentication from environment variable. If it doesn't
- *   exist inside environment variables, fall back to files
- */
+// ReadSecret is a helper function to read secrets used for authentication from environment variable. If it doesn't
+// exist inside environment variables, fall back to files
 func ReadSecret(key string) (string, error) {
 	if key != StateSyncerAppId && key != StateSyncerSecret {
 		return "", fmt.Errorf("invalid input value for ReadSecret function ")

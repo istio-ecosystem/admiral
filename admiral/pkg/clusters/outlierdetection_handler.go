@@ -68,6 +68,9 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 
 func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
+	if common.IsAdmiralStateSyncerMode() {
+		od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.EventType(common.Add), obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -77,6 +80,9 @@ func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDete
 
 func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
+	if common.IsAdmiralStateSyncerMode() {
+		od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -86,6 +92,9 @@ func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDe
 
 func (od OutlierDetectionHandler) Deleted(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
+	if common.IsAdmiralStateSyncerMode() {
+		od.RemoteRegistry.RegistryClient.DeleteCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string))
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
