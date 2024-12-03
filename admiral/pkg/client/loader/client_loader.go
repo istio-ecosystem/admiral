@@ -4,6 +4,7 @@ import (
 	argo "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	admiral "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
+	numaflow "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -26,4 +27,7 @@ type ClientLoader interface {
 
 	LoadKubeClientFromPath(path string) (kubernetes.Interface, error)
 	LoadKubeClientFromConfig(config *rest.Config) (kubernetes.Interface, error)
+
+	LoadNumaflowClientFromPath(path string) (numaflow.Interface, error)
+	LoadNumaflowClientFromConfig(config *rest.Config) (numaflow.Interface, error)
 }

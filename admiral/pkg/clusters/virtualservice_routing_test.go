@@ -3,11 +3,17 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	v1alpha12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -18,7 +24,7 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
+func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
 		vsRoutingLabel: "enabled",
@@ -27,7 +33,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity.global-routing-vs",
-			Namespace: "test-sync-ns",
+			Namespace: util.IstioSystemNamespace,
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
@@ -59,16 +65,17 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet:                    &common.LabelSet{},
-		SyncNamespace:               "test-sync-ns",
 		EnableSWAwareNSCaches:       true,
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
+		EnableVSRouting:             true,
+		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 
 	istioClientWithExistingVS := istioFake.NewSimpleClientset()
-	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(admiralParams.SyncNamespace).
+	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
 		Create(context.Background(), existingVS, metaV1.CreateOptions{})
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
@@ -173,15 +180,8 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			name: "Given a nil remoteRegistry, " +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should return an error",
-			expectedError: fmt.Errorf("remoteRegistry is nil"),
-		},
-		{
-			name: "Given a no sourceClusterToDestinations, " +
-				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
-				"Then it should return an error",
-			remoteRegistry:              rr,
-			sourceClusterToDestinations: map[string]map[string][]*networkingV1Alpha3.RouteDestination{},
-			expectedError:               fmt.Errorf("no route destination found for the ingress virtualservice"),
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("remoteRegistry is nil"),
 		},
 		{
 			name: "Given a valid sourceClusterToDestinations " +
@@ -195,7 +195,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -237,7 +237,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -279,7 +279,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-routing-vs",
-					Namespace: "test-sync-ns",
+					Namespace: util.IstioSystemNamespace,
 					Labels:    vsLabels,
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -453,7 +453,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 			rc := rr.GetRemoteController("cluster-1")
 			rc.VirtualServiceController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
-			err := addUpdateVirtualServicesForSourceIngress(
+			err := addUpdateVirtualServicesForIngress(
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
@@ -465,7 +465,7 @@ func TestAddUpdateVirtualServicesForSourceIngress(t *testing.T) {
 				require.Nil(t, err)
 				actualVS, err := tc.istioClient.
 					NetworkingV1alpha3().
-					VirtualServices("test-sync-ns").
+					VirtualServices(util.IstioSystemNamespace).
 					Get(context.Background(), "test-env.test-identity.global-routing-vs", metaV1.GetOptions{})
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedVS.Spec.Tls, actualVS.Spec.Tls)
@@ -1319,7 +1319,6 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
-		SyncNamespace:               "test-sync-ns",
 		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 
@@ -1329,7 +1328,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	validVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
-			Namespace: "test-sync-ns",
+			Namespace: util.IstioSystemNamespace,
 			Labels:    vsLabels,
 		},
 		Spec: networkingV1Alpha3.VirtualService{
@@ -1536,13 +1535,47 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
-			WorkloadIdentityKey: "identity",
-			EnvKey:              "env",
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "env",
+			AdmiralCRDIdentityLabel: "identity",
 		},
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
+
+	gtpCache := &globalTrafficCache{}
+	gtpCache.identityCache = make(map[string]*v1alpha12.GlobalTrafficPolicy)
+	gtpCache.mutex = &sync.Mutex{}
+
+	gtpCache.Put(&v1alpha12.GlobalTrafficPolicy{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:        "test-gtp",
+			Annotations: map[string]string{"env": "test-env"},
+			Labels:      map[string]string{"identity": "test-identity"},
+		},
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{
+				{
+					DnsPrefix: "default",
+				},
+				{
+					DnsPrefix: "test-env",
+				},
+				{
+					DnsPrefix: "west",
+				},
+				{
+					DnsPrefix: "east",
+				},
+			},
+		},
+	})
+
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr.AdmiralCache = &AdmiralCache{
+		GlobalTrafficCache: gtpCache,
+	}
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1554,6 +1587,8 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		deployment                *v1.Deployment
 		expectedError             error
 		expectedRouteDestination  map[string][]*networkingV1Alpha3.RouteDestination
+		sourceIdentity            string
+		env                       string
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -1634,7 +1669,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		},
 		{
 			name: "Given an empty route destinations map, " +
-				"When populateVSRouteDestinationForDeployment is invoked, " +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
 				"Then it should populate the destinations",
 			meshDeployAndRolloutPorts: map[string]map[string]uint32{
 				common.Deployment: {"http": meshPort},
@@ -1676,8 +1711,8 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		{
 			name: "Given an empty route destinations map" +
 				"And serviceInstance has both rollout" +
-				"When populateVSRouteDestinationForDeployment is invoked, " +
-				"Then it should populate the destinations with rollout service",
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should populate the destinations with deployment and rollout service",
 			meshDeployAndRolloutPorts: map[string]map[string]uint32{
 				common.Rollout:    {"http": meshPort},
 				common.Deployment: {"http": meshPort},
@@ -1771,22 +1806,173 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given an empty route destinations map and valid sourceIdenity and env" +
+				"And serviceInstance has both rollout and deployment" +
+				"And there is corresponding GTP" +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should populate the destinations with deployment, rollout service" +
+				"And additional GTP dns prefixed endpoints sans preview",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Rollout:    {"http": meshPort},
+				common.Deployment: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {},
+				common.Deployment: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:      "test-deployment-svc",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"preview-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "preview-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+				"active-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "active-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			sourceIdentity: "test-identity",
+			env:            "test-env",
+			expectedError:  nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.east.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.preview.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
+
+	ctxLogger := log.WithFields(log.Fields{})
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := getAllVSRouteDestinationsByCluster(
+				ctxLogger,
 				tc.serviceInstance,
 				tc.meshDeployAndRolloutPorts,
 				tc.weightedServices,
 				tc.rollout,
-				tc.deployment)
+				tc.deployment,
+				rr,
+				tc.sourceIdentity,
+				tc.env)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				require.Nil(t, err)
-				require.Equal(t, tc.expectedRouteDestination, actual)
+				for fqdn, destinations := range tc.expectedRouteDestination {
+					require.NotNil(t, actual[fqdn])
+					require.Equal(t, len(destinations), len(actual[fqdn]))
+					for i := 0; i < len(destinations); i++ {
+						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
+					}
+				}
 			}
 		})
 	}
@@ -2080,6 +2266,408 @@ func TestGetPreviewSNIHostFromRollout(t *testing.T) {
 			} else {
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedSNIHost, actual)
+			}
+		})
+	}
+
+}
+
+func TestGetIngressDRLoadBalancerPolicy(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		admiralParams  common.AdmiralParams
+		expectedPolicy networkingV1Alpha3.LoadBalancerSettings_SimpleLB
+	}{
+		{
+			name: "Given a no ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return the default round robin LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+		},
+		{
+			name: "Given a random ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return random LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "random",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_RANDOM,
+		},
+		{
+			name: "Given a least request ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return least request LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "least_request",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
+		},
+		{
+			name: "Given a round robin ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return round robin LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "round_robin",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+		},
+		{
+			name: "Given a passthrough ingressPolicy " +
+				"When getIngressDRLoadBalancerPolicy is invoked, " +
+				"Then it should return passthrough LoadBalancerPolicy",
+			admiralParams: common.AdmiralParams{
+				IngressLBPolicy: "passthrough",
+			},
+			expectedPolicy: networkingV1Alpha3.LoadBalancerSettings_PASSTHROUGH,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			common.ResetSync()
+			common.InitializeConfig(tc.admiralParams)
+			actual := getIngressDRLoadBalancerPolicy()
+			require.Equal(t, tc.expectedPolicy, actual)
+		})
+	}
+
+}
+
+func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
+
+	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test-ns.svc.cluster.local-routing-dr",
+			Namespace: util.IstioSystemNamespace,
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "*.test-ns.svc.cluster.local",
+			ExportTo: []string{util.IstioSystemNamespace},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+						Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
+					},
+					WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
+				},
+				Tls: &networkingV1Alpha3.ClientTLSSettings{
+					SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+				},
+			},
+		},
+	}
+
+	admiralParams := common.AdmiralParams{
+		SANPrefix:                   "test-san-prefix",
+		IngressVSExportToNamespaces: []string{"istio-system"},
+		EnableVSRouting:             true,
+		VSRoutingEnabledClusters:    []string{"cluster-1"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	istioClientWithExistingDR := istioFake.NewSimpleClientset()
+	istioClientWithExistingDR.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
+		Create(context.Background(), existingDR, metaV1.CreateOptions{})
+
+	istioClientWithNoExistingDR := istioFake.NewSimpleClientset()
+
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "DestinationRule",
+	})
+
+	testCases := []struct {
+		name                     string
+		istioClient              *istioFake.Clientset
+		sourceClusterToDRHosts   map[string]map[string]string
+		sourceIdentity           string
+		expectedError            error
+		expectedDestinationRules *apiNetworkingV1Alpha3.DestinationRule
+	}{
+		{
+			name: "Given a empty sourceIdentity " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should return an error",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
+			sourceIdentity: "",
+			expectedError:  fmt.Errorf("sourceIdentity is empty"),
+		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should create the destination rules",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithNoExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Enabled: &wrappers.BoolValue{Value: false},
+							},
+							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
+				"Then it should create the destination rules",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-1": {
+					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Enabled: &wrappers.BoolValue{Value: false},
+							},
+							WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rc := &RemoteController{
+				ClusterID:                 "cluster-1",
+				DestinationRuleController: &istio.DestinationRuleController{},
+			}
+			rc.DestinationRuleController.IstioClient = tc.istioClient
+			rr.PutRemoteController("cluster-1", rc)
+
+			err := addUpdateDestinationRuleForSourceIngress(
+				context.Background(),
+				ctxLogger,
+				rr,
+				tc.sourceClusterToDRHosts,
+				tc.sourceIdentity)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				actualDR, err := tc.istioClient.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
+					Get(context.Background(), "test-ns.svc.cluster.local-routing-dr", metaV1.GetOptions{})
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedDestinationRules.Spec.Host, actualDR.Spec.Host)
+				require.Equal(t, tc.expectedDestinationRules.Spec.TrafficPolicy, actualDR.Spec.TrafficPolicy)
+				require.Equal(t, tc.expectedDestinationRules.Spec.ExportTo, actualDR.Spec.ExportTo)
+			}
+		})
+	}
+
+}
+
+func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
+
+	meshPort := uint32(8080)
+	testCases := []struct {
+		name                        string
+		gtp                         *v1alpha12.GlobalTrafficPolicy
+		routeDestination            map[string][]*networkingV1Alpha3.RouteDestination
+		expectedError               error
+		expectedGTPRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+	}{
+		{
+			name: "Given nil gtp " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("globaltrafficpolicy is nil"),
+		},
+		{
+			name: "Given nil route destinations " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an error",
+			gtp:           &v1alpha12.GlobalTrafficPolicy{},
+			expectedError: fmt.Errorf("destinations map is nil"),
+		},
+		{
+			name: "Given empty route destinations " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an empty gtpRouteDestinations",
+			gtp:                         &v1alpha12.GlobalTrafficPolicy{},
+			routeDestination:            make(map[string][]*networkingV1Alpha3.RouteDestination),
+			expectedError:               nil,
+			expectedGTPRouteDestination: make(map[string][]*networkingV1Alpha3.RouteDestination),
+		},
+		{
+			name: "Given a valid params " +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an empty gtpRouteDestinations",
+			gtp: &v1alpha12.GlobalTrafficPolicy{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:        "test-gtp",
+					Annotations: map[string]string{"env": "test-env"},
+					Labels:      map[string]string{"identity": "test-identity"},
+				},
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							DnsPrefix: "default",
+						},
+						{
+							DnsPrefix: "test-env",
+						},
+						{
+							DnsPrefix: "west",
+						},
+						{
+							DnsPrefix: "east",
+						},
+					},
+				},
+			},
+			routeDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.preview.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "preview-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedGTPRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+				"outbound_.80_._.east.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.east.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"outbound_.80_._.west.canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getDestinationsForGTPDNSPrefixes(
+				ctxLogger,
+				tc.gtp,
+				tc.routeDestination,
+				"test-env")
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				for fqdn, destinations := range tc.expectedGTPRouteDestination {
+					require.NotNil(t, actual[fqdn])
+					require.Equal(t, len(destinations), len(actual[fqdn]))
+					for i := 0; i < len(destinations); i++ {
+						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
+					}
+				}
 			}
 		})
 	}

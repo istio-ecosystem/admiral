@@ -26,6 +26,11 @@ type MapOfMapOfMaps struct {
 	mutex *sync.RWMutex
 }
 
+type MapOfMapOfMapsOfMaps struct {
+	cache map[string]*MapOfMapOfMaps
+	mutex *sync.RWMutex
+}
+
 type SidecarEgress struct {
 	Namespace string
 	FQDN      string
@@ -94,11 +99,13 @@ type AdmiralParams struct {
 	DisableIPGeneration                      bool
 	EnableActivePassive                      bool
 	EnableSWAwareNSCaches                    bool
+	ClientInitiatedProcessingEnabled         bool
 	ExportToIdentityList                     []string
 	ExportToMaxNamespaces                    int
 	EnableSyncIstioResourcesToSourceClusters bool
 	DefaultWarmupDurationSecs                int64
 	EnableGenerationCheck                    bool
+	PreventSplitBrain                        bool
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -128,6 +135,13 @@ type AdmiralParams struct {
 	EnableVSRouting             bool
 	VSRoutingGateways           []string
 	IngressVSExportToNamespaces []string
+	IngressLBPolicy             string
+	VSRoutingEnabledClusters    []string
+
+	//Client discovery (types requiring mesh egress only)
+	EnableClientDiscovery          bool
+	ClientDiscoveryClustersForJobs []string
+	DiscoveryClustersForNumaflow   []string
 }
 
 func (b AdmiralParams) String() string {
@@ -206,6 +220,13 @@ func NewMapOfMaps() *MapOfMaps {
 func NewMapOfMapOfMaps() *MapOfMapOfMaps {
 	n := new(MapOfMapOfMaps)
 	n.cache = make(map[string]*MapOfMaps)
+	n.mutex = &sync.RWMutex{}
+	return n
+}
+
+func NewMapOfMapOfMapOfMaps() *MapOfMapOfMapsOfMaps {
+	n := new(MapOfMapOfMapsOfMaps)
+	n.cache = make(map[string]*MapOfMapOfMaps)
 	n.mutex = &sync.RWMutex{}
 	return n
 }
@@ -459,4 +480,43 @@ func (s *ProxiedServiceInfo) String() string {
 
 func (s *ProxiedServiceEnvironment) String() string {
 	return fmt.Sprintf("{Environment:%s, DnsName: %s, CNames: %s}", s.Environment, s.DnsName, s.CNames)
+}
+
+type K8sObject struct {
+	Name        string
+	Namespace   string
+	Type        string
+	Annotations map[string]string
+	Labels      map[string]string
+	Status      string
+}
+
+func (s *MapOfMapOfMapsOfMaps) Put(pkey string, skey string, tkey string, key, value string) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	var mapOfMapOfMapsVal = s.cache[pkey]
+	if mapOfMapOfMapsVal == nil {
+		mapOfMapOfMapsVal = NewMapOfMapOfMaps()
+	}
+	mapOfMapOfMapsVal.Put(skey, tkey, key, value)
+	s.cache[pkey] = mapOfMapOfMapsVal
+}
+
+func (s *MapOfMapOfMapsOfMaps) PutMapofMapsofMaps(key string, value *MapOfMapOfMaps) {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	s.cache[key] = value
+}
+
+func (s *MapOfMapOfMapsOfMaps) Get(key string) *MapOfMapOfMaps {
+	s.mutex.RLock()
+	val := s.cache[key]
+	s.mutex.RUnlock()
+	return val
+}
+
+func (s *MapOfMapOfMapsOfMaps) Len() int {
+	defer s.mutex.RUnlock()
+	s.mutex.RLock()
+	return len(s.cache)
 }

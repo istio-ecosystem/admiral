@@ -66,7 +66,7 @@ func (d *depCache) Put(dep *v1.Dependency) {
 }
 
 func (d *depCache) getKey(dep *v1.Dependency) string {
-	return dep.Name
+	return dep.Spec.Source
 }
 
 func (d *depCache) Get(identity string) *v1.Dependency {

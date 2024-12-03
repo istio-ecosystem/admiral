@@ -1,0 +1,17 @@
+apiVersion: admiral.io/v1alpha1
+kind: ClientConnectionConfig
+metadata:
+  name: greetings-ccs
+  namespace: greeting
+  annotations:
+    admiral.io/env: stage
+  labels:
+    identity: greeting
+spec:
+  connectionPool:
+    tcp:
+      maxConnectionDuration: 1s
+    http:
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 100
+        idleTimeout: 1s

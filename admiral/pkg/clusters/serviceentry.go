@@ -168,6 +168,8 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		// Holds the VS destinations for the TLSRoutes
 		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
+		// Holds the DR hosts (*.svc.cluster.local) used for VS based routing
+		sourceClusterToDRHosts = make(map[string]map[string]string)
 	)
 
 	clusterName, ok := ctx.Value(common.ClusterName).(string)
@@ -249,7 +251,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			clusterDeployRolloutPresent[rc.ClusterID] = make(map[string]bool)
 		}
 
-		remoteRegistry.AdmiralCache.IdentityClusterCache.Put(partitionedIdentity, rc.ClusterID, rc.ClusterID)
+		UpdateIdentityClusterCache(remoteRegistry, partitionedIdentity, rc.ClusterID)
+
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheIdentityClusterCachePut",
 			deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
 
@@ -455,7 +458,9 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	//cache the latest GTP in global cache to be reused during DR creation
 	start = time.Now()
-	err := updateGlobalGtpCache(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
+	gtpPreferenceRegion, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
+	ctx = context.WithValue(ctx, common.GtpPreferenceRegion, gtpPreferenceRegion)
+	ctxLogger.Infof("GTP preference region is set to %v", ctx.Value(common.GtpPreferenceRegion))
 	if err != nil {
 		modifySEerr = common.AppendError(modifySEerr, err)
 	}
@@ -483,7 +488,11 @@ func modifyServiceEntryForNewServiceOrPod(
 	//update the address to local fqdn for service entry in a cluster local to the service instance
 	start = time.Now()
 
-	for sourceCluster, serviceInstance := range sourceServices {
+	sourceClusterKeys := orderSourceClusters(ctx, remoteRegistry, sourceServices)
+	ctxLogger.Infof(common.CtxLogFormat, "OrderSourceClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", "sourceClusterKeys="+strings.Join(sourceClusterKeys, ","))
+
+	for _, sourceCluster := range sourceClusterKeys {
+		serviceInstance := sourceServices[sourceCluster]
 		resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 		if resourceLabels != nil {
 			// check if additional endpoint generation is required
@@ -778,22 +787,37 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
 
-		if common.IsVSBasedRoutingEnabled() {
+		if common.DoVSRoutingForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				deploymentOrRolloutName, namespace, sourceCluster,
+				"Discovery phase: VS based routing enabled for cluster")
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
 			destinations, err := getAllVSRouteDestinationsByCluster(
+				ctxLogger,
 				serviceInstance,
 				meshDeployAndRolloutPorts,
 				sourceWeightedServices[sourceCluster],
 				sourceRollouts[sourceCluster],
-				sourceDeployments[sourceCluster])
+				sourceDeployments[sourceCluster],
+				remoteRegistry,
+				sourceIdentity,
+				env)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err)
+					deploymentOrRolloutName, namespace, sourceCluster, err)
 				modifySEerr = common.AppendError(modifySEerr, err)
+			} else if len(destinations) == 0 {
+				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+					deploymentOrRolloutName, namespace, sourceCluster,
+					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
+				drHost := fmt.Sprintf("*.%s%s", namespace, common.DotLocalDomainSuffix)
+				sourceClusterToDRHosts[sourceCluster] = map[string]string{
+					namespace + common.DotLocalDomainSuffix: drHost,
+				}
 			}
 		}
 	}
@@ -812,13 +836,25 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
 		return nil, nil
 	}
-	// If VS based routing is enabled, then generate VirtualServices for the source cluster's ingress
-	// This is done after the ServiceEntries are created for the source cluster
-	if common.IsVSBasedRoutingEnabled() {
-		// Writing phase: We update the base ingress virtualservices with the RouteDestinations
-		// gathered during the discovery phase and write them to the source cluster
-		err := addUpdateVirtualServicesForSourceIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+
+	// VS Based Routing
+	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
+	// gathered during the discovery phase and write them to the source cluster
+	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+	if err != nil {
+		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+			deploymentOrRolloutName, namespace, "", err)
+		modifySEerr = common.AppendError(modifySEerr, err)
+	} else {
+		err := addUpdateDestinationRuleForSourceIngress(
+			ctx,
+			ctxLogger,
+			remoteRegistry,
+			sourceClusterToDRHosts,
+			sourceIdentity)
 		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				deploymentOrRolloutName, namespace, "", err)
 			modifySEerr = common.AppendError(modifySEerr, err)
 		}
 	}
@@ -847,6 +883,35 @@ func modifyServiceEntryForNewServiceOrPod(
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", "", start)
 
 	return serviceEntries, modifySEerr
+}
+
+func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
+	clusterKeySlice := make([]string, 0, len(services))
+	clusterKeys := make(map[string]string, len(services))
+	gtpPreferenceRegion, ok := ctx.Value(common.GtpPreferenceRegion).(string)
+
+	if common.PreventSplitBrain() && gtpPreferenceRegion != "" && ok {
+		for cluster, _ := range services {
+			rc := rr.GetRemoteController(cluster)
+			if rc == nil {
+				continue
+			}
+			region, err := getClusterRegion(rr, cluster, rc)
+			if err != nil {
+				continue
+			}
+			if region == gtpPreferenceRegion {
+				clusterKeys[cluster] = cluster
+				clusterKeySlice = append(clusterKeySlice, cluster)
+			}
+		}
+	}
+	for cluster, _ := range services {
+		if _, ok := clusterKeys[cluster]; !ok {
+			clusterKeySlice = append(clusterKeySlice, cluster)
+		}
+	}
+	return clusterKeySlice
 }
 
 // Given an identity with a partition prefix, returns the identity without the prefix that is stored in the PartitionIdentityCache
@@ -896,8 +961,8 @@ func parseLabels(labels map[string]string) map[string]string {
 	return newLabels
 }
 
-func getExistingVS(ctxLogger *logrus.Entry, ctx context.Context, rc *RemoteController, vsName string) (*v1alpha3.VirtualService, error) {
-	existingVS, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(common.GetSyncNamespace()).Get(ctx, vsName, v12.GetOptions{})
+func getExistingVS(ctxLogger *logrus.Entry, ctx context.Context, rc *RemoteController, vsName, namespace string) (*v1alpha3.VirtualService, error) {
+	existingVS, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Get(ctx, vsName, v12.GetOptions{})
 	if err != nil && k8sErrors.IsNotFound(err) {
 		ctxLogger.Debugf(LogFormat, "get", common.VirtualServiceResourceType, vsName, rc.ClusterID, "virtualservice not found")
 		return nil, err
@@ -1007,24 +1072,25 @@ func updateGlobalOutlierDetectionCache(ctxLogger *logrus.Entry, cache *AdmiralCa
 // Does two things;
 // i)  Picks the GTP that was created most recently from the passed in GTP list based on GTP priority label (GTPs from all clusters)
 // ii) Updates the global GTP cache with the selected GTP in i)
-func updateGlobalGtpCache(remoteRegistry *RemoteRegistry, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy, clusterName string, ctxLogger *logrus.Entry) error {
-	defer util.LogElapsedTimeForTask(ctxLogger, "updateGlobalGtpCache", "", "", "", "")()
+func updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry *RemoteRegistry, identity, env string, gtps map[string][]*v1.GlobalTrafficPolicy, clusterName string, ctxLogger *logrus.Entry) (string, error) {
+	defer util.LogElapsedTimeForTask(ctxLogger, "updateGlobalGtpCacheAndGetGtpPreferenceRegion", "", "", "", "")()
 	gtpsOrdered := make([]*v1.GlobalTrafficPolicy, 0)
+	var gtpPreferenceRegion string
 	for _, gtpsInCluster := range gtps {
 		gtpsOrdered = append(gtpsOrdered, gtpsInCluster...)
 	}
+	oldGTP, _ := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(identity, env)
 	if len(gtpsOrdered) == 0 {
 		ctxLogger.Debugf("No GTPs found for identity=%s in env=%s. Deleting global cache entries if any", identity, env)
-		oldGTP, _ := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(identity, env)
 		if oldGTP != nil {
 			err := handleDynamoDbUpdateForOldGtp(oldGTP, remoteRegistry, clusterName, env, identity, ctxLogger)
 			if err != nil {
 				ctxLogger.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
-				return fmt.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
+				return "", fmt.Errorf("failed to update dynamodb data when GTP was deleted for identity=%s and env=%s, err=%v", identity, env, err.Error())
 			}
 		}
 		remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(identity, env)
-		return nil
+		return "", nil
 	} else if len(gtpsOrdered) > 1 {
 		ctxLogger.Infof("More than one GTP found for identity=%s in env=%s.", identity, env)
 		//sort by creation time and priority, gtp with highest priority and most recent at the beginning
@@ -1032,16 +1098,18 @@ func updateGlobalGtpCache(remoteRegistry *RemoteRegistry, identity, env string, 
 	}
 
 	mostRecentGtp := gtpsOrdered[0]
-
+	if oldGTP != nil && common.PreventSplitBrain() {
+		gtpPreferenceRegion = common.GetGtpPreferenceRegion(oldGTP, mostRecentGtp)
+	}
 	err := remoteRegistry.AdmiralCache.GlobalTrafficCache.Put(mostRecentGtp)
 
 	if err != nil {
 		ctxLogger.Errorf("Error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
-		return fmt.Errorf("error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
+		return "", fmt.Errorf("error in updating GTP with name=%s in namespace=%s as actively used for identity=%s with err=%v", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp), err)
 	} else {
 		ctxLogger.Infof("GTP with name=%s in namespace=%s is actively used for identity=%s", mostRecentGtp.Name, mostRecentGtp.Namespace, common.GetGtpKey(mostRecentGtp))
 	}
-	return nil
+	return gtpPreferenceRegion, nil
 }
 
 func sortOutlierDetectionByCreationTime(ods []*v1.OutlierDetection, identity string, env string) {
@@ -1371,7 +1439,7 @@ func AddServiceEntriesWithDrWorker(
 		start = time.Now()
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
-		var seDrSet = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
+		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
@@ -1625,6 +1693,10 @@ func AddServiceEntriesWithDrWorker(
 		}
 		if addSEorDRToAClusterError != nil {
 			addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, fmt.Errorf("%s=%s", errorCluster, cluster))
+		} else {
+			for _, clientNs := range clientNamespaces {
+				rr.AdmiralCache.ClientClusterNamespaceServerCache.Put(cluster, clientNs, partitionedIdentity, partitionedIdentity)
+			}
 		}
 		errors <- addSEorDRToAClusterError
 	}
@@ -2043,7 +2115,7 @@ func createAdditionalEndpoints(
 
 	defaultVSName := getIstioResourceName(virtualServiceHostnames[0], "-vs")
 
-	existingVS, err := getExistingVS(ctxLogger, ctx, rc, defaultVSName)
+	existingVS, err := getExistingVS(ctxLogger, ctx, rc, defaultVSName, common.GetSyncNamespace())
 	if err != nil {
 		ctxLogger.Warn(err.Error())
 	}
@@ -2136,7 +2208,7 @@ func isGeneratedByCartographer(annotations map[string]string) bool {
 
 func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region string, cluster string,
 	se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection,
-	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule) map[string]*SeDrTuple {
+	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule) (map[string]*SeDrTuple, []string) {
 	var (
 		defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 		defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -2147,7 +2219,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 	eventResourceType, ok := ctx.Value(common.EventResourceType).(string)
 	if !ok {
 		ctxLogger.Errorf(AlertLogMsg, ctx.Value(common.EventResourceType))
-		return nil
+		return nil, nil
 	}
 
 	event := admiral.Add
@@ -2155,7 +2227,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		event, ok = ctx.Value(common.EventType).(admiral.EventType)
 		if !ok {
 			ctxLogger.Errorf(AlertLogMsg, ctx.Value(common.EventType))
-			return nil
+			return nil, nil
 		}
 	}
 
@@ -2192,7 +2264,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				var newAddress, addressErr = getUniqueAddress(ctxLogger, ctx, cache, host)
 				if addressErr != nil {
 					ctxLogger.Errorf("failed while getting address for %v with error %v", seName, addressErr)
-					return nil
+					return nil, nil
 				}
 				if common.DisableIPGeneration() && len(newAddress) == 0 {
 					modifiedSe.Addresses = []string{}
@@ -2232,7 +2304,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		seDrSet[se.Hosts[0]] = seDr
 	}
 
-	return seDrSet
+	return seDrSet, se.ExportTo
 }
 
 func makeRemoteEndpointForServiceEntry(address string, locality string, portName string, portNumber int, appType string) *networking.WorkloadEntry {

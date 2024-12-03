@@ -23,6 +23,7 @@ fi
 
 $install_dir/scripts/install_admiral.sh $install_dir
 $install_dir/scripts/install_rollouts.sh
+$install_dir/scripts/install_numaflow.sh
 $install_dir/scripts/cluster-secret.sh $KUBECONFIG  $KUBECONFIG admiral
 $install_dir/scripts/install_sample_services.sh $install_dir
 
@@ -32,9 +33,6 @@ sleep 10
 ./test2.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
 ./test5.sh "webapp" "sample-rollout-bluegreen" "greeting.bluegreen"
 ./test2.sh "webapp" "sample-rollout-canary" "greeting.canary"
-
-# Test Proxy VirtualService Call
-./test7.sh "webapp" "sample" "stage.httpbin.foo"
 
 #cleanup to fee up the pipeline minkube resources
 if [[ $IS_LOCAL == "false" ]]; then
@@ -48,5 +46,7 @@ fi
 ./test4.sh "webapp" "sample"
 # Testing routing policy
 ./test6.sh "sample" "1.13" $install_dir
+
+./client_discovery_test.sh
 
 ./cleanup.sh $istio_version

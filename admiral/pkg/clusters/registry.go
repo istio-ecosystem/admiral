@@ -52,7 +52,7 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 	if err != nil {
 		return nil, fmt.Errorf("error with dependency controller init: %v", err)
 	}
-
+	rr.DependencyController = wd.DepController
 	if !params.ArgoRolloutsEnabled {
 		logrus.Info("argo rollouts disabled")
 	}
@@ -215,6 +215,36 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 				return fmt.Errorf("error with RolloutController initialization, err: %v", err)
 			}
 		}
+
+		if common.IsClientDiscoveryEnabled() {
+
+			clustersForJobs := common.GetClientDiscoveryClustersForJobs()
+
+			if len(clustersForJobs) == 0 || common.IsPresent(clustersForJobs, clusterID) {
+				logrus.Infof("starting JobController clusterID: %v", clusterID)
+				rc.JobController, err = admiral.NewJobController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with JobController initialization, err: %v", err)
+				}
+			}
+
+			clustersForNumaflow := common.GetClientDiscoveryClustersForNumaflow()
+
+			if len(clustersForNumaflow) == 0 || common.IsPresent(clustersForNumaflow, clusterID) {
+				logrus.Infof("starting VertexController clusterID: %v", clusterID)
+				rc.VertexController, err = admiral.NewVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with VertexController initialization, err: %v", err)
+				}
+
+				logrus.Infof("starting MonoVertexController clusterID: %v", clusterID)
+				rc.MonoVertexController, err = admiral.NewMonoVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with MonoVertexController initialization, err: %v", err)
+				}
+			}
+		}
+
 	}
 	logrus.Infof("starting ServiceEntryController for clusterID: %v", clusterID)
 	rc.ServiceEntryController, err = istio.NewServiceEntryController(stop, &ServiceEntryHandler{RemoteRegistry: r, ClusterID: clusterID}, clusterID, clientConfig, resyncPeriod.SeAndDrReconcileInterval, r.ClientLoader)
@@ -242,6 +272,11 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 	}
 	r.PutRemoteController(clusterID, &rc)
 	return nil
+}
+
+func isInClusterList(enabledClusters []string, clusterName string) bool {
+
+	return false
 }
 
 func (r *RemoteRegistry) updateCacheController(clientConfig *rest.Config, clusterID string, resyncPeriod util.ResyncIntervals) error {

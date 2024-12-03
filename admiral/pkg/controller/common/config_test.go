@@ -22,28 +22,31 @@ func setupForConfigTests() {
 				AdmiralCRDIdentityLabel: "identity",
 				IdentityPartitionKey:    "admiral.io/identityPartition",
 			},
-			EnableSAN:                    true,
-			SANPrefix:                    "prefix",
-			HostnameSuffix:               "mesh",
-			SyncNamespace:                "admiral-sync",
-			SecretFilterTags:             "admiral/sync",
-			CacheReconcileDuration:       time.Minute,
-			ClusterRegistriesNamespace:   "default",
-			DependenciesNamespace:        "default",
-			Profile:                      "default",
-			WorkloadSidecarName:          "default",
-			WorkloadSidecarUpdate:        "disabled",
-			MetricsEnabled:               true,
-			DeprecatedEnvoyFilterVersion: "1.10,1.17",
-			EnvoyFilterVersion:           "1.10,1.13,1.17",
-			CartographerFeatures:         map[string]string{"throttle_filter_gen": "disabled"},
-			DisableIPGeneration:          false,
-			EnableSWAwareNSCaches:        true,
-			ExportToIdentityList:         []string{"*"},
-			ExportToMaxNamespaces:        35,
-			AdmiralOperatorMode:          false,
-			OperatorSyncNamespace:        "admiral-sync",
-			OperatorSecretFilterTags:     "admiral/syncoperator",
+			EnableSAN:                      true,
+			SANPrefix:                      "prefix",
+			HostnameSuffix:                 "mesh",
+			SyncNamespace:                  "admiral-sync",
+			SecretFilterTags:               "admiral/sync",
+			CacheReconcileDuration:         time.Minute,
+			ClusterRegistriesNamespace:     "default",
+			DependenciesNamespace:          "default",
+			Profile:                        "default",
+			WorkloadSidecarName:            "default",
+			WorkloadSidecarUpdate:          "disabled",
+			MetricsEnabled:                 true,
+			DeprecatedEnvoyFilterVersion:   "1.10,1.17",
+			EnvoyFilterVersion:             "1.10,1.13,1.17",
+			CartographerFeatures:           map[string]string{"throttle_filter_gen": "disabled"},
+			DisableIPGeneration:            false,
+			EnableSWAwareNSCaches:          true,
+			ExportToIdentityList:           []string{"*"},
+			ExportToMaxNamespaces:          35,
+			AdmiralOperatorMode:            false,
+			OperatorSyncNamespace:          "admiral-sync",
+			OperatorSecretFilterTags:       "admiral/syncoperator",
+			DiscoveryClustersForNumaflow:   make([]string, 0),
+			ClientDiscoveryClustersForJobs: make([]string, 0),
+			EnableClientDiscovery:          true,
 		}
 		ResetSync()
 		initHappened = true
@@ -54,6 +57,76 @@ func setupForConfigTests() {
 	} else {
 		log.Info("InitializeConfig was called setupForConfigTests")
 	}
+}
+
+func TestDoVSRoutingForCluster(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                      string
+		cluster                   string
+		enableVSRouting           bool
+		enableVSRoutingForCluster []string
+		expected                  bool
+	}{
+		{
+			name: "Given enableVSRouting is false, enableVSRoutingForCluster is empty" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           false,
+			enableVSRoutingForCluster: []string{},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, enableVSRoutingForCluster is empty" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster doesn't exists in the list" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster2",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"cluster1"},
+			expected:                  false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster does exists in the list" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"cluster1"},
+			expected:                  true,
+		},
+		{
+			name: "Given enableVSRouting is true, and all VS routing is enabled in all clusters using '*'" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                   "cluster1",
+			enableVSRouting:           true,
+			enableVSRoutingForCluster: []string{"*"},
+			expected:                  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRouting = tc.enableVSRouting
+			p.VSRoutingEnabledClusters = tc.enableVSRoutingForCluster
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoVSRoutingForCluster(tc.cluster))
+		})
+	}
+
 }
 
 func TestConfigManagement(t *testing.T) {
@@ -166,6 +239,18 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetOperatorSecretFilterTags() != "admiral/syncoperator" {
 		t.Errorf("operator secret filter tags mismatch, expected admiral/syncoperator, got %s", GetOperatorSecretFilterTags())
+	}
+
+	if IsClientDiscoveryEnabled() != true {
+		t.Errorf("client discovery enabled mismatch, expected true, got %v", IsClientDiscoveryEnabled())
+	}
+
+	if len(GetClientDiscoveryClustersForJobs()) != 0 {
+		t.Errorf("clusters for jobs client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForJobs())
+	}
+
+	if len(GetClientDiscoveryClustersForNumaflow()) != 0 {
+		t.Errorf("clusters for numaflow client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForNumaflow())
 	}
 }
 

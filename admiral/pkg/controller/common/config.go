@@ -426,16 +426,39 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
+func ClientInitiatedProcessingEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ClientInitiatedProcessingEnabled
+}
+
+func GetIngressLBPolicy() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.IngressLBPolicy
+}
+
 func GetIngressVSExportToNamespace() []string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.IngressVSExportToNamespaces
 }
 
-func IsVSBasedRoutingEnabled() bool {
+func DoVSRoutingForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	return wrapper.params.EnableVSRouting
+	if !wrapper.params.EnableVSRouting {
+		return false
+	}
+	for _, c := range wrapper.params.VSRoutingEnabledClusters {
+		if c == "*" {
+			return true
+		}
+		if c == cluster {
+			return true
+		}
+	}
+	return false
 }
 
 func GetVSRoutingGateways() []string {
@@ -448,6 +471,12 @@ func DoGenerationCheck() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.EnableGenerationCheck
+}
+
+func PreventSplitBrain() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.PreventSplitBrain
 }
 
 func GetResyncIntervals() util.ResyncIntervals {
@@ -463,6 +492,24 @@ func GetExportToMaxNamespaces() int {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.ExportToMaxNamespaces
+}
+
+func IsClientDiscoveryEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableClientDiscovery
+}
+
+func GetClientDiscoveryClustersForJobs() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ClientDiscoveryClustersForJobs
+}
+
+func GetClientDiscoveryClustersForNumaflow() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.DiscoveryClustersForNumaflow
 }
 
 func IsAdmiralStateSyncerMode() bool {

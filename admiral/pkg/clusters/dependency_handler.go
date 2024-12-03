@@ -3,8 +3,6 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -87,28 +85,6 @@ func isIdentityMeshEnabled(identity string, remoteRegistry *RemoteRegistry) bool
 	return false
 }
 
-func getDestinationsToBeProcessed(
-	updatedDependency *v1.Dependency, remoteRegistry *RemoteRegistry) ([]string, bool) {
-	updatedDestinations := make([]string, 0)
-	existingDestination := remoteRegistry.AdmiralCache.SourceToDestinations.Get(updatedDependency.Spec.Source)
-
-	var nonMeshEnabledExists bool
-	lookup := make(map[string]bool)
-	for _, dest := range existingDestination {
-		lookup[dest] = true
-	}
-
-	for _, destination := range updatedDependency.Spec.Destinations {
-		if !isIdentityMeshEnabled(destination, remoteRegistry) {
-			nonMeshEnabledExists = true
-		}
-		if ok := lookup[destination]; !ok {
-			updatedDestinations = append(updatedDestinations, destination)
-		}
-	}
-	return updatedDestinations, nonMeshEnabledExists
-}
-
 func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.Dependency,
 	remoteRegistry *RemoteRegistry, eventType admiral.EventType, modifySE ModifySEFunc) error {
 
@@ -122,13 +98,9 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 		return nil
 	}
 
-	destinations, hasNonMeshDestination := getDestinationsToBeProcessed(dependency, remoteRegistry)
+	destinations, hasNonMeshDestination := getDestinationsToBeProcessed(eventType, dependency, remoteRegistry)
 	log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("found %d new destinations: %v", len(destinations), destinations))
 
-	var processingErrors error
-	var message string
-	counter := 1
-	totalDestinations := len(destinations)
 	// find source cluster for source identity
 	sourceClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependency.Spec.Source)
 	if sourceClusters == nil {
@@ -140,96 +112,6 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 		return nil
 	}
 
-	for _, destinationIdentity := range destinations {
-		if strings.Contains(strings.ToLower(destinationIdentity), strings.ToLower(common.ServicesGatewayIdentity)) &&
-			!hasNonMeshDestination {
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "",
-				fmt.Sprintf("All destinations are MESH enabled. Skipping processing: %v. Destinations: %v", destinationIdentity, dependency.Spec.Destinations))
-			continue
-		}
-
-		// In case of self on-boarding skip the update for the destination as it is the same as the source
-		if strings.EqualFold(dependency.Spec.Source, destinationIdentity) {
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "",
-				fmt.Sprintf("Destination identity is same as source identity. Skipping processing: %v.", destinationIdentity))
-			continue
-		}
-
-		destinationClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
-		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("processing destination %d/%d destinationIdentity=%s", counter, totalDestinations, destinationIdentity))
-		clusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
-		if destinationClusters == nil || destinationClusters.Len() == 0 {
-			listOfSourceClusters := strings.Join(sourceClusters.GetKeys(), ",")
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, listOfSourceClusters,
-				fmt.Sprintf("destinationClusters does not have any clusters. Skipping processing: %v.", destinationIdentity))
-			continue
-		}
-		if clusters == nil {
-			// When destination identity's cluster is not found, then
-			// skip calling modify SE because:
-			// 1. The destination identity might be NON MESH. Which means this error will always happen
-			//    and there is no point calling modifySE.
-			// 2. It could be that the IdentityClusterCache is not updated.
-			//    It is the deployment/rollout controllers responsibility to update the cache
-			//    without which the cache will always be empty. Now when deployment/rollout event occurs
-			//    that will result in calling modify SE and perform the same operations which this function is trying to do
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "",
-				fmt.Sprintf("no cluster found for destinationIdentity: %s. Skipping calling modifySE", destinationIdentity))
-			continue
-		}
-
-		for _, destinationClusterID := range clusters.GetKeys() {
-			message = fmt.Sprintf("processing cluster=%s for destinationIdentity=%s", destinationClusterID, destinationIdentity)
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", message)
-			rc := remoteRegistry.GetRemoteController(destinationClusterID)
-			if rc == nil {
-				processingErrors = common.AppendError(processingErrors,
-					fmt.Errorf("no remote controller found in cache for cluster %s", destinationClusterID))
-				continue
-			}
-			ctx = context.WithValue(ctx, "clusterName", destinationClusterID)
-
-			if rc.DeploymentController != nil {
-				deploymentEnvMap := rc.DeploymentController.Cache.GetByIdentity(destinationIdentity)
-				if len(deploymentEnvMap) != 0 {
-					ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
-					ctx = context.WithValue(ctx, common.DependentClusterOverride, sourceClusters)
-					for env := range deploymentEnvMap {
-						message = fmt.Sprintf("calling modifySE for env=%s destinationIdentity=%s", env, destinationIdentity)
-						log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", message)
-						_, err := modifySE(ctx, eventType, env, destinationIdentity, remoteRegistry)
-						if err != nil {
-							message = fmt.Sprintf("error occurred in modifySE func for env=%s destinationIdentity=%s", env, destinationIdentity)
-							log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", err.Error()+". "+message)
-							processingErrors = common.AppendError(processingErrors, err)
-						}
-					}
-					continue
-				}
-			}
-			if rc.RolloutController != nil {
-				rolloutEnvMap := rc.RolloutController.Cache.GetByIdentity(destinationIdentity)
-				if len(rolloutEnvMap) != 0 {
-					ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
-					ctx = context.WithValue(ctx, common.DependentClusterOverride, sourceClusters)
-					for env := range rolloutEnvMap {
-						message = fmt.Sprintf("calling modifySE for env=%s destinationIdentity=%s", env, destinationIdentity)
-						log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", message)
-						_, err := modifySE(ctx, eventType, env, destinationIdentity, remoteRegistry)
-						if err != nil {
-							message = fmt.Sprintf("error occurred in modifySE func for env=%s destinationIdentity=%s", env, destinationIdentity)
-							log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", err.Error()+". "+message)
-							processingErrors = common.AppendError(processingErrors, err)
-						}
-					}
-					continue
-				}
-			}
-			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("done processing destinationIdentity=%s", destinationIdentity))
-			log.Warnf(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "",
-				fmt.Sprintf("neither deployment or rollout controller initialized in cluster %s and destination identity %s", destinationClusterID, destinationIdentity))
-			counter++
-		}
-	}
-	return processingErrors
+	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, eventType, hasNonMeshDestination, sourceClusters, destinations, dependency.Name, modifySE)
+	return err
 }
