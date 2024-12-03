@@ -95,7 +95,7 @@ type RemoteRegistry struct {
 	ClusterShardHandler         registry.ClusterShardStore
 	ClusterIdentityStoreHandler registry.ClusterIdentityStore
 	ConfigSyncer                registry.ConfigSyncer
-	RegistryClient              registry.IdentityConfiguration
+	RegistryClient              registry.ClientAPI
 	ConfigWriter                ConfigWriter
 }
 
@@ -186,7 +186,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		ConfigWriter:                NewConfigWriter(),
 	}
 
-	if common.IsAdmiralOperatorMode() {
+	if common.IsAdmiralOperatorMode() || common.IsAdmiralStateSyncerMode() {
 		registryClientParams := common.GetRegistryClientConfig()
 		defaultRegistryClientConfig := &registry.Config{
 			Host:      registryClientParams["Host"],

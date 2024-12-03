@@ -230,7 +230,7 @@ func getServiceEntryEndpoints(
 // getExportTo constructs a sorted list of unique namespaces for a given cluster, client assets,
 // and cname, where each namespace is where a client asset of the cname is deployed on the cluster. If the cname
 // is also deployed on the cluster then the istio-system namespace is also in the list.
-func getExportTo(ctxLogger *logrus.Entry, registryClient registry.IdentityConfiguration, clientCluster string, isServerOnClientCluster bool, clientAssets map[string]string) ([]string, error) {
+func getExportTo(ctxLogger *logrus.Entry, registryClient registry.ClientAPI, clientCluster string, isServerOnClientCluster bool, clientAssets map[string]string) ([]string, error) {
 	clientNamespaces := []string{}
 	var err error
 	var clientIdentityConfig registry.IdentityConfig

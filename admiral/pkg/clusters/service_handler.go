@@ -111,6 +111,13 @@ func handleServiceEventForDeployment(
 		log.Infof(LogFormat, "Event", "Deployment", "", clusterName,
 			fmt.Sprintf("updating %v deployments across the cluster for service %s",
 				len(deployments), svc.Name))
+		if common.IsAdmiralStateSyncerMode() {
+			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
+			if regErr != nil {
+				log.Errorf(LogFormat, "Event", "Deployment", "", clusterName,
+					fmt.Sprintf("failed to push cluster gateway in namespace %s for service %s", svc.Namespace, svc.Name))
+			}
+		}
 	} else {
 		deployments = deployController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 		log.Infof(LogFormat, "Event", "Deployment", "", clusterName,
@@ -174,6 +181,13 @@ func handleServiceEventForRollout(
 		log.Infof(LogFormat, "Event", "Rollout", "", clusterName,
 			fmt.Sprintf("updating %v rollouts across the cluster for service %s",
 				len(rollouts), svc.Name))
+		if common.IsAdmiralStateSyncerMode() {
+			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
+			if regErr != nil {
+				log.Errorf(LogFormat, "Event", "Rollout", "", clusterName,
+					fmt.Sprintf("failed to push cluster gateway in namespace %s for service %s", svc.Namespace, svc.Name))
+			}
+		}
 	} else {
 		rollouts = rolloutController.GetRolloutBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 		log.Infof(LogFormat, "Event", "Rollout", "", clusterName,

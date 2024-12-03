@@ -12,16 +12,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// IdentityConfiguration is an interface to fetch configuration from a registry
+// ClientAPI is an interface to fetch configuration from a registry
 // backend. The backend can provide an API to give configurations per identity,
 // or if given a cluster name, it will provide the configurations for all
 // the identities present in that cluster.
-type IdentityConfiguration interface {
+type ClientAPI interface {
 	GetIdentityConfigByIdentityName(identityAlias string, ctxLogger *log.Entry) (IdentityConfig, error)
 	GetIdentityConfigByClusterName(clusterName string, ctxLogger *log.Entry) ([]IdentityConfig, error)
-}
-
-type ClientAPI interface {
 	PutClusterGateway(cluster, name, ingressURL, notes, resourceType, tid string, labels []string) error
 	DeleteClusterGateway(cluster, name, resourceType, tid string) error
 	PutCustomData(cluster, namespace, name, resourceType, tid string, value interface{}) error
@@ -49,12 +46,12 @@ func WithBaseClientConfig(clientConfig *Config) func(*registryClient) {
 }
 
 func marshalDataForRegistry(data map[string]interface{}, url string) ([]byte, error) {
+	if data == nil {
+		return nil, fmt.Errorf("json body for request to %s was nil", url)
+	}
 	body, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal json body for http request to %s", url)
-	}
-	if body == nil {
-		return nil, fmt.Errorf("json body for request to %s was nil", url)
 	}
 	return body, nil
 }
@@ -77,36 +74,39 @@ func makeCallToRegistry(url, tid, method string, data map[string]interface{}, cl
 		return fmt.Errorf("response for request to %s was nil", url)
 	}
 	if response.StatusCode != 200 {
-		return fmt.Errorf("response code for request to %s was %s", url, response.StatusCode)
+		return fmt.Errorf("response code for request to %s was %v", url, response.StatusCode)
 	}
 	return nil
 }
 
 func (c *registryClient) PutClusterGateway(cluster, name, ingressURL, notes, resourceType, tid string, labels []string) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateway/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateways/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
 	data := map[string]interface{}{
+		"name":  name, // name of the actual gateway object in the cluster, not assetAlias
 		"url":   ingressURL,
-		"label": labels, // sort labels?
-		"notes": notes,  // not sure what the point of this is
+		"label": strings.Join(labels, ", "), // sort labels?
+		"notes": notes,                      // not sure what the point of this is
+		"type":  resourceType,
 	}
 	return makeCallToRegistry(url, tid, http.MethodPut, data, c.client)
 	//preferably put this in service handler where we check if common.IsIstioIngressGatewayService(svc)
 }
 
 func (c *registryClient) DeleteClusterGateway(cluster, name, resourceType, tid string) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateway/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateways/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
 	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
 }
 
 func (c *registryClient) PutCustomData(cluster, namespace, name, resourceType, tid string, value interface{}) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/customdata?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, resourceType)
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/customdata/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
+	byteVal, _ := json.Marshal(value)
+	strVal := string(byteVal)
 	data := map[string]interface{}{
 		"name":  name,         // name of the object in the cluster, not assetAlias
 		"type":  resourceType, // GlobalTrafficPolicy/CCC/OD/VS/etc
-		"value": value,        // could be the entire yaml or whatever we want here
+		"value": strVal,       // could be the entire yaml or whatever we want here
 	}
 	return makeCallToRegistry(url, tid, http.MethodPut, data, c.client)
-	// switch-case based on type (CCC/GTP/VS/OD/etc) to cast value?
 	// traffic config?
 }
 
@@ -116,7 +116,7 @@ func (c *registryClient) DeleteCustomData(cluster, namespace, name, resourceType
 }
 
 func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, metadata map[string]interface{}) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hosting/%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name)
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name)
 	data := map[string]interface{}{
 		common.AssetAlias: assetAlias,
 		"name":            name,         // name of the object in the cluster ie env-assetAlias-rollout
@@ -128,7 +128,7 @@ func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, re
 }
 
 func (c *registryClient) DeleteHostingData(cluster, namespace, name, resourceType, tid string) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hosting/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
 	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
 }
 
