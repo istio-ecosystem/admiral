@@ -771,8 +771,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		if common.DoVSRoutingForCluster(sourceCluster) {
+			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
-				deploymentOrRolloutName, namespace, sourceCluster,
+				deploymentOrRolloutName, eventNamespace, sourceCluster,
 				"Discovery phase: VS based routing enabled for cluster")
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
@@ -787,7 +788,6 @@ func modifyServiceEntryForNewServiceOrPod(
 				remoteRegistry,
 				sourceIdentity,
 				env)
-			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
