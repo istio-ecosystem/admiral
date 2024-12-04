@@ -170,6 +170,8 @@ func modifyServiceEntryForNewServiceOrPod(
 		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
 		// Holds the DR hosts (*.svc.cluster.local) used for VS based routing
 		sourceClusterToDRHosts = make(map[string]map[string]string)
+		// Holds the source cluster to namespace mapping from where the event is received
+		sourceClusterToEventNsCache = make(map[string]string)
 	)
 
 	clusterName, ok := ctx.Value(common.ClusterName).(string)
@@ -272,6 +274,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				continue
 			}
 			sourceServices[rc.ClusterID][common.Deployment] = serviceInstance
+			sourceClusterToEventNsCache[rc.ClusterID] = deployment.Namespace
 
 			namespace = deployment.Namespace
 			localMeshPorts := common.GetMeshPortsForDeployments(rc.ClusterID, serviceInstance, deployment)
@@ -332,6 +335,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				break
 			}
 			sourceServices[rc.ClusterID][common.Rollout] = serviceInstance
+			sourceClusterToEventNsCache[rc.ClusterID] = rollout.Namespace
 
 			localMeshPorts := GetMeshPortsForRollout(rc.ClusterID, serviceInstance, rollout)
 
@@ -788,8 +792,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		if common.DoVSRoutingForCluster(sourceCluster) {
+			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
-				deploymentOrRolloutName, namespace, sourceCluster,
+				deploymentOrRolloutName, eventNamespace, sourceCluster,
 				"Discovery phase: VS based routing enabled for cluster")
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
@@ -806,17 +811,17 @@ func modifyServiceEntryForNewServiceOrPod(
 				env)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, namespace, sourceCluster, err)
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
 				modifySEerr = common.AppendError(modifySEerr, err)
 			} else if len(destinations) == 0 {
 				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, namespace, sourceCluster,
+					deploymentOrRolloutName, eventNamespace, sourceCluster,
 					"No RouteDestinations generated for VS based routing ")
 			} else {
 				sourceClusterToDestinations[sourceCluster] = destinations
-				drHost := fmt.Sprintf("*.%s%s", namespace, common.DotLocalDomainSuffix)
+				drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
 				sourceClusterToDRHosts[sourceCluster] = map[string]string{
-					namespace + common.DotLocalDomainSuffix: drHost,
+					eventNamespace + common.DotLocalDomainSuffix: drHost,
 				}
 			}
 		}
