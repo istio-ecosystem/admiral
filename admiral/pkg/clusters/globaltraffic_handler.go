@@ -66,6 +66,7 @@ func (g *globalTrafficCache) Delete(identity string, environment string) error {
 
 func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())
@@ -75,6 +76,7 @@ func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTraffi
 
 func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
+	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())
