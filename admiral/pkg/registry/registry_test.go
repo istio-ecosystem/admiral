@@ -6,12 +6,17 @@ import (
 	json "encoding/json"
 	"errors"
 	"fmt"
+	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	numa "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"io/ioutil"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	apiNetworkingV1Alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	appsV1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"reflect"
@@ -90,6 +95,7 @@ func admiralParamsForRegistryClientTests() common.AdmiralParams {
 		RegistryClientAppId:                 "registry-appid",
 		RegistryClientAppSecret:             "registry-appsecret",
 		RegistryClientBaseURI:               "v1",
+		AdmiralAppEnv:                       "preProd",
 	}
 }
 
@@ -607,6 +613,230 @@ func TestDeleteCustomData(t *testing.T) {
 			err := rc.DeleteCustomData("clusterName", "namespace", "customdata-name", "resourceType", "tid")
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making put cluster customdata call with error: %v", err)
+			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
+			}
+		})
+	}
+}
+
+func TestPutHostingData(t *testing.T) {
+	admiralParams := admiralParamsForRegistryClientTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validClient := MockClient{
+		expectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		expectedPutErr: nil,
+		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+	}
+	errorClient := MockClient{
+		expectedPutResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		expectedPutErr: fmt.Errorf("error executing http request err:No Namespace Found with name=namespace and cluster=test-usw2-k8s"),
+		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+	}
+	vc := newDefaultRegistryClient()
+	vc.client = &validClient
+	ec := newDefaultRegistryClient()
+	ec.client = &errorClient
+	dummyObjectMeta := metaV1.ObjectMeta{
+		Name:      "test",
+		Namespace: "namespace",
+		Labels:    map[string]string{"identity": "bar"},
+	}
+	dummyDeployment := &appsV1.Deployment{
+		ObjectMeta: dummyObjectMeta,
+		Spec: appsV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+	dummyRollout := &argo.Rollout{
+		ObjectMeta: dummyObjectMeta,
+		Spec: argo.RolloutSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+	dummyJob := &batchv1.Job{
+		ObjectMeta: dummyObjectMeta,
+		Spec: batchv1.JobSpec{
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+	dummyVertex := &numa.Vertex{
+		ObjectMeta: dummyObjectMeta,
+		Spec:       numa.VertexSpec{},
+	}
+	dummyVertex.Spec.Metadata = &numa.Metadata{
+		Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+	}
+	dummyMonoVertex := &numa.MonoVertex{
+		ObjectMeta: dummyObjectMeta,
+		Spec:       numa.MonoVertexSpec{},
+	}
+	dummyMonoVertex.Spec.Metadata = &numa.Metadata{
+		Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+	}
+	dummyService := &coreV1.Service{
+		ObjectMeta: dummyObjectMeta,
+		Spec: coreV1.ServiceSpec{
+			Selector: map[string]string{"app": "app"},
+		},
+	}
+	testCases := []struct {
+		name          string
+		expectedError any
+		resourceType  string
+		rc            *registryClient
+		value         interface{}
+	}{
+		{
+			name: "Given a valid request body with Deployment, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.Deployment,
+			rc:            vc,
+			value:         dummyDeployment,
+		},
+		{
+			name: "Given a valid request body with Rollout, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.Rollout,
+			rc:            vc,
+			value:         dummyRollout,
+		},
+		{
+			name: "Given a valid request body with Job, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.Job,
+			rc:            vc,
+			value:         dummyJob,
+		},
+		{
+			name: "Given a valid request body with Vertex, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.Vertex,
+			rc:            vc,
+			value:         dummyVertex,
+		},
+		{
+			name: "Given a valid request body with MonoVertex, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.MonoVertex,
+			rc:            vc,
+			value:         dummyMonoVertex,
+		},
+		{
+			name: "Given a valid request body with Service, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  "service",
+			rc:            vc,
+			value:         dummyService,
+		},
+		{
+			name: "Given a valid request body with Service, " +
+				"When the registry call fails with No Namespace Found, " +
+				"Then the hosting route should be called",
+			expectedError: fmt.Errorf("error executing http request err:No Namespace Found with name=namespace and cluster=test-usw2-k8s"),
+			resourceType:  "service",
+			rc:            ec,
+			value:         dummyService,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.rc.PutHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid", c.value)
+			if err != nil && c.expectedError == nil {
+				t.Errorf("error while making put cluster hostingdata call with error: %v", err)
+			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
+			}
+		})
+	}
+}
+
+func TestDeleteHostingData(t *testing.T) {
+	admiralParams := admiralParamsForRegistryClientTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validClient := MockClient{
+		expectedDeleteResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		expectedDeleteErr: nil,
+		expectedConfig:    &Config{Host: "host", BaseURI: "v1"},
+	}
+	vc := newDefaultRegistryClient()
+	vc.client = &validClient
+	dummyObjectMeta := metaV1.ObjectMeta{
+		Name:      "test",
+		Namespace: "namespace",
+		Labels:    map[string]string{"identity": "bar"},
+	}
+	dummyDeployment := &appsV1.Deployment{
+		ObjectMeta: dummyObjectMeta,
+		Spec: appsV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+	testCases := []struct {
+		name          string
+		expectedError any
+		resourceType  string
+		rc            *registryClient
+		value         interface{}
+	}{
+		{
+			name: "Given a valid request body with Deployment, " +
+				"Then the registry call should succeed",
+			expectedError: nil,
+			resourceType:  common.Deployment,
+			rc:            vc,
+			value:         dummyDeployment,
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.rc.DeleteHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid")
+			if err != nil && c.expectedError == nil {
+				t.Errorf("error while making delete cluster hostingdata call with error: %v", err)
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}

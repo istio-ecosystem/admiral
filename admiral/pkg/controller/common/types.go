@@ -130,6 +130,7 @@ type AdmiralParams struct {
 	RegistryClientAppId      string
 	RegistryClientAppSecret  string
 	RegistryClientBaseURI    string
+	AdmiralAppEnv            string
 
 	// VS Based Routing
 	EnableVSRouting             bool

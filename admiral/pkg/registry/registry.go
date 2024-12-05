@@ -115,20 +115,46 @@ func (c *registryClient) DeleteCustomData(cluster, namespace, name, resourceType
 	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
 }
 
-func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, metadata map[string]interface{}) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name)
-	data := map[string]interface{}{
-		common.AssetAlias: assetAlias,
-		"name":            name,         // name of the object in the cluster ie env-assetAlias-rollout
-		"type":            resourceType, // service/deployment/rollout/etc
-		"metadata":        metadata,     // this will be filled in differently for service/deployment/rollout/etc
+func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, value interface{}) error {
+	hostingMetadataUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+	byteVal, _ := json.Marshal(value)
+	strVal := string(byteVal)
+	hostingMetadataPayload := map[string]interface{}{
+		"json": strVal,
+		"key":  name,
+		//"notes": "string",
+		//"value": "string",
 	}
-	return makeCallToRegistry(url, tid, http.MethodPut, data, c.client)
+	newerr := makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
+	if newerr != nil {
+		// Check if call failed because this hosting did not exist in registry - if so, then create the hosting and populate with the metadata separately
+		// The metadata is added separately so that we avoid a race condition between two hosting metadatas for a new hosting overwriting one another
+		if strings.Contains(newerr.Error(), "No Namespace Found") {
+			hostingUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+			hostingPayload := map[string]interface{}{
+				"assetAlias": assetAlias,
+				//"assetId":    "string",
+				"env": common.GetAdmiralAppEnv(),
+				"hostingMetaData": map[string]interface{}{
+					"json": strVal,
+					"key":  name,
+					//"notes": "string",
+					//"value": "string",
+				},
+				"name": name,
+				//"notes": "string",
+				"type": resourceType,
+			}
+			return makeCallToRegistry(hostingUrl, tid, http.MethodPut, hostingPayload, c.client)
+		}
+	}
+	return newerr
 	// Where does sidecar and envoy filter go?
 }
 
-func (c *registryClient) DeleteHostingData(cluster, namespace, name, resourceType, tid string) error {
-	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
+func (c *registryClient) DeleteHostingData(cluster, namespace, name, assetAlias, resourceType, tid string) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+	// When do we delete the actual hosting instead of the metadata? IMO this should be handled by registry when the actual asset is deleted.
 	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
 }
 
