@@ -327,36 +327,37 @@ func getIngressPortName(meshPorts map[string]uint32) string {
 	return finalProtocol
 }
 
-func parseWeightedService(weightedServices map[string]*WeightedService) map[string]*registry.RegistryServiceConfig {
-	return nil
+func parseWeightedService(weightedServices map[string]*WeightedService, meshPorts map[string]uint32) []*registry.RegistryServiceConfig {
+	services := make([]*registry.RegistryServiceConfig, 0, len(weightedServices))
+
+	for _, serviceInstance := range weightedServices {
+		if serviceInstance.Weight <= 0 {
+			continue
+		}
+		services = append(services, &registry.RegistryServiceConfig{
+			Name:      serviceInstance.Service.Name,
+			Weight:    int(serviceInstance.Weight),
+			Ports:     meshPorts,
+			Selectors: serviceInstance.Service.Spec.Selector,
+		})
+	}
+	return services
 }
 
-func parseMigrationService(services []*k8sV1.Service) map[string]*registry.RegistryServiceConfig {
-	return nil
-}
+func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPorts map[string]map[string]uint32) []*registry.RegistryServiceConfig {
+	services := make([]*registry.RegistryServiceConfig, 0, len(migrationServices))
 
-func (r RouteDestinationSorted) Len() int {
-	return len(r)
-}
-
-func (r RouteDestinationSorted) Less(i, j int) bool {
-	return r[i].Destination.Host < r[j].Destination.Host
-}
-
-func (r RouteDestinationSorted) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
-}
-
-func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
-	var destinationsToBeProcessed []string
-
-	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
-
-	var sourceClusterMap = common.NewMap()
-	sourceClusterMap.Put(clusterName, clusterName)
-
-	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
-	return err
+	services = append(services, &registry.RegistryServiceConfig{
+		Name:      migrationServices[common.Deployment].Name,
+		Ports:     meshPorts[common.Deployment],
+		Selectors: migrationServices[common.Deployment].Spec.Selector,
+	})
+	services = append(services, &registry.RegistryServiceConfig{
+		Name:      migrationServices[common.Rollout].Name,
+		Ports:     meshPorts[common.Rollout],
+		Selectors: migrationServices[common.Rollout].Spec.Selector,
+	})
+	return services
 }
 
 func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string) []string {
@@ -502,4 +503,28 @@ func getDestinationsToBeProcessed(eventType admiral.EventType,
 		}
 	}
 	return updatedDestinations, nonMeshEnabledExists
+}
+
+func (r RouteDestinationSorted) Len() int {
+	return len(r)
+}
+
+func (r RouteDestinationSorted) Less(i, j int) bool {
+	return r[i].Destination.Host < r[j].Destination.Host
+}
+
+func (r RouteDestinationSorted) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
+
+func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+	var destinationsToBeProcessed []string
+
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+
+	var sourceClusterMap = common.NewMap()
+	sourceClusterMap.Put(clusterName, clusterName)
+
+	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+	return err
 }

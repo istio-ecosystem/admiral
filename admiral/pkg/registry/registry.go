@@ -2,6 +2,8 @@ package registry
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -10,17 +12,23 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// IdentityConfiguration is an interface to fetch configuration from a registry
+// ClientAPI is an interface to fetch configuration from a registry
 // backend. The backend can provide an API to give configurations per identity,
 // or if given a cluster name, it will provide the configurations for all
 // the identities present in that cluster.
-type IdentityConfiguration interface {
+type ClientAPI interface {
 	GetIdentityConfigByIdentityName(identityAlias string, ctxLogger *log.Entry) (IdentityConfig, error)
 	GetIdentityConfigByClusterName(clusterName string, ctxLogger *log.Entry) ([]IdentityConfig, error)
+	PutClusterGateway(cluster, name, ingressURL, notes, resourceType, tid string, labels []string) error
+	DeleteClusterGateway(cluster, name, resourceType, tid string) error
+	PutCustomData(cluster, namespace, name, resourceType, tid string, value interface{}) error
+	DeleteCustomData(cluster, namespace, name, resourceType, tid string) error
+	PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, value interface{}) error
+	DeleteHostingData(cluster, namespace, name, assetAlias, resourceType, tid string) error
 }
 
 type registryClient struct {
-	registryEndpoint string
+	client BaseClient
 }
 
 func NewRegistryClient(options ...func(client *registryClient)) *registryClient {
@@ -31,10 +39,128 @@ func NewRegistryClient(options ...func(client *registryClient)) *registryClient 
 	return registryClient
 }
 
-func WithRegistryEndpoint(registryEndpoint string) func(*registryClient) {
+func WithBaseClientConfig(clientConfig *Config) func(*registryClient) {
 	return func(c *registryClient) {
-		c.registryEndpoint = registryEndpoint
+		c.client = NewClient(clientConfig)
 	}
+}
+
+func marshalDataForRegistry(data map[string]interface{}, url string) ([]byte, error) {
+	if data == nil {
+		return nil, fmt.Errorf("json body for request to %s was nil", url)
+	}
+	body, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal json body for http request to %s", url)
+	}
+	return body, nil
+}
+
+func makeCallToRegistry(url, tid, method string, data map[string]interface{}, client BaseClient) error {
+	var body []byte
+	var err error
+	var response *http.Response
+	if data != nil {
+		body, err = marshalDataForRegistry(data, url)
+		if err != nil {
+			return err
+		}
+	}
+	response, err = client.MakePrivateAuthCall(url, tid, method, body)
+	if err != nil {
+		return err
+	}
+	if response == nil {
+		return fmt.Errorf("response for request to %s was nil", url)
+	}
+	if response.StatusCode != 200 {
+		return fmt.Errorf("response code for request to %s was %v", url, response.StatusCode)
+	}
+	return nil
+}
+
+func (c *registryClient) PutClusterGateway(cluster, name, ingressURL, notes, resourceType, tid string, labels []string) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateways/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
+	data := map[string]interface{}{
+		"name":  name, // name of the actual gateway object in the cluster, not assetAlias
+		"url":   ingressURL,
+		"label": strings.Join(labels, ", "), // sort labels?
+		"notes": notes,                      // not sure what the point of this is
+		"type":  resourceType,
+	}
+	return makeCallToRegistry(url, tid, http.MethodPut, data, c.client)
+	//preferably put this in service handler where we check if common.IsIstioIngressGatewayService(svc)
+}
+
+func (c *registryClient) DeleteClusterGateway(cluster, name, resourceType, tid string) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/gateways/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, name, resourceType)
+	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
+}
+
+func (c *registryClient) PutCustomData(cluster, namespace, name, resourceType, tid string, value interface{}) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/customdata/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
+	byteVal, _ := json.Marshal(value)
+	strVal := string(byteVal)
+	data := map[string]interface{}{
+		"name":  name,         // name of the object in the cluster, not assetAlias
+		"type":  resourceType, // GlobalTrafficPolicy/CCC/OD/VS/etc
+		"value": strVal,       // could be the entire yaml or whatever we want here
+	}
+	return makeCallToRegistry(url, tid, http.MethodPut, data, c.client)
+	// traffic config?
+}
+
+func (c *registryClient) DeleteCustomData(cluster, namespace, name, resourceType, tid string) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/customdata/%s?type=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType)
+	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
+}
+
+func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, value interface{}) error {
+	hostingMetadataUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+	byteVal, _ := json.Marshal(value)
+	strVal := string(byteVal)
+	hostingMetadataPayload := map[string]interface{}{
+		"json": strVal,
+		"key":  name,
+		//"notes": "string",
+		//"value": "string",
+	}
+	metadataErr := makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
+	if metadataErr != nil {
+		// Check if call failed because this hosting did not exist in registry - if so, then create the hosting and populate with the metadata separately
+		// The metadata is added in a separate call so that we avoid a race condition between two hosting metadata calls for a new hosting overwriting one another
+		if strings.Contains(metadataErr.Error(), "No Namespace Found") {
+			hostingUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+			hostingPayload := map[string]interface{}{
+				"assetAlias": assetAlias,
+				//"assetId":    "string",
+				"env": common.GetAdmiralAppEnv(),
+				//"hostingMetaData": map[string]interface{}{
+				//	"json": strVal,
+				//	"key":  name,
+				//	//"notes": "string",
+				//	//"value": "string",
+				//},
+				"name": name,
+				//"notes": "string",
+				"type": resourceType,
+			}
+			hostingErr := makeCallToRegistry(hostingUrl, tid, http.MethodPut, hostingPayload, c.client)
+			if hostingErr == nil {
+				return makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
+			} else {
+				return hostingErr
+			}
+		}
+	}
+	return metadataErr
+	// Where does sidecar and envoy filter go?
+}
+
+func (c *registryClient) DeleteHostingData(cluster, namespace, name, assetAlias, resourceType, tid string) error {
+	url := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+	// When do we delete the actual hosting instead of the metadata? IMO this should be handled by registry when the actual asset is deleted.
+	return makeCallToRegistry(url, tid, http.MethodDelete, nil, c.client)
 }
 
 // GetIdentityConfigByIdentityName calls the registry API to fetch the IdentityConfig for

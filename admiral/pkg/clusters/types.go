@@ -99,7 +99,7 @@ type RemoteRegistry struct {
 	ClusterShardHandler         registry.ClusterShardStore
 	ClusterIdentityStoreHandler registry.ClusterIdentityStore
 	ConfigSyncer                registry.ConfigSyncer
-	RegistryClient              registry.IdentityConfiguration
+	RegistryClient              registry.ClientAPI
 	ConfigWriter                ConfigWriter
 }
 
@@ -191,8 +191,15 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		ConfigWriter:                NewConfigWriter(),
 	}
 
-	if common.IsAdmiralOperatorMode() {
-		rr.RegistryClient = registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER"))
+	if common.IsAdmiralOperatorMode() || common.IsAdmiralStateSyncerMode() {
+		registryClientParams := common.GetRegistryClientConfig()
+		defaultRegistryClientConfig := &registry.Config{
+			Host:      registryClientParams["Host"],
+			AppId:     registryClientParams["AppId"],
+			AppSecret: registryClientParams["AppSecret"],
+			BaseURI:   registryClientParams["BaseURI"],
+		}
+		rr.RegistryClient = registry.NewRegistryClient(registry.WithBaseClientConfig(defaultRegistryClientConfig))
 		rr.AdmiralCache.ClusterLocalityCache = common.NewMapOfMaps()
 	}
 

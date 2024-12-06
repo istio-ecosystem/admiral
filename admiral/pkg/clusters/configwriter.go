@@ -15,7 +15,13 @@ import (
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 )
 
-const typeLabel = "type"
+const (
+	typeLabel         = "type"
+	testServiceKey    = "test"
+	defaultServiceKey = "default"
+	canaryPrefix      = "canary"
+	previewPrefix     = "preview"
+)
 
 // IstioSEBuilder is an interface to construct Service Entry objects
 // from IdentityConfig objects. It can construct multiple Service Entries
@@ -35,7 +41,7 @@ type ServiceEntryBuilder struct {
 func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *logrus.Entry, identityConfig registry.IdentityConfig) ([]*networkingV1Alpha3.ServiceEntry, error) {
 	var (
 		identity       = identityConfig.IdentityName
-		seMap          = map[string]*networkingV1Alpha3.ServiceEntry{}
+		seMap          = map[string]map[string]*networkingV1Alpha3.ServiceEntry{}
 		serviceEntries = []*networkingV1Alpha3.ServiceEntry{}
 		start          = time.Now()
 		err            error
@@ -58,35 +64,59 @@ func (b *ServiceEntryBuilder) BuildServiceEntriesFromIdentityConfig(ctxLogger *l
 		serverCluster := identityConfigCluster.Name
 		for _, identityConfigEnvironment := range identityConfigCluster.Environment {
 			env := identityConfigEnvironment.Name
-			var tmpSe *networkingV1Alpha3.ServiceEntry
+			if len(identityConfigEnvironment.Services) == 0 {
+				return serviceEntries, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
+			}
+
 			start = time.Now()
-			endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, ingressEndpoints, identityConfigEnvironment)
-			util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
-			if err != nil {
-				return serviceEntries, err
-			}
-			if se, ok := seMap[env]; !ok {
-				tmpSe = &networkingV1Alpha3.ServiceEntry{
-					Hosts:           []string{common.GetCnameVal([]string{env, strings.ToLower(identity), common.GetHostnameSuffix()})},
-					Ports:           identityConfigEnvironment.Ports,
-					Location:        networkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
-					Resolution:      networkingV1Alpha3.ServiceEntry_DNS,
-					SubjectAltNames: []string{common.SpiffePrefix + common.GetSANPrefix() + common.Slash + identity},
-					Endpoints:       endpoints,
-					ExportTo:        dependentNamespaces,
+			meshHosts := getMeshHosts(identity, identityConfigEnvironment)
+			for _, host := range meshHosts {
+				var tmpSe *networkingV1Alpha3.ServiceEntry
+				endpoints, err := getServiceEntryEndpoints(ctxLogger, b.ClientCluster, serverCluster, host, ingressEndpoints, identityConfigEnvironment)
+				util.LogElapsedTimeSince("getServiceEntryEndpoint", identity, env, b.ClientCluster, start)
+				if len(endpoints) == 0 || err != nil {
+					return serviceEntries, err
 				}
-			} else {
-				tmpSe = se
-				tmpSe.Endpoints = append(tmpSe.Endpoints, endpoints...)
+				if se, ok := seMap[env][host]; !ok {
+					tmpSe = &networkingV1Alpha3.ServiceEntry{
+						Hosts:           []string{host},
+						Ports:           identityConfigEnvironment.Ports,
+						Location:        networkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+						Resolution:      networkingV1Alpha3.ServiceEntry_DNS,
+						SubjectAltNames: []string{common.SpiffePrefix + common.GetSANPrefix() + common.Slash + identity},
+						Endpoints:       endpoints,
+						ExportTo:        dependentNamespaces,
+					}
+				} else {
+					tmpSe = se
+					tmpSe.Endpoints = append(tmpSe.Endpoints, endpoints...)
+				}
+				sort.Sort(WorkloadEntrySorted(tmpSe.Endpoints))
+				seMap[env] = map[string]*networkingV1Alpha3.ServiceEntry{host: tmpSe}
 			}
-			sort.Sort(WorkloadEntrySorted(tmpSe.Endpoints))
-			seMap[env] = tmpSe
 		}
 	}
-	for _, se := range seMap {
-		serviceEntries = append(serviceEntries, se)
+	for _, seForEnv := range seMap {
+		for _, se := range seForEnv {
+			serviceEntries = append(serviceEntries, se)
+		}
 	}
 	return serviceEntries, err
+}
+
+func getMeshHosts(identity string, identityConfigEnvironment *registry.IdentityConfigEnvironment) []string {
+	meshHosts := []string{}
+	meshHosts = append(meshHosts, common.GetCnameVal([]string{identityConfigEnvironment.Name, strings.ToLower(identity), common.GetHostnameSuffix()}))
+	if identityConfigEnvironment.Type[common.Rollout] != nil {
+		strategy := identityConfigEnvironment.Type[common.Rollout].Strategy
+		if strategy == bluegreenStrategy {
+			meshHosts = append(meshHosts, common.GetCnameVal([]string{previewPrefix, strings.ToLower(identity), common.GetHostnameSuffix()}))
+		}
+		if strategy == canaryStrategy {
+			meshHosts = append(meshHosts, common.GetCnameVal([]string{canaryPrefix, strings.ToLower(identity), common.GetHostnameSuffix()}))
+		}
+	}
+	return meshHosts
 }
 
 // getIngressEndpoints constructs the endpoint of the ingress gateway/remote endpoint for an identity
@@ -116,66 +146,91 @@ func getServiceEntryEndpoints(
 	ctxLogger *logrus.Entry,
 	clientCluster string,
 	serverCluster string,
+	host string,
 	ingressEndpoints map[string]*networkingV1Alpha3.WorkloadEntry,
 	identityConfigEnvironment *registry.IdentityConfigEnvironment) ([]*networkingV1Alpha3.WorkloadEntry, error) {
-	if len(identityConfigEnvironment.Services) == 0 {
-		return nil, fmt.Errorf("there were no services for the asset in namespace %s on cluster %s", identityConfigEnvironment.Namespace, serverCluster)
-	}
 	var err error
+	services := identityConfigEnvironment.Services
 	endpoint := ingressEndpoints[serverCluster]
 	endpoints := []*networkingV1Alpha3.WorkloadEntry{}
-	tmpEp := endpoint.DeepCopy()
-	if tmpEp.Labels == nil {
-		tmpEp.Labels = make(map[string]string)
+
+	if services == nil {
+		return endpoints, fmt.Errorf("services are nil for identityConfigEnvironment %s", identityConfigEnvironment.Name)
 	}
-	tmpEp.Labels["security.istio.io/tlsMode"] = "istio"
-	services := []*registry.RegistryServiceConfig{}
-	for _, service := range identityConfigEnvironment.Services {
-		services = append(services, service)
+
+	// Logic to determine which services should be against default (like whether have both rollout and deployment, and which service for which type) will move to state syncer
+	// Also state syncer will be responsible for setting the weight of the services, and removing services without weights if one has a weight
+
+	// Services will have 2 keys at max - default and testSvc
+	// a. Non istio canary rollout will have only default - which will have root svc
+	// b. Istio canary rollout:
+	// 1. If weights present - Default key will have stable, canary svc with weights. The latter can be part of testSvc key as well
+	// 2. If no weights present - Default key will have stable svc, testSvc will have canary svc
+	// c. Blue green rollout will have default key with stable svc, testSvc with preview svc
+	// d. Deployment will have default key with root svc
+
+	// Service structure sample:
+	/*
+			"services": {
+		            "default": [{
+		              "name": "app-1-spk-stable-service",
+		                "weight": 25,
+		              "ports": {
+		                "http": 8090
+		              }
+		            }],
+		            "canary": [{
+		              "name": "app-1-spk-desired-service",
+		              "weight": 75,
+		              "ports": {
+		                "http": 8090
+		              }
+		            }]
+		          },
+	*/
+	ep := endpoint.DeepCopy()
+	if ep.Labels == nil {
+		ep.Labels = make(map[string]string)
 	}
-	sort.Sort(registry.RegistryServiceConfigSorted(services))
-	// Deployment won't have weights, so just sort and take the first service to use as the endpoint
-	if identityConfigEnvironment.Type == common.Deployment {
-		if clientCluster == serverCluster {
-			tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-			tmpEp.Ports = services[0].Ports
-		}
-		endpoints = append(endpoints, tmpEp)
-	}
-	// Rollout without weights is treated the same as deployment so sort and take first service
-	// If any of the services have weights then add them to the list of endpoints
-	if identityConfigEnvironment.Type == common.Rollout {
-		for _, service := range services {
-			if service.Weight > 0 {
-				weightedEp := tmpEp.DeepCopy()
-				weightedEp.Weight = uint32(service.Weight)
-				if clientCluster == serverCluster {
-					weightedEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-					weightedEp.Ports = service.Ports
+	ep.Labels["security.istio.io/tlsMode"] = "istio"
+	if clientCluster == serverCluster {
+		if strings.HasPrefix(host, canaryPrefix) || strings.HasPrefix(host, previewPrefix) {
+			if services[testServiceKey] != nil {
+				ep.Address = services[testServiceKey][0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				ep.Ports = services[testServiceKey][0].Ports
+				endpoints = append(endpoints, ep)
+			}
+		} else {
+			for _, service := range services[defaultServiceKey] {
+				tempEp := ep.DeepCopy()
+				tempEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+				tempEp.Ports = service.Ports
+				if service.Weight > 0 {
+					tempEp.Weight = uint32(service.Weight)
 				}
-				endpoints = append(endpoints, weightedEp)
+				endpoints = append(endpoints, tempEp)
+			}
+			for _, service := range services[testServiceKey] {
+				if service.Weight > 0 {
+					tempEp := ep.DeepCopy()
+					tempEp.Address = service.Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
+					tempEp.Ports = service.Ports
+					tempEp.Weight = uint32(service.Weight)
+					endpoints = append(endpoints, tempEp)
+				}
 			}
 		}
-		// If we go through all the services associated with the rollout and none have applicable weights then endpoints is empty
-		// Treat the rollout like a deployment and sort and take the first service
-		if len(endpoints) == 0 {
-			if clientCluster == serverCluster {
-				tmpEp.Address = services[0].Name + common.Sep + identityConfigEnvironment.Namespace + common.GetLocalDomainSuffix()
-				tmpEp.Ports = services[0].Ports
-			}
-			endpoints = append(endpoints, tmpEp)
-		}
+	} else {
+		endpoints = append(endpoints, ep)
 	}
-	// TODO: type is rollout, strategy is bluegreen, need a way to know which service is preview/desired, trigger another SE
-	// TODO: type is rollout, strategy is canary, need a way to know which service is stable/root/desired, trigger another SE
-	// TODO: two types in the environment, deployment to rollout migration
+	sort.Sort(WorkloadEntrySorted(endpoints))
 	return endpoints, err
 }
 
 // getExportTo constructs a sorted list of unique namespaces for a given cluster, client assets,
 // and cname, where each namespace is where a client asset of the cname is deployed on the cluster. If the cname
 // is also deployed on the cluster then the istio-system namespace is also in the list.
-func getExportTo(ctxLogger *logrus.Entry, registryClient registry.IdentityConfiguration, clientCluster string, isServerOnClientCluster bool, clientAssets map[string]string) ([]string, error) {
+func getExportTo(ctxLogger *logrus.Entry, registryClient registry.ClientAPI, clientCluster string, isServerOnClientCluster bool, clientAssets map[string]string) ([]string, error) {
 	clientNamespaces := []string{}
 	var err error
 	var clientIdentityConfig registry.IdentityConfig

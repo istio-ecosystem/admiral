@@ -253,6 +253,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.ShardIdentityValue, "shard_identity_value", "", "Admiral operator should watch shards where shardIdentityLabelKey == shardIdentityValue")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSecretFilterTags, "operator_secret_filter_tags", "admiral/syncoperator",
 		"Filter tags for the specific admiral operator namespace secret to watch")
+	rootCmd.PersistentFlags().StringVar(&params.RegistryClientHost, "registry_client_host", "https://registry.com", "Host section of the url for a call to service registry")
+	rootCmd.PersistentFlags().StringVar(&params.RegistryClientAppId, "registry_client_app_id", "admiral", "App Id for auth header")
+	rootCmd.PersistentFlags().StringVar(&params.RegistryClientAppSecret, "registry_client_app_secret", "secrets/admiral/app/secret", "Path to secret for auth header")
+	rootCmd.PersistentFlags().StringVar(&params.RegistryClientBaseURI, "registry_client_base_uri", "v1", "Base URI section of of the url for a call to service registry")
+	rootCmd.PersistentFlags().StringVar(&params.AdmiralAppEnv, "admiral_app_env", "preProd", "The env of admiral used for a call to service registry")
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")

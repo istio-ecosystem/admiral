@@ -77,6 +77,9 @@ func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "received")
+	if common.IsAdmiralStateSyncerMode() {
+		c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Add, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -90,6 +93,9 @@ func (c *ClientConnectionConfigHandler) Updated(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
+	if common.IsAdmiralStateSyncerMode() {
+		c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -103,6 +109,9 @@ func (c *ClientConnectionConfigHandler) Deleted(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
+	if common.IsAdmiralStateSyncerMode() {
+		c.RemoteRegistry.RegistryClient.DeleteCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
+	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {

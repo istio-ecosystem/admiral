@@ -553,3 +553,15 @@ func GetOperatorSecretFilterTags() string {
 	defer wrapper.RUnlock()
 	return wrapper.params.OperatorSecretFilterTags
 }
+
+func GetRegistryClientConfig() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return map[string]string{"Host": wrapper.params.RegistryClientHost, "AppId": wrapper.params.RegistryClientAppId, "AppSecret": wrapper.params.RegistryClientAppSecret, "BaseURI": wrapper.params.RegistryClientBaseURI}
+}
+
+func GetAdmiralAppEnv() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.AdmiralAppEnv
+}
