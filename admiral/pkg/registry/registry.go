@@ -23,8 +23,8 @@ type ClientAPI interface {
 	DeleteClusterGateway(cluster, name, resourceType, tid string) error
 	PutCustomData(cluster, namespace, name, resourceType, tid string, value interface{}) error
 	DeleteCustomData(cluster, namespace, name, resourceType, tid string) error
-	PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, metadata map[string]interface{}) error
-	DeleteHostingData(cluster, namespace, name, resourceType, tid string) error
+	PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, value interface{}) error
+	DeleteHostingData(cluster, namespace, name, assetAlias, resourceType, tid string) error
 }
 
 type registryClient struct {
@@ -125,30 +125,35 @@ func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, re
 		//"notes": "string",
 		//"value": "string",
 	}
-	newerr := makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
-	if newerr != nil {
+	metadataErr := makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
+	if metadataErr != nil {
 		// Check if call failed because this hosting did not exist in registry - if so, then create the hosting and populate with the metadata separately
-		// The metadata is added separately so that we avoid a race condition between two hosting metadatas for a new hosting overwriting one another
-		if strings.Contains(newerr.Error(), "No Namespace Found") {
+		// The metadata is added in a separate call so that we avoid a race condition between two hosting metadata calls for a new hosting overwriting one another
+		if strings.Contains(metadataErr.Error(), "No Namespace Found") {
 			hostingUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, resourceType, common.GetAdmiralAppEnv(), assetAlias)
 			hostingPayload := map[string]interface{}{
 				"assetAlias": assetAlias,
 				//"assetId":    "string",
 				"env": common.GetAdmiralAppEnv(),
-				"hostingMetaData": map[string]interface{}{
-					"json": strVal,
-					"key":  name,
-					//"notes": "string",
-					//"value": "string",
-				},
+				//"hostingMetaData": map[string]interface{}{
+				//	"json": strVal,
+				//	"key":  name,
+				//	//"notes": "string",
+				//	//"value": "string",
+				//},
 				"name": name,
 				//"notes": "string",
 				"type": resourceType,
 			}
-			return makeCallToRegistry(hostingUrl, tid, http.MethodPut, hostingPayload, c.client)
+			hostingErr := makeCallToRegistry(hostingUrl, tid, http.MethodPut, hostingPayload, c.client)
+			if hostingErr == nil {
+				return makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
+			} else {
+				return hostingErr
+			}
 		}
 	}
-	return newerr
+	return metadataErr
 	// Where does sidecar and envoy filter go?
 }
 

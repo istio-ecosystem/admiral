@@ -796,8 +796,8 @@ func TestDeleteHostingData(t *testing.T) {
 		expectedDeleteErr: nil,
 		expectedConfig:    &Config{Host: "host", BaseURI: "v1"},
 	}
-	vc := newDefaultRegistryClient()
-	vc.client = &validClient
+	rc := newDefaultRegistryClient()
+	rc.client = &validClient
 	dummyObjectMeta := metaV1.ObjectMeta{
 		Name:      "test",
 		Namespace: "namespace",
@@ -820,7 +820,6 @@ func TestDeleteHostingData(t *testing.T) {
 		name          string
 		expectedError any
 		resourceType  string
-		rc            *registryClient
 		value         interface{}
 	}{
 		{
@@ -828,13 +827,12 @@ func TestDeleteHostingData(t *testing.T) {
 				"Then the registry call should succeed",
 			expectedError: nil,
 			resourceType:  common.Deployment,
-			rc:            vc,
 			value:         dummyDeployment,
 		},
 	}
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			err := c.rc.DeleteHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid")
+			err := rc.DeleteHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid")
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making delete cluster hostingdata call with error: %v", err)
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
