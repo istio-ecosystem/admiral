@@ -10290,3 +10290,214 @@ func TestOrderSourceClusters(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLocalityInServiceEntry(t *testing.T) {
+	testCases := []struct {
+		name        string
+		entry       *v1alpha3.ServiceEntry
+		expected    bool
+		expectedErr interface{}
+	}{
+		{
+			"AllEndpointsWithLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+						{Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"NoEndpoints",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"SingleEndpointLocalitySet",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+		{
+			"SomeEndpointsMissingLocality",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+						{Address: "abc.foo.com.", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			false,
+			[]string{"locality not set for endpoint with address abc.foo.com."},
+		},
+		{
+			"AllEndpointsWithoutLocalityAndMode",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com."},
+						{Address: "def.foo.com."},
+					},
+				},
+			},
+			false,
+			[]string{"locality not set for endpoint with address abc.foo.com.", "istio mode not set for endpoint with address abc.foo.com.", "locality not set for endpoint with address def.foo.com.", "istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithoutIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2"},
+						{Address: "def.foo.com.", Locality: "us-east-2"},
+					},
+				},
+			},
+			false,
+			[]string{"istio mode not set for endpoint with address abc.foo.com.", "istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithPartiallyIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+						{Address: "def.foo.com.", Locality: "us-east-2"},
+					},
+				},
+			},
+			false,
+			[]string{"istio mode not set for endpoint with address def.foo.com."},
+		},
+		{
+			"AllEndpointsWithLocalityWithIstioModeLabel",
+			&v1alpha3.ServiceEntry{
+				Spec: istioNetworkingV1Alpha3.ServiceEntry{
+					Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+						{Address: "abc.foo.com.", Locality: "us-west-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+						{Address: "def.foo.com.", Locality: "us-east-2", Labels: map[string]string{"type": common.Rollout, "security.istio.io/tlsMode": "istio"}},
+					},
+				},
+			},
+			true,
+			nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		result, err := validateServiceEntryEndpoints(tt.entry)
+		if result != tt.expected {
+			t.Errorf("Test failed: %s \nExpected: %v \nGot: %v", tt.name, tt.expected, result)
+		}
+		if tt.expectedErr == nil {
+			assert.Nil(t, err)
+		} else {
+			for i, expectedErr := range tt.expectedErr.([]string) {
+				assert.Contains(t, err.Error(), expectedErr, "Error %d: %s", i, expectedErr)
+			}
+		}
+	}
+}
+
+func TestOrderSourceClusters(t *testing.T) {
+	rc1 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-east-2",
+			},
+		},
+	}
+	rc2 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+	}
+	rc3 := &RemoteController{
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-apse-2",
+			},
+		},
+	}
+
+	tests := []struct {
+		desc       string
+		gtpPrefReg string
+		rcMap      map[string]*RemoteController
+		services   map[string]map[string]*v1.Service
+		enabled    bool
+		expected   string
+	}{
+		{
+			desc:       "Empty services",
+			gtpPrefReg: "",
+			rcMap:      map[string]*RemoteController{},
+			services:   map[string]map[string]*v1.Service{},
+			expected:   "",
+		},
+		{
+			desc:       "Cluster in gtp preference region",
+			gtpPrefReg: "us-west-2",
+			rcMap:      map[string]*RemoteController{"cluster2": rc2, "cluster1": rc1, "cluster3": rc3},
+			services:   map[string]map[string]*v1.Service{"cluster1": {}, "cluster2": {}, "cluster3": {}},
+			enabled:    true,
+			expected:   "cluster2",
+		},
+	}
+
+	for _, tC := range tests {
+		t.Run(tC.desc, func(t *testing.T) {
+			common.ResetSync()
+			rr, _ := InitAdmiral(context.Background(), common.AdmiralParams{
+				KubeconfigPath: "testdata/fake.config",
+				LabelSet: &common.LabelSet{
+					GatewayApp:              "gatewayapp",
+					WorkloadIdentityKey:     "identity",
+					PriorityKey:             "priority",
+					EnvKey:                  "env",
+					AdmiralCRDIdentityLabel: "identity",
+				},
+				EnableSAN:                         true,
+				SANPrefix:                         "prefix",
+				HostnameSuffix:                    "mesh",
+				SyncNamespace:                     "ns",
+				CacheReconcileDuration:            0,
+				ClusterRegistriesNamespace:        "default",
+				DependenciesNamespace:             "default",
+				WorkloadSidecarName:               "default",
+				Profile:                           common.AdmiralProfileDefault,
+				DependentClusterWorkerConcurrency: 5,
+				PreventSplitBrain:                 tC.enabled,
+			})
+			for c, rc := range tC.rcMap {
+				rr.PutRemoteController(c, rc)
+			}
+			ctx := context.WithValue(context.Background(), common.GtpPreferenceRegion, tC.gtpPrefReg)
+			result := orderSourceClusters(ctx, rr, tC.services)
+
+			if tC.expected == "" {
+				assert.Equal(t, 0, len(result))
+			} else if !reflect.DeepEqual(result[0], tC.expected) {
+				t.Fatalf("Expected %v, but got %v", tC.expected, result)
+			}
+		})
+	}
+}
