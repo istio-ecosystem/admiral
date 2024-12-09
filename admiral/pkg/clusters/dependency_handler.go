@@ -20,6 +20,7 @@ type DependencyHandler struct {
 	RemoteRegistry              *RemoteRegistry
 	DepController               *admiral.DependencyController
 	DestinationServiceProcessor DestinationServiceProcessor
+	RoutingPolicyProcessor      RoutingPolicyProcessor
 }
 
 func (dh *DependencyHandler) Added(ctx context.Context, obj *v1.Dependency) error {
@@ -73,6 +74,9 @@ func (dh *DependencyHandler) HandleDependencyRecord(ctx context.Context, obj *v1
 		// This will be re-queued and retried
 		return handleDepRecordErrors
 	}
+
+	// process routing policies
+	_ = dh.RoutingPolicyProcessor.ProcessDependency(ctx, eventType, obj)
 
 	remoteRegistry.AdmiralCache.SourceToDestinations.put(obj)
 	return handleDepRecordErrors
