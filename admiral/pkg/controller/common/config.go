@@ -473,12 +473,27 @@ func DoGenerationCheck() bool {
 	return wrapper.params.EnableGenerationCheck
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+func IsOnlyReplicaCountChanged() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableIsOnlyReplicaCountChangedCheck
+}
+
+>>>>>>> 564f504f (Add replica count check)
 func PreventSplitBrain() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.PreventSplitBrain
 }
 
+<<<<<<< HEAD
+=======
+>>>>>>> 870eb6da (Add replica count check)
+>>>>>>> 564f504f (Add replica count check)
 func GetResyncIntervals() util.ResyncIntervals {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

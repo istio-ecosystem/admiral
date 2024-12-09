@@ -105,7 +105,15 @@ type AdmiralParams struct {
 	EnableSyncIstioResourcesToSourceClusters bool
 	DefaultWarmupDurationSecs                int64
 	EnableGenerationCheck                    bool
+<<<<<<< HEAD
 	PreventSplitBrain                        bool
+=======
+<<<<<<< HEAD
+=======
+	EnableIsOnlyReplicaCountChangedCheck     bool
+	PreventSplitBrain                        bool
+>>>>>>> 870eb6da (Add replica count check)
+>>>>>>> 564f504f (Add replica count check)
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
