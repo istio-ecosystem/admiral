@@ -49,8 +49,6 @@ func TestRoutingPolicyHandler(t *testing.T) {
 
 	registry, _ := InitAdmiral(context.Background(), p)
 
-	handler := RoutingPolicyHandler{}
-
 	rpFilterCache := &routingPolicyFilterCache{}
 	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
 	rpFilterCache.mutex = &sync.Mutex{}
@@ -76,7 +74,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	// foo1 is dependent upon bar 1 but bar1 does not have a deployment so it is missing from identityClusterCache
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo1", "bar1", "bar1")
 
-	handler.RemoteRegistry = registry
+	handler := NewRoutingPolicyHandler(registry, "")
 
 	routingPolicyFoo := &admiralV1.RoutingPolicy{
 		TypeMeta: metaV1.TypeMeta{},
@@ -228,7 +226,7 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
 
-	handler := RoutingPolicyHandler{}
+	handler := NewRoutingPolicyHandler(nil, "")
 
 	testcases := []struct {
 		name      string

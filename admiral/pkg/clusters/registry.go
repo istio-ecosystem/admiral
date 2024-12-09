@@ -197,7 +197,8 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with NodeController controller initialization, err: %v", err)
 		}
 		logrus.Infof("starting RoutingPoliciesController for clusterID: %v", clusterID)
-		rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, &RoutingPolicyHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+		rpHandler := NewRoutingPolicyHandler(r, clusterID)
+		rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, rpHandler, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with RoutingPoliciesController initialization, err: %v", err)
 		}
