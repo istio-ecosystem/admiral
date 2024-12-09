@@ -21,7 +21,7 @@ type RoutingPolicyHandler struct {
 }
 
 func NewRoutingPolicyHandler(rr *RemoteRegistry, cId string) *RoutingPolicyHandler {
-	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId}
+	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId, RoutingPolicyService: &RoutingPolicyService{RemoteRegistry: rr}}
 }
 
 type RoutingPolicyProcessor interface {
