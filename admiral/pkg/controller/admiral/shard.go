@@ -43,6 +43,10 @@ func (d *ShardController) DoesGenerationMatch(entry *log.Entry, i interface{}, i
 	return false, nil
 }
 
+func (d *ShardController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 // shardCache is a map from shard name to corresponding ShardItem
 type shardCache struct {
 	cache map[string]*ShardItem

@@ -167,6 +167,13 @@ func (p *VertexController) DoesGenerationMatch(ctxLogger *log.Entry, obj interfa
 	return false, nil
 }
 
+<<<<<<< HEAD
+=======
+func (p *VertexController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
+>>>>>>> 564f504f (Add replica count check)
 func NewVertexController(stopCh <-chan struct{}, handler ClientDiscoveryHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*VertexController, error) {
 
 	vertexController := VertexController{}

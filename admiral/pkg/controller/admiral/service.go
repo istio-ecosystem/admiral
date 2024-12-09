@@ -51,6 +51,10 @@ func (s *ServiceController) DoesGenerationMatch(*logrus.Entry, interface{}, inte
 	return false, nil
 }
 
+func (s *ServiceController) IsOnlyReplicaCountChanged(*logrus.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type serviceCache struct {
 	//map of dependencies key=identity value array of onboarded identities
 	cache map[string]*ServiceClusterEntry
