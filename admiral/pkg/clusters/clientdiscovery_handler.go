@@ -36,6 +36,12 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
 
+	if event != admiral.Delete {
+		remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+	} else {
+		remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
+	}
+
 	if remoteRegistry.AdmiralCache != nil {
 
 		UpdateIdentityClusterCache(remoteRegistry, globalIdentifier, clusterName)

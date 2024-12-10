@@ -56,6 +56,15 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.Deployment)
 
+	if common.IsAdmiralStateSyncerMode() {
+		// the globalIdentifier is partition + "." + assetAlias, not just assetAlias
+		if event != admiral.Delete {
+			remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
+		} else {
+			remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
+		}
+	}
+
 	if remoteRegistry.AdmiralCache != nil {
 		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)

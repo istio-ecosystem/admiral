@@ -54,6 +54,12 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
 
+	if event != admiral.Delete {
+		remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string), obj)
+	} else {
+		remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string))
+	}
+
 	if remoteRegistry.AdmiralCache != nil {
 		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)
