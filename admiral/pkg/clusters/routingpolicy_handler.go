@@ -21,19 +21,18 @@ type RoutingPolicyHandler struct {
 }
 
 func NewRoutingPolicyHandler(rr *RemoteRegistry, cId string, rpProcessor RoutingPolicyProcessor) *RoutingPolicyHandler {
-
 	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId, RoutingPolicyService: rpProcessor}
 }
 
 type RoutingPolicyProcessor interface {
-	process(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) error
+	ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy, dependents map[string]string) error
 }
 
 type RoutingPolicyService struct {
 	RemoteRegistry *RemoteRegistry
 }
 
-func (r *RoutingPolicyService) process(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) error {
+func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy, dependents map[string]string) error {
 	var err error
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
 		for _, dependent := range dependents {
@@ -118,7 +117,7 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 			log.Info("No dependents found for Routing Policy - ", obj.Name)
 			return nil
 		}
-		err := r.RoutingPolicyService.process(ctx, dependents, obj, admiral.Add)
+		err := r.RoutingPolicyService.ProcessAddOrUpdate(ctx, admiral.Add, obj, dependents)
 		if err != nil {
 			log.Errorf(LogErrFormat, admiral.Update, "routingpolicy", obj.Name, "", "failed to process routing policy")
 			return err
@@ -167,7 +166,7 @@ func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy
 		if len(dependents) == 0 {
 			return nil
 		}
-		err := r.RoutingPolicyService.process(ctx, dependents, obj, admiral.Update)
+		err := r.RoutingPolicyService.ProcessAddOrUpdate(ctx, admiral.Update, obj, dependents)
 		if err != nil {
 			log.Errorf(LogErrFormat, admiral.Update, "routingpolicy", obj.Name, "", "failed to process routing policy")
 			return err
