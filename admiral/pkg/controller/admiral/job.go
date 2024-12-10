@@ -158,13 +158,10 @@ func (p *JobController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{
 	return false, nil
 }
 
-<<<<<<< HEAD
-=======
 func (p *JobController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
 	return false, nil
 }
 
->>>>>>> 564f504f (Add replica count check)
 func NewJobController(stopCh <-chan struct{}, handler ClientDiscoveryHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*JobController, error) {
 
 	jobController := JobController{}
