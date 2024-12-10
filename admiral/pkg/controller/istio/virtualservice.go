@@ -35,6 +35,10 @@ func (v *VirtualServiceController) DoesGenerationMatch(*log.Entry, interface{}, 
 	return false, nil
 }
 
+func (v *VirtualServiceController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*VirtualServiceController, error) {
 
 	vsController := VirtualServiceController{}

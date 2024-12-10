@@ -54,6 +54,7 @@ type Delegator interface {
 	LogValueOfAdmiralIoIgnore(interface{})
 	Get(ctx context.Context, isRetry bool, obj interface{}) (interface{}, error)
 	DoesGenerationMatch(*log.Entry, interface{}, interface{}) (bool, error)
+	IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error)
 }
 
 type EventType string
@@ -169,6 +170,19 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
 						fmt.Sprintf("skipped processing event due to status=%s doesGenerationMatch=%v",
 							status, doesGenerationMatch))
+					return
+				}
+
+				// Check if the generation of the object has changed
+				// if the generation of old and new object is same then we do not process the object
+				isOnlyReplicaCountChanged, err := controller.delegator.IsOnlyReplicaCountChanged(ctxLogger, oldObj, newObj)
+				if err != nil {
+					ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), err.Error())
+				}
+				if status == common.Processed && isOnlyReplicaCountChanged {
+					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
+						fmt.Sprintf("skipped processing event due to status=%s isOnlyReplicaCountChanged=%v",
+							status, isOnlyReplicaCountChanged))
 					return
 				}
 
