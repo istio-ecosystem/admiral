@@ -176,6 +176,8 @@ func TestIdentityConfigGetByIdentityName(t *testing.T) {
 				t.Errorf("error while getting identityConfig by name with error: %v", err)
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
 			} else {
 				opts := getUnexportedProperties()
 				if !cmp.Equal(identityConfig, c.expectedIdentityConfig, opts) {
@@ -222,6 +224,8 @@ func TestGetIdentityConfigByClusterName(t *testing.T) {
 				t.Errorf("error while getting identityConfigs by cluster name with error: %v", err)
 			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
 			} else {
 				opts := getUnexportedProperties()
 				if !cmp.Equal(identityConfigs[0], c.expectedIdentityConfig, opts) {
@@ -245,7 +249,7 @@ func TestMarshalDataForRegistry(t *testing.T) {
 	testCases := []struct {
 		name          string
 		expectedBody  []byte
-		expectedError any
+		expectedError error
 		data          map[string]interface{}
 	}{
 		{
@@ -268,8 +272,10 @@ func TestMarshalDataForRegistry(t *testing.T) {
 			body, err := marshalDataForRegistry(c.data, registryUrl)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while marshaling data with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
 			} else {
 				if !bytes.Equal(body, c.expectedBody) {
 					t.Errorf("expected body was not same as returned body")
@@ -331,7 +337,7 @@ func TestMakeCallToRegistry(t *testing.T) {
 	testCases := []struct {
 		name          string
 		client        BaseClient
-		expectedError any
+		expectedError error
 		data          map[string]interface{}
 	}{
 		{
@@ -379,7 +385,9 @@ func TestMakeCallToRegistry(t *testing.T) {
 			err := makeCallToRegistry(registryUrl, tid, method, c.data, c.client)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making call to registry with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -403,7 +411,7 @@ func TestDeleteClusterGateway(t *testing.T) {
 	rc.client = &validClient
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 	}{
 		{
 			name: "Given a valid DELETE request, " +
@@ -416,7 +424,9 @@ func TestDeleteClusterGateway(t *testing.T) {
 			err := rc.DeleteClusterGateway("clusterName", "gatewayName", "gateway-type", "tid")
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making delete cluster gateway call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -440,7 +450,7 @@ func TestPutClusterGateway(t *testing.T) {
 	rc.client = &validClient
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 	}{
 		{
 			name: "Given a valid request body, " +
@@ -453,7 +463,9 @@ func TestPutClusterGateway(t *testing.T) {
 			err := rc.PutClusterGateway("clusterName", "gatewayName", "ingress.com", "", "gateway-type", "tid", nil)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making put cluster gateway call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -538,7 +550,7 @@ func TestPutCustomData(t *testing.T) {
 	}
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 		resourceType  string
 		value         interface{}
 	}{
@@ -576,7 +588,9 @@ func TestPutCustomData(t *testing.T) {
 			err := rc.PutCustomData("clusterName", "namespace", "customdata-name", c.resourceType, "tid", c.value)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making put cluster customdata call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -600,7 +614,7 @@ func TestDeleteCustomData(t *testing.T) {
 	rc.client = &validClient
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 	}{
 		{
 			name: "Given a valid DELETE request, " +
@@ -613,7 +627,9 @@ func TestDeleteCustomData(t *testing.T) {
 			err := rc.DeleteCustomData("clusterName", "namespace", "customdata-name", "resourceType", "tid")
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making put cluster customdata call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -708,7 +724,7 @@ func TestPutHostingData(t *testing.T) {
 	}
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 		resourceType  string
 		rc            *registryClient
 		value         interface{}
@@ -776,7 +792,9 @@ func TestPutHostingData(t *testing.T) {
 			err := c.rc.PutHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid", c.value)
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making put cluster hostingdata call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
@@ -818,7 +836,7 @@ func TestDeleteHostingData(t *testing.T) {
 	}
 	testCases := []struct {
 		name          string
-		expectedError any
+		expectedError error
 		resourceType  string
 		value         interface{}
 	}{
@@ -835,7 +853,9 @@ func TestDeleteHostingData(t *testing.T) {
 			err := rc.DeleteHostingData("clusterName", "namespace", "hostingdata-name", "asset.alias", c.resourceType, "tid")
 			if err != nil && c.expectedError == nil {
 				t.Errorf("error while making delete cluster hostingdata call with error: %v", err)
-			} else if err != nil && c.expectedError != nil && !errors.As(err, &c.expectedError) {
+			} else if err == nil && c.expectedError != nil {
+				t.Errorf("did not get expected error: %v", c.expectedError)
+			} else if err != nil && c.expectedError != nil && c.expectedError.Error() != err.Error() {
 				t.Errorf("failed to get correct error: %v, instead got error: %v", c.expectedError, err)
 			}
 		})
