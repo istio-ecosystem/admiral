@@ -43,9 +43,11 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 
 	var err error
 	destinationServiceProcessor := &ProcessDestinationService{}
+	routingPolicyProcessor := NewRoutingPolicyProcessor(rr)
 	wd := DependencyHandler{
 		RemoteRegistry:              rr,
 		DestinationServiceProcessor: destinationServiceProcessor,
+		RoutingPolicyProcessor:      routingPolicyProcessor,
 	}
 
 	wd.DepController, err = admiral.NewDependencyController(ctx.Done(), &wd, params.KubeconfigPath, params.DependenciesNamespace, 0, rr.ClientLoader)
@@ -197,7 +199,8 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 			return fmt.Errorf("error with NodeController controller initialization, err: %v", err)
 		}
 		logrus.Infof("starting RoutingPoliciesController for clusterID: %v", clusterID)
-		rpHandler := NewRoutingPolicyHandler(r, clusterID)
+		rpProcessor := NewRoutingPolicyProcessor(r)
+		rpHandler := NewRoutingPolicyHandler(r, clusterID, rpProcessor)
 		rc.RoutingPolicyController, err = admiral.NewRoutingPoliciesController(stop, rpHandler, clientConfig, 0, r.ClientLoader)
 		if err != nil {
 			return fmt.Errorf("error with RoutingPoliciesController initialization, err: %v", err)

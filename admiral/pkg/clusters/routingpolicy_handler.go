@@ -17,11 +17,12 @@ import (
 type RoutingPolicyHandler struct {
 	RemoteRegistry       *RemoteRegistry
 	ClusterID            string
-	RoutingPolicyService *RoutingPolicyService
+	RoutingPolicyService RoutingPolicyProcessor
 }
 
-func NewRoutingPolicyHandler(rr *RemoteRegistry, cId string) *RoutingPolicyHandler {
-	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId, RoutingPolicyService: &RoutingPolicyService{RemoteRegistry: rr}}
+func NewRoutingPolicyHandler(rr *RemoteRegistry, cId string, rpProcessor RoutingPolicyProcessor) *RoutingPolicyHandler {
+
+	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId, RoutingPolicyService: rpProcessor}
 }
 
 type RoutingPolicyProcessor interface {

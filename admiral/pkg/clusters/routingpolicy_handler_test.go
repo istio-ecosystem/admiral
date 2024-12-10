@@ -74,7 +74,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	// foo1 is dependent upon bar 1 but bar1 does not have a deployment so it is missing from identityClusterCache
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo1", "bar1", "bar1")
 
-	handler := NewRoutingPolicyHandler(registry, "")
+	handler := NewRoutingPolicyHandler(registry, "", NewRoutingPolicyProcessor(registry))
 
 	routingPolicyFoo := &admiralV1.RoutingPolicy{
 		TypeMeta: metaV1.TypeMeta{},
@@ -226,7 +226,7 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
 
-	handler := NewRoutingPolicyHandler(nil, "")
+	handler := NewRoutingPolicyHandler(nil, "", NewRoutingPolicyProcessor(nil))
 
 	testcases := []struct {
 		name      string
