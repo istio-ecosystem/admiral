@@ -15,51 +15,44 @@ import (
 )
 
 type RoutingPolicyHandler struct {
+	RemoteRegistry       *RemoteRegistry
+	ClusterID            string
+	RoutingPolicyService RoutingPolicyProcessor
+}
+
+func NewRoutingPolicyHandler(rr *RemoteRegistry, cId string, rpProcessor RoutingPolicyProcessor) *RoutingPolicyHandler {
+	return &RoutingPolicyHandler{RemoteRegistry: rr, ClusterID: cId, RoutingPolicyService: rpProcessor}
+}
+
+type RoutingPolicyProcessor interface {
+	ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy, dependents map[string]string) error
+}
+
+type RoutingPolicyService struct {
 	RemoteRegistry *RemoteRegistry
-	ClusterID      string
 }
 
-type routingPolicyCache struct {
-	// map of routing policies key=environment.identity, value: RoutingPolicy object
-	// only one routing policy per identity + env is allowed
-	identityCache map[string]*v1.RoutingPolicy
-	mutex         *sync.Mutex
-}
-
-func (r *routingPolicyCache) Delete(identity string, environment string) {
-	defer r.mutex.Unlock()
-	r.mutex.Lock()
-	key := common.ConstructRoutingPolicyKey(environment, identity)
-	if _, ok := r.identityCache[key]; ok {
-		log.Infof("deleting RoutingPolicy with key=%s from global RoutingPolicy cache", key)
-		delete(r.identityCache, key)
+func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy, dependents map[string]string) error {
+	var err error
+	for _, remoteController := range r.RemoteRegistry.remoteControllers {
+		for _, dependent := range dependents {
+			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
+			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
+				_, err1 := createOrUpdateEnvoyFilter(ctx, remoteController, routingPolicy, eventType, dependent, r.RemoteRegistry.AdmiralCache)
+				if err1 != nil {
+					log.Errorf(LogErrFormat, eventType, "routingpolicy", routingPolicy.Name, remoteController.ClusterID, err)
+					err = common.AppendError(err, err1)
+				} else {
+					log.Infof(LogFormat, eventType, "routingpolicy	", routingPolicy.Name, remoteController.ClusterID, "created envoyfilters")
+				}
+			}
+		}
 	}
+	return err
 }
 
-func (r *routingPolicyCache) GetFromIdentity(identity string, environment string) *v1.RoutingPolicy {
-	defer r.mutex.Unlock()
-	r.mutex.Lock()
-	return r.identityCache[common.ConstructRoutingPolicyKey(environment, identity)]
-}
-
-func (r *routingPolicyCache) Put(rp *v1.RoutingPolicy) error {
-	if rp == nil || rp.Name == "" {
-		// no RoutingPolicy, throw error
-		return errors.New("cannot add an empty RoutingPolicy to the cache")
-	}
-	if rp.Labels == nil {
-		return errors.New("labels empty in RoutingPolicy")
-	}
-	defer r.mutex.Unlock()
-	r.mutex.Lock()
-	var rpIdentity = rp.Labels[common.GetRoutingPolicyLabel()]
-	var rpEnv = common.GetRoutingPolicyEnv(rp)
-
-	log.Infof("Adding RoutingPolicy with name %v to RoutingPolicy cache. LabelMatch=%v env=%v", rp.Name, rpIdentity, rpEnv)
-	key := common.ConstructRoutingPolicyKey(rpEnv, rpIdentity)
-	r.identityCache[key] = rp
-
-	return nil
+func NewRoutingPolicyProcessor(remoteRegistry *RemoteRegistry) RoutingPolicyProcessor {
+	return &RoutingPolicyService{RemoteRegistry: remoteRegistry}
 }
 
 type routingPolicyFilterCache struct {
@@ -124,7 +117,7 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 			log.Info("No dependents found for Routing Policy - ", obj.Name)
 			return nil
 		}
-		err := r.processroutingPolicy(ctx, dependents, obj, admiral.Add)
+		err := r.RoutingPolicyService.ProcessAddOrUpdate(ctx, admiral.Add, obj, dependents)
 		if err != nil {
 			log.Errorf(LogErrFormat, admiral.Update, "routingpolicy", obj.Name, "", "failed to process routing policy")
 			return err
@@ -173,7 +166,7 @@ func (r RoutingPolicyHandler) Updated(ctx context.Context, obj *v1.RoutingPolicy
 		if len(dependents) == 0 {
 			return nil
 		}
-		err := r.processroutingPolicy(ctx, dependents, obj, admiral.Update)
+		err := r.RoutingPolicyService.ProcessAddOrUpdate(ctx, admiral.Update, obj, dependents)
 		if err != nil {
 			log.Errorf(LogErrFormat, admiral.Update, "routingpolicy", obj.Name, "", "failed to process routing policy")
 			return err

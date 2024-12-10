@@ -20,6 +20,7 @@ type DependencyHandler struct {
 	RemoteRegistry              *RemoteRegistry
 	DepController               *admiral.DependencyController
 	DestinationServiceProcessor DestinationServiceProcessor
+	RoutingPolicyProcessor      RoutingPolicyProcessor
 }
 
 func (dh *DependencyHandler) Added(ctx context.Context, obj *v1.Dependency) error {
