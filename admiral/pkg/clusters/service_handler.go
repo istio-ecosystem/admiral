@@ -142,6 +142,20 @@ func handleServiceEventForDeployment(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
+				if common.IsAdmiralStateSyncerMode() {
+					err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), svc.Kind, ctx.Value("txId").(string))
+					if err != nil {
+						allErrors = common.AppendError(allErrors, err)
+					}
+				}
+			}
+		}
+
+		// Why are we deleting the svc and then adding it back in case of delete?
+		if common.IsAdmiralStateSyncerMode() {
+			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), svc.Kind, ctx.Value("txId").(string), svc)
+			if err != nil {
+				allErrors = common.AppendError(allErrors, err)
 			}
 		}
 
@@ -212,6 +226,20 @@ func handleServiceEventForRollout(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
+				if common.IsAdmiralStateSyncerMode() {
+					err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), svc.Kind, ctx.Value("txId").(string))
+					if err != nil {
+						allErrors = common.AppendError(allErrors, err)
+					}
+				}
+			}
+		}
+
+		// Why are we deleting the svc and then adding it back in case of delete?
+		if common.IsAdmiralStateSyncerMode() {
+			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), svc.Kind, ctx.Value("txId").(string), svc)
+			if err != nil {
+				allErrors = common.AppendError(allErrors, err)
 			}
 		}
 

@@ -69,7 +69,10 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	if common.IsAdmiralStateSyncerMode() {
-		od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
+		}
 	}
 	err := HandleEventForOutlierDetection(ctx, admiral.EventType(common.Add), obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -81,7 +84,10 @@ func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDete
 func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	if common.IsAdmiralStateSyncerMode() {
-		od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
+		}
 	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -93,7 +99,10 @@ func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDe
 func (od OutlierDetectionHandler) Deleted(ctx context.Context, obj *v1.OutlierDetection) error {
 	log.Infof(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	if common.IsAdmiralStateSyncerMode() {
-		od.RemoteRegistry.RegistryClient.DeleteCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string))
+		err := od.RemoteRegistry.RegistryClient.DeleteCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string))
+		if err != nil {
+			log.Errorf(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, "failed to delete "+common.OutlierDetection+" custom data")
+		}
 	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {

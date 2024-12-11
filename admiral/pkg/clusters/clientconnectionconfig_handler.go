@@ -78,7 +78,10 @@ func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	log.Infof(
 		LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "received")
 	if common.IsAdmiralStateSyncerMode() {
-		c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		if err != nil {
+			log.Errorf(LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
+		}
 	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Add, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
@@ -94,7 +97,10 @@ func (c *ClientConnectionConfigHandler) Updated(
 	log.Infof(
 		LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
 	if common.IsAdmiralStateSyncerMode() {
-		c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		if err != nil {
+			log.Errorf(LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
+		}
 	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
@@ -110,7 +116,10 @@ func (c *ClientConnectionConfigHandler) Deleted(
 	log.Infof(
 		LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
 	if common.IsAdmiralStateSyncerMode() {
-		c.RemoteRegistry.RegistryClient.DeleteCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
+		err := c.RemoteRegistry.RegistryClient.DeleteCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
+		if err != nil {
+			log.Errorf(LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to delete "+common.ClientConnectionConfig+" custom data")
+		}
 	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)

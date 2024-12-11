@@ -59,9 +59,15 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	if common.IsAdmiralStateSyncerMode() {
 		// the globalIdentifier is partition + "." + assetAlias, not just assetAlias
 		if event != admiral.Delete {
-			remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
+			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
+			if err != nil {
+				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to put "+common.Deployment+" hosting data for identity="+globalIdentifier)
+			}
 		} else {
-			remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
+			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
+			if err != nil {
+				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to delete "+common.Deployment+" hosting data for identity="+globalIdentifier)
+			}
 		}
 	}
 
