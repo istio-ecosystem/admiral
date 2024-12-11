@@ -3,6 +3,7 @@ package admiral
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
@@ -69,6 +70,41 @@ func (d *DeploymentController) DoesGenerationMatch(ctxLogger *log.Entry, obj int
 			fmt.Sprintf("old and new generation matched for deployment %s", deploymentNew.Name))
 		return true, nil
 	}
+	return false, nil
+}
+
+func (d *DeploymentController) IsOnlyReplicaCountChanged(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
+	if !common.IsOnlyReplicaCountChanged() {
+		ctxLogger.Debugf(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
+			fmt.Sprintf("replica count check is disabled"))
+		return false, nil
+	}
+	deploymentNew, ok := obj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", obj)
+	}
+	deploymentOld, ok := oldObj.(*k8sAppsV1.Deployment)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", oldObj)
+	}
+
+	// Temporarily storing replica count to use later after the check is complete
+	newReplicaCount := deploymentNew.Spec.Replicas
+	oldReplicaCount := deploymentOld.Spec.Replicas
+
+	deploymentNew.Spec.Replicas = nil
+	deploymentOld.Spec.Replicas = nil
+
+	if reflect.DeepEqual(deploymentOld.Spec, deploymentNew.Spec) {
+		ctxLogger.Infof(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
+			fmt.Sprintf("old and new spec matched for deployment excluding replica count %s", deploymentNew.Name))
+		deploymentNew.Spec.Replicas = newReplicaCount
+		deploymentOld.Spec.Replicas = oldReplicaCount
+		return true, nil
+	}
+
+	deploymentNew.Spec.Replicas = newReplicaCount
+	deploymentOld.Spec.Replicas = oldReplicaCount
 	return false, nil
 }
 

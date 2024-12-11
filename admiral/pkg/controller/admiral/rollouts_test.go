@@ -148,6 +148,122 @@ func TestRolloutController_DoesGenerationMatch(t *testing.T) {
 
 }
 
+func TestRolloutController_IsOnlyReplicaCountChanged(t *testing.T) {
+	rc := RolloutController{}
+	replicaNewCount := int32(1)
+	replicaOldCount := int32(2)
+
+	admiralParams := common.AdmiralParams{}
+
+	testCases := []struct {
+		name                                 string
+		rolloutNew                           interface{}
+		rolloutOld                           interface{}
+		enableIsOnlyReplicaCountChangedCheck bool
+		expectedValue                        bool
+		expectedError                        error
+	}{
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When new rollout is not of type *argo.Rollout " +
+				"Then func should return an error",
+			rolloutNew:                           struct{}{},
+			rolloutOld:                           struct{}{},
+			enableIsOnlyReplicaCountChangedCheck: true,
+			expectedError:                        fmt.Errorf("type assertion failed, {} is not of type *argo.Rollout"),
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When old rollout is not of type *argo.Rollout " +
+				"Then func should return an error",
+			rolloutNew:                           &argo.Rollout{},
+			rolloutOld:                           struct{}{},
+			enableIsOnlyReplicaCountChangedCheck: true,
+			expectedError:                        fmt.Errorf("type assertion failed, {} is not of type *argo.Rollout"),
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When is replica count changed check is enabled " +
+				"And everything in the spec expect the count is the same " +
+				"Then func should return true ",
+			rolloutNew: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaNewCount,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaOldCount,
+				},
+			},
+			expectedValue:                        true,
+			expectedError:                        nil,
+			enableIsOnlyReplicaCountChangedCheck: true,
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When rollout is replica count changed check is disabled " +
+				"Then func should return false",
+			rolloutNew: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaNewCount,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaOldCount,
+				},
+			},
+			expectedValue:                        false,
+			expectedError:                        nil,
+			enableIsOnlyReplicaCountChangedCheck: false,
+		},
+		{
+			name: "Given context, new rollout and old rollout object " +
+				"When is replica count changed check is enabled " +
+				"And something in the spec expect the count is different " +
+				"Then func should return false ",
+			rolloutNew: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaNewCount,
+					Paused:   false,
+				},
+			},
+			rolloutOld: &argo.Rollout{
+				Spec: argo.RolloutSpec{
+					Replicas: &replicaOldCount,
+					Paused:   true,
+				},
+			},
+			expectedValue:                        false,
+			enableIsOnlyReplicaCountChangedCheck: true,
+			expectedError:                        nil,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"txId": "abc",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams.EnableIsOnlyReplicaCountChangedCheck = tc.enableIsOnlyReplicaCountChangedCheck
+			common.ResetSync()
+			common.InitializeConfig(admiralParams)
+			actual, err := rc.IsOnlyReplicaCountChanged(ctxLogger, tc.rolloutNew, tc.rolloutOld)
+			if !ErrorEqualOrSimilar(err, tc.expectedError) {
+				t.Errorf("expected: %v, got: %v", tc.expectedError, err)
+			}
+			if err == nil {
+				if tc.expectedValue != actual {
+					t.Errorf("expected: %v, got: %v", tc.expectedValue, actual)
+				}
+			}
+		})
+	}
+
+}
+
 func TestRolloutController_Added(t *testing.T) {
 	common.ResetSync()
 	admiralParams := common.AdmiralParams{
