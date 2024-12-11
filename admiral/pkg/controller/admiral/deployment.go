@@ -88,15 +88,23 @@ func (d *DeploymentController) IsOnlyReplicaCountChanged(ctxLogger *log.Entry, o
 		return false, fmt.Errorf("type assertion failed, %v is not of type *v1.Deployment", oldObj)
 	}
 
+	// Temporarily storing replica count to use later after the check is complete
+	newReplicaCount := deploymentNew.Spec.Replicas
+	oldReplicaCount := deploymentOld.Spec.Replicas
+
 	deploymentNew.Spec.Replicas = nil
 	deploymentOld.Spec.Replicas = nil
 
 	if reflect.DeepEqual(deploymentOld.Spec, deploymentNew.Spec) {
 		ctxLogger.Infof(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
 			fmt.Sprintf("old and new spec matched for deployment excluding replica count %s", deploymentNew.Name))
+		deploymentNew.Spec.Replicas = newReplicaCount
+		deploymentOld.Spec.Replicas = oldReplicaCount
 		return true, nil
 	}
 
+	deploymentNew.Spec.Replicas = newReplicaCount
+	deploymentOld.Spec.Replicas = oldReplicaCount
 	return false, nil
 }
 

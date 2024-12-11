@@ -93,15 +93,23 @@ func (rc *RolloutController) IsOnlyReplicaCountChanged(ctxLogger *log.Entry, obj
 		return false, fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", oldObj)
 	}
 
+	// Temporarily storing replica count to use later after the check is complete
+	newReplicaCount := rolloutNew.Spec.Replicas
+	oldReplicaCount := rolloutOld.Spec.Replicas
+
 	rolloutNew.Spec.Replicas = nil
 	rolloutOld.Spec.Replicas = nil
 
 	if reflect.DeepEqual(rolloutOld.Spec, rolloutNew.Spec) {
 		ctxLogger.Infof(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
 			fmt.Sprintf("old and new spec matched for rollout excluding replica count %s", rolloutNew.Name))
+		rolloutNew.Spec.Replicas = newReplicaCount
+		rolloutOld.Spec.Replicas = oldReplicaCount
 		return true, nil
 	}
 
+	rolloutNew.Spec.Replicas = newReplicaCount
+	rolloutOld.Spec.Replicas = oldReplicaCount
 	return false, nil
 }
 
