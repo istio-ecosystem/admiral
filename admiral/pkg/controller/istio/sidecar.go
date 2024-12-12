@@ -40,6 +40,10 @@ func (s *SidecarController) DoesGenerationMatch(*log.Entry, interface{}, interfa
 	return false, nil
 }
 
+func (s *SidecarController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func NewSidecarController(stopCh <-chan struct{}, handler SidecarHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*SidecarController, error) {
 
 	sidecarController := SidecarController{}

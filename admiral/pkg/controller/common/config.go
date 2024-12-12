@@ -473,6 +473,12 @@ func DoGenerationCheck() bool {
 	return wrapper.params.EnableGenerationCheck
 }
 
+func IsOnlyReplicaCountChanged() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableIsOnlyReplicaCountChangedCheck
+}
+
 func PreventSplitBrain() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

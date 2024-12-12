@@ -359,6 +359,20 @@ func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPort
 	})
 	return services
 }
+func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+	var destinationsToBeProcessed []string
+
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+	log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
+	var sourceClusterMap = common.NewMap()
+	sourceClusterMap.Put(clusterName, clusterName)
+
+	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+	if err != nil {
+		return errors.New("failed to perform client initiated processing for " + globalIdentifier + ", got error: " + err.Error())
+	}
+	return nil
+}
 
 func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string) []string {
 	actualServerIdentities := remoteRegistry.AdmiralCache.SourceToDestinations.Get(globalIdentifier)
@@ -515,16 +529,4 @@ func (r RouteDestinationSorted) Less(i, j int) bool {
 
 func (r RouteDestinationSorted) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
-}
-
-func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
-	var destinationsToBeProcessed []string
-
-	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
-
-	var sourceClusterMap = common.NewMap()
-	sourceClusterMap.Put(clusterName, clusterName)
-
-	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
-	return err
 }

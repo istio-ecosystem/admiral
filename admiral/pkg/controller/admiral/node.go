@@ -31,6 +31,10 @@ func (p *NodeController) DoesGenerationMatch(*log.Entry, interface{}, interface{
 	return false, nil
 }
 
+func (p *NodeController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type Locality struct {
 	Region string
 }

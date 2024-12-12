@@ -89,6 +89,7 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	// Use the same function as added deployment function to update and put new service entry in place to replace old one
 	_, err := modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
 	if common.ClientInitiatedProcessingEnabled() {
+		log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Client initiated processing started for "+globalIdentifier)
 		depProcessErr := processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
 		if depProcessErr != nil {
 			return common.AppendError(err, depProcessErr)

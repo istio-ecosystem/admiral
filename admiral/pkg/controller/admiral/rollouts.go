@@ -3,6 +3,7 @@ package admiral
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -74,6 +75,41 @@ func (rc *RolloutController) DoesGenerationMatch(ctxLogger *log.Entry, obj inter
 			fmt.Sprintf("old and new generation matched for rollout %s", rolloutNew.Name))
 		return true, nil
 	}
+	return false, nil
+}
+
+func (rc *RolloutController) IsOnlyReplicaCountChanged(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
+	if !common.IsOnlyReplicaCountChanged() {
+		ctxLogger.Debugf(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
+			fmt.Sprintf("replica count check is disabled"))
+		return false, nil
+	}
+	rolloutNew, ok := obj.(*argo.Rollout)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", obj)
+	}
+	rolloutOld, ok := oldObj.(*argo.Rollout)
+	if !ok {
+		return false, fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", oldObj)
+	}
+
+	// Temporarily storing replica count to use later after the check is complete
+	newReplicaCount := rolloutNew.Spec.Replicas
+	oldReplicaCount := rolloutOld.Spec.Replicas
+
+	rolloutNew.Spec.Replicas = nil
+	rolloutOld.Spec.Replicas = nil
+
+	if reflect.DeepEqual(rolloutOld.Spec, rolloutNew.Spec) {
+		ctxLogger.Infof(ControllerLogFormat, "IsOnlyReplicaCountChanged", "",
+			fmt.Sprintf("old and new spec matched for rollout excluding replica count %s", rolloutNew.Name))
+		rolloutNew.Spec.Replicas = newReplicaCount
+		rolloutOld.Spec.Replicas = oldReplicaCount
+		return true, nil
+	}
+
+	rolloutNew.Spec.Replicas = newReplicaCount
+	rolloutOld.Spec.Replicas = oldReplicaCount
 	return false, nil
 }
 

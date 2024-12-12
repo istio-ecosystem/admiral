@@ -105,6 +105,7 @@ type AdmiralParams struct {
 	EnableSyncIstioResourcesToSourceClusters bool
 	DefaultWarmupDurationSecs                int64
 	EnableGenerationCheck                    bool
+	EnableIsOnlyReplicaCountChangedCheck     bool
 	PreventSplitBrain                        bool
 
 	// Cartographer specific params

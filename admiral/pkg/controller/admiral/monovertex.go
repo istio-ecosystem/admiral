@@ -166,6 +166,10 @@ func (p *MonoVertexController) DoesGenerationMatch(ctxLogger *log.Entry, obj int
 	return false, nil
 }
 
+func (p *MonoVertexController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func NewMonoVertexController(stopCh <-chan struct{}, handler ClientDiscoveryHandler, config *rest.Config, resyncPeriod time.Duration, clientLoader loader.ClientLoader) (*MonoVertexController, error) {
 
 	monoVertexController := MonoVertexController{}

@@ -43,6 +43,10 @@ func (d *DependencyController) DoesGenerationMatch(*log.Entry, interface{}, inte
 	return false, nil
 }
 
+func (c *DependencyController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type DependencyItem struct {
 	Dependency *v1.Dependency
 	Status     string

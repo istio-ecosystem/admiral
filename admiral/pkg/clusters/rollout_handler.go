@@ -84,6 +84,7 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 	_, err := modifyServiceEntryForNewServiceOrPod(ctx, event, env, globalIdentifier, remoteRegistry)
 
 	if common.ClientInitiatedProcessingEnabled() {
+		log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Client initiated processing started for "+globalIdentifier)
 		rolloutProcessErr := processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
 		if rolloutProcessErr != nil {
 			return common.AppendError(err, rolloutProcessErr)

@@ -39,6 +39,10 @@ func (s *ServiceEntryController) DoesGenerationMatch(*log.Entry, interface{}, in
 	return false, nil
 }
 
+func (s *ServiceEntryController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type ServiceEntryItem struct {
 	ServiceEntry *networking.ServiceEntry
 	Status       string
