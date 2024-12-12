@@ -35,6 +35,10 @@ func (c *ClientConnectionConfigController) DoesGenerationMatch(*log.Entry, inter
 	return false, nil
 }
 
+func (c *ClientConnectionConfigController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 type clientConnectionSettingsItem struct {
 	clientConnectionSettings *v1.ClientConnectionConfig
 	status                   string

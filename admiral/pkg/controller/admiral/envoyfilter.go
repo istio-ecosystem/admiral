@@ -36,6 +36,10 @@ func (e *EnvoyFilterController) DoesGenerationMatch(*log.Entry, interface{}, int
 	return false, nil
 }
 
+func (e *EnvoyFilterController) IsOnlyReplicaCountChanged(*log.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func (e *EnvoyFilterController) Added(ctx context.Context, obj interface{}) error {
 	ef, ok := obj.(*networking.EnvoyFilter)
 	if !ok {

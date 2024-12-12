@@ -15,6 +15,10 @@ func (m *MockDelegator) DoesGenerationMatch(ctx *log.Entry, i interface{}, i2 in
 	return false, nil
 }
 
+func (m *MockDelegator) IsOnlyReplicaCountChanged(ctx *log.Entry, i interface{}, i2 interface{}) (bool, error) {
+	return false, nil
+}
+
 func NewMockDelegator() *MockDelegator {
 	return &MockDelegator{}
 }

@@ -39,6 +39,10 @@ func (o *OutlierDetectionController) DoesGenerationMatch(*logrus.Entry, interfac
 	return false, nil
 }
 
+func (o *OutlierDetectionController) IsOnlyReplicaCountChanged(*logrus.Entry, interface{}, interface{}) (bool, error) {
+	return false, nil
+}
+
 func (c *odCache) Put(od *v1.OutlierDetection) {
 
 	defer c.mutex.Unlock()
