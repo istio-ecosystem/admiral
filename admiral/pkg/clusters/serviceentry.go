@@ -824,7 +824,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// VS Based Routing
 	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
-	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations, cname)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			deploymentOrRolloutName, namespace, "", err)
