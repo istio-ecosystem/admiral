@@ -102,6 +102,16 @@ func TestDoRoutingPolicyForCluster(t *testing.T) {
 		},
 		{
 			name: "Given enableRoutingPolicy is true " +
+				"Then it should return false if routingPolicyClusters is empty",
+			args: args{
+				cluster:               "cluster1",
+				enableRoutingPolicy:   true,
+				routingPolicyClusters: []string{},
+			},
+			want: false,
+		},
+		{
+			name: "Given enableRoutingPolicy is true " +
 				"Then it should return true if routingPolicyClusters contains exact match",
 			args: args{
 				cluster:               "cluster1",
