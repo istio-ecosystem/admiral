@@ -59,6 +59,71 @@ func setupForConfigTests() {
 	}
 }
 
+func TestDoRoutingPolicyForCluster(t *testing.T) {
+	p := AdmiralParams{}
+	type args struct {
+		cluster               string
+		enableRoutingPolicy   bool
+		routingPolicyClusters []string
+	}
+	testCases := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Given enableRoutingPolicy is false" +
+				"Then it should return false irrespective of the routingPolicyClusters",
+			args: args{
+				cluster:             "cluster1",
+				enableRoutingPolicy: false,
+			},
+			want: false,
+		},
+		{
+			name: "Given enableRoutingPolicy is false" +
+				"Then it should return false irrespective of the routingPolicyClusters",
+			args: args{
+				cluster:               "cluster1",
+				enableRoutingPolicy:   false,
+				routingPolicyClusters: []string{"cluster1"},
+			},
+			want: false,
+		},
+		{
+			name: "Given enableRoutingPolicy is true " +
+				"Then it should return true if routingPolicyClusters contains '*'",
+			args: args{
+				cluster:               "cluster1",
+				enableRoutingPolicy:   true,
+				routingPolicyClusters: []string{"*"},
+			},
+			want: true,
+		},
+		{
+			name: "Given enableRoutingPolicy is true " +
+				"Then it should return true if routingPolicyClusters contains exact match",
+			args: args{
+				cluster:               "cluster1",
+				enableRoutingPolicy:   true,
+				routingPolicyClusters: []string{"cluster1"},
+			},
+			want: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableRoutingPolicy = tc.args.enableRoutingPolicy
+			p.RoutingPolicyClusters = tc.args.routingPolicyClusters
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.want, DoRoutingPolicyForCluster(tc.args.cluster))
+		})
+	}
+}
+
 func TestDoVSRoutingForCluster(t *testing.T) {
 	p := AdmiralParams{}
 

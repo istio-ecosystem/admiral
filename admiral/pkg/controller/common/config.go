@@ -461,6 +461,23 @@ func DoVSRoutingForCluster(cluster string) bool {
 	return false
 }
 
+func DoRoutingPolicyForCluster(cluster string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if !wrapper.params.EnableRoutingPolicy {
+		return false
+	}
+	for _, c := range wrapper.params.RoutingPolicyClusters {
+		if c == "*" {
+			return true
+		}
+		if c == cluster {
+			return true
+		}
+	}
+	return false
+}
+
 func GetVSRoutingGateways() []string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
