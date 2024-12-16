@@ -171,6 +171,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	testCases := []struct {
 		name                        string
 		remoteRegistry              *RemoteRegistry
+		vsName                      string
 		sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination
 		istioClient                 *istioFake.Clientset
 		expectedError               error
@@ -184,11 +185,20 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			expectedError:               fmt.Errorf("remoteRegistry is nil"),
 		},
 		{
+			name: "Given a empty vsName, " +
+				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
+				"Then it should return an error",
+			remoteRegistry:              rr,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("vsName is empty"),
+		},
+		{
 			name: "Given a valid sourceClusterToDestinations " +
 				"And the VS is a new VS" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -231,6 +241,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully update the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -273,6 +284,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the preview endpoint route",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithPreviewSvc,
 			expectedError:               nil,
@@ -336,6 +348,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the canary endpoint routes with weights",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithCanarySvc,
 			expectedError:               nil,
@@ -410,6 +423,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then the VS created should not have the preview sniHost match in the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -457,7 +471,8 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
-				tc.sourceClusterToDestinations)
+				tc.sourceClusterToDestinations,
+				tc.vsName)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -468,6 +483,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 					VirtualServices(util.IstioSystemNamespace).
 					Get(context.Background(), "test-env.test-identity.global-routing-vs", metaV1.GetOptions{})
 				require.Nil(t, err)
+				require.Equal(t, tc.expectedVS.ObjectMeta.Name, actualVS.ObjectMeta.Name)
 				require.Equal(t, tc.expectedVS.Spec.Tls, actualVS.Spec.Tls)
 				require.Equal(t, tc.expectedVS.Spec.ExportTo, actualVS.Spec.ExportTo)
 				require.Equal(t, tc.expectedVS.Spec.Gateways, actualVS.Spec.Gateways)

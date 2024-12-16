@@ -455,10 +455,15 @@ func addUpdateVirtualServicesForIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
-	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination) error {
+	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination,
+	vsName string) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	if vsName == "" {
+		return fmt.Errorf("vsName is empty")
 	}
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
@@ -486,25 +491,14 @@ func addUpdateVirtualServicesForIngress(
 			return err
 		}
 
-		var vsName string
 		vsHosts := make([]string, 0)
 		tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
 
 		for globalFQDN, routeDestinations := range destination {
-			hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
-			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-					"", "", sourceCluster, err.Error())
-				continue
-			}
-			if !strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) &&
-				!strings.HasPrefix(hostWithoutSNIPrefix, common.CanaryRolloutCanaryPrefix) {
-				vsName = hostWithoutSNIPrefix + "-routing-vs"
-			}
 			if routeDestinations == nil || len(routeDestinations) == 0 {
 				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 					"", "", sourceCluster,
-					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", hostWithoutSNIPrefix))
+					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", globalFQDN))
 				continue
 			}
 			tlsRoute := networkingV1Alpha3.TLSRoute{
@@ -541,12 +535,7 @@ func addUpdateVirtualServicesForIngress(
 		})
 		virtualService.Spec.Tls = tlsRoutes
 
-		// If we were unable to find the default host in the above loop,
-		// then we pick the first one
-		if vsName == "" {
-			vsName = vsHosts[0] + "-routing-vs"
-		}
-		virtualService.Name = vsName
+		virtualService.Name = vsName + "-routing-vs"
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
