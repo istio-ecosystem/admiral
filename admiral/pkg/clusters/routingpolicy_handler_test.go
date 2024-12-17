@@ -39,6 +39,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
+		RoutingPolicyClusters:      []string{"*"},
 		EnvoyFilterVersion:         "1.13",
 		Profile:                    common.AdmiralProfileDefault,
 	}
@@ -221,6 +222,7 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
+		RoutingPolicyClusters:      []string{"*"},
 		EnvoyFilterVersion:         "1.13",
 	}
 
@@ -283,4 +285,83 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 			assert.Equal(t, c.doesError, val)
 		})
 	}
+}
+
+func TestRoutingPolicyDisabled_ForEmptyClusters(t *testing.T) {
+	common.ResetSync()
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			DeploymentAnnotation: "sidecar.istio.io/inject",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheReconcileDuration:     time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		EnableRoutingPolicy:        true,
+		RoutingPolicyClusters:      []string{},
+		EnvoyFilterVersion:         "1.13",
+		Profile:                    common.AdmiralProfileDefault,
+	}
+
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
+	registry, _ := InitAdmiral(context.Background(), p)
+
+	handler := RoutingPolicyHandler{}
+
+	rpFilterCache := &routingPolicyFilterCache{}
+	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
+	rpFilterCache.mutex = &sync.Mutex{}
+
+	routingPolicyController := &admiral.RoutingPolicyController{IstioClient: istiofake.NewSimpleClientset()}
+	remoteController, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+
+	remoteController.RoutingPolicyController = routingPolicyController
+
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
+
+	// foo is dependent upon bar and bar has a deployment in the same cluster.
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar", remoteController.ClusterID, remoteController.ClusterID)
+
+	handler.RemoteRegistry = registry
+	routingPolicy := &admiralV1.RoutingPolicy{
+		TypeMeta: metaV1.TypeMeta{},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "rpfoo",
+			Labels: map[string]string{
+				"identity":       "foo",
+				"admiral.io/env": "dev",
+			},
+		},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh"},
+			Config: map[string]string{
+				"cachePrefix":       "cache-v1",
+				"cachettlSec":       "86400",
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+				"pathPrefix":        "/sayhello,/v1/company/{id}/",
+			},
+		},
+		Status: admiralV1.RoutingPolicyStatus{},
+	}
+	ctx := context.Background()
+
+	handler.Added(ctx, routingPolicy)
+	// No-Op. Filters should not be created
+	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("rpfoofoodev"))
+
+	handler.Deleted(ctx, routingPolicy)
+	// No-Op. Should not panic or throw errors
+	assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get("rpfoofoodev"))
 }

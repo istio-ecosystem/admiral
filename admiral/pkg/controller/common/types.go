@@ -75,6 +75,7 @@ type AdmiralParams struct {
 	DeprecatedEnvoyFilterVersion             string
 	EnvoyFilterAdditionalConfig              string
 	EnableRoutingPolicy                      bool
+	RoutingPolicyClusters                    []string
 	ExcludedIdentityList                     []string
 	AdditionalEndpointSuffixes               []string
 	AdditionalEndpointLabelFilters           []string

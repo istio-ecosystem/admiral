@@ -139,6 +139,10 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 func (r RoutingPolicyHandler) processroutingPolicy(ctx context.Context, dependents map[string]string, routingPolicy *v1.RoutingPolicy, eventType admiral.EventType) error {
 	var err error
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
+		if !common.DoRoutingPolicyForCluster(remoteController.ClusterID) {
+			log.Warnf(LogFormat, eventType, "routingpolicy", routingPolicy.Name, remoteController.ClusterID, "RoutingPolicy disabled for cluster")
+			continue
+		}
 		for _, dependent := range dependents {
 			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
@@ -220,6 +224,10 @@ func (r RoutingPolicyHandler) deleteEnvoyFilters(ctx context.Context, obj *v1.Ro
 	var err error
 	for _, rc := range r.RemoteRegistry.remoteControllers {
 		if rc != nil {
+			if !common.DoRoutingPolicyForCluster(rc.ClusterID) {
+				log.Warnf(LogFormat, eventType, "routingpolicy", obj.Name, rc.ClusterID, "RoutingPolicy disabled for cluster")
+				continue
+			}
 			if filterMap, ok := clusterIdFilterMap[rc.ClusterID]; ok {
 				for filter, filterNs := range filterMap {
 					log.Infof(LogFormat, eventType, "envoyfilter", filter, rc.ClusterID, "deleting")
