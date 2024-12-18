@@ -1730,3 +1730,189 @@ func TestMakeDnsPrefixRegionMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestSortGtpsByPriorityAndCreationTime(t *testing.T) {
+	identity := "test-identity"
+	env := "test"
+
+	creationTime1, _ := time.Parse(time.RFC3339, "2024-12-05T06:54:17Z")
+	creationTime2, _ := time.Parse(time.RFC3339, "2024-12-05T08:54:17Z")
+
+	testCases := []struct {
+		name        string
+		gtpsToOrder []*admiralV1Alpha1.GlobalTrafficPolicy
+		expected    []*admiralV1Alpha1.GlobalTrafficPolicy
+	}{
+		{
+			name: "Give lastUpdatedAt is set for both GTPs" +
+				"And priority is same" +
+				"Then sort GTPs based on lastUpdatedAt and ignore creation time",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Give lastUpdatedAt is set for only one GTP" +
+				"And priority is same" +
+				"Then sort GTPs based on creation time and ignore lastUpdatedAt time",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Give creationTime is set for both GTPs" +
+				"And priority is same and update time is not set" +
+				"Then sort GTPs based on creationTime",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Given priority is set for both GTPs and different" +
+				"Then sort GTPs based on priority and ignore other fields",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime1},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "1000000"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime1},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "1000000"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			SortGtpsByPriorityAndCreationTime(c.gtpsToOrder, identity, env)
+			for i := range c.gtpsToOrder {
+				if !reflect.DeepEqual(c.gtpsToOrder[i], c.expected[i]) {
+					t.Errorf("Wanted the GTP sorting at this index: %v to be: %v, got: %v", i, c.expected[i], c.gtpsToOrder[i])
+				}
+			}
+
+		})
+	}
+}
