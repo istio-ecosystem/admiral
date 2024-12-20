@@ -610,14 +610,24 @@ func SortGtpsByPriorityAndCreationTime(gtpsToOrder []*v1.GlobalTrafficPolicy, id
 		iPriority := getGtpPriority(gtpsToOrder[i])
 		jPriority := getGtpPriority(gtpsToOrder[j])
 
-		iTime := gtpsToOrder[i].CreationTimestamp
-		jTime := gtpsToOrder[j].CreationTimestamp
+		iCreationTime := gtpsToOrder[i].CreationTimestamp
+		jCreationTime := gtpsToOrder[j].CreationTimestamp
 		if iPriority != jPriority {
-			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
+			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iCreationTime, iPriority, gtpsToOrder[j].Name, jCreationTime, jPriority)
 			return iPriority > jPriority
 		}
-		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
-		return iTime.After(jTime.Time)
+
+		if gtpsToOrder[i].Annotations != nil && gtpsToOrder[j].Annotations != nil {
+			if iUpdateTime, ok := gtpsToOrder[i].Annotations["lastUpdatedAt"]; ok {
+				if jUpdateTime, ok := gtpsToOrder[j].Annotations["lastUpdatedAt"]; ok {
+					log.Debugf("GTP sorting identity=%s env=%s name1=%s updateTime1=%v priority1=%d name2=%s updateTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iUpdateTime, iPriority, gtpsToOrder[j].Name, jUpdateTime, jPriority)
+					return iUpdateTime > jUpdateTime
+				}
+			}
+		}
+
+		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iCreationTime, iPriority, gtpsToOrder[j].Name, jCreationTime, jPriority)
+		return iCreationTime.After(jCreationTime.Time)
 	})
 }
 
