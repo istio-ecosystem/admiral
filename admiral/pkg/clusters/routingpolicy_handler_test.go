@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -24,6 +25,8 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const envoyFilterVersion_1_13 = "1.13"
+
 func TestNewRoutingPolicyProcessor(t *testing.T) {
 	common.ResetSync()
 	p := common.AdmiralParams{
@@ -40,7 +43,7 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 
@@ -112,6 +115,8 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 	foo2RP := fooRP.DeepCopy()
 	foo1RP.Labels[common.GetWorkloadIdentifier()] = "foo2"
 
+	efnFooRp := envoyFilterName(fooRP, "bar")
+
 	testCases := []struct {
 		name string
 		args args
@@ -135,7 +140,7 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 							"configuration": map[string]interface{}{
 								"@type": "type.googleapis.com/google.protobuf.StringValue",
 								"value": "routingServiceUrl: e2e.test.routing.service.mesh\nhosts: e2e.testservice.mesh\nplugin: test"},
-							"vm_config": map[string]interface{}{"code": map[string]interface{}{"local": map[string]interface{}{"filename": ""}}, "runtime": "envoy.wasm.runtime.v8", "vm_id": "test-dr-532221909d5db54fe5f5-f6ce3712830af1b15625-1.13"}}}}},
+							"vm_config": map[string]interface{}{"code": map[string]interface{}{"local": map[string]interface{}{"filename": ""}}, "runtime": "envoy.wasm.runtime.v8", "vm_id": efnFooRp}}}}},
 			},
 		},
 		{
@@ -208,7 +213,8 @@ func TestRoutingPolicyProcess_DeltaUpdate(t *testing.T) {
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
-		EnvoyFilterVersion:         "1.13",
+		RoutingPolicyClusters:      []string{"cluster-1"},
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 
@@ -216,31 +222,170 @@ func TestRoutingPolicyProcess_DeltaUpdate(t *testing.T) {
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
 
-	InitAdmiral(context.Background(), p)
+	registry, _ := InitAdmiral(context.Background(), p)
+	registry.AdmiralCache.SourceToDestinations = &sourceToDestinations{
+		sourceDestinations: map[string][]string{
+			"foo": {"bar"},
+		},
+		mutex: &sync.Mutex{},
+	}
+
+	routingPolicyController := &admiral.RoutingPolicyController{IstioClient: istiofake.NewSimpleClientset()}
+	allowedCluster, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	allowedCluster.ClusterID = "cluster-1"
+
+	disabledCluster, _ := createMockRemoteController(func(i interface{}) {
+
+	})
+	disabledCluster.ClusterID = "cluster-2"
+
+	rpFilterCache := &routingPolicyFilterCache{}
+	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
+	rpFilterCache.mutex = &sync.Mutex{}
+
+	allowedCluster.RoutingPolicyController = routingPolicyController
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": allowedCluster, "cluster-2": disabledCluster}
+	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
+
+	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
+	registry.AdmiralCache.IdentityClusterCache.Put("bar", allowedCluster.ClusterID, allowedCluster.ClusterID)
+	registry.AdmiralCache.IdentityClusterCache.Put("bar2", allowedCluster.ClusterID, allowedCluster.ClusterID)
+	registry.AdmiralCache.IdentityClusterCache.Put("baz", disabledCluster.ClusterID, disabledCluster.ClusterID)
+
+	fooRP := &admiralV1.RoutingPolicy{
+		TypeMeta: metaV1.TypeMeta{},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "rpfoo",
+			Labels: map[string]string{
+				"identity":       "foo",
+				"admiral.io/env": "dev",
+			},
+		},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh"},
+			Config: map[string]string{
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+			},
+		},
+		Status: admiralV1.RoutingPolicyStatus{},
+	}
+	registry.AdmiralCache.RoutingPolicyCache.Put("foo", "dev", "foo", fooRP)
 
 	type args struct {
 		rr         *RemoteRegistry
 		dependency *admiralV1.Dependency
 	}
 	type want struct {
-		err error
+		err                                         error
+		expectedFilterCacheKey                      string
+		filterCountInCluster1                       int
+		filterCountInCluster2                       int
+		expectedEnvoyFilterConfigPatchValInCluster1 map[string]interface{}
 	}
 
-	_ = []struct {
+	efn := envoyFilterName(fooRP, "bar2")
+
+	testCases := []struct {
 		name string
 		args args
 		want want
 	}{
 		{
-			name: "New dependency addition creates filter for destinations with routing policy",
+			name: "Adding a new destination to dependency in an enabled cluster adds the filter",
+			args: args{
+				rr: registry,
+				dependency: &admiralV1.Dependency{
+					TypeMeta: metaV1.TypeMeta{},
+					ObjectMeta: metaV1.ObjectMeta{
+						Name: "foo-dep",
+						Labels: map[string]string{
+							"identity":       "bar2",
+							"admiral.io/env": "dev",
+						},
+					},
+					Spec: model.Dependency{
+						Source:        "bar2",
+						IdentityLabel: "identity",
+						Destinations:  []string{"foo"},
+					},
+				},
+			},
+			want: want{
+				filterCountInCluster1:  1,
+				expectedFilterCacheKey: "rpfoofoodev",
+				expectedEnvoyFilterConfigPatchValInCluster1: map[string]interface{}{"name": "dynamicRoutingFilterPatch", "typed_config": map[string]interface{}{
+					"@type": "type.googleapis.com/udpa.type.v1.TypedStruct", "type_url": "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm",
+					"value": map[string]interface{}{
+						"config": map[string]interface{}{
+							"configuration": map[string]interface{}{
+								"@type": "type.googleapis.com/google.protobuf.StringValue",
+								"value": "routingServiceUrl: e2e.test.routing.service.mesh\nhosts: e2e.testservice.mesh\nplugin: test"},
+							"vm_config": map[string]interface{}{"code": map[string]interface{}{"local": map[string]interface{}{"filename": ""}}, "runtime": "envoy.wasm.runtime.v8", "vm_id": efn}}}}},
+			},
 		},
 		{
-			name: "Existing dependency update creates filter for destinations with routing policy",
-		},
-		{
-			name: "Existing dependency deletion removes filter for destinations with routing policy",
+			name: "Adding a new destination to dependency in a disabled cluster does nothing",
+			args: args{
+				rr: registry,
+				dependency: &admiralV1.Dependency{
+					TypeMeta: metaV1.TypeMeta{},
+					ObjectMeta: metaV1.ObjectMeta{
+						Name: "foo-dep",
+						Labels: map[string]string{
+							"identity":       "baz",
+							"admiral.io/env": "dev",
+						},
+					},
+					Spec: model.Dependency{
+						Source:        "baz",
+						IdentityLabel: "identity",
+						Destinations:  []string{"foo"},
+					},
+				},
+			},
+			want: want{},
 		},
 	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			processor := NewRoutingPolicyProcessor(tc.args.rr)
+			err := processor.DeltaUpdate(ctx, admiral.Update, tc.args.dependency)
+			if err != nil && tc.want.err == nil {
+				t.Errorf("DeltaUpdate() unexpected error = %v", err)
+			}
+
+			// cluster 1
+			list1, _ := allowedCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").List(ctx, metaV1.ListOptions{})
+			assert.Equal(t, tc.want.filterCountInCluster1, len(list1.Items))
+			if tc.want.filterCountInCluster1 > 0 {
+
+				receivedEnvoyFilter, _ := allowedCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(ctx, efn, metaV1.GetOptions{})
+				eq := reflect.DeepEqual(tc.want.expectedEnvoyFilterConfigPatchValInCluster1, receivedEnvoyFilter.Spec.ConfigPatches[0].Patch.Value.AsMap())
+				assert.True(t, eq)
+				assert.NotNil(t, registry.AdmiralCache.RoutingPolicyCache.Get("foo", "dev", "rpfoo"))
+
+				// cleanup
+				processor.Delete(ctx, admiral.Delete, fooRP)
+				assert.Nil(t, registry.AdmiralCache.RoutingPolicyFilterCache.Get(tc.want.expectedFilterCacheKey))
+				assert.Nil(t, registry.AdmiralCache.RoutingPolicyCache.Get("foo", "dev", fooRP.Name))
+			}
+
+			// cluster 2
+			list2, _ := disabledCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").List(ctx, metaV1.ListOptions{})
+			assert.Equal(t, tc.want.filterCountInCluster2, len(list2.Items))
+		})
+	}
+}
+
+func envoyFilterName(fooRP *admiralV1.RoutingPolicy, dependentIdentity string) string {
+	name, _ := common.GetSha1(fooRP.Name + common.GetRoutingPolicyEnv(fooRP) + common.GetRoutingPolicyIdentity(fooRP))
+	dependentIdentitySha, _ := common.GetSha1(dependentIdentity)
+	envoyFilterName := fmt.Sprintf("%s-dr-%s-%s-%s", strings.ToLower(fooRP.Spec.Plugin), name, dependentIdentitySha, envoyFilterVersion_1_13)
+	return envoyFilterName
 }
 
 func TestRoutingPolicyHandler(t *testing.T) {
@@ -259,7 +404,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 
@@ -449,7 +594,7 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -529,7 +674,7 @@ func TestRoutingPolicyIgnored(t *testing.T) {
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 
@@ -610,7 +755,7 @@ func TestRoutingPolicyProcessingDisabled(t *testing.T) {
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        false,
 		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 
@@ -688,7 +833,7 @@ func TestRoutingPolicyCache_Delete(t *testing.T) {
 		CacheReconcileDuration:     time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
-		EnvoyFilterVersion:         "1.13",
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
 	}
 

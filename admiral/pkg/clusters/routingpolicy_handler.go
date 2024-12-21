@@ -71,20 +71,20 @@ func (r *RoutingPolicyService) DeltaUpdate(ctx context.Context, eventType admira
 
 	// for each destination, identify the rp.
 	for _, dependent := range newDestinations {
-		if isIdentityMeshEnabled(dependent, r.RemoteRegistry) {
-			// if the dependent is in the mesh, then get the rp
-			policies := r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.GetForIdentity(dependent)
-			for _, rp := range policies {
-				err := r.ProcessAddOrUpdate(ctx, eventType, rp, nil, map[string]string{dependent: dependent})
-				if err != nil {
-					log.Errorf(LogErrFormat, eventType, "routingpolicy", rp.Name, "",
-						fmt.Sprintf("failed to process routing policy for new destination=%s in delta update", dependent))
-					return err
-				}
-				log.Infof(LogFormat, eventType, "routingpolicy", rp.Name, "",
-					fmt.Sprintf("finished processing routing policy for new destination=%s in delta update", dependent))
+		//if isIdentityMeshEnabled(dependent, r.RemoteRegistry) {
+		// if the dependent is in the mesh, then get the rp
+		policies := r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.GetForIdentity(dependent)
+		for _, rp := range policies {
+			err := r.ProcessAddOrUpdate(ctx, eventType, rp, nil, map[string]string{dependent: dependency.Spec.Source})
+			if err != nil {
+				log.Errorf(LogErrFormat, eventType, "routingpolicy", rp.Name, "",
+					fmt.Sprintf("failed to process routing policy for new destination=%s in delta update", dependent))
+				return err
 			}
+			log.Infof(LogFormat, eventType, "routingpolicy", rp.Name, "",
+				fmt.Sprintf("finished processing routing policy for new destination=%s in delta update", dependent))
 		}
+		//}
 	}
 
 	return nil
