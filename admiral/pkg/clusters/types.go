@@ -70,6 +70,7 @@ type AdmiralCache struct {
 	DependencyNamespaceCache            *common.SidecarEgressMap
 	SeClusterCache                      *common.MapOfMaps
 	RoutingPolicyFilterCache            *routingPolicyFilterCache
+	RoutingPolicyCache                  *RoutingPolicyCache
 	SourceToDestinations                *sourceToDestinations //This cache is to fetch list of all dependencies for a given source identity,
 	TrafficConfigIgnoreAssets           []string
 	GatewayAssets                       []string
@@ -134,6 +135,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		CnameDependentClusterCache:  common.NewMapOfMaps(),
 		IdentityDependencyCache:     common.NewMapOfMaps(),
 		RoutingPolicyFilterCache:    rpFilterCache,
+		RoutingPolicyCache:          NewRoutingPolicyCache(),
 		DependencyNamespaceCache:    common.NewSidecarEgressMap(),
 		CnameIdentityCache:          &sync.Map{},
 		ServiceEntryAddressStore:    &ServiceEntryAddressStore{EntryAddresses: map[string]string{}, Addresses: []string{}},

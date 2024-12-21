@@ -273,6 +273,7 @@ func TestAdded(t *testing.T) {
 		RemoteRegistry:              rr,
 		DepController:               d,
 		DestinationServiceProcessor: &MockDestinationServiceProcessor{},
+		RoutingPolicyProcessor:      &MockPolicyProcessor{},
 	}
 
 	depData := v1.Dependency{
