@@ -101,10 +101,12 @@ func modifyServiceEntryForNewServiceOrPod(
 	defer util.LogElapsedTimeForTask(ctxLogger, "event", "", "", "", "TotalModifySETime")()
 	var modifySEerr error
 	var isServiceEntryModifyCalledForSourceCluster bool
-	totalConfigWriterEvents.Increment(api.WithAttributes(
-		attribute.Key("identity").String(sourceIdentity),
-		attribute.Key("environment").String(env),
-	))
+	if common.IsAdmiralOperatorMode() {
+		totalConfigWriterEvents.Increment(api.WithAttributes(
+			attribute.Key("identity").String(sourceIdentity),
+			attribute.Key("environment").String(env),
+		))
+	}
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
 	partitionedIdentity := sourceIdentity
