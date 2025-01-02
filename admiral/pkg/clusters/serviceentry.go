@@ -17,9 +17,6 @@ import (
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"gopkg.in/yaml.v2"
 
-	"go.opentelemetry.io/otel/attribute"
-	api "go.opentelemetry.io/otel/metric"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	model "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
@@ -101,10 +98,10 @@ func modifyServiceEntryForNewServiceOrPod(
 	defer util.LogElapsedTimeForTask(ctxLogger, "event", "", "", "", "TotalModifySETime")()
 	var modifySEerr error
 	var isServiceEntryModifyCalledForSourceCluster bool
-	totalConfigWriterEvents.Increment(api.WithAttributes(
-		attribute.Key("identity").String(sourceIdentity),
-		attribute.Key("environment").String(env),
-	))
+	//totalConfigWriterEvents.Increment(api.WithAttributes(
+	//	attribute.Key("identity").String(sourceIdentity),
+	//	attribute.Key("environment").String(env),
+	//))
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
 	partitionedIdentity := sourceIdentity
