@@ -139,18 +139,35 @@ func (m *MockNodeHandler) Deleted(obj *k8sCoreV1.Node) {
 }
 
 type MockDependencyHandler struct {
+	AddedCnt   int
+	UpdatedCnt int
+	DeletedCnt int
+	addedErr   error
+	updatedErr error
+	deletedErr error
+}
+
+func NewMockDependencyHandler(addErr error, updateErr error, deleteError error) *MockDependencyHandler {
+	return &MockDependencyHandler{
+		addedErr:   addErr,
+		updatedErr: updateErr,
+		deletedErr: deleteError,
+	}
 }
 
 func (m *MockDependencyHandler) Added(ctx context.Context, obj *admiralV1.Dependency) error {
-	return nil
+	m.AddedCnt++
+	return m.addedErr
 }
 
 func (m *MockDependencyHandler) Updated(ctx context.Context, obj *admiralV1.Dependency) error {
-	return nil
+	m.UpdatedCnt++
+	return m.updatedErr
 }
 
 func (m *MockDependencyHandler) Deleted(ctx context.Context, obj *admiralV1.Dependency) error {
-	return nil
+	m.DeletedCnt++
+	return m.deletedErr
 }
 
 type MockGlobalTrafficHandler struct {

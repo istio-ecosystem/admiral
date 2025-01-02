@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
+	fake2 "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned/typed/admiral/v1/fake"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	"github.com/stretchr/testify/assert"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"testing"
 )
 
@@ -101,6 +104,85 @@ func TestShardController_Deleted(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShardController_Get(t *testing.T) {
+
+	type args struct {
+		obj                interface{}
+		retry              bool
+		cacheItems         map[string]*admiralapiv1.Shard
+		fakeClientResponse *admiralapiv1.Shard
+	}
+
+	type want struct {
+		obj interface{}
+		err error
+	}
+	testCases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "K8s client not initialized returns error",
+			args: args{
+				obj: nil,
+			},
+			want: want{
+				err: fmt.Errorf("kubernetes client is not initialized, txId=test"),
+			},
+		},
+		{
+			name: "lookup with retry",
+			args: args{
+				obj:   &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				retry: true,
+				cacheItems: map[string]*admiralapiv1.Shard{
+					"test": {ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				},
+			},
+			want: want{
+				obj: &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+			},
+		},
+		{
+			name: "lookup without retry",
+			args: args{
+				obj: &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				cacheItems: map[string]*admiralapiv1.Shard{
+					"test": {ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				},
+				fakeClientResponse: &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+			},
+			want: want{
+				obj: &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+			},
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			sCtrl, _ := getNewMockShardController()
+			if c.args.fakeClientResponse != nil {
+				sCtrl.CrdClient.AdmiralV1().(*fake2.FakeAdmiralV1).PrependReactor("get", "*", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, c.args.fakeClientResponse, nil
+				})
+			}
+			for _, shard := range c.args.cacheItems {
+				sCtrl.Cache.UpdateShardToClusterCache("test", shard)
+			}
+			ctx := context.WithValue(context.Background(), "txId", "test")
+			r, err := sCtrl.Get(ctx, c.args.retry, c.args.obj)
+			if c.want.err == nil {
+				assert.Nil(t, err)
+			}
+			if c.want.err != nil && assert.Error(t, err) {
+				assert.Equal(t, c.want.err, err)
+			}
+			assert.Equal(t, c.want.obj, r)
+		})
+	}
+
 }
 
 func getNewMockShardController() (*ShardController, error) {
