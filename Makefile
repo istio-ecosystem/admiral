@@ -45,7 +45,8 @@ build-mac:
 	$(GOBUILD) -o $(BINARY_DARWIN) -v $(MAIN_PATH_ADMIRAL)
 
 test:
-	$(GOTEST) -v -failfast -race -timeout 0 `go list ./... | grep -v client | grep -v fmeatests | grep -v tests` -coverprofile=c.out
+	$(GOTEST) -v -failfast -race -timeout 0 `go list ./... | grep -v client | grep -v fmeatests | grep -v tests` -coverprofile=c.out.tmp
+	cat c.out.tmp | grep -v "pb.go" | grep -v "root.go" | grep -v "_generated.deepcopy.go" > c.out
 	$(GOCMD) install github.com/boumenot/gocover-cobertura@latest
 	$(GOPATH)/bin/gocover-cobertura < c.out > cobertura-coverage.xml
 
