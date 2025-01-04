@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"sync"
 
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -37,6 +38,9 @@ type RoutingPolicyService struct {
 
 func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, newRP *v1.RoutingPolicy, oldRP *v1.RoutingPolicy, dependents map[string]string) error {
 	var err error
+	id := common.GetRoutingPolicyIdentity(newRP)
+	env := common.GetRoutingPolicyEnv(newRP)
+	defer util.LogElapsedTime("ProcessAddOrUpdateRoutingPolicy", id, env, "-")
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
 		if !common.DoRoutingPolicyForCluster(remoteController.ClusterID) {
 			log.Warnf(LogFormat, eventType, "routingpolicy", newRP.Name, remoteController.ClusterID, "RoutingPolicy disabled for cluster")
@@ -51,12 +55,10 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 					err = common.AppendError(err, err1)
 				} else {
 					log.Infof(LogFormat, eventType, "routingpolicy	", newRP.Name, remoteController.ClusterID, "created envoyfilters")
-					id := common.GetRoutingPolicyIdentity(newRP)
 					if oldRP != nil {
 						oldEnv := common.GetRoutingPolicyEnv(oldRP)
 						r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Delete(id, oldEnv, oldRP.Name)
 					}
-					env := common.GetRoutingPolicyEnv(newRP)
 					r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 				}
 			}
@@ -67,7 +69,8 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 
 func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType admiral.EventType, dependency *v1.Dependency) error {
 	newDestinations, _ := getDestinationsToBeProcessed(eventType, dependency, r.RemoteRegistry)
-
+	env := common.GetEnvFromMetadata(dependency.Annotations, dependency.Labels, nil)
+	defer util.LogElapsedTime("ProcessDependencyUpdateForRoutingPolicy", dependency.Spec.Source, env, "-")
 	// for each destination, identify the newRP.
 	for _, dependent := range newDestinations {
 		// if the dependent is in the mesh, then get the newRP
@@ -90,6 +93,7 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 func (r *RoutingPolicyService) Delete(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy) error {
 	identity := common.GetRoutingPolicyIdentity(routingPolicy)
 	env := common.GetRoutingPolicyEnv(routingPolicy)
+	defer util.LogElapsedTime("DeleteRoutingPolicy", identity, env, "-")
 	key := routingPolicy.Name + identity + env
 	if r.RemoteRegistry == nil || r.RemoteRegistry.AdmiralCache == nil || r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache == nil {
 		log.Infof(LogFormat, eventType, "routingpolicy", routingPolicy.Name, "", "skipping delete event as cache is nil")

@@ -66,7 +66,7 @@ func (r *RoutingPolicyController) Updated(ctx context.Context, newObj interface{
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1.RoutingPolicy", newObj)
 	}
-	oldRP, ok := oldObj.(*v1.RoutingPolicy)
+	oldRP, _ := oldObj.(*v1.RoutingPolicy)
 	// oldRp can be nil
 	r.RoutingPolicyHandler.Updated(ctx, newRP, oldRP)
 	return nil
