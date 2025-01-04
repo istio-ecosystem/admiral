@@ -22,7 +22,7 @@ import (
 // RoutingPolicyHandler interface contains the methods that are required
 type RoutingPolicyHandler interface {
 	Added(ctx context.Context, obj *v1.RoutingPolicy) error
-	Updated(ctx context.Context, obj *v1.RoutingPolicy) error
+	Updated(ctx context.Context, newObj *v1.RoutingPolicy, oldObj *v1.RoutingPolicy) error
 	Deleted(ctx context.Context, obj *v1.RoutingPolicy) error
 }
 
@@ -61,12 +61,14 @@ func (r *RoutingPolicyController) Added(ctx context.Context, obj interface{}) er
 	return nil
 }
 
-func (r *RoutingPolicyController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
-	routingPolicy, ok := obj.(*v1.RoutingPolicy)
+func (r *RoutingPolicyController) Updated(ctx context.Context, newObj interface{}, oldObj interface{}) error {
+	newRP, ok := newObj.(*v1.RoutingPolicy)
 	if !ok {
-		return fmt.Errorf("type assertion failed, %v is not of type *v1.RoutingPolicy", obj)
+		return fmt.Errorf("type assertion failed, %v is not of type *v1.RoutingPolicy", newObj)
 	}
-	r.RoutingPolicyHandler.Updated(ctx, routingPolicy)
+	oldRP, _ := oldObj.(*v1.RoutingPolicy)
+	// oldRp can be nil
+	r.RoutingPolicyHandler.Updated(ctx, newRP, oldRP)
 	return nil
 }
 

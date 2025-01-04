@@ -266,21 +266,24 @@ func (m *MockSidecarHandler) Deleted(ctx context.Context, obj *v1alpha32.Sidecar
 }
 
 type MockRoutingPolicyHandler struct {
-	Obj *admiralV1.RoutingPolicy
+	Old *admiralV1.RoutingPolicy
+	New *admiralV1.RoutingPolicy
 }
 
 func (m *MockRoutingPolicyHandler) Added(ctx context.Context, obj *admiralV1.RoutingPolicy) error {
-	m.Obj = obj
+	m.New = obj
 	return nil
 }
 
 func (m *MockRoutingPolicyHandler) Deleted(ctx context.Context, obj *admiralV1.RoutingPolicy) error {
-	m.Obj = nil
+	m.Old = obj
+	m.New = nil
 	return nil
 }
 
-func (m *MockRoutingPolicyHandler) Updated(ctx context.Context, obj *admiralV1.RoutingPolicy) error {
-	m.Obj = obj
+func (m *MockRoutingPolicyHandler) Updated(ctx context.Context, newObj *admiralV1.RoutingPolicy, oldObj *admiralV1.RoutingPolicy) error {
+	m.New = newObj
+	m.Old = oldObj
 	return nil
 }
 
