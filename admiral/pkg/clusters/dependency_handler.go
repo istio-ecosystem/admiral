@@ -61,6 +61,12 @@ func (dh *DependencyHandler) HandleDependencyRecord(ctx context.Context, obj *v1
 
 	var handleDepRecordErrors error
 
+	// process routing policies.
+	err = dh.RoutingPolicyProcessor.ProcessDependency(ctx, eventType, obj)
+	if err != nil {
+		log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, obj.Name, "", fmt.Sprintf("error processing routing policies %v", err))
+	}
+
 	// Generate SE/DR/VS for all newly added destination services in the source's cluster
 	err = dh.DestinationServiceProcessor.Process(ctx,
 		obj,
@@ -74,9 +80,6 @@ func (dh *DependencyHandler) HandleDependencyRecord(ctx context.Context, obj *v1
 		// This will be re-queued and retried
 		return handleDepRecordErrors
 	}
-
-	// process routing policies
-	_ = dh.RoutingPolicyProcessor.ProcessDependency(ctx, eventType, obj)
 
 	remoteRegistry.AdmiralCache.SourceToDestinations.put(obj)
 	return handleDepRecordErrors
