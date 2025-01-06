@@ -1,7 +1,9 @@
 package clusters
 
 import (
+	"github.com/stretchr/testify/assert"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -41,4 +43,37 @@ func setupForTypeTests() {
 		common.ResetSync()
 		common.InitializeConfig(admiralParamsForTypesTests())
 	})
+}
+
+func TestRangeRemoteControllers(t *testing.T) {
+	setupForTypeTests()
+
+	rr := &RemoteRegistry{
+		Mutex:             sync.Mutex{},
+		remoteControllers: map[string]*RemoteController{"test": &RemoteController{}},
+	}
+
+	counter := 0
+	// testFunc is a function that tests the RemoteController
+	testFunc := func(k string, v *RemoteController) {
+		counter = counter + 1
+	}
+
+	// TestRangeRemoteControllers is a table-driven test for RangeRemoteControllers
+	tests := []struct {
+		name     string
+		expected int
+	}{
+		{
+			name:     "TestRangeRemoteControllers",
+			expected: 1,
+		},
+	}
+	for _, tt := range tests {
+		counter = 0
+		t.Run(tt.name, func(t *testing.T) {
+			rr.RangeRemoteControllers(testFunc)
+			assert.Equal(t, tt.expected, counter)
+		})
+	}
 }
