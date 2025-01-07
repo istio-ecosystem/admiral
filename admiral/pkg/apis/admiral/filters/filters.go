@@ -28,16 +28,3 @@ func Logger(inner http.Handler, name string) http.Handler {
 		)
 	})
 }
-
-func Auth(inner http.Handler, name string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		log.Printf(
-			"Auth Logger for endpoint %s", name,
-		)
-		//TODO implement authnz
-
-		inner.ServeHTTP(w, r)
-
-	})
-}
