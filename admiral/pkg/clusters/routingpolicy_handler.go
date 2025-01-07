@@ -39,6 +39,8 @@ type RoutingPolicyService struct {
 func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, newRP *v1.RoutingPolicy, oldRP *v1.RoutingPolicy, dependents map[string]string) error {
 	id := common.GetRoutingPolicyIdentity(newRP)
 	env := common.GetRoutingPolicyEnv(newRP)
+	// always store in cache first to reflect cluster state
+	r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 	ctxLogger := common.GetCtxLogger(ctx, id, env)
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
 		fmt.Sprintf("start of processing routing policy, dependents=%v", dependents))
@@ -62,11 +64,6 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 					err = common.AppendError(err, err1)
 				} else {
 					ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, remoteController.ClusterID, "created envoyfilters")
-					if oldRP != nil {
-						oldEnv := common.GetRoutingPolicyEnv(oldRP)
-						r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Delete(id, oldEnv, oldRP.Name)
-					}
-					r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 				}
 				ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
 					fmt.Sprintf("end create filter for dependent=%s in cluster=%s", dependent, remoteController.ClusterID))
