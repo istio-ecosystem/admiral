@@ -548,7 +548,7 @@ func addUpdateVirtualService(
 				rc.ClusterID, newCopy.Name))
 		newCopy.Namespace = namespace
 		newCopy.ResourceVersion = ""
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, newCopy, metav1.CreateOptions{}) //HERE RTAY
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, newCopy, metav1.CreateOptions{})
 		if k8sErrors.IsAlreadyExists(err) {
 			ctxLogger.Infof(LogFormat, op, common.VirtualServiceResourceType, newCopy.Name, rc.ClusterID,
 				fmt.Sprintf("skipping create virtualservice and it already exists for cluster: %s VirtualService name=%s",
@@ -579,7 +579,7 @@ func addUpdateVirtualService(
 		exist.Annotations = newCopy.Annotations
 		//nolint
 		exist.Spec = newCopy.Spec
-		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, exist, metav1.UpdateOptions{}) //HERE RTAY
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, exist, metav1.UpdateOptions{})
 		if err != nil {
 			err = retryUpdatingVS(ctxLogger, ctx, newCopy, exist, namespace, rc, err, op)
 		}
@@ -619,7 +619,7 @@ func retryUpdatingVS(ctxLogger *log.Entry, ctx context.Context, obj *v1alpha3.Vi
 			updatedVS.Spec = obj.Spec
 			updatedVS.Labels = obj.Labels
 			updatedVS.Annotations = obj.Annotations
-			_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, updatedVS, metav1.UpdateOptions{}) //HERE RTAY
+			_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, updatedVS, metav1.UpdateOptions{})
 			if err == nil {
 				return nil
 			}
