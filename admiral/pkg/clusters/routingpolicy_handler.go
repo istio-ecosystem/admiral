@@ -37,13 +37,15 @@ type RoutingPolicyService struct {
 }
 
 func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, newRP *v1.RoutingPolicy, oldRP *v1.RoutingPolicy, dependents map[string]string) error {
-	var err error
 	id := common.GetRoutingPolicyIdentity(newRP)
 	env := common.GetRoutingPolicyEnv(newRP)
+	ctxLogger := common.GetCtxLogger(ctx, id, env)
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-", "start of processing routing policy")
+	var err error
 	defer util.LogElapsedTime("ProcessAddOrUpdateRoutingPolicy", id, env, "-")
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
 		if !common.DoRoutingPolicyForCluster(remoteController.ClusterID) {
-			log.Warnf(LogFormat, eventType, "routingpolicy", newRP.Name, remoteController.ClusterID, "RoutingPolicy disabled for cluster")
+			ctxLogger.Warnf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, remoteController.ClusterID, "processing disabled for cluster")
 			continue
 		}
 		for _, dependent := range dependents {
@@ -51,10 +53,10 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
 				_, err1 := createOrUpdateEnvoyFilter(ctx, remoteController, newRP, eventType, dependent, r.RemoteRegistry.AdmiralCache)
 				if err1 != nil {
-					log.Errorf(LogErrFormat, eventType, "routingpolicy", newRP.Name, remoteController.ClusterID, err)
+					ctxLogger.Errorf(LogErrFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, remoteController.ClusterID, err)
 					err = common.AppendError(err, err1)
 				} else {
-					log.Infof(LogFormat, eventType, "routingpolicy	", newRP.Name, remoteController.ClusterID, "created envoyfilters")
+					ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, remoteController.ClusterID, "created envoyfilters")
 					if oldRP != nil {
 						oldEnv := common.GetRoutingPolicyEnv(oldRP)
 						r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Delete(id, oldEnv, oldRP.Name)
@@ -64,13 +66,16 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 			}
 		}
 	}
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-", "end of processing routing policy")
 	return err
 }
 
 func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType admiral.EventType, dependency *v1.Dependency) error {
 	newDestinations, _ := getDestinationsToBeProcessed(eventType, dependency, r.RemoteRegistry)
 	env := common.GetEnvFromMetadata(dependency.Annotations, dependency.Labels, nil)
+	ctxLogger := common.GetCtxLogger(ctx, dependency.Name, env)
 	defer util.LogElapsedTime("ProcessDependencyUpdateForRoutingPolicy", dependency.Spec.Source, env, "-")
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-", "start of processing dependency update for routing policy")
 	// for each destination, identify the newRP.
 	for _, dependent := range newDestinations {
 		// if the dependent is in the mesh, then get the newRP
@@ -78,50 +83,54 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 		for _, rp := range policies {
 			err := r.ProcessAddOrUpdate(ctx, eventType, rp, nil, map[string]string{dependent: dependency.Spec.Source})
 			if err != nil {
-				log.Errorf(LogErrFormat, eventType, "routingpolicy", rp.Name, "",
+				ctxLogger.Errorf(LogErrFormat, eventType, common.RoutingPolicyResourceType, rp.Name, "",
 					fmt.Sprintf("failed to process routing policy for new destination=%s in delta update", dependent))
 				return err
 			}
-			log.Infof(LogFormat, eventType, "routingpolicy", rp.Name, "",
+			ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, rp.Name, "",
 				fmt.Sprintf("finished processing routing policy for new destination=%s in delta update", dependent))
 		}
 	}
-
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-", "end of processing dependency update for routing policy")
 	return nil
 }
 
 func (r *RoutingPolicyService) Delete(ctx context.Context, eventType admiral.EventType, routingPolicy *v1.RoutingPolicy) error {
 	identity := common.GetRoutingPolicyIdentity(routingPolicy)
 	env := common.GetRoutingPolicyEnv(routingPolicy)
+	ctxLogger := common.GetCtxLogger(ctx, identity, env)
 	defer util.LogElapsedTime("DeleteRoutingPolicy", identity, env, "-")
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "start of delete for routing policy")
 	key := routingPolicy.Name + identity + env
 	if r.RemoteRegistry == nil || r.RemoteRegistry.AdmiralCache == nil || r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache == nil {
-		log.Infof(LogFormat, eventType, "routingpolicy", routingPolicy.Name, "", "skipping delete event as cache is nil")
+		ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "", "skipping delete event as cache is nil")
 		return nil
 	}
-	clusterIdFilterMap := r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Get(key) // RoutingPolicyFilterCache key=rpname+rpidentity+environment of the routingPolicy, value is a map [clusterId -> map [filterName -> filterNameSpace]]
+	// RoutingPolicyFilterCache key=rpname+rpidentity+environment of the routingPolicy, value is a map [clusterId -> map [filterName -> filterNameSpace]]
+	clusterIdFilterMap := r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Get(key)
 	var err error
 	for _, rc := range r.RemoteRegistry.remoteControllers {
 		if !common.DoRoutingPolicyForCluster(rc.ClusterID) {
-			log.Warnf(LogFormat, eventType, "routingpolicy", routingPolicy.Name, rc.ClusterID, "RoutingPolicy disabled for cluster")
+			ctxLogger.Warnf(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, rc.ClusterID, "RoutingPolicy disabled for cluster")
 			continue
 		}
 		if filterMap, ok := clusterIdFilterMap[rc.ClusterID]; ok {
 			for filter, filterNs := range filterMap {
-				log.Infof(LogFormat, eventType, "envoyfilter", filter, rc.ClusterID, "deleting")
+				ctxLogger.Infof(LogFormat, eventType, common.EnvoyFilterResourceType, filter, rc.ClusterID, "deleting")
 				err1 := rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters(filterNs).Delete(ctx, filter, metaV1.DeleteOptions{})
 				if err1 != nil {
-					log.Errorf(LogErrFormat, eventType, "envoyfilter", filter, rc.ClusterID, err1)
+					ctxLogger.Errorf(LogErrFormat, eventType, common.EnvoyFilterResourceType, filter, rc.ClusterID, err1)
 					err = common.AppendError(err, err1)
 				}
 			}
 		}
 	}
 	if err == nil {
-		log.Infof(LogFormat, eventType, "routingPolicy", fmt.Sprintf("%s.%s.%s", identity, env, routingPolicy.Name), "", "deleting from cache")
+		ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, fmt.Sprintf("%s.%s.%s", identity, env, routingPolicy.Name), "", "deleting from cache")
 		r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Delete(identity, env, routingPolicy.Name)
 		r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Delete(key)
 	}
+	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "end of delete for routing policy")
 	return err
 }
 
