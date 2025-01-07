@@ -108,6 +108,7 @@ type AdmiralParams struct {
 	EnableGenerationCheck                    bool
 	EnableIsOnlyReplicaCountChangedCheck     bool
 	PreventSplitBrain                        bool
+	IgnoreLabelsAnnotationsList              []string
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool

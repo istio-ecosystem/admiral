@@ -1773,7 +1773,9 @@ func TestAddUpdateVirtualService(t *testing.T) {
 		namespace = "testns"
 		fooVS     = &apiNetworkingV1Alpha3.VirtualService{
 			ObjectMeta: metaV1.ObjectMeta{
-				Name: "stage.test00.foo-vs",
+				Name:        "stage.test00.foo-vs",
+				Labels:      map[string]string{"applications.argoproj.io/app-name": "test", "app.kubernetes.io/instance": "test"},
+				Annotations: map[string]string{"argocd.argoproj.io/tracking-id": "test"},
 			},
 			Spec: networkingV1Alpha3.VirtualService{
 				Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
@@ -1789,10 +1791,13 @@ func TestAddUpdateVirtualService(t *testing.T) {
 		},
 	}
 	admiralParams := common.AdmiralParams{
-		LabelSet:              &common.LabelSet{},
-		SyncNamespace:         "test-sync-ns",
-		EnableSWAwareNSCaches: true,
+		LabelSet:                    &common.LabelSet{},
+		SyncNamespace:               "test-sync-ns",
+		EnableSWAwareNSCaches:       true,
+		IgnoreLabelsAnnotationsList: []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
 	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
 	rr := NewRemoteRegistry(ctx, admiralParams)
 
 	cases := []struct {
@@ -1818,6 +1823,18 @@ func TestAddUpdateVirtualService(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			addUpdateVirtualService(ctxLogger, ctx, c.newVS, c.existingVS, namespace, rc, rr)
+			vs, err := istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(namespace).Get(ctx, fooVS.Name, metaV1.GetOptions{})
+			if err != nil {
+				t.Errorf("failed to get VS with error: %v", err)
+			}
+			for _, ignored := range common.GetIgnoreLabelsAnnotations() {
+				if vs.Labels[ignored] != "" {
+					t.Errorf("expected VS to not ignored labels, but got labels: %v", ignored)
+				}
+				if vs.Annotations[ignored] != "" {
+					t.Errorf("expected VS to not ignored annotations, but got annotations: %v", ignored)
+				}
+			}
 		})
 	}
 }

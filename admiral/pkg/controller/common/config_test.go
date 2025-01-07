@@ -47,6 +47,7 @@ func setupForConfigTests() {
 			DiscoveryClustersForNumaflow:   make([]string, 0),
 			ClientDiscoveryClustersForJobs: make([]string, 0),
 			EnableClientDiscovery:          true,
+			IgnoreLabelsAnnotationsList:    []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
 		}
 		ResetSync()
 		initHappened = true
@@ -326,6 +327,10 @@ func TestConfigManagement(t *testing.T) {
 
 	if len(GetClientDiscoveryClustersForNumaflow()) != 0 {
 		t.Errorf("clusters for numaflow client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForNumaflow())
+	}
+
+	if len(GetIgnoreLabelsAnnotations()) != 3 {
+		t.Errorf("ignored labels and annotations for VS copy mismatch, expected 3, got %v", GetIgnoreLabelsAnnotations())
 	}
 }
 
