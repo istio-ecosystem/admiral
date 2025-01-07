@@ -45,7 +45,6 @@ type RemoteController struct {
 	SidecarController                *istio.SidecarController
 	RolloutController                *admiral.RolloutController
 	RoutingPolicyController          *admiral.RoutingPolicyController
-	EnvoyFilterController            *admiral.EnvoyFilterController
 	OutlierDetectionController       *admiral.OutlierDetectionController
 	ClientConnectionConfigController *admiral.ClientConnectionConfigController
 	JobController                    *admiral.JobController
