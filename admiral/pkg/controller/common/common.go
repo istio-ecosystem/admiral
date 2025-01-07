@@ -8,11 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 
 	"github.com/google/uuid"
 
@@ -489,9 +490,7 @@ func AppendError(err error, newError error) error {
 func IsIstioIngressGatewayService(svc *k8sV1.Service) bool {
 
 	if svc != nil && len(svc.Labels) > 0 {
-		for _,ingressGatewayLabel := range strings.Split(GetAdmiralParams().LabelSet.GatewayApp, ",") {
-			return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == ingressGatewayLabel
-		}
+		return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == ingressGatewayLabel
 	} else {
 		return false
 	}
