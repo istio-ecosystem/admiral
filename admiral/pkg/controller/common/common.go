@@ -487,7 +487,14 @@ func AppendError(err error, newError error) error {
 }
 
 func IsIstioIngressGatewayService(svc *k8sV1.Service) bool {
-	return svc.Namespace == NamespaceIstioSystem && svc.Name == IstioIngressGatewayServiceName
+
+	if svc != nil && len(svc.Labels) > 0 {
+		for _,ingressGatewayLabel := range strings.Split(GetAdmiralParams().LabelSet.GatewayApp, ",") {
+			return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == ingressGatewayLabel
+		}
+	} else {
+		return false
+	}
 }
 
 func FetchTxIdOrGenNew(ctx context.Context) string {
