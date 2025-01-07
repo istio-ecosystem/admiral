@@ -40,7 +40,8 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 	id := common.GetRoutingPolicyIdentity(newRP)
 	env := common.GetRoutingPolicyEnv(newRP)
 	ctxLogger := common.GetCtxLogger(ctx, id, env)
-	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-", "start of processing routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
+		fmt.Sprintf("start of processing routing policy, dependents=[%v]", dependents))
 	var err error
 	defer util.LogElapsedTime("ProcessAddOrUpdateRoutingPolicy", id, env, "-")()
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
@@ -66,7 +67,8 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 			}
 		}
 	}
-	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-", "end of processing routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
+		fmt.Sprintf("end of processing routing policy, dependents=[%v]", dependents))
 	return err
 }
 
@@ -75,7 +77,8 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 	env := common.GetEnvFromMetadata(dependency.Annotations, dependency.Labels, nil)
 	ctxLogger := common.GetCtxLogger(ctx, dependency.Name, env)
 	defer util.LogElapsedTime("ProcessDependencyUpdateForRoutingPolicy", dependency.Spec.Source, env, "-")()
-	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-", "start of processing dependency update for routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
+		fmt.Sprintf("start of processing dependency update for routing policy, newDestinations=[%v]", newDestinations))
 	// for each destination, identify the newRP.
 	for _, dependent := range newDestinations {
 		// if the dependent is in the mesh, then get the newRP
@@ -91,7 +94,8 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 				fmt.Sprintf("finished processing routing policy for new destination=%s in delta update", dependent))
 		}
 	}
-	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-", "end of processing dependency update for routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
+		fmt.Sprintf("end of processing dependency update for routing policy, newDestinations=[%v]", newDestinations))
 	return nil
 }
 
@@ -100,7 +104,7 @@ func (r *RoutingPolicyService) Delete(ctx context.Context, eventType admiral.Eve
 	env := common.GetRoutingPolicyEnv(routingPolicy)
 	ctxLogger := common.GetCtxLogger(ctx, identity, env)
 	defer util.LogElapsedTime("DeleteRoutingPolicy", identity, env, "-")()
-	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "start of delete for routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "start of delete for routing policy")
 	key := routingPolicy.Name + identity + env
 	if r.RemoteRegistry == nil || r.RemoteRegistry.AdmiralCache == nil || r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache == nil {
 		ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "", "skipping delete event as cache is nil")
@@ -130,7 +134,7 @@ func (r *RoutingPolicyService) Delete(ctx context.Context, eventType admiral.Eve
 		r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Delete(identity, env, routingPolicy.Name)
 		r.RemoteRegistry.AdmiralCache.RoutingPolicyFilterCache.Delete(key)
 	}
-	ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "end of delete for routing policy")
+	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, routingPolicy.Name, "-", "end of delete for routing policy")
 	return err
 }
 
