@@ -106,7 +106,9 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 	}
 
 	destinations, hasNonMeshDestination := getDestinationsToBeProcessed(eventType, dependency, remoteRegistry)
-	log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("found %d new destinations: %v", len(destinations), destinations))
+	id := common.GetIdentity(dependency.Labels, nil)
+	ctxLogger := common.GetCtxLogger(ctx, id, "-")
+	ctxLogger.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("found %d new destinations: %v", len(destinations), destinations))
 
 	// find source cluster for source identity
 	sourceClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependency.Spec.Source)
@@ -115,7 +117,7 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 		// the rollout/deployment event hasn't gone through yet.
 		// This can be ignored, and not be added back to the dependency controller queue
 		// because it will be processed by the rollout/deployment controller
-		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("identity: %s, does not have any clusters. Skipping calling modifySE", dependency.Spec.Source))
+		ctxLogger.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("identity: %s, does not have any clusters. Skipping calling modifySE", dependency.Spec.Source))
 		return nil
 	}
 
