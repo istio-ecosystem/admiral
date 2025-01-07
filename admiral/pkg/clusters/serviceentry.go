@@ -213,7 +213,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Infof(common.CtxLogFormat, "event", "", "", clusterId, "neither deployment nor rollouts found")
 			continue
 		}
-		ingressEndpoint, port := getIngressEndpointAndPort(rc)
+		ingressEndpoint, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
