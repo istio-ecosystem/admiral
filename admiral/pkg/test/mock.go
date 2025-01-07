@@ -284,34 +284,6 @@ func (m *MockRoutingPolicyHandler) Updated(ctx context.Context, obj *admiralV1.R
 	return nil
 }
 
-type MockTrafficConfigHandler struct {
-	Obj *admiralV1.TrafficConfig
-}
-
-func (m *MockTrafficConfigHandler) Added(ctx context.Context, obj *admiralV1.TrafficConfig) {
-	m.Obj = obj
-}
-
-func (m *MockTrafficConfigHandler) Deleted(ctx context.Context, obj *admiralV1.TrafficConfig) {
-	m.Obj = nil
-}
-
-func (m *MockTrafficConfigHandler) Updated(ctx context.Context, obj *admiralV1.TrafficConfig) {
-	m.Obj = obj
-}
-
-type MockEnvoyFilterHandler struct {
-}
-
-func (m *MockEnvoyFilterHandler) Added(context.Context, *v1alpha32.EnvoyFilter) {
-}
-
-func (m *MockEnvoyFilterHandler) Deleted(context.Context, *v1alpha32.EnvoyFilter) {
-}
-
-func (m *MockEnvoyFilterHandler) Updated(context.Context, *v1alpha32.EnvoyFilter) {
-}
-
 type MockRolloutsGetter struct{}
 type FakeRolloutsImpl struct{}
 
