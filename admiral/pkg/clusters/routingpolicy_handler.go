@@ -41,7 +41,7 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 	env := common.GetRoutingPolicyEnv(newRP)
 	ctxLogger := common.GetCtxLogger(ctx, id, env)
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
-		fmt.Sprintf("start of processing routing policy, dependents=[%v]", dependents))
+		fmt.Sprintf("start of processing routing policy, dependents=%v", dependents))
 	var err error
 	defer util.LogElapsedTime("ProcessAddOrUpdateRoutingPolicy", id, env, "-")()
 	for _, remoteController := range r.RemoteRegistry.remoteControllers {
@@ -50,8 +50,12 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 			continue
 		}
 		for _, dependent := range dependents {
+			ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
+				fmt.Sprintf("process dependent=%s in cluster=%s", dependent, remoteController.ClusterID))
 			// Check if the dependent exists in this remoteCluster. If so, we create an envoyFilter with dependent identity as workload selector
 			if _, ok := r.RemoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependent).Copy()[remoteController.ClusterID]; ok {
+				ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
+					fmt.Sprintf("start create filter for dependent=%s in cluster=%s", dependent, remoteController.ClusterID))
 				_, err1 := createOrUpdateEnvoyFilter(ctx, remoteController, newRP, eventType, dependent, r.RemoteRegistry.AdmiralCache)
 				if err1 != nil {
 					ctxLogger.Errorf(LogErrFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, remoteController.ClusterID, err)
@@ -64,11 +68,13 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 					}
 					r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 				}
+				ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
+					fmt.Sprintf("end create filter for dependent=%s in cluster=%s", dependent, remoteController.ClusterID))
 			}
 		}
 	}
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
-		fmt.Sprintf("end of processing routing policy, dependents=[%v]", dependents))
+		fmt.Sprintf("end of processing routing policy, dependents=%v", dependents))
 	return err
 }
 
@@ -78,11 +84,15 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 	ctxLogger := common.GetCtxLogger(ctx, dependency.Name, env)
 	defer util.LogElapsedTime("ProcessDependencyUpdateForRoutingPolicy", dependency.Spec.Source, env, "-")()
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
-		fmt.Sprintf("start of processing dependency update for routing policy, newDestinations=[%v]", newDestinations))
+		fmt.Sprintf("start of processing dependency update for routing policy, newDestinations=%v", newDestinations))
 	// for each destination, identify the newRP.
 	for _, dependent := range newDestinations {
 		// if the dependent is in the mesh, then get the newRP
+		ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
+			fmt.Sprintf("process destination=%s", dependent))
 		policies := r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.GetForIdentity(dependent)
+		ctxLogger.Debugf(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
+			fmt.Sprintf("found %d routing policies for dependent=%s", len(policies), dependent))
 		for _, rp := range policies {
 			err := r.ProcessAddOrUpdate(ctx, eventType, rp, nil, map[string]string{dependent: dependency.Spec.Source})
 			if err != nil {
@@ -95,7 +105,7 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 		}
 	}
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, dependency.Spec.Source, "-",
-		fmt.Sprintf("end of processing dependency update for routing policy, newDestinations=[%v]", newDestinations))
+		fmt.Sprintf("end of processing dependency update for routing policy, newDestinations=%v", newDestinations))
 	return nil
 }
 
