@@ -74,13 +74,13 @@ func (dh *DependencyHandler) HandleDependencyRecord(ctx context.Context, obj *v1
 		// This will be re-queued and retried
 		return handleDepRecordErrors
 	}
-	remoteRegistry.AdmiralCache.SourceToDestinations.put(obj)
-
 	// process routing policies.
 	err = dh.RoutingPolicyProcessor.ProcessDependency(ctx, eventType, obj)
 	if err != nil {
 		log.Errorf(LogErrFormat, string(eventType), common.DependencyResourceType, obj.Name, "", fmt.Sprintf("error processing routing policies %v", err))
 	}
+
+	remoteRegistry.AdmiralCache.SourceToDestinations.put(obj)
 
 	return handleDepRecordErrors
 }
