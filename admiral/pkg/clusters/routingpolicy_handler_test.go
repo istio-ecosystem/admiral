@@ -384,6 +384,71 @@ func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
 	}
 }
 
+func TestRoutingPolicyProcess_Delete_NilCaches(t *testing.T) {
+	common.ResetSync()
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			DeploymentAnnotation: "sidecar.istio.io/inject",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		CacheReconcileDuration:     time.Minute,
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		EnableRoutingPolicy:        true,
+		RoutingPolicyClusters:      []string{"*"},
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
+		Profile:                    common.AdmiralProfileDefault,
+	}
+
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
+	registry, _ := InitAdmiral(context.Background(), p)
+	registry.AdmiralCache.SourceToDestinations = &sourceToDestinations{
+		sourceDestinations: map[string][]string{
+			"foo": {"bar"},
+		},
+		mutex: &sync.Mutex{},
+	}
+
+	routingPolicyController := &admiral.RoutingPolicyController{IstioClient: istiofake.NewSimpleClientset()}
+	cluster, _ := createMockRemoteController(func(i interface{}) {})
+	cluster.ClusterID = "cluster-1"
+
+	cluster.RoutingPolicyController = routingPolicyController
+	registry.remoteControllers = map[string]*RemoteController{"cluster-1": cluster}
+	registry.AdmiralCache.RoutingPolicyFilterCache = nil
+
+	pp := NewRoutingPolicyProcessor(registry)
+	ctx := context.Background()
+	rp := &admiralV1.RoutingPolicy{
+		TypeMeta: metaV1.TypeMeta{},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "rpfoo",
+			Labels: map[string]string{
+				"identity":       "foo",
+				"admiral.io/env": "dev",
+			},
+		},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh"},
+			Config: map[string]string{
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+			},
+		},
+		Status: admiralV1.RoutingPolicyStatus{},
+	}
+	err := pp.Delete(ctx, admiral.Delete, rp)
+	assert.NoErrorf(t, err, "Error deleting routing policy")
+
+}
+
 func envoyFilterName(fooRP *admiralV1.RoutingPolicy, dependentIdentity string) string {
 	name, _ := common.GetSha1(fooRP.Name + common.GetRoutingPolicyEnv(fooRP) + common.GetRoutingPolicyIdentity(fooRP))
 	dependentIdentitySha, _ := common.GetSha1(dependentIdentity)
@@ -909,6 +974,24 @@ func TestRoutingPolicyCache_Delete(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRoutingPolicyCache_GetForIdentity(t *testing.T) {
+	rp := NewRoutingPolicyCache()
+
+	assert.Empty(t, rp.GetForIdentity("foo"))
+
+	it := &admiralV1.RoutingPolicy{}
+	rp.Put("foo", "qal", "rpfoo", it)
+	rp.Put("foo", "e2e", "rpfoo", it)
+	rp.Put("foo", "prf", "rpfoo", it)
+	rp.Put("foo", "prd", "rpfoo", it)
+
+	actual := rp.GetForIdentity("foo")
+
+	assert.NotNil(t, actual)
+	assert.Equal(t, 4, len(actual))
+
 }
 
 type MockPolicyProcessor struct {
