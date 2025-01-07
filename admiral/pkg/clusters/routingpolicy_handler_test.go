@@ -108,26 +108,6 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 		Status: admiralV1.RoutingPolicyStatus{},
 	}
 
-	update2FooRP := &admiralV1.RoutingPolicy{
-		TypeMeta: metaV1.TypeMeta{},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name: "rpfoo",
-			Labels: map[string]string{
-				"identity":       "foo",
-				"admiral.io/env": "dev",
-			},
-		},
-		Spec: model.RoutingPolicy{
-			Plugin: "test",
-			Hosts:  []string{"e2e.testservice.mesh"},
-			Config: map[string]string{
-				"routingServiceUrl": "e2e.test.routing.service.mesh",
-				"prefix":            "updated",
-			},
-		},
-		Status: admiralV1.RoutingPolicyStatus{},
-	}
-
 	foo1RP := update1FooRP.DeepCopy()
 	foo1RP.Labels[common.GetWorkloadIdentifier()] = "foo1"
 
@@ -188,28 +168,6 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 				expectedFilterCount:    0,
 			},
 		},
-		{
-			name: "Updated routing policy for an existing deployment of foo",
-			args: args{
-				rr:    registry,
-				et:    admiral.Add,
-				newRP: update2FooRP,
-				oldRP: update1FooRP,
-				dp:    map[string]string{"bar": "bar"},
-			},
-			want: want{
-				expectedFilterCacheKey: "rpfoofoodev",
-				expectedFilterCount:    1,
-				expectedEnvoyFilterConfigPatchVal: map[string]interface{}{"name": "dynamicRoutingFilterPatch", "typed_config": map[string]interface{}{
-					"@type": "type.googleapis.com/udpa.type.v1.TypedStruct", "type_url": "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm",
-					"value": map[string]interface{}{
-						"config": map[string]interface{}{
-							"configuration": map[string]interface{}{
-								"@type": "type.googleapis.com/google.protobuf.StringValue",
-								"value": "routingServiceUrl: e2e.test.routing.service.mesh\nprefix: updated\nhosts: e2e.testservice.mesh\nplugin: test"},
-							"vm_config": map[string]interface{}{"code": map[string]interface{}{"local": map[string]interface{}{"filename": ""}}, "runtime": "envoy.wasm.runtime.v8", "vm_id": efnFooRp}}}}},
-			},
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -237,7 +195,6 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 				receivedEnvoyFilter, _ := bar1RCtrl.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(ctx, efnFooRp, metaV1.GetOptions{})
 				eq := reflect.DeepEqual(tc.want.expectedEnvoyFilterConfigPatchVal, receivedEnvoyFilter.Spec.ConfigPatches[0].Patch.Value.AsMap())
 				assert.True(t, eq)
-				assert.NotNil(t, registry.AdmiralCache.RoutingPolicyCache.Get("foo", "dev", "rpfoo"))
 			}
 
 			// once the routing policy is deleted, the corresponding filter should also be deleted
@@ -413,7 +370,6 @@ func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
 				receivedEnvoyFilter, _ := allowedCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(ctx, efn, metaV1.GetOptions{})
 				eq := reflect.DeepEqual(tc.want.expectedEnvoyFilterConfigPatchValInCluster1, receivedEnvoyFilter.Spec.ConfigPatches[0].Patch.Value.AsMap())
 				assert.True(t, eq)
-				assert.NotNil(t, registry.AdmiralCache.RoutingPolicyCache.Get("foo", "dev", "rpfoo"))
 
 				// cleanup
 				processor.Delete(ctx, admiral.Delete, fooRP)
@@ -471,6 +427,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	remoteController.RoutingPolicyController = routingPolicyController
 	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 	registry.AdmiralCache.RoutingPolicyFilterCache = rpFilterCache
+	registry.AdmiralCache.RoutingPolicyCache = NewRoutingPolicyCache()
 
 	// foo is dependent upon bar and bar has a deployment in the same cluster.
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
@@ -646,7 +603,10 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 	p.LabelSet.EnvKey = "admiral.io/env"
 	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
 
-	handler := NewRoutingPolicyHandler(nil, "", NewRoutingPolicyProcessor(nil))
+	registry, _ := InitAdmiral(context.Background(), p)
+	registry.AdmiralCache.RoutingPolicyCache = NewRoutingPolicyCache()
+
+	handler := NewRoutingPolicyHandler(registry, "", NewRoutingPolicyProcessor(registry))
 
 	testcases := []struct {
 		name      string

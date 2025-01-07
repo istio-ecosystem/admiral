@@ -39,8 +39,6 @@ type RoutingPolicyService struct {
 func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType admiral.EventType, newRP *v1.RoutingPolicy, oldRP *v1.RoutingPolicy, dependents map[string]string) error {
 	id := common.GetRoutingPolicyIdentity(newRP)
 	env := common.GetRoutingPolicyEnv(newRP)
-	// always store in cache first to reflect cluster state
-	r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 	ctxLogger := common.GetCtxLogger(ctx, id, env)
 	ctxLogger.Infof(LogFormat, eventType, common.RoutingPolicyResourceType, newRP.Name, "-",
 		fmt.Sprintf("start of processing routing policy, dependents=%v", dependents))
@@ -201,11 +199,14 @@ func (r *RoutingPolicyCache) Put(identity string, env string, name string, rp *v
 	defer r.mutex.Unlock()
 	r.mutex.Lock()
 	if r.entries[identity] == nil {
+		log.Debugf("initializing routing policy cache for identity=%s", identity)
 		r.entries[identity] = &routingPolicyCacheEntry{policiesByEnv: make(map[string]map[string]*v1.RoutingPolicy)}
 	}
 	if r.entries[identity].policiesByEnv[env] == nil {
+		log.Debugf("initializing routing policy cache for identity=%s and env=%s", identity, env)
 		r.entries[identity].policiesByEnv[env] = make(map[string]*v1.RoutingPolicy)
 	}
+	log.Debugf("add to routing policy cache for identity=%s, env=%s, name=%s", identity, env, name)
 	r.entries[identity].policiesByEnv[env][name] = rp
 }
 
@@ -277,6 +278,10 @@ func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 	}
 }
 func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) error {
+	id := common.GetRoutingPolicyIdentity(obj)
+	env := common.GetRoutingPolicyEnv(obj)
+	// always store in cache first to reflect cluster state
+	r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, obj.Name, obj)
 	if commonUtil.IsAdmiralReadOnly() {
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", "", "", "skipping read-only mode")
 		return nil
@@ -306,6 +311,10 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 }
 
 func (r RoutingPolicyHandler) Updated(ctx context.Context, newRP *v1.RoutingPolicy, oldRP *v1.RoutingPolicy) error {
+	id := common.GetRoutingPolicyIdentity(newRP)
+	env := common.GetRoutingPolicyEnv(newRP)
+	// always store in cache first to reflect cluster state
+	r.RemoteRegistry.AdmiralCache.RoutingPolicyCache.Put(id, env, newRP.Name, newRP)
 	if commonUtil.IsAdmiralReadOnly() {
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", "", "", "skipping read-only mode")
 		return nil
