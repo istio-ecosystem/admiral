@@ -22,31 +22,64 @@ func setupForConfigTests() {
 				AdmiralCRDIdentityLabel: "identity",
 				IdentityPartitionKey:    "admiral.io/identityPartition",
 			},
-			EnableSAN:                      true,
-			SANPrefix:                      "prefix",
-			HostnameSuffix:                 "mesh",
-			SyncNamespace:                  "admiral-sync",
-			SecretFilterTags:               "admiral/sync",
-			CacheReconcileDuration:         time.Minute,
-			ClusterRegistriesNamespace:     "default",
-			DependenciesNamespace:          "default",
-			Profile:                        "default",
-			WorkloadSidecarName:            "default",
-			WorkloadSidecarUpdate:          "disabled",
-			MetricsEnabled:                 true,
-			DeprecatedEnvoyFilterVersion:   "1.10,1.17",
-			EnvoyFilterVersion:             "1.10,1.13,1.17",
-			CartographerFeatures:           map[string]string{"throttle_filter_gen": "disabled"},
-			DisableIPGeneration:            false,
-			EnableSWAwareNSCaches:          true,
-			ExportToIdentityList:           []string{"*"},
-			ExportToMaxNamespaces:          35,
-			AdmiralOperatorMode:            false,
-			OperatorSyncNamespace:          "admiral-sync",
-			OperatorSecretFilterTags:       "admiral/syncoperator",
-			DiscoveryClustersForNumaflow:   make([]string, 0),
-			ClientDiscoveryClustersForJobs: make([]string, 0),
-			EnableClientDiscovery:          true,
+			EnableSAN:                              true,
+			SANPrefix:                              "prefix",
+			HostnameSuffix:                         "mesh",
+			SyncNamespace:                          "admiral-sync",
+			SecretFilterTags:                       "admiral/sync",
+			CacheReconcileDuration:                 time.Minute,
+			ClusterRegistriesNamespace:             "default",
+			DependenciesNamespace:                  "default",
+			Profile:                                "default",
+			WorkloadSidecarName:                    "default",
+			WorkloadSidecarUpdate:                  "disabled",
+			MetricsEnabled:                         true,
+			DeprecatedEnvoyFilterVersion:           "1.10,1.17",
+			EnvoyFilterVersion:                     "1.10,1.13,1.17",
+			CartographerFeatures:                   map[string]string{"throttle_filter_gen": "disabled"},
+			DisableIPGeneration:                    false,
+			EnableSWAwareNSCaches:                  true,
+			ExportToIdentityList:                   []string{"*"},
+			ExportToMaxNamespaces:                  35,
+			AdmiralOperatorMode:                    false,
+			OperatorSyncNamespace:                  "admiral-sync",
+			OperatorIdentityValue:                  "operator",
+			ShardIdentityValue:                     "shard",
+			OperatorSecretFilterTags:               "admiral/syncoperator",
+			DiscoveryClustersForNumaflow:           make([]string, 0),
+			ClientDiscoveryClustersForJobs:         make([]string, 0),
+			EnableClientDiscovery:                  true,
+			ArgoRolloutsEnabled:                    true,
+			EnvoyFilterAdditionalConfig:            "additional",
+			EnableRoutingPolicy:                    true,
+			HAMode:                                 "true",
+			EnableDiffCheck:                        true,
+			EnableProxyEnvoyFilter:                 true,
+			EnableDependencyProcessing:             true,
+			SeAddressConfigmap:                     "configmap",
+			DeploymentOrRolloutWorkerConcurrency:   10,
+			DependentClusterWorkerConcurrency:      10,
+			DependencyWarmupMultiplier:             10,
+			MaxRequestsPerConnection:               10,
+			EnableClientConnectionConfigProcessing: true,
+			DisableDefaultAutomaticFailover:        true,
+			EnableServiceEntryCache:                true,
+			EnableDestinationRuleCache:             true,
+			AlphaIdentityList:                      []string{"identity1", "identity2"},
+			EnableActivePassive:                    true,
+			ClientInitiatedProcessingEnabled:       true,
+			IngressLBPolicy:                        "policy",
+			IngressVSExportToNamespaces:            []string{"namespace"},
+			VSRoutingGateways:                      []string{"gateway"},
+			EnableGenerationCheck:                  true,
+			EnableIsOnlyReplicaCountChangedCheck:   true,
+			PreventSplitBrain:                      true,
+			AdmiralStateSyncerMode:                 true,
+			DefaultWarmupDurationSecs:              10,
+			AdmiralConfig:                          "someConfig",
+			AdditionalEndpointSuffixes:             []string{"suffix1", "suffix2"},
+			AdditionalEndpointLabelFilters:         []string{"label1", "label2"},
+			EnableWorkloadDataStorage:              true,
 		}
 		ResetSync()
 		initHappened = true
@@ -327,6 +360,134 @@ func TestConfigManagement(t *testing.T) {
 	if len(GetClientDiscoveryClustersForNumaflow()) != 0 {
 		t.Errorf("clusters for numaflow client discovery mismatch, expected 0, got %v", GetClientDiscoveryClustersForNumaflow())
 	}
+
+	if !GetArgoRolloutsEnabled() {
+		t.Errorf("Argo rollouts enabled mismatch, expected true, got %v", GetArgoRolloutsEnabled())
+	}
+
+	if GetEnvoyFilterAdditionalConfig() != "additional" {
+		t.Errorf("Envoy filter additional config mismatch, expected additional, got %v", GetEnvoyFilterAdditionalConfig())
+	}
+
+	if !GetEnableRoutingPolicy() {
+		t.Errorf("Enable routing policy mismatch, expected true, got %v", GetEnableRoutingPolicy())
+	}
+
+	if GetHAMode() != "true" {
+		t.Errorf("HA mode mismatch, expected true, got %v", GetHAMode())
+	}
+
+	if !GetDiffCheckEnabled() {
+		t.Errorf("Diff check enabled mismatch, expected true, got %v", GetDiffCheckEnabled())
+	}
+
+	if !IsProxyEnvoyFilterEnabled() {
+		t.Errorf("Proxy Envoy Filter enabled mismatch, expected true, got %v", IsProxyEnvoyFilterEnabled())
+	}
+
+	if !IsDependencyProcessingEnabled() {
+		t.Errorf("Dependency processing enabled mismatch, expected true, got %v", IsDependencyProcessingEnabled())
+	}
+
+	if GetSeAddressConfigMap() != "configmap" {
+		t.Errorf("SE address config map mismatch, expected configmap, got %v", GetSeAddressConfigMap())
+	}
+
+	if DeploymentOrRolloutWorkerConcurrency() != 10 {
+		t.Errorf("Deployment or rollout worker concurrency mismatch, expected 10, got %v", DeploymentOrRolloutWorkerConcurrency())
+	}
+
+	if DependentClusterWorkerConcurrency() != 10 {
+		t.Errorf("Dependent cluster worker concurrency mismatch, expected 10, got %v", DependentClusterWorkerConcurrency())
+	}
+
+	if DependencyWarmupMultiplier() != 10 {
+		t.Errorf("Dependency warmup multiplier mismatch, expected 10, got %v", DependencyWarmupMultiplier())
+	}
+
+	if MaxRequestsPerConnection() != 10 {
+		t.Errorf("Max requests per connection mismatch, expected 10, got %v", MaxRequestsPerConnection())
+	}
+
+	if !IsClientConnectionConfigProcessingEnabled() {
+		t.Errorf("Client connection config processing enabled mismatch, expected true, got %v", IsClientConnectionConfigProcessingEnabled())
+	}
+
+	if DisableDefaultAutomaticFailover() != true {
+		t.Errorf("Disable default automatic failover mismatch, expected true, got %v", DisableDefaultAutomaticFailover())
+	}
+
+	if !EnableServiceEntryCache() {
+		t.Errorf("Enable service entry cache mismatch, expected true, got %v", EnableServiceEntryCache())
+	}
+
+	if !EnableDestinationRuleCache() {
+		t.Errorf("Enable destination rule cache mismatch, expected true, got %v", EnableDestinationRuleCache())
+	}
+
+	if len(AlphaIdentityList()) != 2 {
+		t.Errorf("Alpha identity list mismatch, expected 2, got %v", len(AlphaIdentityList()))
+	}
+
+	if AlphaIdentityList()[0] != "identity1" && AlphaIdentityList()[1] != "identity2" {
+		t.Errorf("Alpha identity list mismatch, expected identity1 and identity2, got %v and %v", AlphaIdentityList()[0], AlphaIdentityList()[1])
+	}
+
+	if !IsOnlyReplicaCountChanged() {
+		t.Errorf("Is only replica count changed mismatch, expected true, got %v", IsOnlyReplicaCountChanged())
+	}
+
+	if !EnableActivePassive() {
+		t.Errorf("Enable active passive mismatch, expected true, got %v", EnableActivePassive())
+	}
+
+	if PreventSplitBrain() != true {
+		t.Errorf("Prevent split brain mismatch, expected true, got %v", PreventSplitBrain())
+	}
+
+	if IsAdmiralStateSyncerMode() != true {
+		t.Errorf("Admiral state syncer mode mismatch, expected true, got %v", IsAdmiralStateSyncerMode())
+	}
+
+	if GetDefaultWarmupDurationSecs() != int64(10) {
+		t.Errorf("Default warmup duration mismatch, expected 10, got %v", GetDefaultWarmupDurationSecs())
+	}
+
+	if !DoGenerationCheck() {
+		t.Errorf("Do generation check mismatch, expected true, got %v", DoGenerationCheck())
+	}
+
+	if GetVSRoutingGateways()[0] != "gateway" {
+		t.Errorf("VS routing gateways mismatch, expected gateway, got %v", GetVSRoutingGateways())
+	}
+
+	if GetIngressVSExportToNamespace()[0] != "namespace" {
+		t.Errorf("Ingress VS export to namespace mismatch, expected namespace, got %v", GetIngressVSExportToNamespace()[0])
+	}
+
+	if GetIngressLBPolicy() != "policy" {
+		t.Errorf("Ingress LB policy mismatch, expected policy, got %v", GetIngressLBPolicy())
+	}
+
+	if ClientInitiatedProcessingEnabled() != true {
+		t.Errorf("Client initiated processing enabled mismatch, expected true, got %v", ClientInitiatedProcessingEnabled())
+	}
+
+	if GetAdmiralConfigPath() != "someConfig" {
+		t.Errorf("Admiral config path mismatch, expected someConfig, got %v", GetAdmiralConfigPath())
+	}
+
+	if GetAdditionalEndpointSuffixes()[0] != "suffix1" && GetAdditionalEndpointSuffixes()[1] != "suffix2" {
+		t.Errorf("Additional endpoint suffixes mismatch, expected [suffix1, suffix2], got %v", GetAdditionalEndpointSuffixes())
+	}
+
+	if GetAdditionalEndpointLabelFilters()[0] != "label1" && GetAdditionalEndpointLabelFilters()[1] != "label2" {
+		t.Errorf("Additional endpoint label filters mismatch, expected [label1, label2], got %v", GetAdditionalEndpointLabelFilters())
+	}
+
+	if !GetEnableWorkloadDataStorage() {
+		t.Errorf("Enable workload data storage mismatch, expected true, got %v", GetEnableWorkloadDataStorage())
+	}
 }
 
 func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
@@ -338,6 +499,38 @@ func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
 	assert.Equalf(t, "identityOld", GetAdmiralCRDIdentityLabel(), "GetCRDIdentityLabel()")
 
 	admiralParams.LabelSet.AdmiralCRDIdentityLabel = backOldIdentity
+}
+
+func TestSetArgoRolloutsEnabled(t *testing.T) {
+	p := AdmiralParams{}
+	p.ArgoRolloutsEnabled = true
+	ResetSync()
+	InitializeConfig(p)
+
+	SetArgoRolloutsEnabled(true)
+	assert.Equal(t, true, GetArgoRolloutsEnabled())
+}
+
+func TestSetCartographerFeature(t *testing.T) {
+	p := AdmiralParams{}
+	ResetSync()
+	InitializeConfig(p)
+
+	SetCartographerFeature("feature", "enabled")
+	assert.Equal(t, "enabled", wrapper.params.CartographerFeatures["feature"])
+}
+
+func TestGetResyncIntervals(t *testing.T) {
+	p := AdmiralParams{}
+	p.CacheReconcileDuration = time.Minute
+	p.SeAndDrCacheReconcileDuration = time.Minute
+	ResetSync()
+	InitializeConfig(p)
+
+	actual := GetResyncIntervals()
+
+	assert.Equal(t, time.Minute, actual.SeAndDrReconcileInterval)
+	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
 }
 
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {

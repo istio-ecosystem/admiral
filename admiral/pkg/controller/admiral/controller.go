@@ -95,156 +95,9 @@ func NewController(name, clusterEndpoint string, stopCh <-chan struct{}, delegat
 		queue:     workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
 	controller.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			var (
-				txId                    = uuid.NewString()
-				metaName, metaNamespace string
-			)
-			meta, ok := obj.(metav1.Object)
-			if ok && meta != nil && meta.GetResourceVersion() != "" {
-				txId = common.GenerateTxId(meta, controller.name, txId)
-				metaName = meta.GetName()
-				metaNamespace = meta.GetNamespace()
-			}
-			ctxLogger := log.WithFields(log.Fields{
-				"op":         operationInformerEvents,
-				"name":       metaName,
-				"namespace":  metaNamespace,
-				"controller": controller.name,
-				"cluster":    controller.cluster,
-				"txId":       txId,
-			})
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			if err == nil {
-				ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), Add+" Event")
-				controller.queue.Add(InformerCacheObj{
-					key:       key,
-					eventType: Add,
-					obj:       obj,
-					txId:      txId,
-					ctxLogger: ctxLogger,
-				})
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			var (
-				ctx                     = context.Background()
-				txId                    = uuid.NewString()
-				metaName, metaNamespace string
-			)
-			meta, ok := newObj.(metav1.Object)
-			if ok && meta != nil && meta.GetResourceVersion() != "" {
-				txId = common.GenerateTxId(meta, controller.name, txId)
-				metaName = meta.GetName()
-				metaNamespace = meta.GetNamespace()
-			}
-			ctx = context.WithValue(ctx, "txId", txId)
-			ctxLogger := log.WithFields(log.Fields{
-				"op":         operationInformerEvents,
-				"name":       metaName,
-				"namespace":  metaNamespace,
-				"controller": controller.name,
-				"cluster":    controller.cluster,
-				"txId":       txId,
-			})
-
-			key, err := cache.MetaNamespaceKeyFunc(newObj)
-			if err == nil {
-				ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), Update+" Event")
-				// Check if the event has already been processed or the resource version
-				// has changed. If either the event has not been processed yet or the
-				// resource version has changed only then add it to the queue
-
-				status, err := controller.delegator.GetProcessItemStatus(newObj)
-				if err != nil {
-					ctxLogger.Errorf(err.Error())
-				}
-
-				// Check if the generation of the object has changed
-				// if the generation of old and new object is same then we do not process the object
-				doesGenerationMatch, err := controller.delegator.DoesGenerationMatch(ctxLogger, oldObj, newObj)
-				if err != nil {
-					ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), err.Error())
-				}
-				if status == common.Processed && doesGenerationMatch {
-					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
-						fmt.Sprintf("skipped processing event due to status=%s doesGenerationMatch=%v",
-							status, doesGenerationMatch))
-					return
-				}
-
-				// Check if the generation of the object has changed
-				// if the generation of old and new object is same then we do not process the object
-				isOnlyReplicaCountChanged, err := controller.delegator.IsOnlyReplicaCountChanged(ctxLogger, oldObj, newObj)
-				if err != nil {
-					ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), err.Error())
-				}
-				if status == common.Processed && isOnlyReplicaCountChanged {
-					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
-						fmt.Sprintf("skipped processing event due to status=%s isOnlyReplicaCountChanged=%v",
-							status, isOnlyReplicaCountChanged))
-					return
-				}
-
-				controller.delegator.LogValueOfAdmiralIoIgnore(newObj)
-				latestObj, isVersionChanged := checkIfResourceVersionHasIncreased(ctxLogger, ctx, oldObj, newObj, delegator)
-				txId, ctxLogger = updateTxId(ctx, newObj, latestObj, txId, ctxLogger, controller)
-
-				if status == common.NotProcessed || isVersionChanged {
-					ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
-						fmt.Sprintf("version changed=%v", isVersionChanged))
-					controller.queue.Add(
-						InformerCacheObj{
-							key:       key,
-							eventType: Update,
-							obj:       latestObj,
-							oldObj:    oldObj,
-							txId:      txId,
-							ctxLogger: ctxLogger,
-						})
-					// If the pod is running in Active Mode we update the status to ProcessingInProgress
-					// to prevent any duplicate events that might be added to the queue if there is full
-					// resync that happens and a similar event in the queue is not processed yet
-					if !commonUtil.IsAdmiralReadOnly() {
-						ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(),
-							"status=%s", common.ProcessingInProgress)
-						controller.delegator.UpdateProcessItemStatus(latestObj, common.ProcessingInProgress)
-					}
-				}
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			var (
-				txId = uuid.NewString()
-			)
-			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			if err == nil {
-				meta, ok := obj.(metav1.Object)
-				var metaName, metaNamespace string
-				if ok && meta != nil && meta.GetResourceVersion() != "" {
-					txId = common.GenerateTxId(meta, controller.name, txId)
-					metaName = meta.GetName()
-					metaNamespace = meta.GetNamespace()
-				}
-				ctxLogger := log.WithFields(log.Fields{
-					"op":         operationInformerEvents,
-					"name":       metaName,
-					"namespace":  metaNamespace,
-					"controller": controller.name,
-					"cluster":    controller.cluster,
-					"txId":       txId,
-				})
-				ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, controller.queue.Len(), Delete+" Event")
-				controller.queue.Add(
-					InformerCacheObj{
-						key:       key,
-						eventType: Delete,
-						obj:       obj,
-						txId:      txId,
-						ctxLogger: ctxLogger,
-					})
-			}
-		},
+		AddFunc:    controller.AddFuncImpl,
+		UpdateFunc: controller.UpdateFuncImpl,
+		DeleteFunc: controller.DeleteFuncImpl,
 	})
 	go controller.Run(stopCh)
 	return controller
@@ -270,6 +123,159 @@ func updateTxId(
 		}
 	}
 	return txId, ctxLogger
+}
+
+func (c *Controller) AddFuncImpl(obj interface{}) {
+	var (
+		txId                    = uuid.NewString()
+		metaName, metaNamespace string
+	)
+	meta, ok := obj.(metav1.Object)
+	if ok && meta != nil && meta.GetResourceVersion() != "" {
+		txId = common.GenerateTxId(meta, c.name, txId)
+		metaName = meta.GetName()
+		metaNamespace = meta.GetNamespace()
+	}
+	ctxLogger := log.WithFields(log.Fields{
+		"op":         operationInformerEvents,
+		"name":       metaName,
+		"namespace":  metaNamespace,
+		"controller": c.name,
+		"cluster":    c.cluster,
+		"txId":       txId,
+	})
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err == nil {
+		ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(), Add+" Event")
+		c.queue.Add(InformerCacheObj{
+			key:       key,
+			eventType: Add,
+			obj:       obj,
+			txId:      txId,
+			ctxLogger: ctxLogger,
+		})
+	}
+}
+
+func (c *Controller) UpdateFuncImpl(oldObj, newObj interface{}) {
+	var (
+		ctx                     = context.Background()
+		txId                    = uuid.NewString()
+		metaName, metaNamespace string
+	)
+	meta, ok := newObj.(metav1.Object)
+	if ok && meta != nil && meta.GetResourceVersion() != "" {
+		txId = common.GenerateTxId(meta, c.name, txId)
+		metaName = meta.GetName()
+		metaNamespace = meta.GetNamespace()
+	}
+	ctx = context.WithValue(ctx, "txId", txId)
+	ctxLogger := log.WithFields(log.Fields{
+		"op":         operationInformerEvents,
+		"name":       metaName,
+		"namespace":  metaNamespace,
+		"controller": c.name,
+		"cluster":    c.cluster,
+		"txId":       txId,
+	})
+
+	key, err := cache.MetaNamespaceKeyFunc(newObj)
+	if err == nil {
+		ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(), Update+" Event")
+		// Check if the event has already been processed or the resource version
+		// has changed. If either the event has not been processed yet or the
+		// resource version has changed only then add it to the queue
+
+		status, err := c.delegator.GetProcessItemStatus(newObj)
+		if err != nil {
+			ctxLogger.Errorf(err.Error())
+		}
+
+		// Check if the generation of the object has changed
+		// if the generation of old and new object is same then we do not process the object
+		doesGenerationMatch, err := c.delegator.DoesGenerationMatch(ctxLogger, oldObj, newObj)
+		if err != nil {
+			ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(), err.Error())
+		}
+		if status == common.Processed && doesGenerationMatch {
+			ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(),
+				fmt.Sprintf("skipped processing event due to status=%s doesGenerationMatch=%v",
+					status, doesGenerationMatch))
+			return
+		}
+
+		// Check if the generation of the object has changed
+		// if the generation of old and new object is same then we do not process the object
+		isOnlyReplicaCountChanged, err := c.delegator.IsOnlyReplicaCountChanged(ctxLogger, oldObj, newObj)
+		if err != nil {
+			ctxLogger.Errorf(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(), err.Error())
+		}
+		if status == common.Processed && isOnlyReplicaCountChanged {
+			ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(),
+				fmt.Sprintf("skipped processing event due to status=%s isOnlyReplicaCountChanged=%v",
+					status, isOnlyReplicaCountChanged))
+			return
+		}
+
+		c.delegator.LogValueOfAdmiralIoIgnore(newObj)
+		latestObj, isVersionChanged := checkIfResourceVersionHasIncreased(ctxLogger, ctx, oldObj, newObj, c.delegator)
+		txId, ctxLogger = updateTxId(ctx, newObj, latestObj, txId, ctxLogger, *c)
+
+		if status == common.NotProcessed || isVersionChanged {
+			ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(),
+				fmt.Sprintf("version changed=%v", isVersionChanged))
+			c.queue.Add(
+				InformerCacheObj{
+					key:       key,
+					eventType: Update,
+					obj:       latestObj,
+					oldObj:    oldObj,
+					txId:      txId,
+					ctxLogger: ctxLogger,
+				})
+			// If the pod is running in Active Mode we update the status to ProcessingInProgress
+			// to prevent any duplicate events that might be added to the queue if there is full
+			// resync that happens and a similar event in the queue is not processed yet
+			if !commonUtil.IsAdmiralReadOnly() {
+				ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(),
+					"status=%s", common.ProcessingInProgress)
+				c.delegator.UpdateProcessItemStatus(latestObj, common.ProcessingInProgress)
+			}
+		}
+	}
+}
+
+func (c *Controller) DeleteFuncImpl(obj interface{}) {
+	var (
+		txId = uuid.NewString()
+	)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err == nil {
+		meta, ok := obj.(metav1.Object)
+		var metaName, metaNamespace string
+		if ok && meta != nil && meta.GetResourceVersion() != "" {
+			txId = common.GenerateTxId(meta, c.name, txId)
+			metaName = meta.GetName()
+			metaNamespace = meta.GetNamespace()
+		}
+		ctxLogger := log.WithFields(log.Fields{
+			"op":         operationInformerEvents,
+			"name":       metaName,
+			"namespace":  metaNamespace,
+			"controller": c.name,
+			"cluster":    c.cluster,
+			"txId":       txId,
+		})
+		ctxLogger.Infof(ControllerLogFormat, taskAddEventToQueue, c.queue.Len(), Delete+" Event")
+		c.queue.Add(
+			InformerCacheObj{
+				key:       key,
+				eventType: Delete,
+				obj:       obj,
+				txId:      txId,
+				ctxLogger: ctxLogger,
+			})
+	}
 }
 
 // Run starts the controller until it receives a message over stopCh

@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"context"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"testing"
 	"time"
 
@@ -171,4 +172,28 @@ func TestConfigMapController_PutConfigMap(t *testing.T) {
 		t.Errorf("No error expected. Err: %v", err)
 	}
 
+}
+
+func TestNewConfigMapController(t *testing.T) {
+	clientLoader := &loader.FakeClientLoader{}
+	seIPPrefix := "prefix"
+	controller, err := NewConfigMapController(seIPPrefix, clientLoader)
+	if err != nil {
+		t.Errorf("No error expected. Err: %v", err)
+	}
+
+	if controller.ServiceEntryIPPrefix != seIPPrefix {
+		t.Errorf("Expected %v but got %v", seIPPrefix, controller.ServiceEntryIPPrefix)
+	}
+}
+
+func TestConfigMapController_GetIPPrefixForServiceEntries(t *testing.T) {
+	seIPPrefix := "prefix"
+	controller := ConfigMapController{
+		ServiceEntryIPPrefix: seIPPrefix,
+	}
+
+	if controller.GetIPPrefixForServiceEntries() != seIPPrefix {
+		t.Errorf("Expected %v but got %v", seIPPrefix, controller.GetIPPrefixForServiceEntries())
+	}
 }
