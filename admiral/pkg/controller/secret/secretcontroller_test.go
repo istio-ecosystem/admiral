@@ -17,6 +17,7 @@ package secret
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"reflect"
 	"sync"
 	"testing"
@@ -546,4 +547,89 @@ func TestRemoveClusterFromShard(t *testing.T) {
 			assert.Equal(t, len(c.clusterShardStoreHandler.ExpectedCalls), c.clusterShardStoreHandlerCalls)
 		})
 	}
+}
+
+func TestNewClustersStore(t *testing.T) {
+	t.Parallel()
+	store := newClustersStore()
+	assert.NotNil(t, store)
+}
+
+// Initializes a new Controller with default secret resolver when admiralProfile is "default"
+func TestNewControllerWithDefaultProfile(t *testing.T) {
+	kubeclientset := &kubernetes.Clientset{}
+	namespace := "test-namespace"
+	cs := &ClusterStore{}
+	addCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	updateCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	removeCallback := func(dataKey string) error { return nil }
+	admiralProfile := common.AdmiralProfileDefault
+	secretResolverConfig := ""
+
+	controller := NewController(kubeclientset, namespace, cs, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverConfig)
+
+	if controller == nil {
+		t.Fatalf("Expected controller to be initialized, got nil")
+	}
+
+	if controller.secretResolver == nil {
+		t.Fatalf("Expected secret resolver to be initialized, got nil")
+	}
+}
+
+// Handles unrecognized admiralProfile by logging an error and returning nil
+func TestNewControllerWithUnrecognizedProfile(t *testing.T) {
+	kubeclientset := &kubernetes.Clientset{}
+	namespace := "test-namespace"
+	cs := &ClusterStore{}
+	addCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	updateCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	removeCallback := func(dataKey string) error { return nil }
+	admiralProfile := "unknown-profile"
+	secretResolverConfig := ""
+
+	controller := NewController(kubeclientset, namespace, cs, addCallback, updateCallback, removeCallback, admiralProfile, secretResolverConfig)
+
+	if controller != nil {
+		t.Fatalf("Expected controller to be nil for unrecognized profile, got non-nil")
+	}
+}
+
+// Successfully initializes a new Controller with valid parameters
+func TestStartSecretControllerInitialization(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mockK8s := &kubernetes.Clientset{}
+	addCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	updateCallback := func(config *rest.Config, dataKey string, resyncPeriod util.ResyncIntervals) error { return nil }
+	removeCallback := func(dataKey string) error { return nil }
+	namespace := "default"
+	admiralProfile := common.AdmiralProfileDefault
+	secretResolverConfig := ""
+
+	controller, err := StartSecretController(ctx, mockK8s, addCallback, updateCallback, removeCallback, namespace, admiralProfile, secretResolverConfig)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if controller == nil {
+		t.Fatalf("Expected controller to be initialized, got nil")
+	}
+}
+
+// Returns error when kubeConfig is empty
+func TestCreateRemoteClusterWithEmptyKubeConfig(t *testing.T) {
+	// Arrange
+	controller := &Controller{}
+
+	// Act
+	remoteCluster, restConfig, err := controller.createRemoteCluster([]byte(""), "secretName", "clusterID", "namespace")
+
+	// Assert
+	assert.Nil(t, remoteCluster)
+	assert.Nil(t, restConfig)
+	assert.Error(t, err)
+	assert.Equal(t, "kubeconfig is empty", err.Error())
 }
