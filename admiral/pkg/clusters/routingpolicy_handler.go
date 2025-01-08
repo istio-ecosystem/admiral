@@ -74,6 +74,15 @@ func (r *RoutingPolicyService) ProcessAddOrUpdate(ctx context.Context, eventType
 }
 
 func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType admiral.EventType, dependency *v1.Dependency) error {
+	if IsCacheWarmupTimeForDependency(r.RemoteRegistry) {
+		log.Debugf(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", "processing skipped during cache warm up state")
+		return nil
+	}
+
+	if !common.IsDependencyProcessingEnabled() {
+		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", "dependency processing is disabled")
+		return nil
+	}
 	newDestinations, _ := getDestinationsToBeProcessed(eventType, dependency, r.RemoteRegistry)
 	env := common.GetEnvFromMetadata(dependency.Annotations, dependency.Labels, nil)
 	ctxLogger := common.GetCtxLogger(ctx, dependency.Name, env)

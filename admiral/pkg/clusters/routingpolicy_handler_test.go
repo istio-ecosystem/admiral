@@ -206,7 +206,7 @@ func TestNewRoutingPolicyProcessor(t *testing.T) {
 	}
 }
 
-func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
+func TestRoutingPolicyProcessor_Disabled_ReturnsNil(t *testing.T) {
 	common.ResetSync()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -217,13 +217,78 @@ func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
 		SyncNamespace:              "ns",
-		CacheReconcileDuration:     time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"cluster-1"},
 		EnvoyFilterVersion:         envoyFilterVersion_1_13,
 		Profile:                    common.AdmiralProfileDefault,
+		EnableDependencyProcessing: false,
+	}
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
+	registry, _ := InitAdmiral(context.Background(), p)
+	ctx := context.Background()
+	processor := NewRoutingPolicyProcessor(registry)
+	dep := &admiralV1.Dependency{}
+	dep.Name = "dep1"
+	assert.Nil(t, processor.ProcessDependency(ctx, admiral.Add, dep))
+	assert.Nil(t, processor.ProcessDependency(ctx, admiral.Update, dep))
+}
+
+func TestRoutingPolicyProcessor_DuringWarmup_ReturnsNil(t *testing.T) {
+	common.ResetSync()
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			DeploymentAnnotation: "sidecar.istio.io/inject",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		EnableRoutingPolicy:        true,
+		CacheReconcileDuration:     10 * time.Second,
+		RoutingPolicyClusters:      []string{"cluster-1"},
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
+		Profile:                    common.AdmiralProfileDefault,
+		EnableDependencyProcessing: true,
+	}
+	p.LabelSet.WorkloadIdentityKey = "identity"
+	p.LabelSet.EnvKey = "admiral.io/env"
+	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
+
+	registry, _ := InitAdmiral(context.Background(), p)
+	ctx := context.Background()
+	processor := NewRoutingPolicyProcessor(registry)
+	dep := &admiralV1.Dependency{}
+	dep.Name = "dep1"
+	assert.Nil(t, processor.ProcessDependency(ctx, admiral.Add, dep))
+	assert.Nil(t, processor.ProcessDependency(ctx, admiral.Update, dep))
+}
+
+func TestRoutingPolicyProcessor_DependencyUpdate_AddOrUpdate(t *testing.T) {
+	common.ResetSync()
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			DeploymentAnnotation: "sidecar.istio.io/inject",
+		},
+		EnableSAN:                  true,
+		SANPrefix:                  "prefix",
+		HostnameSuffix:             "mesh",
+		SyncNamespace:              "ns",
+		ClusterRegistriesNamespace: "default",
+		DependenciesNamespace:      "default",
+		EnableRoutingPolicy:        true,
+		RoutingPolicyClusters:      []string{"cluster-1"},
+		EnvoyFilterVersion:         envoyFilterVersion_1_13,
+		Profile:                    common.AdmiralProfileDefault,
+		EnableDependencyProcessing: true,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -367,7 +432,8 @@ func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
 			assert.Equal(t, tc.want.filterCountInCluster1, len(list1.Items))
 			if tc.want.filterCountInCluster1 > 0 {
 
-				receivedEnvoyFilter, _ := allowedCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(ctx, efn, metaV1.GetOptions{})
+				receivedEnvoyFilter, e := allowedCluster.RoutingPolicyController.IstioClient.NetworkingV1alpha3().EnvoyFilters("istio-system").Get(ctx, efn, metaV1.GetOptions{})
+				assert.NoError(t, e)
 				eq := reflect.DeepEqual(tc.want.expectedEnvoyFilterConfigPatchValInCluster1, receivedEnvoyFilter.Spec.ConfigPatches[0].Patch.Value.AsMap())
 				assert.True(t, eq)
 
@@ -384,7 +450,7 @@ func TestRoutingPolicyProcess_DependencyUpdate_AddOrUpdate(t *testing.T) {
 	}
 }
 
-func TestRoutingPolicyProcess_Delete_NilCaches(t *testing.T) {
+func TestRoutingPolicyProcessor_Delete_NilCaches(t *testing.T) {
 	common.ResetSync()
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
@@ -395,7 +461,6 @@ func TestRoutingPolicyProcess_Delete_NilCaches(t *testing.T) {
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
 		SyncNamespace:              "ns",
-		CacheReconcileDuration:     time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
@@ -467,7 +532,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
 		SyncNamespace:              "ns",
-		CacheReconcileDuration:     time.Minute,
+		CacheReconcileDuration:     5 * time.Second,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
@@ -649,6 +714,7 @@ func TestRoutingPolicyHandler(t *testing.T) {
 }
 
 func TestRoutingPolicyReadOnly(t *testing.T) {
+	common.ResetSync()
 	p := common.AdmiralParams{
 		KubeconfigPath:             "testdata/fake.config",
 		LabelSet:                   &common.LabelSet{},
