@@ -349,8 +349,6 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService3.Labels = map[string]string{"app": "test-service-unignored-later"}
 
 	sc.Put(service)
-	//sc.Put(s2)
-	//sc.Put(externalIPService)
 	sc.Put(ignoreService)
 	sc.Put(ignoreService2)
 	sc.Put(ignoreService3)
