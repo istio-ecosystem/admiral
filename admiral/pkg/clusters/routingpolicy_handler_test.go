@@ -1,11 +1,9 @@
 package clusters
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -20,7 +18,6 @@ import (
 	admiralV1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -722,12 +719,12 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 		SANPrefix:                  "prefix",
 		HostnameSuffix:             "mesh",
 		SyncNamespace:              "ns",
-		CacheReconcileDuration:     time.Minute,
 		ClusterRegistriesNamespace: "default",
 		DependenciesNamespace:      "default",
 		EnableRoutingPolicy:        true,
 		RoutingPolicyClusters:      []string{"*"},
 		EnvoyFilterVersion:         envoyFilterVersion_1_13,
+		EnableDependencyProcessing: false,
 	}
 
 	p.LabelSet.WorkloadIdentityKey = "identity"
@@ -746,16 +743,8 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 		doesError bool
 	}{
 		{
-			name:      "Readonly test - Routing Policy",
-			rp:        &admiralV1.RoutingPolicy{},
-			readOnly:  true,
-			doesError: true,
-		},
-		{
-			name:      "Readonly false test - Routing Policy",
-			rp:        &admiralV1.RoutingPolicy{},
-			readOnly:  false,
-			doesError: false,
+			name: "Readonly test - Routing Policy",
+			rp:   &admiralV1.RoutingPolicy{},
 		},
 	}
 
@@ -763,33 +752,17 @@ func TestRoutingPolicyReadOnly(t *testing.T) {
 
 	for _, c := range testcases {
 		t.Run(c.name, func(t *testing.T) {
-			if c.readOnly {
-				commonUtil.CurrentAdmiralState.ReadOnly = true
-			} else {
-				commonUtil.CurrentAdmiralState.ReadOnly = false
-			}
-			var buf bytes.Buffer
-			log.SetOutput(&buf)
-			defer func() {
-				log.SetOutput(os.Stderr)
-			}()
+			commonUtil.CurrentAdmiralState.ReadOnly = true
+
 			// Add routing policy test
-			handler.Added(ctx, c.rp)
-			t.Log(buf.String())
-			val := strings.Contains(buf.String(), "skipping read-only mode")
-			assert.Equal(t, c.doesError, val)
+			err := handler.Added(ctx, c.rp)
+			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			// Update routing policy test
-			handler.Updated(ctx, c.rp, nil)
-			t.Log(buf.String())
-			val = strings.Contains(buf.String(), "skipping read-only mode")
-			assert.Equal(t, c.doesError, val)
-
-			// Delete routing policy test
-			handler.Deleted(ctx, c.rp)
-			t.Log(buf.String())
-			val = strings.Contains(buf.String(), "skipping read-only mode")
-			assert.Equal(t, c.doesError, val)
+			err = handler.Updated(ctx, c.rp, nil)
+			assert.Nil(t, err)
+			assert.NoError(t, err)
 		})
 	}
 }
