@@ -1791,10 +1791,10 @@ func TestAddUpdateVirtualService(t *testing.T) {
 		},
 	}
 	admiralParams := common.AdmiralParams{
-		LabelSet:                    &common.LabelSet{},
-		SyncNamespace:               "test-sync-ns",
-		EnableSWAwareNSCaches:       true,
-		IgnoreLabelsAnnotationsList: []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
+		LabelSet:                          &common.LabelSet{},
+		SyncNamespace:                     "test-sync-ns",
+		EnableSWAwareNSCaches:             true,
+		IgnoreLabelsAnnotationsVSCopyList: []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -1827,7 +1827,7 @@ func TestAddUpdateVirtualService(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to get VS with error: %v", err)
 			}
-			for _, ignored := range common.GetIgnoreLabelsAnnotations() {
+			for _, ignored := range common.GetIgnoreLabelsAnnotationsVSCopy() {
 				if vs.Labels[ignored] != "" {
 					t.Errorf("expected VS to not ignored labels, but got labels: %v", ignored)
 				}
