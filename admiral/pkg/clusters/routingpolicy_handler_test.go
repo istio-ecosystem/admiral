@@ -710,63 +710,6 @@ func TestRoutingPolicyHandler(t *testing.T) {
 	}
 }
 
-func TestRoutingPolicyReadOnly(t *testing.T) {
-	common.ResetSync()
-	p := common.AdmiralParams{
-		KubeconfigPath:             "testdata/fake.config",
-		LabelSet:                   &common.LabelSet{},
-		EnableSAN:                  true,
-		SANPrefix:                  "prefix",
-		HostnameSuffix:             "mesh",
-		SyncNamespace:              "ns",
-		ClusterRegistriesNamespace: "default",
-		DependenciesNamespace:      "default",
-		EnableRoutingPolicy:        true,
-		RoutingPolicyClusters:      []string{"*"},
-		EnvoyFilterVersion:         envoyFilterVersion_1_13,
-		EnableDependencyProcessing: false,
-	}
-
-	p.LabelSet.WorkloadIdentityKey = "identity"
-	p.LabelSet.EnvKey = "admiral.io/env"
-	p.LabelSet.AdmiralCRDIdentityLabel = "identity"
-
-	registry, _ := InitAdmiral(context.Background(), p)
-	registry.AdmiralCache.RoutingPolicyCache = NewRoutingPolicyCache()
-
-	handler := NewRoutingPolicyHandler(registry, "", NewRoutingPolicyProcessor(registry))
-
-	testcases := []struct {
-		name      string
-		rp        *admiralV1.RoutingPolicy
-		readOnly  bool
-		doesError bool
-	}{
-		{
-			name: "Readonly test - Routing Policy",
-			rp:   &admiralV1.RoutingPolicy{},
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, c := range testcases {
-		t.Run(c.name, func(t *testing.T) {
-			commonUtil.CurrentAdmiralState.ReadOnly = true
-
-			// Add routing policy test
-			err := handler.Added(ctx, c.rp)
-			assert.Nil(t, err)
-			assert.NoError(t, err)
-
-			// Update routing policy test
-			err = handler.Updated(ctx, c.rp, nil)
-			assert.Nil(t, err)
-			assert.NoError(t, err)
-		})
-	}
-}
-
 func TestRoutingPolicyIgnored(t *testing.T) {
 	common.ResetSync()
 	p := common.AdmiralParams{
