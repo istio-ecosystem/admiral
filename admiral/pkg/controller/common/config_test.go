@@ -80,6 +80,7 @@ func setupForConfigTests() {
 			AdditionalEndpointSuffixes:             []string{"suffix1", "suffix2"},
 			AdditionalEndpointLabelFilters:         []string{"label1", "label2"},
 			EnableWorkloadDataStorage:              true,
+			IgnoreLabelsAnnotationsVSCopyList:      []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
 		}
 		ResetSync()
 		initHappened = true
@@ -487,6 +488,10 @@ func TestConfigManagement(t *testing.T) {
 
 	if !GetEnableWorkloadDataStorage() {
 		t.Errorf("Enable workload data storage mismatch, expected true, got %v", GetEnableWorkloadDataStorage())
+	}
+
+	if len(GetIgnoreLabelsAnnotationsVSCopy()) != 3 {
+		t.Errorf("ignored labels and annotations for VS copy mismatch, expected 3, got %v", GetIgnoreLabelsAnnotationsVSCopy())
 	}
 }
 

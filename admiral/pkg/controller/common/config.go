@@ -576,3 +576,9 @@ func GetOperatorSecretFilterTags() string {
 	defer wrapper.RUnlock()
 	return wrapper.params.OperatorSecretFilterTags
 }
+
+func GetIgnoreLabelsAnnotationsVSCopy() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.IgnoreLabelsAnnotationsVSCopyList
+}
