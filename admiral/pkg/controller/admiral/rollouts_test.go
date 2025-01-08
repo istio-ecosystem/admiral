@@ -1097,3 +1097,93 @@ func TestRolloutLogValueOfAdmiralIoIgnore(t *testing.T) {
 	d.LogValueOfAdmiralIoIgnore(&argo.Rollout{ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Annotations: map[string]string{common.AdmiralIgnoreAnnotation: "true"}}})
 	// No error should occur
 }
+
+func TestRolloutCache_Put(t *testing.T) {
+	rc := &rolloutCache{
+		cache: make(map[string]*RolloutClusterEntry),
+		mutex: &sync.Mutex{},
+	}
+
+	rce := &RolloutClusterEntry{
+		Identity: "test",
+	}
+
+	rc.Put(rce)
+
+	assert.Equal(t, 1, len(rc.cache))
+	assert.Equal(t, rce, rc.cache["test"])
+}
+
+func TestRolloutCache_Get(t *testing.T) {
+	rce := &RolloutClusterEntry{
+		Identity: "test",
+		Rollouts: map[string]*RolloutItem{
+			"dev": {
+				Rollout: &argo.Rollout{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+		},
+	}
+
+	rc := &rolloutCache{
+		cache: map[string]*RolloutClusterEntry{"rce": rce},
+		mutex: &sync.Mutex{},
+	}
+
+	actual := rc.Get("rce", "dev")
+
+	assert.Equal(t, "test", actual.ObjectMeta.Name)
+	assert.Nil(t, rc.Get("rce", "prd"))
+}
+
+func TestRolloutCache_List(t *testing.T) {
+	rce := &RolloutClusterEntry{
+		Identity: "test",
+		Rollouts: map[string]*RolloutItem{
+			"dev": {
+				Rollout: &argo.Rollout{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+		},
+	}
+
+	rc := &rolloutCache{
+		cache: map[string]*RolloutClusterEntry{"rce": rce},
+		mutex: &sync.Mutex{},
+	}
+
+	actual := rc.List()
+
+	assert.Equal(t, 1, len(actual))
+}
+
+func TestRolloutCache_Delete(t *testing.T) {
+	rce := &RolloutClusterEntry{
+		Identity: "test",
+		Rollouts: map[string]*RolloutItem{
+			"dev": {
+				Rollout: &argo.Rollout{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+		},
+	}
+
+	rc := &rolloutCache{
+		cache: map[string]*RolloutClusterEntry{"test": rce},
+		mutex: &sync.Mutex{},
+	}
+
+	rc.Put(rce)
+	rc.Delete(rce)
+
+	assert.Equal(t, 0, len(rc.cache))
+}

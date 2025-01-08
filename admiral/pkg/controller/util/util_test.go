@@ -2,8 +2,11 @@ package util
 
 import (
 	"bytes"
+	"github.com/sirupsen/logrus/hooks/test"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -148,4 +151,50 @@ func TestLogElapsedTime(t *testing.T) {
 
 	assert.Contains(t, buf.String(), "op=test_op identity=test_identity env=test_env cluster=test_clusterId txTime=")
 	log.SetOutput(oldOut)
+}
+
+// Logs the elapsed time in milliseconds after execution
+func TestLogElapsedTimeController(t *testing.T) {
+	logger := log.NewEntry(log.New())
+	logMessage := "Test operation"
+
+	logFunc := LogElapsedTimeController(logger, logMessage)
+
+	// Simulate some operation
+	time.Sleep(100 * time.Millisecond)
+
+	// Capture the log output
+	hook := test.NewLocal(logger.Logger)
+	logFunc()
+
+	if len(hook.Entries) != 1 {
+		t.Fatalf("Expected one log entry, got %d", len(hook.Entries))
+	}
+
+	entry := hook.LastEntry()
+	if !strings.Contains(entry.Message, logMessage) {
+		t.Errorf("Expected log message to contain %q, got %q", logMessage, entry.Message)
+	}
+
+	if !strings.Contains(entry.Message, "txTime=") {
+		t.Errorf("Expected log message to contain elapsed time, got %q", entry.Message)
+	}
+}
+
+// Function returns a closure that logs elapsed time
+func TestLogElapsedTimeForTaskClosure(t *testing.T) {
+	logger := log.NewEntry(log.New())
+	op := "operation"
+	name := "taskName"
+	namespace := "default"
+	cluster := "cluster1"
+	message := "test message"
+
+	logFunc := LogElapsedTimeForTask(logger, op, name, namespace, cluster, message)
+
+	if logFunc == nil {
+		t.Error("Expected a non-nil closure function")
+	}
+
+	logFunc()
 }

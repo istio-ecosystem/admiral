@@ -2,6 +2,7 @@ package admiral
 
 import (
 	"context"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned"
 	"sync"
 	"testing"
 
@@ -274,4 +275,105 @@ func TestLogValueOfAdmiralIoIgnore(t *testing.T) {
 	od = &v1.OutlierDetection{ObjectMeta: metaV1.ObjectMeta{Labels: map[string]string{common.AdmiralIgnoreAnnotation: "true"}}}
 	o.LogValueOfAdmiralIoIgnore(od)
 	// No error should occur
+}
+
+func TestOutlierDetectionController_DoesGenerationMatch(t *testing.T) {
+	// Test case 1: obj1 and obj2 are not OutlierDetection objects
+	o := &OutlierDetectionController{}
+	match, err := o.DoesGenerationMatch(nil, "not an outlier detection", "not an outlier detection")
+	assert.False(t, match)
+	assert.Nil(t, err)
+
+	// Test case 2: obj1 and obj2 are OutlierDetection objects with different generations
+	o = &OutlierDetectionController{}
+	obj1 := &v1.OutlierDetection{ObjectMeta: metaV1.ObjectMeta{Generation: 1}}
+	obj2 := &v1.OutlierDetection{ObjectMeta: metaV1.ObjectMeta{Generation: 2}}
+	match, err = o.DoesGenerationMatch(nil, obj1, obj2)
+	assert.False(t, match)
+	assert.Nil(t, err)
+}
+
+func TestOutlierDetectionController_IsOnlyReplicaCountChanged(t *testing.T) {
+	// Test case 1: obj1 and obj2 are not OutlierDetection objects
+	o := &OutlierDetectionController{}
+	match, err := o.IsOnlyReplicaCountChanged(nil, "not an outlier detection", "not an outlier detection")
+	assert.False(t, match)
+	assert.Nil(t, err)
+
+	// Test case 2: obj1 and obj2 are OutlierDetection objects with different replica counts
+	o = &OutlierDetectionController{}
+	obj1 := &v1.OutlierDetection{ObjectMeta: metaV1.ObjectMeta{Generation: 1}}
+	obj2 := &v1.OutlierDetection{ObjectMeta: metaV1.ObjectMeta{Generation: 1}}
+	match, err = o.IsOnlyReplicaCountChanged(nil, obj1, obj2)
+	assert.False(t, match)
+	assert.Nil(t, err)
+}
+
+func TestOdCache_UpdateODProcessingStatus(t *testing.T) {
+	p := common.AdmiralParams{}
+	p.LabelSet = &common.LabelSet{}
+	common.InitializeConfig(p)
+
+	oc := &odCache{
+		cache: make(map[string]map[string]map[string]*odItems),
+		mutex: &sync.RWMutex{},
+	}
+
+	od1 := &v1.OutlierDetection{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "od1",
+			Namespace: "ns1",
+		},
+		Status: v1.OutlierDetectionStatus{
+			State: common.NotProcessed,
+		},
+		Spec: model.OutlierDetection{
+			Selector: map[string]string{"identity": "payments", "env": "e2e"},
+		},
+	}
+
+	oc.Put(od1)
+	oc.UpdateODProcessingStatus(od1, common.Processed)
+
+	assert.Equal(t, oc.GetODProcessStatus(od1), common.Processed)
+}
+
+func TestOdCache_GetProcessStatus(t *testing.T) {
+	p := common.AdmiralParams{}
+	p.LabelSet = &common.LabelSet{}
+	common.InitializeConfig(p)
+
+	oc1 := &odCache{
+		cache: make(map[string]map[string]map[string]*odItems),
+		mutex: &sync.RWMutex{},
+	}
+
+	od1 := &v1.OutlierDetection{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "od1",
+			Namespace: "ns1",
+		},
+		Status: v1.OutlierDetectionStatus{
+			State: common.NotProcessed,
+		},
+		Spec: model.OutlierDetection{
+			Selector: map[string]string{"identity": "payments", "env": "e2e"},
+		},
+	}
+
+	oc1.Put(od1)
+	assert.Equal(t, oc1.GetProcessStatus(od1), common.ProcessingInProgress)
+}
+
+func TestOutlierDetectionController_Get2(t *testing.T) {
+	p := common.AdmiralParams{}
+	p.LabelSet = &common.LabelSet{}
+	common.InitializeConfig(p)
+
+	odc := &OutlierDetectionController{
+		cache:     &odCache{cache: make(map[string]map[string]map[string]*odItems), mutex: &sync.RWMutex{}},
+		crdclient: &versioned.Clientset{},
+	}
+
+	odc.Get(context.Background(), false, "")
 }

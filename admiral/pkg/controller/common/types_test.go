@@ -279,3 +279,139 @@ func TestSidecarEgressRange(t *testing.T) {
 	assert.Equal(t, 3, numOfIter)
 
 }
+
+func TestMapOfMapOfMapOfMaps(t *testing.T) {
+	mapOfMapOfMapOfMaps := NewMapOfMapOfMapOfMaps()
+	mapOfMapOfMapOfMaps.Put("pkey1", "skey1", "tkey1", "key", "value")
+
+	mapOfMapOfMaps1 := mapOfMapOfMapOfMaps.Get("pkey1")
+	if mapOfMapOfMaps1 == nil || mapOfMapOfMapOfMaps.Len() != 1 || mapOfMapOfMaps1.Get("skey1").Get("tkey1").Get("key") != "value" {
+		t.Fail()
+	}
+}
+
+func TestPutMapOfMapsOfMaps(t *testing.T) {
+	mapOfMapOfMapOfMaps := NewMapOfMapOfMapOfMaps()
+	mapOfMapOfMaps := NewMapOfMapOfMaps()
+	mapOfMapOfMaps.Put("pkey1", "skey1", "key", "value")
+
+	mapOfMapOfMapOfMaps.PutMapofMapsofMaps("tkey1", mapOfMapOfMaps)
+	if mapOfMapOfMaps.Get("pkey1").Get("skey1").Get("key") != "value" {
+		t.Fail()
+	}
+}
+
+func TestMap_CheckIfPresent(t *testing.T) {
+	m := NewMap()
+	m.Put("key1", "value")
+	if !m.CheckIfPresent("key1") {
+		t.Fail()
+	}
+	if m.CheckIfPresent("key2") {
+		t.Fail()
+	}
+}
+
+func TestMap_Len(t *testing.T) {
+	m := NewMap()
+	m.Put("key1", "value")
+	m.Put("key2", "value")
+	if m.Len() != 2 {
+		t.Fail()
+	}
+}
+
+func TestMap_Copy(t *testing.T) {
+	m := NewMap()
+	m.Put("key1", "value1")
+	m.Put("key2", "value2")
+	mCopy := m.Copy()
+	if mCopy["key1"] != "value1" || mCopy["key2"] != "value2" {
+		t.Fail()
+	}
+}
+
+func TestMap_CopyJustValues(t *testing.T) {
+	m := NewMap()
+	m.Put("key1", "value")
+	m.Put("key2", "value")
+	mCopy := m.CopyJustValues()
+	if len(mCopy) != 2 {
+		t.Fail()
+	}
+	if mCopy[0] != "value" || mCopy[1] != "value" {
+		t.Fail()
+	}
+}
+
+func TestMapOfMaps_PutMap(t *testing.T) {
+	m := NewMap()
+	m.Put("key1", "value")
+	mom := NewMapOfMaps()
+	mom.PutMap("pkey", m)
+
+	if mom.Get("pkey").Get("key1") != "value" {
+		t.Fail()
+	}
+}
+
+func TestMapOfMaps_Len(t *testing.T) {
+	mom := NewMapOfMaps()
+	m := NewMap()
+	m.Put("key1", "value")
+	mom.PutMap("pkey", m)
+	if mom.Len() != 1 {
+		t.Fail()
+	}
+}
+
+func TestMapOfMaps_GetKeys(t *testing.T) {
+	mom := NewMapOfMaps()
+	m := NewMap()
+	m.Put("key1", "value")
+	mom.PutMap("pkey", m)
+	keys := mom.GetKeys()
+	if len(keys) != 1 || keys[0] != "pkey" {
+		t.Fail()
+	}
+}
+
+func TestSidecarEgressMap_Delete(t *testing.T) {
+	sem := NewSidecarEgressMap()
+	sem.Put("pkey1", "skey1", "fqdn", map[string]string{"pkey2": "pkey2"})
+	sem.Delete("pkey1")
+	if sem.Get("pkey1") != nil {
+		t.Fail()
+	}
+}
+
+func TestProxyFilterConfig_String(t *testing.T) {
+	pfc := ProxyFilterConfig{
+		ConfigFile: "configFile",
+	}
+	expected := "{ConfigFile: configFile, DNSTimeoutMs:0, DNSRetries: 0, GatewayAssetAlias: , Services: []}"
+	if pfc.String() != expected {
+		t.Errorf("expected=%v, got=%v", expected, pfc.String())
+	}
+}
+
+func TestProxiedServiceInfo_String(t *testing.T) {
+	psi := ProxiedServiceInfo{
+		Identity:   "identity",
+		ProxyAlias: "proxyAlias",
+	}
+	expected := "{Identity:identity, Enviroments: []}"
+	if psi.String() != expected {
+		t.Errorf("expected=%v, got=%v", expected, psi.String())
+	}
+}
+
+func TestProxiedServiceEnvironment_String(t *testing.T) {
+	pse := ProxiedServiceEnvironment{
+		Environment: "environment",
+	}
+	expected := "{Environment:environment, DnsName: , CNames: []}"
+	if pse.String() != expected {
+		t.Errorf("expected=%v, got=%v", expected, pse.String())
+	}
+}
