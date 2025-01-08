@@ -38,3 +38,8 @@ func TestNewGaugeFrom(t *testing.T) {
 		})
 	}
 }
+
+func TestNoop_Set(t *testing.T) {
+	n := Noop{}
+	n.Set(1)
+}
