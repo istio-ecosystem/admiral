@@ -583,10 +583,16 @@ func TestGetDestinationDiff(t *testing.T) {
 	var (
 		identityClusterCacheWithOnlyFoo        = common.NewMapOfMaps()
 		identityClusterCacheWithAllMeshEnabled = common.NewMapOfMaps()
+		identityClusterCacheMultiple           = common.NewMapOfMaps()
 	)
 	identityClusterCacheWithOnlyFoo.Put("foo", "cluster1", "cluster1")
 	identityClusterCacheWithAllMeshEnabled.Put("foo", "cluster1", "cluster1")
 	identityClusterCacheWithAllMeshEnabled.Put("bar", "cluster1", "cluster1")
+
+	identityClusterCacheMultiple.Put("foo", "cluster1", "cluster1")
+	identityClusterCacheMultiple.Put("bar", "cluster1", "cluster1")
+	identityClusterCacheMultiple.Put("baz", "cluster1", "cluster1")
+
 	testCases := []struct {
 		name                     string
 		eventType                admiral.EventType
