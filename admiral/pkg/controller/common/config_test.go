@@ -238,6 +238,76 @@ func TestDoVSRoutingForCluster(t *testing.T) {
 
 }
 
+func TestIsSlowStartEnabledForCluster(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                               string
+		cluster                            string
+		enableVSRouting                    bool
+		enableVSRoutingSlowStartForCluster []string
+		expected                           bool
+	}{
+		{
+			name: "Given enableVSRouting is false, enableVSRoutingSlowStartForCluster is empty" +
+				"When IsSlowStartEnabledForCluster is called" +
+				"Then it should return false",
+			cluster:                            "cluster1",
+			enableVSRouting:                    false,
+			enableVSRoutingSlowStartForCluster: []string{},
+			expected:                           false,
+		},
+		{
+			name: "Given enableVSRouting is true, enableVSRoutingSlowStartForCluster is empty" +
+				"When IsSlowStartEnabledForCluster is called" +
+				"Then it should return false",
+			cluster:                            "cluster1",
+			enableVSRouting:                    true,
+			enableVSRoutingSlowStartForCluster: []string{},
+			expected:                           false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster doesn't exists in the list" +
+				"When IsSlowStartEnabledForCluster is called" +
+				"Then it should return false",
+			cluster:                            "cluster2",
+			enableVSRouting:                    true,
+			enableVSRoutingSlowStartForCluster: []string{"cluster1"},
+			expected:                           false,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster does exists in the list" +
+				"When IsSlowStartEnabledForCluster is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			enableVSRouting:                    true,
+			enableVSRoutingSlowStartForCluster: []string{"cluster1"},
+			expected:                           true,
+		},
+		{
+			name: "Given enableVSRouting is true, and all slow start is enabled in all clusters using '*'" +
+				"When IsSlowStartEnabledForCluster is called" +
+				"Then it should return false",
+			cluster:                            "cluster1",
+			enableVSRouting:                    true,
+			enableVSRoutingSlowStartForCluster: []string{"*"},
+			expected:                           true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRouting = tc.enableVSRouting
+			p.VSRoutingSlowStartEnabledClusters = tc.enableVSRoutingSlowStartForCluster
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, IsSlowStartEnabledForCluster(tc.cluster))
+		})
+	}
+
+}
+
 func TestConfigManagement(t *testing.T) {
 	setupForConfigTests()
 

@@ -131,11 +131,12 @@ type AdmiralParams struct {
 	OperatorSecretFilterTags string
 
 	// VS Based Routing
-	EnableVSRouting             bool
-	VSRoutingGateways           []string
-	IngressVSExportToNamespaces []string
-	IngressLBPolicy             string
-	VSRoutingEnabledClusters    []string
+	EnableVSRouting                   bool
+	VSRoutingGateways                 []string
+	IngressVSExportToNamespaces       []string
+	IngressLBPolicy                   string
+	VSRoutingEnabledClusters          []string
+	VSRoutingSlowStartEnabledClusters []string
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool

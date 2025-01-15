@@ -776,13 +776,18 @@ func addUpdateDestinationRuleForSourceIngress(
 						LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
 							Enabled: &wrappers.BoolValue{Value: false},
 						},
-						WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 					},
 					Tls: &networkingV1Alpha3.ClientTLSSettings{
 						SubjectAltNames: []string{san},
 					},
 				},
 			}
+
+			if common.IsSlowStartEnabledForCluster(sourceCluster) {
+				drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs =
+					&duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()}
+			}
+
 			drName := fmt.Sprintf("%s-routing-dr", name)
 
 			newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
