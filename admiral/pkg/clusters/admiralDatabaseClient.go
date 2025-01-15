@@ -74,6 +74,18 @@ func checkIfDatabaseClientIsInitialize(workloadDatabaseClient *WorkloadDatabaseC
 	return nil
 }
 
+func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
+	return nil
+}
+
+func (databaseClient *DummyDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
+	return nil
+}
+
+func (databaseClient *DummyDatabaseClient) Get(env, identity string) (interface{}, error) {
+	return nil, nil
+}
+
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
 	//TODO implement me
 	//At point of release there is no plan to support push config to dyanmic config storage
@@ -89,18 +101,6 @@ func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data inte
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
 	//Variable renaming is done to re-purpose existing interface
 	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
-}
-
-func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
-	return nil
-}
-
-func (databaseClient *DummyDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
-	return nil
-}
-
-func (databaseClient *DummyDatabaseClient) Get(env, identity string) (interface{}, error) {
-	return nil, nil
 }
 
 func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc func(string, string) (*DynamoClient, error)) (*WorkloadDatabaseClient, error) {
