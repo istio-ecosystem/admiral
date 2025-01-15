@@ -146,6 +146,12 @@ func GetEnableWorkloadDataStorage() bool {
 	return wrapper.params.EnableWorkloadDataStorage
 }
 
+func IsAdmiralDynamicConfigEnable() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableDynamicConfig
+}
+
 func GetHostnameSuffix() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

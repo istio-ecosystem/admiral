@@ -71,6 +71,11 @@ type WorkloadData struct {
 	FailedClusters      []string         `json:"failedClusters"`
 }
 
+type DynamicConfigData struct {
+	EnableDynamicConfig bool `json:"enableDynamicConfig"`
+	//NLBEnabledClusters  []string `json:"nlbEnabledClusters"`
+}
+
 type DynamoClient struct {
 	svc dynamodbiface.DynamoDBAPI
 }
@@ -203,6 +208,54 @@ func (client *DynamoClient) getWorkloadDataItemByIdentityAndEnv(env, identity, t
 	}
 
 	return workloadDataItems, nil
+}
+
+func (client *DynamoClient) getDynamicConfig(tableName string) (DynamicConfigData, error) {
+
+	configData := DynamicConfigData{}
+
+	//keyCond := expression.KeyEqual(expression.Key("EnableDynamicConfig"), expression.Value(true))
+	//
+	//expr, err := expression.NewBuilder().
+	//	WithKeyCondition(keyCond).
+	//	Build()
+	//
+	//if err != nil {
+	//	return "", err
+	//}
+
+	dbQuery := dynamodb.ScanInput{
+		TableName: aws.String(tableName),
+		//ExpressionAttributeNames:  expr.Names(),
+		//ExpressionAttributeValues: expr.Values(),
+		//KeyConditionExpression: expr.KeyCondition(),
+		//FilterExpression: expr.Filter(),
+	}
+
+	items, err := client.svc.Scan(&dbQuery)
+
+	if err != nil {
+		return configData, fmt.Errorf("Failed to fetch dynamic config : %s", err)
+	}
+
+	if items == nil {
+		log.Infof("Failed to fetch dynamic config : %s", tableName)
+		return configData, nil
+	}
+
+	if *items.Count == 1 {
+		//err = dynamodbattribute.Unmarshal(items.Items[0], &configData)
+		//items
+		err = dynamodbattribute.UnmarshalMap(items.Items[0], &configData)
+
+		if err != nil {
+			return configData, fmt.Errorf("failed to unmarshal table items, err: %v", err)
+		}
+	} else {
+		return configData, fmt.Errorf("Expected only 1 row but got %s for tableName : %s", items.Count, tableName)
+	}
+
+	return configData, nil
 }
 
 /*

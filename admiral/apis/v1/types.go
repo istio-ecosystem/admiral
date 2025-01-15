@@ -5,9 +5,10 @@ const (
 )
 
 type AdmiralConfig struct {
-	IdpsConfig         IdpsConfig         `yaml:"idps,omitempty"`
-	IgnoreIdentityList IgnoreIdentityList `yaml:"ignoreIdentityList,omitempty"`
-	WorkloadDatabase   DynamoDB           `yaml:"workloadDynamoDB,omitempty"`
+	IdpsConfig            IdpsConfig         `yaml:"idps,omitempty"`
+	IgnoreIdentityList    IgnoreIdentityList `yaml:"ignoreIdentityList,omitempty"`
+	WorkloadDatabase      DynamoDB           `yaml:"workloadDynamoDB,omitempty"`
+	DynamicConfigDatabase DynamoDB           `yaml:"dynamicConfigDynamoDB,omitempty"`
 }
 
 type IgnoreIdentityList struct {

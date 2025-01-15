@@ -142,6 +142,11 @@ type AdmiralParams struct {
 	EnableClientDiscovery          bool
 	ClientDiscoveryClustersForJobs []string
 	DiscoveryClustersForNumaflow   []string
+
+	//DynamicConfig setting
+	EnableDynamicConfig            bool
+	DynamicConfigDynamoDBTableName string
+	DynamicSyncPeriod              int
 }
 
 func (b AdmiralParams) String() string {
