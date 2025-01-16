@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"strings"
 	"time"
 )
 
@@ -74,6 +75,21 @@ func checkIfDatabaseClientIsInitialize(workloadDatabaseClient *WorkloadDatabaseC
 	return nil
 }
 
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
+	//Variable renaming is done to re-purpose existing interface
+	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
+}
+
 func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
 	return nil
 }
@@ -122,16 +138,20 @@ func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc fun
 	return workloadDatabaseClient, nil
 }
 
-func ReadDynamoConfigForDynamoDB(path string) (*v1.AdmiralConfig, error) {
-	var admiralConfig *v1.AdmiralConfig
+func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)) (*DynamicConfigDatabaseClient, error) {
+	var (
+		admiralConfig       *v1.AdmiralConfig
+		dynamicConfigClient = DynamicConfigDatabaseClient{}
+	)
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading admiral config file, err: %v", err)
+		return &dynamicConfigClient, fmt.Errorf("error reading admiral config file for DynamicConfig, err: %v", err)
 	}
 
 	err = yaml.Unmarshal(data, &admiralConfig)
 	if err != nil {
+		return &dynamicConfigClient, fmt.Errorf("error unmarshalling admiral config file for DynamicConfig, err: %v", err)
 		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
 	}
 
