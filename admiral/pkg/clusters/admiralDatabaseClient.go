@@ -1,12 +1,14 @@
 package clusters
 
 import (
+	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/apis/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"strings"
 	"time"
 )
 
@@ -72,37 +74,19 @@ func checkIfDatabaseClientIsInitialize(workloadDatabaseClient *WorkloadDatabaseC
 	return nil
 }
 
-func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, ctxLogger *log.Entry) error {
-	//workloadData := data.(WorkloadData)
-	//
-	//err := checkIfDatabaseClientIsInitialize(workloadDatabaseClient)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//return workloadDatabaseClient.dynamoClient.updateWorkloadDataItem(&workloadData, workloadDatabaseClient.database.TableName, ctxLogger)
-	panic("Implement me!")
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
-
-	//err := checkIfDatabaseClientIsInitialize(dynamicConfigDatabaseClient)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(dynamicConfigDatabaseClient.database.TableName)
-}
-
-func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, ctxLogger *log.Entry) error {
-	//workloadData := data.(WorkloadData)
-	//
-	//err := checkIfDatabaseClientIsInitialize(workloadDatabaseClient)
-	//if err != nil {
-	//	return err
-	//}
-	//return workloadDatabaseClient.dynamoClient.deleteWorkloadDataItem(&workloadData, workloadDatabaseClient.database.TableName)
-	panic("Implement me!")
+	//Variable renaming is done to re-purpose existing interface
+	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
 }
 
 func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
@@ -147,17 +131,17 @@ func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc fun
 func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)) (*DynamicConfigDatabaseClient, error) {
 	var (
 		admiralConfig       *v1.AdmiralConfig
-		dynamicConfigClient = &DynamicConfigDatabaseClient{}
+		dynamicConfigClient = DynamicConfigDatabaseClient{}
 	)
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading admiral config file for DynamicConfig, err: %v", err)
+		return &dynamicConfigClient, fmt.Errorf("error reading admiral config file for DynamicConfig, err: %v", err)
 	}
 
 	err = yaml.Unmarshal(data, &admiralConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling admiral config file for DynamicConfig, err: %v", err)
+		return &dynamicConfigClient, fmt.Errorf("error unmarshalling admiral config file for DynamicConfig, err: %v", err)
 	}
 
 	dynamicConfigClient.database = &admiralConfig.DynamicConfigDatabase
@@ -167,9 +151,9 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 		admiralConfig.WorkloadDatabase.Region,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("unable to instantiate dynamo client for DynamicConfig, err: %v", err)
+		return &dynamicConfigClient, fmt.Errorf("unable to instantiate dynamo client for DynamicConfig, err: %v", err)
 	}
-	return dynamicConfigClient, nil
+	return &dynamicConfigClient, nil
 }
 
 func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
@@ -179,6 +163,28 @@ func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
 	}
 }
 
-func UpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) {
-	dbClient.Get("", "")
+func UpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
+
+	configData, err := dbClient.Get("EnableDynamicConfig", "admiral")
+	if err != nil {
+		//TODO : Log Something Bad Happen but error out
+		return err
+	}
+
+	configDataCast, ok := configData.(DynamicConfigData)
+	if !ok {
+		return errors.New("Failed parse")
+	}
+
+	if configDataCast.EnableDynamicConfig == "admiral" {
+		fmt.Println(configDataCast)
+		newAdmiralConfig := common.GetAdmiralParams()
+		newAdmiralConfig.NLBEnabledClusters = strings.Join(configDataCast.NLBEnabledClusters, ",")
+
+		common.UpdateAdmiralParams(newAdmiralConfig)
+
+		fmt.Println(common.GetAdmiralParams().NLBEnabledClusters)
+	}
+
+	return nil
 }

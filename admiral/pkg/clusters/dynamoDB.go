@@ -72,8 +72,12 @@ type WorkloadData struct {
 }
 
 type DynamicConfigData struct {
-	EnableDynamicConfig bool `json:"enableDynamicConfig"`
-	//NLBEnabledClusters  []string `json:"nlbEnabledClusters"`
+	/*
+		DynamoDB primary key only support string, binary, int.
+		Conversation from binary to bool is not straight forward hence choosing string
+	*/
+	EnableDynamicConfig string   `json:"enableDynamicConfig"`
+	NLBEnabledClusters  []string `json:"nlbEnabledClusters"`
 }
 
 type DynamoClient struct {
@@ -210,29 +214,29 @@ func (client *DynamoClient) getWorkloadDataItemByIdentityAndEnv(env, identity, t
 	return workloadDataItems, nil
 }
 
-func (client *DynamoClient) getDynamicConfig(tableName string) (DynamicConfigData, error) {
+func (client *DynamoClient) getDynamicConfig(key string, value string, tableName string) (DynamicConfigData, error) {
 
 	configData := DynamicConfigData{}
 
-	//keyCond := expression.KeyEqual(expression.Key("EnableDynamicConfig"), expression.Value(true))
-	//
-	//expr, err := expression.NewBuilder().
-	//	WithKeyCondition(keyCond).
-	//	Build()
-	//
-	//if err != nil {
-	//	return "", err
-	//}
+	keyCond := expression.KeyEqual(expression.Key(key), expression.Value(value))
 
-	dbQuery := dynamodb.ScanInput{
-		TableName: aws.String(tableName),
-		//ExpressionAttributeNames:  expr.Names(),
-		//ExpressionAttributeValues: expr.Values(),
-		//KeyConditionExpression: expr.KeyCondition(),
-		//FilterExpression: expr.Filter(),
+	expr, err := expression.NewBuilder().
+		WithKeyCondition(keyCond).
+		Build()
+
+	if err != nil {
+		return configData, err
 	}
 
-	items, err := client.svc.Scan(&dbQuery)
+	dbQuery := dynamodb.QueryInput{
+		TableName:                 aws.String(tableName),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		KeyConditionExpression:    expr.KeyCondition(),
+		FilterExpression:          expr.Filter(),
+	}
+
+	items, err := client.svc.Query(&dbQuery)
 
 	if err != nil {
 		return configData, fmt.Errorf("Failed to fetch dynamic config : %s", err)
@@ -244,8 +248,6 @@ func (client *DynamoClient) getDynamicConfig(tableName string) (DynamicConfigDat
 	}
 
 	if *items.Count == 1 {
-		//err = dynamodbattribute.Unmarshal(items.Items[0], &configData)
-		//items
 		err = dynamodbattribute.UnmarshalMap(items.Items[0], &configData)
 
 		if err != nil {
