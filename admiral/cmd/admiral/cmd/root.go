@@ -276,7 +276,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringVar(&params.DynamicConfigDynamoDBTableName, "dynamic_config_dynamodb_table_name", "admiral-dynamic-config-dev", "The name of the dynamic config dynamodb table")
 	rootCmd.PersistentFlags().IntVar(&params.DynamicSyncPeriod, "dynamic_sync_period", 10, "Duration after which the dynamic sync get performed")
 	rootCmd.PersistentFlags().StringVar(&params.NLBEnabledClusters, "nlb_enabled_clusters", "", "Comma seperated list of enabled clusters to be enabled for NLB")
-	rootCmd.PersistentFlags().StringVar(&params.NLBEnabledAssetAliases, "nlb_enabled_assets", "", "Comma seperated list of enabled asset aliases to be enabled for NLB")
+	rootCmd.PersistentFlags().StringVar(&params.NLBEnabledIdentityList, "nlb_enabled_identity_list", "", "Comma seperated list of enabled idenity list to be enabled for NLB")
 	rootCmd.PersistentFlags().StringVar(&params.CLBEnabledClusters, "clb_enabled_clusters", "", "Comma seperated list of enabled clusters to be enabled for CLB")
 
 	return rootCmd

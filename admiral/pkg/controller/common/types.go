@@ -148,7 +148,7 @@ type AdmiralParams struct {
 	DynamicConfigDynamoDBTableName string
 	DynamicSyncPeriod              int
 	NLBEnabledClusters             string
-	NLBEnabledAssetAliases         string
+	NLBEnabledIdentityList         string
 	CLBEnabledClusters             string
 }
 

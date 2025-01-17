@@ -180,10 +180,11 @@ func UpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 		fmt.Println(configDataCast)
 		newAdmiralConfig := common.GetAdmiralParams()
 		newAdmiralConfig.NLBEnabledClusters = strings.Join(configDataCast.NLBEnabledClusters, ",")
+		newAdmiralConfig.CLBEnabledClusters = strings.Join(configDataCast.CLBEnabledClusters, ",")
+		newAdmiralConfig.NLBEnabledIdentityList = strings.Join(configDataCast.NLBEnabledIdentityList, ",")
 
 		common.UpdateAdmiralParams(newAdmiralConfig)
 
-		fmt.Println(common.GetAdmiralParams().NLBEnabledClusters)
 	}
 
 	return nil
