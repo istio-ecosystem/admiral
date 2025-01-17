@@ -128,7 +128,7 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 		deployment1InNamespace1        = newFakeDeployment(deploymentName1, namespace1, labels)
 		deployment2InNamespace1        = newFakeDeployment(deploymentName2, namespace1, labels)
 		deployment1InNamespace2        = newFakeDeployment(deploymentName1, namespace2, labels)
-		istioIngressGatewayService     = newFakeService(common.IstioIngressGatewayServiceName, common.NamespaceIstioSystem, labels)
+		istioIngressGatewayService     = newFakeService(common.IstioIngressGatewayLabelValue, common.NamespaceIstioSystem, labels)
 		applicationServiceInNamespace1 = newFakeService(serviceInNamespace1, namespace1, labels)
 
 		remoteControllers = map[string]*RemoteController{
@@ -325,7 +325,7 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 		rollout1InNamespace1           = newFakeRollout(rolloutName1, namespace1, labels)
 		rollout2InNamespace1           = newFakeRollout(rolloutName2, namespace1, labels)
 		rollout1InNamespace2           = newFakeRollout(rolloutName1, namespace2, labels)
-		istioIngressGatewayService     = newFakeService(common.IstioIngressGatewayServiceName, common.NamespaceIstioSystem, labels)
+		istioIngressGatewayService     = newFakeService(common.IstioIngressGatewayLabelValue, common.NamespaceIstioSystem, labels)
 		applicationServiceInNamespace1 = newFakeService(serviceInNamespace1, namespace1, labels)
 		remoteControllers              = map[string]*RemoteController{
 			clusterName: &RemoteController{
