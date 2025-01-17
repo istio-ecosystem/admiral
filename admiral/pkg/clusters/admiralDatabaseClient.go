@@ -77,11 +77,13 @@ func checkIfDatabaseClientIsInitialize(workloadDatabaseClient *WorkloadDatabaseC
 
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
 	//TODO implement me
+	//At point of release there is no plan to support push config to dyanmic config storage
 	panic("implement me")
 }
 
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
 	//TODO implement me
+	//At point of release there is no plan to support delete config to dyanmic config storage
 	panic("implement me")
 }
 
@@ -138,20 +140,16 @@ func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc fun
 	return workloadDatabaseClient, nil
 }
 
-func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)) (*DynamicConfigDatabaseClient, error) {
-	var (
-		admiralConfig       *v1.AdmiralConfig
-		dynamicConfigClient = DynamicConfigDatabaseClient{}
-	)
+func ReadDynamoConfigForDynamoDB(path string) (*v1.AdmiralConfig, error) {
+	var admiralConfig *v1.AdmiralConfig
 
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return &dynamicConfigClient, fmt.Errorf("error reading admiral config file for DynamicConfig, err: %v", err)
+		return nil, fmt.Errorf("error reading admiral config file, err: %v", err)
 	}
 
 	err = yaml.Unmarshal(data, &admiralConfig)
 	if err != nil {
-		return &dynamicConfigClient, fmt.Errorf("error unmarshalling admiral config file for DynamicConfig, err: %v", err)
 		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
 	}
 
@@ -163,7 +161,7 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 
 	admiralConfig, err := ReadDynamoConfigForDynamoDB(path)
 	if err != nil {
-		return nil, fmt.Errorf("task=%v, error unmarshalling admiral config file, err: %v", common.DynamicConfigUpdate, err)
+		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
 	}
 
 	dynamicConfigClient.database = &admiralConfig.DynamicConfigDatabase
@@ -193,14 +191,14 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 		return err
 	}
 
-	configData, ok := dbRawData.(DynamicConfigData)
+	configDataCast, ok := dbRawData.(DynamicConfigData)
 	if !ok {
 		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
-	if IsDynamicConfigChanged(configData) {
+	if IsDynamicConfigChanged(configDataCast) {
 		log.Infof(fmt.Sprintf("task=%s, updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
-		UpdateSyncAdmiralConfig(configData)
+		UpdateSyncAdmiralConfig(configDataCast)
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
