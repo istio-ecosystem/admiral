@@ -191,7 +191,7 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 		return err
 	}
 
-	configDataCast, ok := dbRawData.(DynamicConfigData)
+	configData, ok := dbRawData.(DynamicConfigData)
 	if !ok {
 		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
@@ -212,29 +212,18 @@ func IsDynamicConfigChanged(config DynamicConfigData) bool {
 		return false
 	}
 
-	if DynamicConfigCheckSum == md5.Sum([]byte(fmt.Sprintf("%v", config))) {
-		return false
-	} else {
-		DynamicConfigCheckSum = md5.Sum([]byte(fmt.Sprintf("%v", config)))
-		return true
-	}
+	UpdateSyncAdmiralConfig(configData)
+
+	return nil
 }
 
 func UpdateSyncAdmiralConfig(configData DynamicConfigData) {
-	if configData.EnableDynamicConfig == common.Admiral {
+	if configData.EnableDynamicConfig == "admiral" {
 		//Fetch Existing config and update which are changed.
 		newAdmiralConfig := common.GetAdmiralParams()
-		if len(configData.NLBEnabledClusters) > 0 {
-			newAdmiralConfig.NLBEnabledClusters = configData.NLBEnabledClusters
-		}
-
-		if len(configData.CLBEnabledClusters) > 0 {
-			newAdmiralConfig.CLBEnabledClusters = configData.CLBEnabledClusters
-		}
-
-		if len(configData.NLBEnabledIdentityList) > 0 {
-			newAdmiralConfig.NLBEnabledIdentityList = configData.NLBEnabledIdentityList
-		}
+		newAdmiralConfig.NLBEnabledClusters = strings.Join(configData.NLBEnabledClusters, ",")
+		newAdmiralConfig.CLBEnabledClusters = strings.Join(configData.CLBEnabledClusters, ",")
+		newAdmiralConfig.NLBEnabledIdentityList = strings.Join(configData.NLBEnabledIdentityList, ",")
 
 		common.UpdateAdmiralParams(newAdmiralConfig)
 
