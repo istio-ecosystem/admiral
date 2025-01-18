@@ -214,7 +214,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		Later down the process like async processor will take on going config pushes.
 	*/
 	if common.IsAdmiralDynamicConfigEnable() {
-		UpdateSyncAdmiralConfig(rr.DynamicConfigDatabaseClient)
+		ReadAndUpdateSyncAdmiralConfig(rr.DynamicConfigDatabaseClient)
 	}
 
 	return rr

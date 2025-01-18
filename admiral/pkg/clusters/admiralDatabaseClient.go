@@ -161,11 +161,11 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
 
 	for range time.Tick(time.Minute * time.Duration(syncTime)) {
-		UpdateSyncAdmiralConfig(dbClient)
+		ReadAndUpdateSyncAdmiralConfig(dbClient)
 	}
 }
 
-func UpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
+func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 
 	dbRawData, err := dbClient.Get("EnableDynamicConfig", "admiral")
 	if err != nil {
@@ -173,21 +173,25 @@ func UpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 		return err
 	}
 
-	configDataCast, ok := dbRawData.(DynamicConfigData)
+	configData, ok := dbRawData.(DynamicConfigData)
 	if !ok {
 		return errors.New("Failed to parse DynamicConfigData")
 	}
 
-	if configDataCast.EnableDynamicConfig == "admiral" {
-		fmt.Println(configDataCast)
+	UpdateSyncAdmiralConfig(configData)
+
+	return nil
+}
+
+func UpdateSyncAdmiralConfig(configData DynamicConfigData) {
+	if configData.EnableDynamicConfig == "admiral" {
+		//Fetch Existing config and update which are changed.
 		newAdmiralConfig := common.GetAdmiralParams()
-		newAdmiralConfig.NLBEnabledClusters = strings.Join(configDataCast.NLBEnabledClusters, ",")
-		newAdmiralConfig.CLBEnabledClusters = strings.Join(configDataCast.CLBEnabledClusters, ",")
-		newAdmiralConfig.NLBEnabledIdentityList = strings.Join(configDataCast.NLBEnabledIdentityList, ",")
+		newAdmiralConfig.NLBEnabledClusters = strings.Join(configData.NLBEnabledClusters, ",")
+		newAdmiralConfig.CLBEnabledClusters = strings.Join(configData.CLBEnabledClusters, ",")
+		newAdmiralConfig.NLBEnabledIdentityList = strings.Join(configData.NLBEnabledIdentityList, ",")
 
 		common.UpdateAdmiralParams(newAdmiralConfig)
 
 	}
-
-	return nil
 }
