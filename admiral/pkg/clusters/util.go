@@ -310,11 +310,6 @@ func getLocality(rc *RemoteController) string {
 	return ""
 }
 
-func getIngressEndpointAndPort(rc *RemoteController) (string, int) {
-	return rc.ServiceController.Cache.
-		GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
-}
-
 func getIngressPort(rc *RemoteController) string {
 	return ""
 }
