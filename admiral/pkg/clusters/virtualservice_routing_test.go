@@ -69,7 +69,6 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
 		EnableVSRouting:             true,
-		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2381,7 +2380,6 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 		SANPrefix:                         "test-san-prefix",
 		IngressVSExportToNamespaces:       []string{"istio-system"},
 		EnableVSRouting:                   true,
-		VSRoutingEnabledClusters:          []string{"cluster-1", "cluster-2"},
 		VSRoutingSlowStartEnabledClusters: []string{"cluster-1"},
 	}
 	common.ResetSync()

@@ -772,7 +772,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
 
-		if common.DoVSRoutingForCluster(sourceCluster) {
+		if !common.IsVSRoutingDisabledForCluster(sourceCluster) {
 			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
