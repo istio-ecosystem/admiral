@@ -490,11 +490,9 @@ func AppendError(err error, newError error) error {
 func IsIstioIngressGatewayService(svc *k8sV1.Service, key string) bool {
 
 	if svc != nil && len(svc.Labels) > 0 {
-		//return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == GetAdmiralParams().LabelSet.GatewayApp
 		return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == key
-	} else {
-		return false
 	}
+	return false
 }
 
 func FetchTxIdOrGenNew(ctx context.Context) string {

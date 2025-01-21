@@ -189,7 +189,6 @@ func (s *serviceCache) GetLoadBalancer(key string, namespace string) (string, in
 	}
 	for _, service := range services {
 		if common.IsIstioIngressGatewayService(service, key) {
-			//if service.Labels["app"] == key {
 			loadBalancerStatus := service.Status.LoadBalancer.Ingress
 			if len(loadBalancerStatus) > 0 {
 				if len(loadBalancerStatus[0].Hostname) > 0 {
