@@ -310,10 +310,6 @@ func getLocality(rc *RemoteController) string {
 	return ""
 }
 
-func getIngressPort(rc *RemoteController) string {
-	return ""
-}
-
 func getIngressPortName(meshPorts map[string]uint32) string {
 	var finalProtocol = commonUtil.Http
 	for protocol := range meshPorts {
