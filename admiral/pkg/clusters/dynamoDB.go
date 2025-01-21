@@ -35,6 +35,8 @@ type DynamoDBConfigWrapper struct {
 	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
 }
 
+var DynamicConfigCheckSum [32]byte
+
 /*
 Reference struct used to unmarshall the DynamoDB config present in the yaml config file
 */
@@ -83,7 +85,8 @@ type DynamicConfigData struct {
 }
 
 type DynamoClient struct {
-	svc dynamodbiface.DynamoDBAPI
+	svc      dynamodbiface.DynamoDBAPI
+	checkSha string
 }
 
 func NewDynamoClient(role, region string) (*DynamoClient, error) {
@@ -255,6 +258,7 @@ func (client *DynamoClient) getDynamicConfig(key string, value string, tableName
 		if err != nil {
 			return configData, fmt.Errorf("failed to unmarshal table items, err: %v", err)
 		}
+
 	} else {
 		return configData, fmt.Errorf("Expected only 1 row but got %s for tableName : %s", items.Count, tableName)
 	}
