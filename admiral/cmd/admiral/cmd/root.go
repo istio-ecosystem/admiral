@@ -258,7 +258,7 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
-	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingEnabledClusters, "vs_routing_enabled_clusters", []string{}, "The source clusters to enable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingDisabledClusters, "vs_routing_disabled_clusters", []string{}, "The source clusters to disable VS based routing on")
 	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingSlowStartEnabledClusters, "vs_routing_slow_start_enabled_clusters", []string{}, "The source clusters to where VS routing is enabled and require slow start")
 	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")

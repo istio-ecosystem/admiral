@@ -135,7 +135,7 @@ type AdmiralParams struct {
 	VSRoutingGateways                 []string
 	IngressVSExportToNamespaces       []string
 	IngressLBPolicy                   string
-	VSRoutingEnabledClusters          []string
+	VSRoutingDisabledClusters         []string
 	VSRoutingSlowStartEnabledClusters []string
 
 	//Client discovery (types requiring mesh egress only)

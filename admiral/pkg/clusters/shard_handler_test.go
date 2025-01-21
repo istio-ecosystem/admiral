@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
@@ -13,9 +17,6 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sync"
-	"testing"
-	"time"
 
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -42,6 +43,7 @@ func setupForShardTests() common.AdmiralParams {
 	admiralParams.AdditionalEndpointSuffixes = []string{"org"}
 	admiralParams.SecretFilterTags = "admiral/sync"
 	admiralParams.OperatorSecretFilterTags = "admiral/syncoperator"
+	admiralParams.VSRoutingGateways = []string{"passthrough-gateway"}
 	shardTestSingleton.Do(func() {
 		common.ResetSync()
 		initHappened = true
