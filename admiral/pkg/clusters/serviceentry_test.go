@@ -78,6 +78,7 @@ func admiralParamsForServiceEntryTests() common.AdmiralParams {
 		Profile:                           common.AdmiralProfileDefault,
 		DependentClusterWorkerConcurrency: 5,
 		PreventSplitBrain:                 true,
+		VSRoutingGateways:                 []string{"istio-system/passthrough-gateway"},
 	}
 }
 
