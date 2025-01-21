@@ -490,7 +490,7 @@ func addUpdateVirtualServicesForIngress(
 		virtualService, err := getBaseVirtualServiceForIngress()
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+				"", util.IstioSystemNamespace, sourceCluster, err.Error())
 			return err
 		}
 
