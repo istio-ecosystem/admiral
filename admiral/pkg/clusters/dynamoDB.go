@@ -86,7 +86,8 @@ type DynamicConfigData struct {
 }
 
 type DynamoClient struct {
-	svc dynamodbiface.DynamoDBAPI
+	svc      dynamodbiface.DynamoDBAPI
+	checkSha string
 }
 
 func NewDynamoClient(role, region string) (*DynamoClient, error) {
