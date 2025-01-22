@@ -81,8 +81,6 @@ type AdmiralCache struct {
 	CnameDependentClusterNamespaceCache *common.MapOfMapOfMaps
 	PartitionIdentityCache              *common.Map
 	ClientClusterNamespaceServerCache   *common.MapOfMapOfMaps
-	NLBEnabledClusterCache              []string
-	NLBEnabledServiceCache              []string
 }
 
 type RemoteRegistry struct {

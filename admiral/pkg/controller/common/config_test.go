@@ -368,6 +368,10 @@ func TestConfigManagement(t *testing.T) {
 		t.Errorf("Enable Traffic Persona mismatch, expected false, got %v", IsPersonaTrafficConfig())
 	}
 
+	if IsAdmiralDynamicConfigEnable() != false {
+		t.Errorf("Enable Dynamic Config mismatch, expected false, got %v", IsAdmiralDynamicConfigEnable())
+	}
+
 	if IsDefaultPersona() != true {
 		t.Errorf("Enable Default Persona mismatch, expected false, got %v", IsDefaultPersona())
 	}
