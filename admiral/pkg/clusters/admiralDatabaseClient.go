@@ -212,7 +212,7 @@ func IsDynamicConfigChanged(config DynamicConfigData) bool {
 		return false
 	}
 
-	if IsDBConfigChanged(configData) {
+	if IsDynamicConfigChanged(configData) {
 		log.Infof("Updating DynamicConfigData with Admiral config")
 		UpdateSyncAdmiralConfig(configData)
 	} else {
@@ -222,7 +222,7 @@ func IsDynamicConfigChanged(config DynamicConfigData) bool {
 	return nil
 }
 
-func IsDBConfigChanged(config DynamicConfigData) bool {
+func IsDynamicConfigChanged(config DynamicConfigData) bool {
 
 	if DynamicConfigCheckSum == sha256.Sum256([]byte(fmt.Sprintf("%v", config))) {
 		return false
