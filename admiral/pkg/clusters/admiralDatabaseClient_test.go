@@ -1,5 +1,11 @@
 package clusters
 
+import (
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
+
 /*
 import (
 	"fmt"
@@ -423,3 +429,66 @@ func TestDeleteWorkloadData(t *testing.T) {
 	}
 }
 */
+
+func TestIsDynamicConfigChanged(t *testing.T) {
+	type args struct {
+		config DynamicConfigData
+	}
+
+	config := DynamicConfigData{}
+
+	config1 := DynamicConfigData{EnableDynamicConfig: common.Admiral}
+
+	config2 := config1
+	config2.NLBEnabledIdentityList = []string{"identity1", "identity2"}
+
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"When empty config send then it should return false", args{config}, false},
+		{"When admiral is loading/or no previous checksum present then it should return true", args{config1}, true},
+		{"When admiral is loaded and no checksum mismatch then it should return false", args{config1}, false},
+		{"When admiral is loaded and checksum mismatched then it should return true", args{config2}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, IsDynamicConfigChanged(tt.args.config), "IsDynamicConfigChanged(%v)", tt.args.config)
+		})
+	}
+}
+
+func TestUpdateSyncAdmiralConfig(t *testing.T) {
+	type args struct {
+		configData DynamicConfigData
+	}
+
+	configUpdated := DynamicConfigData{EnableDynamicConfig: common.Admiral}
+	configUpdated.NLBEnabledClusters = []string{"cluster1", "cluster2"}
+	configUpdated.NLBEnabledIdentityList = []string{"identity1", "identity2"}
+	configUpdated.CLBEnabledClusters = []string{"cluster1", "cluster2"}
+
+	expectedAdmiralConfig := common.GetAdmiralParams()
+	expectedAdmiralConfig.NLBEnabledClusters = "cluster1,cluster2"
+	expectedAdmiralConfig.CLBEnabledClusters = "cluster1,cluster2"
+	expectedAdmiralConfig.NLBEnabledIdentityList = "identity1,identity2"
+
+	emptyConfig := DynamicConfigData{}
+	expectedEmptyConfig := common.GetAdmiralParams()
+
+	tests := []struct {
+		name string
+		args args
+		want common.AdmiralParams
+	}{
+		{"EmptyConfig", args{emptyConfig}, expectedEmptyConfig},
+		{"AdmiralConfigUpdate", args{configUpdated}, expectedAdmiralConfig},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			UpdateSyncAdmiralConfig(tt.args.configData)
+			assert.Equal(t, tt.want, common.GetAdmiralParams())
+		})
+	}
+}

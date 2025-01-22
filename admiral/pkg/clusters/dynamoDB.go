@@ -260,7 +260,7 @@ func (client *DynamoClient) getDynamicConfig(key string, value string, tableName
 		}
 
 	} else {
-		return configData, fmt.Errorf("Expected only 1 row but got %s for tableName : %s", items.Count, tableName)
+		return configData, fmt.Errorf("Expected only 1 row but got %d for tableName : %s", items.Count, tableName)
 	}
 
 	return configData, nil

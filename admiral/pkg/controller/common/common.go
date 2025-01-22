@@ -37,6 +37,7 @@ var (
 )
 
 const (
+	Admiral                       = "admiral"
 	NamespaceKubeSystem           = "kube-system"
 	NamespaceIstioSystem          = "istio-system"
 	IstioIngressGatewayLabelValue = "istio-ingressgateway"
