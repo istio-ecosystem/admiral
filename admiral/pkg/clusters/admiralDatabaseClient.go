@@ -168,7 +168,7 @@ func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
 
 func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 
-	dbRawData, err := dbClient.Get("EnableDynamicConfig", "admiral")
+	dbRawData, err := dbClient.Get("EnableDynamicConfig", common.Admiral)
 	if err != nil {
 		log.Errorf("Error getting EnableDynamicConfig admiral config, err: %v", err)
 		return err
