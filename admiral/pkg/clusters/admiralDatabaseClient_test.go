@@ -1,6 +1,8 @@
 package clusters
 
 import (
+	"fmt"
+	v1 "github.com/istio-ecosystem/admiral/admiral/apis/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -489,6 +491,56 @@ func TestUpdateSyncAdmiralConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			UpdateSyncAdmiralConfig(tt.args.configData)
 			assert.Equal(t, tt.want, common.GetAdmiralParams())
+		})
+	}
+}
+
+func TestNewDynamicConfigDatabaseClient(t *testing.T) {
+	var dummyDynamoClientFunc = func(role, region string) (*DynamoClient, error) {
+		return nil, nil
+	}
+
+	var dummyDynamoClientFuncWithError = func(role, region string) (*DynamoClient, error) {
+		return nil, fmt.Errorf("failed to initialize client")
+	}
+
+	type args struct {
+		path                 string
+		dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)
+	}
+
+	var dynamicConfigClient = DynamicConfigDatabaseClient{}
+
+	expectedV1AdmiralConfig := v1.AdmiralConfig{}
+	dynamicConfigClient.database = &expectedV1AdmiralConfig.DynamicConfigDatabase
+	dynamicConfigClient.database.TableName = common.GetAdmiralParams().DynamicConfigDynamoDBTableName
+
+	testArgsValid := args{
+		path:                 "testdata/admiralDatabaseClientConfig_is_valid.yaml",
+		dynamoClientInitFunc: dummyDynamoClientFunc,
+	}
+
+	testArgsError := args{
+		path:                 "testdata/admiralDatabaseClientConfig_is_valid.yaml",
+		dynamoClientInitFunc: dummyDynamoClientFuncWithError,
+	}
+
+	tests := []struct {
+		name    string
+		args    args
+		want    *DynamicConfigDatabaseClient
+		wantErr bool
+	}{
+		{"When valid config is passed then expected client to be initialize with no error", testArgsValid, &dynamicConfigClient, false},
+		{"When valid is passed then expected error", testArgsError, &dynamicConfigClient, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewDynamicConfigDatabaseClient(tt.args.path, tt.args.dynamoClientInitFunc)
+			if tt.wantErr {
+				assert.NotNil(t, err, "NewDynamicConfigDatabaseClient() should have returned an error")
+			}
+			assert.Equalf(t, tt.want, got, "NewDynamicConfigDatabaseClient(%v, %v)", tt.args.path, tt.args.dynamoClientInitFunc)
 		})
 	}
 }
