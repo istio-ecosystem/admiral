@@ -35,6 +35,7 @@ type DynamoDBConfigWrapper struct {
 	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
 }
 
+// Store last known CheckSum of DynamoDB config
 var DynamicConfigCheckSum [32]byte
 
 /*
@@ -85,8 +86,7 @@ type DynamicConfigData struct {
 }
 
 type DynamoClient struct {
-	svc      dynamodbiface.DynamoDBAPI
-	checkSha string
+	svc dynamodbiface.DynamoDBAPI
 }
 
 func NewDynamoClient(role, region string) (*DynamoClient, error) {
