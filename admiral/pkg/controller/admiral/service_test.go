@@ -285,26 +285,30 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	sc.cache = make(map[string]*ServiceClusterEntry)
 	sc.mutex = &sync.Mutex{}
 
+	sc_fallbackToIp := serviceCache{}
+	sc_fallbackToIp.cache = make(map[string]*ServiceClusterEntry)
+	sc_fallbackToIp.mutex = &sync.Mutex{}
+
 	service := &coreV1.Service{}
 	service.Name = "test-service"
-	service.Namespace = "ns"
+	service.Namespace = common.NamespaceIstioSystem
 	service.Status = coreV1.ServiceStatus{}
 	service.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	service.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
-	service.Labels = map[string]string{"app": "test-service"}
+	service.Labels = map[string]string{"app": common.IstioIngressGatewayLabelValue}
 
 	s2 := &coreV1.Service{}
 	s2.Name = "test-service-ip"
-	s2.Namespace = "ns"
+	s2.Namespace = common.NamespaceIstioSystem
 	s2.Status = coreV1.ServiceStatus{}
 	s2.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	s2.Status.LoadBalancer.Ingress = append(s2.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{IP: "1.2.3.4"})
-	s2.Labels = map[string]string{"app": "test-service-ip"}
+	s2.Labels = map[string]string{"app": common.IstioIngressGatewayLabelValue}
 
 	// The primary use case is to support ingress gateways for local development
 	externalIPService := &coreV1.Service{}
 	externalIPService.Name = "test-service-externalip"
-	externalIPService.Namespace = "ns"
+	externalIPService.Namespace = common.NamespaceIstioSystem
 	externalIPService.Spec = coreV1.ServiceSpec{}
 	externalIPService.Spec.ExternalIPs = []string{"1.2.3.4"}
 	externalIPService.Spec.Ports = []coreV1.ServicePort{
@@ -320,7 +324,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	ignoreService := &coreV1.Service{}
 	ignoreService.Name = "test-service-ignored"
-	ignoreService.Namespace = "ns"
+	ignoreService.Namespace = common.NamespaceIstioSystem
 	ignoreService.Status = coreV1.ServiceStatus{}
 	ignoreService.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -329,7 +333,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	ignoreService2 := &coreV1.Service{}
 	ignoreService2.Name = "test-service-ignored-later"
-	ignoreService2.Namespace = "ns"
+	ignoreService2.Namespace = common.NamespaceIstioSystem
 	ignoreService2.Status = coreV1.ServiceStatus{}
 	ignoreService2.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService2.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -337,7 +341,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	ignoreService3 := &coreV1.Service{}
 	ignoreService3.Name = "test-service-unignored-later"
-	ignoreService3.Namespace = "ns"
+	ignoreService3.Namespace = common.NamespaceIstioSystem
 	ignoreService3.Status = coreV1.ServiceStatus{}
 	ignoreService3.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService3.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -345,8 +349,6 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 	ignoreService3.Labels = map[string]string{"app": "test-service-unignored-later"}
 
 	sc.Put(service)
-	sc.Put(s2)
-	sc.Put(externalIPService)
 	sc.Put(ignoreService)
 	sc.Put(ignoreService2)
 	sc.Put(ignoreService3)
@@ -356,6 +358,9 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	sc.Put(ignoreService2) //Ensuring that if the ignore label is added to a service, it's no longer found
 	sc.Put(ignoreService3) //And ensuring that if the ignore label is removed from a service, it becomes found
+
+	sc_fallbackToIp.Put(s2)
+	sc_fallbackToIp.Put(externalIPService)
 
 	testCases := []struct {
 		name           string
@@ -368,8 +373,8 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 		{
 			name:           "Find service load balancer when present",
 			cache:          &sc,
-			key:            "test-service",
-			ns:             "ns",
+			key:            common.IstioIngressGatewayLabelValue,
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "hostname.com",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -383,17 +388,17 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 		},
 		{
 			name:           "Falls back to IP",
-			cache:          &sc,
-			key:            "test-service-ip",
-			ns:             "ns",
+			cache:          &sc_fallbackToIp,
+			key:            common.IstioIngressGatewayLabelValue,
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "1.2.3.4",
 			expectedPort:   common.DefaultMtlsPort,
 		},
 		{
 			name:           "Falls back to externalIP",
-			cache:          &sc,
+			cache:          &sc_fallbackToIp,
 			key:            "test-service-externalip",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "1.2.3.4",
 			expectedPort:   30800,
 		},
@@ -401,7 +406,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			name:           "Successfully ignores services with the ignore label",
 			cache:          &sc,
 			key:            "test-service-ignored",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -409,7 +414,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			name:           "Successfully ignores services when the ignore label is added after the service had been added to the cache for the first time",
 			cache:          &sc,
 			key:            "test-service-ignored-later",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -417,7 +422,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 			name:           "Successfully finds services when the ignore label is added initially, then removed",
 			cache:          &sc,
 			key:            "test-service-unignored-later",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "hostname.com",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -443,15 +448,15 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 
 	service := &coreV1.Service{}
 	service.Name = "test-service"
-	service.Namespace = "ns"
+	service.Namespace = common.NamespaceIstioSystem
 	service.Status = coreV1.ServiceStatus{}
 	service.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	service.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
-	service.Labels = map[string]string{"app": "test-service"}
+	service.Labels = map[string]string{"app": common.IstioIngressGatewayLabelValue}
 
 	s2 := &coreV1.Service{}
 	s2.Name = "test-service-ip"
-	s2.Namespace = "ns"
+	s2.Namespace = common.NamespaceIstioSystem
 	s2.Status = coreV1.ServiceStatus{}
 	s2.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	s2.Status.LoadBalancer.Ingress = append(s2.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{IP: "1.2.3.4"})
@@ -476,7 +481,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 
 	ignoreService := &coreV1.Service{}
 	ignoreService.Name = "test-service-ignored"
-	ignoreService.Namespace = "ns"
+	ignoreService.Namespace = common.NamespaceIstioSystem
 	ignoreService.Status = coreV1.ServiceStatus{}
 	ignoreService.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -485,7 +490,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 
 	ignoreService2 := &coreV1.Service{}
 	ignoreService2.Name = "test-service-ignored-later"
-	ignoreService2.Namespace = "ns"
+	ignoreService2.Namespace = common.NamespaceIstioSystem
 	ignoreService2.Status = coreV1.ServiceStatus{}
 	ignoreService2.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService2.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -493,7 +498,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 
 	ignoreService3 := &coreV1.Service{}
 	ignoreService3.Name = "test-service-unignored-later"
-	ignoreService3.Namespace = "ns"
+	ignoreService3.Namespace = common.NamespaceIstioSystem
 	ignoreService3.Status = coreV1.ServiceStatus{}
 	ignoreService3.Status.LoadBalancer = coreV1.LoadBalancerStatus{}
 	ignoreService3.Status.LoadBalancer.Ingress = append(service.Status.LoadBalancer.Ingress, coreV1.LoadBalancerIngress{Hostname: "hostname.com"})
@@ -524,8 +529,8 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 		{
 			name:           "Given service and loadbalancer, should return endpoint with dot in the end",
 			cache:          &sc,
-			key:            "test-service",
-			ns:             "ns",
+			key:            common.IstioIngressGatewayLabelValue,
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "hostname.com.",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -541,7 +546,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 			name:           "Given host not present in load balancer, should fallback to IP without dot at the end",
 			cache:          &sc,
 			key:            "test-service-ip",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "1.2.3.4",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -549,7 +554,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 			name:           "Given ignore label, should return dummy",
 			cache:          &sc,
 			key:            "test-service-ignored",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -557,7 +562,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 			name:           "Successfully ignores services when the ignore label is added after the service had been added to the cache for the first time",
 			cache:          &sc,
 			key:            "test-service-ignored-later",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "dummy.admiral.global",
 			expectedPort:   common.DefaultMtlsPort,
 		},
@@ -565,7 +570,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 			name:           "Successfully finds services when the ignore label is added initially, then removed",
 			cache:          &sc,
 			key:            "test-service-unignored-later",
-			ns:             "ns",
+			ns:             common.NamespaceIstioSystem,
 			expectedReturn: "hostname.com.",
 			expectedPort:   common.DefaultMtlsPort,
 		},
