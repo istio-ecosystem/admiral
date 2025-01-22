@@ -772,7 +772,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
 
-		if !common.IsVSRoutingDisabledForCluster(sourceCluster) {
+		if common.DoVSRoutingForCluster(sourceCluster) {
 			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
@@ -805,6 +805,10 @@ func modifyServiceEntryForNewServiceOrPod(
 					eventNamespace + common.DotLocalDomainSuffix: drHost,
 				}
 			}
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				"", "", sourceCluster,
+				"Discovery phase: VS based routing disabled for cluster")
 		}
 	}
 

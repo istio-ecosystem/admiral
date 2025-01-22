@@ -468,7 +468,7 @@ func addUpdateVirtualServicesForIngress(
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
-		if common.IsVSRoutingDisabledForCluster(sourceCluster) {
+		if !common.DoVSRoutingForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				"", "", sourceCluster,
 				"Writing phase: addUpdateVirtualServicesForIngress VS based routing disabled for cluster")
@@ -743,7 +743,7 @@ func addUpdateDestinationRuleForSourceIngress(
 
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
 
-		if common.IsVSRoutingDisabledForCluster(sourceCluster) {
+		if !common.DoVSRoutingForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				"", "", sourceCluster,
 				"Writing phase: addUpdateVirtualServicesForIngress VS based routing disabled for cluster")

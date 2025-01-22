@@ -444,7 +444,7 @@ func GetIngressVSExportToNamespace() []string {
 	return wrapper.params.IngressVSExportToNamespaces
 }
 
-func IsVSRoutingDisabledForCluster(cluster string) bool {
+func DoVSRoutingForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	if !wrapper.params.EnableVSRouting {
@@ -452,13 +452,13 @@ func IsVSRoutingDisabledForCluster(cluster string) bool {
 	}
 	for _, c := range wrapper.params.VSRoutingDisabledClusters {
 		if c == "*" {
-			return true
+			return false
 		}
 		if c == cluster {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func IsSlowStartEnabledForCluster(cluster string) bool {

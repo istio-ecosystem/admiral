@@ -168,7 +168,7 @@ func TestDoRoutingPolicyForCluster(t *testing.T) {
 	}
 }
 
-func TestIsVSRoutingDisabledForCluster(t *testing.T) {
+func TestDoVSRoutingForCluster(t *testing.T) {
 	p := AdmiralParams{}
 
 	testCases := []struct {
@@ -180,7 +180,7 @@ func TestIsVSRoutingDisabledForCluster(t *testing.T) {
 	}{
 		{
 			name: "Given enableVSRouting is false, disabledVSRoutingForCluster is empty" +
-				"When IsVSRoutingDisabledForCluster is called" +
+				"When DoVSRoutingForCluster is called" +
 				"Then it should return false",
 			cluster:                     "cluster1",
 			enableVSRouting:             false,
@@ -189,39 +189,39 @@ func TestIsVSRoutingDisabledForCluster(t *testing.T) {
 		},
 		{
 			name: "Given enableVSRouting is true, disabledVSRoutingForCluster is empty" +
-				"When IsVSRoutingDisabledForCluster is called" +
-				"Then it should return false",
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return true",
 			cluster:                     "cluster1",
 			enableVSRouting:             true,
 			disabledVSRoutingForCluster: []string{},
-			expected:                    false,
+			expected:                    true,
 		},
 		{
 			name: "Given enableVSRouting is true, and given cluster doesn't exists in the list" +
-				"When IsVSRoutingDisabledForCluster is called" +
-				"Then it should return false",
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return true",
 			cluster:                     "cluster2",
+			enableVSRouting:             true,
+			disabledVSRoutingForCluster: []string{"cluster1"},
+			expected:                    true,
+		},
+		{
+			name: "Given enableVSRouting is true, and given cluster does exists in the list" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
+			cluster:                     "cluster1",
 			enableVSRouting:             true,
 			disabledVSRoutingForCluster: []string{"cluster1"},
 			expected:                    false,
 		},
 		{
-			name: "Given enableVSRouting is true, and given cluster does exists in the list" +
-				"When IsVSRoutingDisabledForCluster is called" +
-				"Then it should return true",
-			cluster:                     "cluster1",
-			enableVSRouting:             true,
-			disabledVSRoutingForCluster: []string{"cluster1"},
-			expected:                    true,
-		},
-		{
-			name: "Given enableVSRouting is true, and all VS routing is enabled in all clusters using '*'" +
-				"When IsVSRoutingDisabledForCluster is called" +
-				"Then it should return true",
+			name: "Given enableVSRouting is true, and VS routing is disabled in all clusters using '*'" +
+				"When DoVSRoutingForCluster is called" +
+				"Then it should return false",
 			cluster:                     "cluster1",
 			enableVSRouting:             true,
 			disabledVSRoutingForCluster: []string{"*"},
-			expected:                    true,
+			expected:                    false,
 		},
 	}
 
@@ -232,7 +232,7 @@ func TestIsVSRoutingDisabledForCluster(t *testing.T) {
 			ResetSync()
 			InitializeConfig(p)
 
-			assert.Equal(t, tc.expected, IsVSRoutingDisabledForCluster(tc.cluster))
+			assert.Equal(t, tc.expected, DoVSRoutingForCluster(tc.cluster))
 		})
 	}
 
