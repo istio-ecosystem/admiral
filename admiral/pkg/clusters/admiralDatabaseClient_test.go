@@ -1,11 +1,7 @@
 package clusters
 
 import (
-	"errors"
-	"fmt"
-	v1 "github.com/istio-ecosystem/admiral/admiral/apis/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -474,9 +470,9 @@ func TestUpdateSyncAdmiralConfig(t *testing.T) {
 	configUpdated.CLBEnabledClusters = []string{"cluster1", "cluster2"}
 
 	expectedAdmiralConfig := common.GetAdmiralParams()
-	expectedAdmiralConfig.NLBEnabledClusters = []string{"cluster1", "cluster2"}
-	expectedAdmiralConfig.CLBEnabledClusters = []string{"cluster1", "cluster2"}
-	expectedAdmiralConfig.NLBEnabledIdentityList = []string{"identity1", "identity2"}
+	expectedAdmiralConfig.NLBEnabledClusters = "cluster1,cluster2"
+	expectedAdmiralConfig.CLBEnabledClusters = "cluster1,cluster2"
+	expectedAdmiralConfig.NLBEnabledIdentityList = "identity1,identity2"
 
 	emptyConfig := DynamicConfigData{}
 	expectedEmptyConfig := common.GetAdmiralParams()
@@ -493,115 +489,6 @@ func TestUpdateSyncAdmiralConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			UpdateSyncAdmiralConfig(tt.args.configData)
 			assert.Equal(t, tt.want, common.GetAdmiralParams())
-		})
-	}
-}
-
-func TestNewDynamicConfigDatabaseClient(t *testing.T) {
-	var dummyDynamoClientFunc = func(role, region string) (*DynamoClient, error) {
-		return nil, nil
-	}
-
-	var dummyDynamoClientFuncWithError = func(role, region string) (*DynamoClient, error) {
-		return nil, fmt.Errorf("failed to initialize client")
-	}
-
-	type args struct {
-		path                 string
-		dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)
-	}
-
-	var dynamicConfigClient = DynamicConfigDatabaseClient{}
-
-	expectedV1AdmiralConfig := v1.AdmiralConfig{}
-	dynamicConfigClient.database = &expectedV1AdmiralConfig.DynamicConfigDatabase
-	dynamicConfigClient.database.TableName = common.GetAdmiralParams().DynamicConfigDynamoDBTableName
-
-	testArgsValid := args{
-		path:                 "testdata/admiralDatabaseClientConfig_is_valid.yaml",
-		dynamoClientInitFunc: dummyDynamoClientFunc,
-	}
-
-	testArgsError := args{
-		path:                 "testdata/admiralDatabaseClientConfig_is_valid.yaml",
-		dynamoClientInitFunc: dummyDynamoClientFuncWithError,
-	}
-
-	testArgsErrorMarshalling := args{
-		path:                 "testdata/admiralDatabaseClientConfig_invalid.yaml",
-		dynamoClientInitFunc: dummyDynamoClientFunc,
-	}
-
-	tests := []struct {
-		name    string
-		args    args
-		want    *DynamicConfigDatabaseClient
-		wantErr error
-	}{
-		{"When valid config is passed then expected client to be initialize with no error", testArgsValid, &dynamicConfigClient, nil},
-		{"When valid is passed then expected error", testArgsError, &dynamicConfigClient, errors.New("unable to instantiate dynamo client for DynamicConfig")},
-		{"When invalid config is passed then expect error", testArgsErrorMarshalling, nil, errors.New("error unmarshalling admiral config file")},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewDynamicConfigDatabaseClient(tt.args.path, tt.args.dynamoClientInitFunc)
-			if tt.wantErr != nil {
-				assert.Contains(t, err.Error(), tt.wantErr.Error())
-			}
-			assert.Equalf(t, tt.want, got, "NewDynamicConfigDatabaseClient(%v, %v)", tt.args.path, tt.args.dynamoClientInitFunc)
-		})
-	}
-}
-
-type DummyDynamicConfigDatabaseClient struct {
-	DynamoClient *DynamoClient
-	datbaase     *v1.DynamoDB
-}
-
-func (d DummyDynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (d DummyDynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (d DummyDynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
-	dummyDynamicConfigData := DynamicConfigData{
-		EnableDynamicConfig:    common.Admiral,
-		NLBEnabledClusters:     []string{"cluster1", "cluster2"},
-		NLBEnabledIdentityList: []string{"identity1", "identity2"},
-		CLBEnabledClusters:     []string{"cluster1", "cluster2"},
-	}
-
-	return dummyDynamicConfigData, nil
-}
-
-func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
-
-	var testData DummyDynamicConfigDatabaseClient
-	type args struct {
-		dbClient AdmiralDatabaseManager
-	}
-
-	var testArgs = args{dbClient: testData}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr error
-	}{
-		{"When ReadAndUpdateSyncAdmiralConfig invoked with valid DynamoClient then expect no error", testArgs, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ReadAndUpdateSyncAdmiralConfig(tt.args.dbClient)
-			if tt.wantErr != nil {
-				assert.Contains(t, err.Error(), tt.wantErr.Error(), "ReadAndUpdateSyncAdmiralConfig(). Expect error containing %s but got error = %v", tt.wantErr.Error(), err.Error())
-			} else {
-				assert.Nil(t, err, "ReadAndUpdateSyncAdmiralConfig(). Expect no error but got error - %s", err)
-			}
 		})
 	}
 }
