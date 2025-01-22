@@ -108,6 +108,7 @@ type AdmiralParams struct {
 	EnableGenerationCheck                    bool
 	EnableIsOnlyReplicaCountChangedCheck     bool
 	PreventSplitBrain                        bool
+	IgnoreLabelsAnnotationsVSCopyList        []string
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -130,11 +131,12 @@ type AdmiralParams struct {
 	OperatorSecretFilterTags string
 
 	// VS Based Routing
-	EnableVSRouting             bool
-	VSRoutingGateways           []string
-	IngressVSExportToNamespaces []string
-	IngressLBPolicy             string
-	VSRoutingEnabledClusters    []string
+	EnableVSRouting                   bool
+	VSRoutingGateways                 []string
+	IngressVSExportToNamespaces       []string
+	IngressLBPolicy                   string
+	VSRoutingDisabledClusters         []string
+	VSRoutingSlowStartEnabledClusters []string
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool

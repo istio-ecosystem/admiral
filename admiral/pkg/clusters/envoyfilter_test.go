@@ -30,8 +30,6 @@ import (
 func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	registry := getRegistry("1.13,1.17")
 
-	handler := RoutingPolicyHandler{}
-
 	rpFilterCache := &routingPolicyFilterCache{}
 	rpFilterCache.filterCache = make(map[string]map[string]map[string]string)
 	rpFilterCache.mutex = &sync.Mutex{}
@@ -88,8 +86,6 @@ func TestCreateOrUpdateEnvoyFilter(t *testing.T) {
 	// foo is dependent upon bar and bar has a deployment in the same cluster.
 	registry.AdmiralCache.IdentityDependencyCache.Put("foo", "bar", "bar")
 	registry.AdmiralCache.IdentityClusterCache.Put("bar", remoteController.ClusterID, remoteController.ClusterID)
-
-	handler.RemoteRegistry = registry
 
 	routingPolicyFoo := &v1.RoutingPolicy{
 		TypeMeta: metav1.TypeMeta{},

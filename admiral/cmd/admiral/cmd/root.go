@@ -240,11 +240,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
-
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", false, "Enable/Disable Replica Count Check")
 	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabled, "client_initiated_processing_enabled", true, "Enable/Disable Client Initiated Processing")
 	rootCmd.PersistentFlags().BoolVar(&params.PreventSplitBrain, "prevent_split_brain", true, "Enable/Disable Explicit Split Brain prevention logic")
+	rootCmd.PersistentFlags().StringSliceVar(&params.IgnoreLabelsAnnotationsVSCopyList, "ignore_labels_annotations_vs_copy_list", []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"}, "Labels and annotations that should not be preserved during VS copy")
 
 	//Admiral 2.0 flags
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
@@ -258,7 +258,8 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
-	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingEnabledClusters, "vs_routing_enabled_clusters", []string{}, "The source clusters to enable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingDisabledClusters, "vs_routing_disabled_clusters", []string{}, "The source clusters to disable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingSlowStartEnabledClusters, "vs_routing_slow_start_enabled_clusters", []string{}, "The source clusters to where VS routing is enabled and require slow start")
 	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")

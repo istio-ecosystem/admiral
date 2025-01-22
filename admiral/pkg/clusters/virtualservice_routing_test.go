@@ -69,7 +69,6 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
 		EnableVSRouting:             true,
-		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2378,10 +2377,10 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		SANPrefix:                   "test-san-prefix",
-		IngressVSExportToNamespaces: []string{"istio-system"},
-		EnableVSRouting:             true,
-		VSRoutingEnabledClusters:    []string{"cluster-1"},
+		SANPrefix:                         "test-san-prefix",
+		IngressVSExportToNamespaces:       []string{"istio-system"},
+		EnableVSRouting:                   true,
+		VSRoutingSlowStartEnabledClusters: []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2401,6 +2400,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		istioClient              *istioFake.Clientset
+		drName                   string
 		sourceClusterToDRHosts   map[string]map[string]string
 		sourceIdentity           string
 		expectedError            error
@@ -2410,6 +2410,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a empty sourceIdentity " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should return an error",
+			drName: "test-ns.svc.cluster.local-routing-dr",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
 					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
@@ -2422,6 +2423,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a valid sourceClusterToDRHosts " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should create the destination rules",
+			drName:         "test-ns.svc.cluster.local-routing-dr",
 			sourceIdentity: "test-identity",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
@@ -2459,6 +2461,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a valid sourceClusterToDRHosts " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should create the destination rules",
+			drName:         "test-ns.svc.cluster.local-routing-dr",
 			sourceIdentity: "test-identity",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
@@ -2492,6 +2495,44 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked," +
+				"And the cluster is not enabled with slow start " +
+				"Then it should create the destination rules without warmupDurationSecs",
+			drName:         "test-ns2.svc.cluster.local-routing-dr",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-2": {
+					"test-ns2.svc.cluster.local": "*.test-ns2.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns2.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns2.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Enabled: &wrappers.BoolValue{Value: false},
+							},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2500,8 +2541,14 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				ClusterID:                 "cluster-1",
 				DestinationRuleController: &istio.DestinationRuleController{},
 			}
+			rc2 := &RemoteController{
+				ClusterID:                 "cluster-2",
+				DestinationRuleController: &istio.DestinationRuleController{},
+			}
 			rc.DestinationRuleController.IstioClient = tc.istioClient
+			rc2.DestinationRuleController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
+			rr.PutRemoteController("cluster-2", rc2)
 
 			err := addUpdateDestinationRuleForSourceIngress(
 				context.Background(),
@@ -2514,7 +2561,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				actualDR, err := tc.istioClient.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
-					Get(context.Background(), "test-ns.svc.cluster.local-routing-dr", metaV1.GetOptions{})
+					Get(context.Background(), tc.drName, metaV1.GetOptions{})
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedDestinationRules.Spec.Host, actualDR.Spec.Host)
 				require.Equal(t, tc.expectedDestinationRules.Spec.TrafficPolicy, actualDR.Spec.TrafficPolicy)
