@@ -746,7 +746,7 @@ func addUpdateDestinationRuleForSourceIngress(
 		if !common.DoVSRoutingForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				"", "", sourceCluster,
-				"Writing phase: addUpdateVirtualServicesForIngress VS based routing disabled for cluster")
+				"Writing phase: addUpdateDestinationRuleForSourceIngress VS based routing disabled for cluster")
 			continue
 		}
 
