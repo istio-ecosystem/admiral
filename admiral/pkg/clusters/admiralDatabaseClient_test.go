@@ -569,7 +569,6 @@ func (d DummyDynamicConfigDatabaseClient) Delete(data interface{}, logger *log.E
 }
 
 func (d DummyDynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
-	//TODO implement me
 	dummyDynamicConfigData := DynamicConfigData{
 		EnableDynamicConfig:    common.Admiral,
 		NLBEnabledClusters:     []string{"cluster1", "cluster2"},
