@@ -252,9 +252,8 @@ func (client *DynamoClient) getDynamicConfig(key string, value string, tableName
 		return configData, nil
 	}
 
-	if *items.Count == 1 {
+	if items.Count != nil && *items.Count == 1 {
 		err = dynamodbattribute.UnmarshalMap(items.Items[0], &configData)
-
 		if err != nil {
 			return configData, fmt.Errorf("failed to unmarshal table items, err: %v", err)
 		}
