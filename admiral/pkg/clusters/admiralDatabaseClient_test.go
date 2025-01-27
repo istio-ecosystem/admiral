@@ -474,9 +474,9 @@ func TestUpdateSyncAdmiralConfig(t *testing.T) {
 	configUpdated.CLBEnabledClusters = []string{"cluster1", "cluster2"}
 
 	expectedAdmiralConfig := common.GetAdmiralParams()
-	expectedAdmiralConfig.NLBEnabledClusters = "cluster1,cluster2"
-	expectedAdmiralConfig.CLBEnabledClusters = "cluster1,cluster2"
-	expectedAdmiralConfig.NLBEnabledIdentityList = "identity1,identity2"
+	expectedAdmiralConfig.NLBEnabledClusters = []string{"cluster1", "cluster2"}
+	expectedAdmiralConfig.CLBEnabledClusters = []string{"cluster1", "cluster2"}
+	expectedAdmiralConfig.NLBEnabledIdentityList = []string{"identity1", "identity2"}
 
 	emptyConfig := DynamicConfigData{}
 	expectedEmptyConfig := common.GetAdmiralParams()
