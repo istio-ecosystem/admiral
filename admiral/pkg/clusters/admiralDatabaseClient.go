@@ -1,7 +1,7 @@
 package clusters
 
 import (
-	"crypto/sha256"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/apis/v1"
@@ -212,10 +212,12 @@ func IsDynamicConfigChanged(config DynamicConfigData) bool {
 		return false
 	}
 
-	if DynamicConfigCheckSum == sha256.Sum256([]byte(fmt.Sprintf("%v", config))) {
+	//md5.Sum()
+
+	if DynamicConfigCheckSum == md5.Sum([]byte(fmt.Sprintf("%v", config))) {
 		return false
 	} else {
-		DynamicConfigCheckSum = sha256.Sum256([]byte(fmt.Sprintf("%v", config)))
+		DynamicConfigCheckSum = md5.Sum([]byte(fmt.Sprintf("%v", config)))
 		return true
 	}
 }
