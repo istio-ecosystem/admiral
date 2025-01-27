@@ -36,7 +36,7 @@ type DynamoDBConfigWrapper struct {
 }
 
 // Store last known CheckSum of DynamoDB config
-var DynamicConfigCheckSum [32]byte
+var DynamicConfigCheckSum [16]byte
 
 /*
 Reference struct used to unmarshall the DynamoDB config present in the yaml config file
