@@ -244,7 +244,7 @@ func (client *DynamoClient) getDynamicConfig(key string, value string, tableName
 	items, err := client.svc.Query(&dbQuery)
 
 	if err != nil {
-		return configData, fmt.Errorf("Failed to fetch dynamic config : %s", err)
+		return configData, fmt.Errorf("task=%s, Failed to fetch dynamic config : %s", common.DynamicConfigUpdate, err)
 	}
 
 	if items == nil {
@@ -255,11 +255,11 @@ func (client *DynamoClient) getDynamicConfig(key string, value string, tableName
 	if items.Count != nil && *items.Count == 1 {
 		err = dynamodbattribute.UnmarshalMap(items.Items[0], &configData)
 		if err != nil {
-			return configData, fmt.Errorf("failed to unmarshal table items, err: %v", err)
+			return configData, fmt.Errorf("task=%s, failed to unmarshal table items, err: %v", common.DynamicConfigUpdate, err)
 		}
 
 	} else {
-		return configData, fmt.Errorf("Expected only 1 row but got %d for tableName : %s", items.Count, tableName)
+		return configData, fmt.Errorf("task=%s, Expected only 1 row but got %d for tableName : %s", common.DynamicConfigUpdate, items.Count, tableName)
 	}
 
 	return configData, nil

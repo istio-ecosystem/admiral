@@ -164,7 +164,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		serviceEntrySuspender = NewDummyServiceEntrySuspender()
 	}
 
-	if common.IsAdmiralDynamicConfigEnable() {
+	if common.IsAdmiralDynamicConfigEnabled() {
 		admiralDynamicConfigDatabaseClient, err = NewDynamicConfigDatabaseClient(common.GetAdmiralConfigPath(), NewDynamoClient)
 	} else {
 		admiralDynamicConfigDatabaseClient = &DummyDatabaseClient{}
@@ -211,7 +211,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		This is done to avoid any transitive state where component starts with outofsync config.
 		Later down the process like async processor will take on going config pushes.
 	*/
-	if common.IsAdmiralDynamicConfigEnable() {
+	if common.IsAdmiralDynamicConfigEnabled() {
 		ReadAndUpdateSyncAdmiralConfig(rr.DynamicConfigDatabaseClient)
 	}
 

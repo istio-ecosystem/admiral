@@ -150,7 +150,7 @@ func GetEnableWorkloadDataStorage() bool {
 	return wrapper.params.EnableWorkloadDataStorage
 }
 
-func IsAdmiralDynamicConfigEnable() bool {
+func IsAdmiralDynamicConfigEnabled() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.EnableDynamicConfig

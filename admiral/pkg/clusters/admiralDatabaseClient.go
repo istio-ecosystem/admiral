@@ -144,7 +144,7 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 
 	admiralConfig, err := ReadDynamoConfigForDynamoDB(path)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
+		return nil, fmt.Errorf("task=%v, error unmarshalling admiral config file, err: %v", common.DynamicConfigUpdate, err)
 	}
 
 	dynamicConfigClient.database = &admiralConfig.DynamicConfigDatabase
@@ -154,7 +154,7 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 		admiralConfig.WorkloadDatabase.Region,
 	)
 	if err != nil {
-		return &dynamicConfigClient, fmt.Errorf("unable to instantiate dynamo client for DynamicConfig, err: %v", err)
+		return &dynamicConfigClient, fmt.Errorf("task=%v, unable to instantiate dynamo client for DynamicConfig, err: %v", common.DynamicConfigUpdate, err)
 	}
 	return &dynamicConfigClient, nil
 }
@@ -170,20 +170,20 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 
 	dbRawData, err := dbClient.Get("EnableDynamicConfig", common.Admiral)
 	if err != nil {
-		log.Errorf("Error getting EnableDynamicConfig admiral config, err: %v", err)
+		log.Errorf("task=%s, Error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
 		return err
 	}
 
 	configData, ok := dbRawData.(DynamicConfigData)
 	if !ok {
-		return errors.New("Failed to parse DynamicConfigData")
+		return errors.New(fmt.Sprintf("task=%s, Failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
 	if IsDynamicConfigChanged(configData) {
-		log.Infof("Updating DynamicConfigData with Admiral config")
+		log.Infof(fmt.Sprintf("task=%s, Updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
 		UpdateSyncAdmiralConfig(configData)
 	} else {
-		log.Infof("No need to update DynamicConfigData")
+		log.Infof(fmt.Sprintf("task=%s, No need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
 	return nil

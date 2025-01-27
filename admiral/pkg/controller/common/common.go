@@ -122,6 +122,8 @@ const (
 	LastUpdatedAt = "lastUpdatedAt"
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
+
+	DynamicConfigUpdate = "DynamicConfigUpdate"
 )
 
 type Event string

@@ -78,7 +78,7 @@ func GetRootCmd(args []string) *cobra.Command {
 				log.Fatalf("Error: %v", err)
 			}
 
-			if common.IsAdmiralDynamicConfigEnable() {
+			if common.IsAdmiralDynamicConfigEnabled() {
 				go clusters.UpdateASyncAdmiralConfig(remoteRegistry.DynamicConfigDatabaseClient, params.DynamicSyncPeriod)
 			}
 
