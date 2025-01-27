@@ -9,7 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"strings"
 	"time"
 )
 
@@ -226,16 +225,16 @@ func UpdateSyncAdmiralConfig(configData DynamicConfigData) {
 	if configData.EnableDynamicConfig == common.Admiral {
 		//Fetch Existing config and update which are changed.
 		newAdmiralConfig := common.GetAdmiralParams()
-		if len(strings.Join(configData.NLBEnabledClusters, ",")) > 0 {
-			newAdmiralConfig.NLBEnabledClusters = strings.Join(configData.NLBEnabledClusters, ",")
+		if len(configData.NLBEnabledClusters) > 0 {
+			newAdmiralConfig.NLBEnabledClusters = configData.NLBEnabledClusters
 		}
 
-		if len(strings.Join(configData.CLBEnabledClusters, ",")) > 0 {
-			newAdmiralConfig.CLBEnabledClusters = strings.Join(configData.CLBEnabledClusters, ",")
+		if len(configData.CLBEnabledClusters) > 0 {
+			newAdmiralConfig.CLBEnabledClusters = configData.CLBEnabledClusters
 		}
 
-		if len(strings.Join(configData.NLBEnabledIdentityList, ",")) > 0 {
-			newAdmiralConfig.NLBEnabledIdentityList = strings.Join(configData.NLBEnabledIdentityList, ",")
+		if len(configData.NLBEnabledIdentityList) > 0 {
+			newAdmiralConfig.NLBEnabledIdentityList = configData.NLBEnabledIdentityList
 		}
 
 		common.UpdateAdmiralParams(newAdmiralConfig)
