@@ -886,6 +886,12 @@ func modifyServiceEntryForNewServiceOrPod(
 	return serviceEntries, modifySEerr
 }
 
+/*
+This method first fetch CLB (or load balancer associated with app label mention in gateway_app
+If provided cluster is overwritten with some other app label mention in nlb-istio-ingressgateway
+
+	then overwrite load balancer
+*/
 func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int) {
 	//if rc == nil {
 	//	return "", fmt.Errorf("remote controller not initialized")
@@ -901,10 +907,12 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	//}
 
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+
 	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
 		ctx.Info("Getting NLB for cluster:", clusterName)
-		endpoint, port = rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
-		if len(endpoint) > 0 {
+		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
+		if len(overwriteEndpoint) > 0 && overwritePort > 0 {
+			return overwriteEndpoint, port
 			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
 		}
 	}
@@ -2650,8 +2658,6 @@ func generateServiceEntry(
 
 	start = time.Now()
 	endpointAddress, port := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
-	//endpointAddress, port := rc.ServiceController.Cache.
-	//	GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 	util.LogElapsedTimeSinceTask(ctxLogger, "GetLoadBalancer", "", "", rc.ClusterID, "", start)
 	var locality string
 	if rc.NodeController.Locality != nil {
