@@ -216,7 +216,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		ingressEndpoint, port := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
-		//ingressEndpoint, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
@@ -909,6 +908,7 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
+		ctx = ctx.WithField("task", common.LBUpdateProcessor)
 		ctx.Info("Getting NLB for cluster:", clusterName)
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
 		if len(overwriteEndpoint) > 0 && overwritePort > 0 {

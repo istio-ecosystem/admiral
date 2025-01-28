@@ -125,6 +125,7 @@ const (
 
 	App                 = "app"
 	DynamicConfigUpdate = "DynamicConfigUpdate"
+	LBUpdateProcessor   = "LBUpdateProcessor"
 )
 
 type Event string

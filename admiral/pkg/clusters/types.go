@@ -168,6 +168,9 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		serviceEntrySuspender = NewDummyServiceEntrySuspender()
 	}
 
+	admiralCache.NLBEnabledCluster = params.NLBEnabledClusters
+	admiralCache.CLBEnabledCluster = params.CLBEnabledClusters
+
 	if common.IsAdmiralDynamicConfigEnabled() {
 		admiralDynamicConfigDatabaseClient, err = NewDynamicConfigDatabaseClient(common.GetAdmiralConfigPath(), NewDynamoClient)
 	} else {
