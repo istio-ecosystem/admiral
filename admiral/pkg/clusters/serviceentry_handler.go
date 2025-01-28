@@ -283,7 +283,7 @@ func validateAndProcessServiceEntryEndpoints(obj *v1alpha3.ServiceEntry) bool {
 
 	temp := make([]*networkingv1alpha3.WorkloadEntry, 0)
 	for _, endpoint := range obj.Spec.Endpoints {
-		if endpoint.Address == "dummy.admiral.global" {
+		if endpoint.Address == common.DummyAdmiralGlobal {
 			areEndpointsValid = false
 		} else {
 			temp = append(temp, endpoint)

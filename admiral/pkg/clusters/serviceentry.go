@@ -909,9 +909,9 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 
 	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
 		ctx = ctx.WithField("task", common.LBUpdateProcessor)
-		ctx.Info("Getting NLB for cluster:", clusterName)
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
-		if len(overwriteEndpoint) > 0 && overwritePort > 0 {
+		//Validate if provided LB information is not default dummy, If Dummy return CLB
+		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
 			return overwriteEndpoint, port
 			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
 		}

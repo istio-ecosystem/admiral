@@ -179,7 +179,7 @@ func (s *serviceCache) Delete(service *k8sV1.Service) {
 
 func (s *serviceCache) GetSingleLoadBalancer(key string, namespace string) (string, int) {
 	var (
-		lb     = "dummy.admiral.global"
+		lb     = common.DummyAdmiralGlobal
 		lbPort = common.DefaultMtlsPort
 	)
 	services := s.Get(namespace)
