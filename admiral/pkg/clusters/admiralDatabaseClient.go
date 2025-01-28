@@ -169,20 +169,20 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 
 	dbRawData, err := dbClient.Get("EnableDynamicConfig", common.Admiral)
 	if err != nil {
-		log.Errorf("task=%s, Error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
+		log.Errorf("task=%s, error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
 		return err
 	}
 
 	configData, ok := dbRawData.(DynamicConfigData)
 	if !ok {
-		return errors.New(fmt.Sprintf("task=%s, Failed to parse DynamicConfigData", common.DynamicConfigUpdate))
+		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
 	if IsDynamicConfigChanged(configData) {
-		log.Infof(fmt.Sprintf("task=%s, Updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
+		log.Infof(fmt.Sprintf("task=%s, updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
 		UpdateSyncAdmiralConfig(configData)
 	} else {
-		log.Infof(fmt.Sprintf("task=%s, No need to update DynamicConfigData", common.DynamicConfigUpdate))
+		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
 	return nil
