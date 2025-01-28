@@ -123,6 +123,7 @@ const (
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
 
+	App                 = "app"
 	DynamicConfigUpdate = "DynamicConfigUpdate"
 )
 

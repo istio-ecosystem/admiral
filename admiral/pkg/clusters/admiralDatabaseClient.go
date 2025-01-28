@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"context"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"slices"
 	"time"
 )
 
@@ -88,7 +90,25 @@ func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data inte
 
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
 	//Variable renaming is done to re-purpose existing interface
+	err := checkIfDynamicConfigDatabaseClientIsInitialize(dynamicConfigDatabaseClient)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
+}
+
+func checkIfDynamicConfigDatabaseClientIsInitialize(dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) error {
+	if dynamicConfigDatabaseClient == nil || dynamicConfigDatabaseClient.dynamoClient == nil {
+		return fmt.Errorf("DynamicConfig: dynamoClient is not initialized")
+	}
+
+	if dynamicConfigDatabaseClient.database == nil {
+		return fmt.Errorf("DynamicConfig: database is not initialized")
+	}
+
+	return nil
 }
 
 func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
@@ -175,16 +195,16 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 	return &dynamicConfigClient, nil
 }
 
-func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
+func UpdateASyncAdmiralConfig(rr *RemoteRegistry, syncTime int) {
 
 	for range time.Tick(time.Minute * time.Duration(syncTime)) {
-		ReadAndUpdateSyncAdmiralConfig(dbClient)
+		ReadAndUpdateSyncAdmiralConfig(rr)
 	}
 }
 
-func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
+func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
-	dbRawData, err := dbClient.Get("EnableDynamicConfig", common.Admiral)
+	dbRawData, err := rr.DynamicConfigDatabaseClient.Get("EnableDynamicConfig", common.Admiral)
 	if err != nil {
 		log.Errorf("task=%s, error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
 		return err
@@ -198,6 +218,12 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 	if IsDynamicConfigChanged(configData) {
 		log.Infof(fmt.Sprintf("task=%s, updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
 		UpdateSyncAdmiralConfig(configData)
+
+		ctx := context.Context(context.Background())
+		//Process NLB Cluster
+		processLBMigration(ctx, rr, rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBEnabledClusters, common.GetAdmiralParams().NLBIngressLabel)
+		//Process CLB Cluster
+		processLBMigration(ctx, rr, rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().CLBEnabledClusters, common.GetAdmiralParams().LabelSet.GatewayApp)
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
@@ -205,13 +231,51 @@ func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
 	return nil
 }
 
+func processLBMigration(ctx context.Context, rr *RemoteRegistry, cachedLBCluster []string, updatedLBs []string, lbLabel string) {
+
+	log.Info("Update LB")
+	if cachedLBCluster != nil {
+		for _, cluster := range getLBToProcess(rr, updatedLBs) {
+			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
+				if fetchService.Labels[common.App] == lbLabel {
+					log.Info("Processing LB migration for Cluster : ", cluster)
+					go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
+					go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
+				}
+			}
+		}
+	}
+
+}
+
+func getLBToProcess(rr *RemoteRegistry, updatedLB []string) []string {
+	var clusersToProcess []string
+	if rr.AdmiralCache.NLBEnabledCluster == nil {
+		rr.AdmiralCache.NLBEnabledCluster = updatedLB
+		return clusersToProcess
+	} else {
+		//Validate if New ClusterAdded
+		for _, clusterFromAdmiralParam := range updatedLB {
+			if !slices.Contains(rr.AdmiralCache.NLBEnabledCluster, clusterFromAdmiralParam) {
+				clusersToProcess = append(clusersToProcess, clusterFromAdmiralParam)
+			}
+		}
+
+		//Validate if cluster Removed
+		for _, clusterFromCache := range rr.AdmiralCache.NLBEnabledCluster {
+			if !slices.Contains(updatedLB, clusterFromCache) {
+				clusersToProcess = append(clusersToProcess, clusterFromCache)
+			}
+		}
+	}
+	return clusersToProcess
+}
+
 func IsDynamicConfigChanged(config DynamicConfigData) bool {
 
 	if config.EnableDynamicConfig != common.Admiral {
 		return false
 	}
-
-	//md5.Sum()
 
 	if DynamicConfigCheckSum == md5.Sum([]byte(fmt.Sprintf("%v", config))) {
 		return false

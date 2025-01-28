@@ -582,6 +582,10 @@ func (d DummyDynamicConfigDatabaseClient) Get(env, identity string) (interface{}
 func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
 
 	var testData DummyDynamicConfigDatabaseClient
+
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.DynamicConfigDatabaseClient = testData
+
 	type args struct {
 		dbClient AdmiralDatabaseManager
 	}
@@ -596,7 +600,7 @@ func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ReadAndUpdateSyncAdmiralConfig(tt.args.dbClient)
+			err := ReadAndUpdateSyncAdmiralConfig(rr)
 			if tt.wantErr != nil {
 				assert.Contains(t, err.Error(), tt.wantErr.Error(), "ReadAndUpdateSyncAdmiralConfig(). Expect error containing %s but got error = %v", tt.wantErr.Error(), err.Error())
 			} else {

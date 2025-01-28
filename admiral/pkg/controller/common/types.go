@@ -147,9 +147,12 @@ type AdmiralParams struct {
 	EnableDynamicConfig            bool
 	DynamicConfigDynamoDBTableName string
 	DynamicSyncPeriod              int
-	NLBEnabledClusters             []string
-	NLBEnabledIdentityList         []string
-	CLBEnabledClusters             []string
+
+	//NLB Specific
+	NLBEnabledClusters     []string
+	NLBEnabledIdentityList []string
+	CLBEnabledClusters     []string
+	NLBIngressLabel        string
 }
 
 func (b AdmiralParams) String() string {

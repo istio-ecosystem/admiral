@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"math"
 	"math/rand"
 	"reflect"
@@ -213,7 +214,9 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Infof(common.CtxLogFormat, "event", "", "", clusterId, "neither deployment nor rollouts found")
 			continue
 		}
-		ingressEndpoint, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+
+		ingressEndpoint, port := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+		//ingressEndpoint, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
@@ -603,8 +606,8 @@ func modifyServiceEntryForNewServiceOrPod(
 					modifySEerr = common.AppendError(modifySEerr, err)
 				}
 			}
+			clusterIngress, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
 
-			clusterIngress, err := getClusterIngress(rc, common.GetAdmiralParams())
 			if err != nil {
 				err := fmt.Errorf(
 					"error getting cluster ingress for the cluster %s due to error %w", sourceCluster, err)
@@ -883,21 +886,29 @@ func modifyServiceEntryForNewServiceOrPod(
 	return serviceEntries, modifySEerr
 }
 
-func getClusterIngress(rc *RemoteController, admiralParams common.AdmiralParams) (string, error) {
-	if rc == nil {
-		return "", fmt.Errorf("remote controller not initialized")
+func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int) {
+	//if rc == nil {
+	//	return "", fmt.Errorf("remote controller not initialized")
+	//}
+	//if rc.ServiceController == nil {
+	//	return "", fmt.Errorf("service controller not initialized")
+	//}
+	//if rc.ServiceController.Cache == nil {
+	//	return "", fmt.Errorf("service controller cache not initialized")
+	//}
+	//if admiralParams.LabelSet == nil {
+	//	return "", fmt.Errorf("admiralparams labelset not initialized")
+	//}
+
+	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
+		ctx.Info("Getting NLB for cluster:", clusterName)
+		endpoint, port = rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
+		if len(endpoint) > 0 {
+			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
+		}
 	}
-	if rc.ServiceController == nil {
-		return "", fmt.Errorf("service controller not initialized")
-	}
-	if rc.ServiceController.Cache == nil {
-		return "", fmt.Errorf("service controller cache not initialized")
-	}
-	if admiralParams.LabelSet == nil {
-		return "", fmt.Errorf("admiralparams labelset not initialized")
-	}
-	clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiralParams.LabelSet.GatewayApp, common.NamespaceIstioSystem)
-	return clusterIngress, nil
+	return endpoint, port
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
@@ -2638,8 +2649,9 @@ func generateServiceEntry(
 	}
 
 	start = time.Now()
-	endpointAddress, port := rc.ServiceController.Cache.
-		GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+	endpointAddress, port := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
+	//endpointAddress, port := rc.ServiceController.Cache.
+	//	GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 	util.LogElapsedTimeSinceTask(ctxLogger, "GetLoadBalancer", "", "", rc.ClusterID, "", start)
 	var locality string
 	if rc.NodeController.Locality != nil {
