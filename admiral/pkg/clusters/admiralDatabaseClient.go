@@ -194,8 +194,6 @@ func IsDynamicConfigChanged(config DynamicConfigData) bool {
 		return false
 	}
 
-	//md5.Sum()
-
 	if DynamicConfigCheckSum == md5.Sum([]byte(fmt.Sprintf("%v", config))) {
 		return false
 	} else {
