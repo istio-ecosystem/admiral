@@ -221,9 +221,9 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
 		ctx := context.Context(context.Background())
 		//Process NLB Cluster
-		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, common.GetAdmiralParams().NLBIngressLabel)
+		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
 		//Process CLB Cluster
-		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, common.GetAdmiralParams().LabelSet.GatewayApp)
+		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, &rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().LabelSet.GatewayApp)
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
@@ -231,11 +231,11 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 	return nil
 }
 
-func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, lbLabel string) {
+func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, existingCache *[]string, lbLabel string) {
 
 	log.Info("Update LB")
 	//if cachedLBCluster != nil {
-	for _, cluster := range getLBToProcess(rr, updatedLBs) {
+	for _, cluster := range getLBToProcess(updatedLBs, existingCache) {
 		for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
 			if fetchService.Labels[common.App] == lbLabel {
 				log.Info("Processing LB migration for Cluster : ", cluster)
@@ -248,22 +248,22 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 
 }
 
-func getLBToProcess(rr *RemoteRegistry, updatedLB []string) []string {
+func getLBToProcess(updatedLB []string, cache *[]string) []string {
 	var clusersToProcess []string
-	if rr.AdmiralCache.NLBEnabledCluster == nil {
-		rr.AdmiralCache.NLBEnabledCluster = updatedLB
+	if cache == nil || len(*cache) == 0 {
+		*cache = updatedLB
 		clusersToProcess = updatedLB
 		return clusersToProcess
 	} else {
 		//Validate if New ClusterAdded
 		for _, clusterFromAdmiralParam := range updatedLB {
-			if !slices.Contains(rr.AdmiralCache.NLBEnabledCluster, clusterFromAdmiralParam) {
+			if !slices.Contains(*cache, clusterFromAdmiralParam) {
 				clusersToProcess = append(clusersToProcess, clusterFromAdmiralParam)
 			}
 		}
 
 		//Validate if cluster Removed
-		for _, clusterFromCache := range rr.AdmiralCache.NLBEnabledCluster {
+		for _, clusterFromCache := range *cache {
 			if !slices.Contains(updatedLB, clusterFromCache) {
 				clusersToProcess = append(clusersToProcess, clusterFromCache)
 			}

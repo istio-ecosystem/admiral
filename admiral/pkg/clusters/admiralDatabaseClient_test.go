@@ -696,3 +696,30 @@ func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
 		})
 	}
 }
+
+func Test_getLBToProcess(t *testing.T) {
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.AdmiralCache.NLBEnabledCluster = []string{}
+
+	type args struct {
+		updatedLB []string
+		cache     *[]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{"When cache is not updated then getLBToProcess should be all updated list ",
+			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{}}, []string{"cluster1", "cluster2"}},
+		{"When cluster is removed from update list then getLBToProcess should return removed cluster",
+			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{"cluster1", "cluster2", "cluster3"}}, []string{"cluster3"}},
+		{"When cluster is added from update list then getLBToProcess should return added cluster",
+			args{updatedLB: []string{"cluster1", "cluster2", "cluster3"}, cache: &[]string{"cluster1", "cluster2"}}, []string{"cluster3"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, getLBToProcess(tt.args.updatedLB, tt.args.cache), "getLBToProcess(%v, %v)", tt.args.updatedLB, *tt.args.cache)
+		})
+	}
+}
