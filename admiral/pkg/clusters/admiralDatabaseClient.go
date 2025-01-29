@@ -221,9 +221,9 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
 		ctx := context.Context(context.Background())
 		//Process NLB Cluster
-		processLBMigration(ctx, rr, rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBEnabledClusters, common.GetAdmiralParams().NLBIngressLabel)
+		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, common.GetAdmiralParams().NLBIngressLabel)
 		//Process CLB Cluster
-		processLBMigration(ctx, rr, rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().CLBEnabledClusters, common.GetAdmiralParams().LabelSet.GatewayApp)
+		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, common.GetAdmiralParams().LabelSet.GatewayApp)
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
 	}
@@ -231,20 +231,20 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 	return nil
 }
 
-func processLBMigration(ctx context.Context, rr *RemoteRegistry, cachedLBCluster []string, updatedLBs []string, lbLabel string) {
+func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, lbLabel string) {
 
 	log.Info("Update LB")
-	if cachedLBCluster != nil {
-		for _, cluster := range getLBToProcess(rr, updatedLBs) {
-			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
-				if fetchService.Labels[common.App] == lbLabel {
-					log.Info("Processing LB migration for Cluster : ", cluster)
-					go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
-					go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
-				}
+	//if cachedLBCluster != nil {
+	for _, cluster := range getLBToProcess(rr, updatedLBs) {
+		for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
+			if fetchService.Labels[common.App] == lbLabel {
+				log.Info("Processing LB migration for Cluster : ", cluster)
+				go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
+				go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
 			}
 		}
 	}
+	//}
 
 }
 
@@ -252,6 +252,7 @@ func getLBToProcess(rr *RemoteRegistry, updatedLB []string) []string {
 	var clusersToProcess []string
 	if rr.AdmiralCache.NLBEnabledCluster == nil {
 		rr.AdmiralCache.NLBEnabledCluster = updatedLB
+		clusersToProcess = updatedLB
 		return clusersToProcess
 	} else {
 		//Validate if New ClusterAdded
