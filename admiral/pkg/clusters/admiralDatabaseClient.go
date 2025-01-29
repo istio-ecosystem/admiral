@@ -233,19 +233,17 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
 func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, existingCache *[]string, lbLabel string) {
 
-	log.Info("Update LB")
-	//if cachedLBCluster != nil {
+	log.Infof("task=%s, Processing LB migration for %s. UpdateReceived=%s, ExistingCache=%s, ", common.LBUpdateProcessor, lbLabel, updatedLBs, existingCache)
+
 	for _, cluster := range getLBToProcess(updatedLBs, existingCache) {
 		for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
 			if fetchService.Labels[common.App] == lbLabel {
-				log.Info("Processing LB migration for Cluster : ", cluster)
+				log.Infof("task=%s, Processing LB migration for Cluster : %s", common.LBUpdateProcessor, cluster)
 				go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
 				go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
 			}
 		}
 	}
-	//}
-
 }
 
 func getLBToProcess(updatedLB []string, cache *[]string) []string {
