@@ -37,6 +37,7 @@ var (
 )
 
 const (
+	Admiral                       = "admiral"
 	NamespaceKubeSystem           = "kube-system"
 	NamespaceIstioSystem          = "istio-system"
 	IstioIngressGatewayLabelValue = "istio-ingressgateway"
@@ -121,6 +122,8 @@ const (
 	LastUpdatedAt = "lastUpdatedAt"
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
+
+	DynamicConfigUpdate = "DynamicConfigUpdate"
 )
 
 type Event string

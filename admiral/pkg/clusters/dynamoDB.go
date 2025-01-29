@@ -35,6 +35,9 @@ type DynamoDBConfigWrapper struct {
 	DynamoDBConfig DynamoDBConfig `yaml:"dynamoDB,omitempty"`
 }
 
+// Store last known CheckSum of DynamoDB config
+var DynamicConfigCheckSum [16]byte
+
 /*
 Reference struct used to unmarshall the DynamoDB config present in the yaml config file
 */
@@ -69,6 +72,17 @@ type WorkloadData struct {
 	LastUpdatedAt       string           `json:"lastUpdatedAt"` // GTP updation time in RFC3339 format
 	SuccessCluster      []string         `json:"successClusters"`
 	FailedClusters      []string         `json:"failedClusters"`
+}
+
+type DynamicConfigData struct {
+	/*
+		DynamoDB primary key only support string, binary, int.
+		Conversation from binary to bool is not straight forward hence choosing string
+	*/
+	EnableDynamicConfig    string   `json:"enableDynamicConfig"`
+	NLBEnabledClusters     []string `json:"nlbEnabledClusters"`
+	NLBEnabledIdentityList []string `json:"nlbEnabledAssetAlias"`
+	CLBEnabledClusters     []string `json:"clbEnabledClusters"`
 }
 
 type DynamoClient struct {
@@ -203,6 +217,52 @@ func (client *DynamoClient) getWorkloadDataItemByIdentityAndEnv(env, identity, t
 	}
 
 	return workloadDataItems, nil
+}
+
+func (client *DynamoClient) getDynamicConfig(key string, value string, tableName string) (DynamicConfigData, error) {
+
+	configData := DynamicConfigData{}
+
+	keyCond := expression.KeyEqual(expression.Key(key), expression.Value(value))
+
+	expr, err := expression.NewBuilder().
+		WithKeyCondition(keyCond).
+		Build()
+
+	if err != nil {
+		return configData, err
+	}
+
+	dbQuery := dynamodb.QueryInput{
+		TableName:                 aws.String(tableName),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		KeyConditionExpression:    expr.KeyCondition(),
+		FilterExpression:          expr.Filter(),
+	}
+
+	items, err := client.svc.Query(&dbQuery)
+
+	if err != nil {
+		return configData, fmt.Errorf("task=%s, Failed to fetch dynamic config : %s", common.DynamicConfigUpdate, err)
+	}
+
+	if items == nil {
+		log.Infof("Failed to fetch dynamic config : %s", tableName)
+		return configData, nil
+	}
+
+	if items.Count != nil && *items.Count == 1 {
+		err = dynamodbattribute.UnmarshalMap(items.Items[0], &configData)
+		if err != nil {
+			return configData, fmt.Errorf("task=%s, failed to unmarshal table items, err: %v", common.DynamicConfigUpdate, err)
+		}
+
+	} else {
+		return configData, fmt.Errorf("task=%s, Expected only 1 row but got %d for tableName : %s", common.DynamicConfigUpdate, items.Count, tableName)
+	}
+
+	return configData, nil
 }
 
 /*

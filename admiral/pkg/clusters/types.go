@@ -93,6 +93,7 @@ type RemoteRegistry struct {
 	StartTime                   time.Time
 	ServiceEntrySuspender       ServiceEntrySuspender
 	AdmiralDatabaseClient       AdmiralDatabaseManager
+	DynamicConfigDatabaseClient AdmiralDatabaseManager
 	DependencyController        *admiral.DependencyController
 	ShardController             *admiral.ShardController
 	ClientLoader                loader.ClientLoader
@@ -111,6 +112,7 @@ type ModifySEFunc func(ctx context.Context, event admiral.EventType, env string,
 func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *RemoteRegistry {
 	var serviceEntrySuspender ServiceEntrySuspender
 	var admiralDatabaseClient AdmiralDatabaseManager
+	var admiralDynamicConfigDatabaseClient AdmiralDatabaseManager
 	var err error
 
 	gtpCache := &globalTrafficCache{}
@@ -162,6 +164,12 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		serviceEntrySuspender = NewDummyServiceEntrySuspender()
 	}
 
+	if common.IsAdmiralDynamicConfigEnabled() {
+		admiralDynamicConfigDatabaseClient, err = NewDynamicConfigDatabaseClient(common.GetAdmiralConfigPath(), NewDynamoClient)
+	} else {
+		admiralDynamicConfigDatabaseClient = &DummyDatabaseClient{}
+	}
+
 	if common.GetEnableWorkloadDataStorage() {
 		admiralDatabaseClient, err = NewAdmiralDatabaseClient(common.GetAdmiralConfigPath(), NewDynamoClient)
 		if err != nil {
@@ -186,6 +194,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		AdmiralCache:                admiralCache,
 		ServiceEntrySuspender:       serviceEntrySuspender,
 		AdmiralDatabaseClient:       admiralDatabaseClient,
+		DynamicConfigDatabaseClient: admiralDynamicConfigDatabaseClient,
 		ClientLoader:                clientLoader,
 		ClusterIdentityStoreHandler: registry.NewClusterIdentityStoreHandler(),
 		ConfigSyncer:                registry.NewConfigSync(),
@@ -195,6 +204,15 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 	if common.IsAdmiralOperatorMode() {
 		rr.RegistryClient = registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER"))
 		rr.AdmiralCache.ClusterLocalityCache = common.NewMapOfMaps()
+	}
+
+	/*
+		Load data from dynamoDB before async process starts.
+		This is done to avoid any transitive state where component starts with outofsync config.
+		Later down the process like async processor will take on going config pushes.
+	*/
+	if common.IsAdmiralDynamicConfigEnabled() {
+		ReadAndUpdateSyncAdmiralConfig(rr.DynamicConfigDatabaseClient)
 	}
 
 	return rr

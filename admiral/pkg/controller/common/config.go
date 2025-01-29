@@ -56,6 +56,10 @@ func GetAdmiralParams() AdmiralParams {
 	return wrapper.params
 }
 
+func UpdateAdmiralParams(params AdmiralParams) {
+	wrapper.params = params
+}
+
 func GetAdmiralProfile() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
@@ -144,6 +148,12 @@ func GetEnableWorkloadDataStorage() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.EnableWorkloadDataStorage
+}
+
+func IsAdmiralDynamicConfigEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableDynamicConfig
 }
 
 func GetHostnameSuffix() string {

@@ -78,6 +78,10 @@ func GetRootCmd(args []string) *cobra.Command {
 				log.Fatalf("Error: %v", err)
 			}
 
+			if common.IsAdmiralDynamicConfigEnabled() {
+				go clusters.UpdateASyncAdmiralConfig(remoteRegistry.DynamicConfigDatabaseClient, params.DynamicSyncPeriod)
+			}
+
 			// This is required for PERF tests only.
 			// Perf tests requires remote registry object for validations.
 			// There is no way to inject this object
@@ -267,6 +271,16 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
 	rootCmd.PersistentFlags().StringSliceVar(&params.DiscoveryClustersForNumaflow, "client_discovery_clusters_for_numaflow", []string{}, "List of clusters for client discovery for numaflow types")
+
+	//Parameter for DynamicConfigPush
+	rootCmd.PersistentFlags().BoolVar(&params.EnableDynamicConfig, "enable_dynamic_config", true, "Enable/Disable Dynamic Configuration")
+	rootCmd.PersistentFlags().StringVar(&params.DynamicConfigDynamoDBTableName, "dynamic_config_dynamodb_table_name", "dynamic-config-dev", "The name of the dynamic config dynamodb table")
+	rootCmd.PersistentFlags().IntVar(&params.DynamicSyncPeriod, "dynamic_sync_period", 10, "Duration in min after which the dynamic sync get performed")
+
+	//Parameter for NLB releated migration
+	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledClusters, "nlb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for NLB")
+	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledIdentityList, "nlb_enabled_identity_list", []string{}, "Comma seperated list of enabled idenity list to be enabled for NLB")
+	rootCmd.PersistentFlags().StringSliceVar(&params.CLBEnabledClusters, "clb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for CLB")
 
 	return rootCmd
 }

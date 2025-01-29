@@ -1916,3 +1916,42 @@ func TestSortGtpsByPriorityAndCreationTime(t *testing.T) {
 		})
 	}
 }
+
+func TestIsIstioIngressGatewayService(t *testing.T) {
+	svc1 := k8sCoreV1.Service{
+		TypeMeta:   v1.TypeMeta{},
+		ObjectMeta: v1.ObjectMeta{},
+		Spec:       k8sCoreV1.ServiceSpec{},
+		Status:     k8sCoreV1.ServiceStatus{},
+	}
+
+	svc2 := svc1
+	svc2.Labels = map[string]string{"app": "istio-ingressgateway"}
+	svc2.Namespace = NamespaceIstioSystem
+
+	svc3 := svc2
+	svc3.Namespace = NamespaceIstioSystem + "_TEST"
+
+	svc4 := svc1
+	svc4.Namespace = NamespaceIstioSystem
+
+	type args struct {
+		svc *k8sCoreV1.Service
+		key string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"When Empty K8S Service is present then expect no exception & result is false", args{&svc1, "istio-ingressgateway"}, false},
+		{"When correct K8S service is present then expect no exception & result is true", args{&svc2, "istio-ingressgateway"}, true},
+		{"When K8S service containts wrong namespace then expect no exception & result is false", args{&svc3, "istio-ingressgateway"}, false},
+		{"When K8S service don't have correct label then expect no exception & result is false", args{&svc4, "istio-ingressgateway"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, IsIstioIngressGatewayService(tt.args.svc, tt.args.key), "IsIstioIngressGatewayService(%v, %v)", tt.args.svc, tt.args.key)
+		})
+	}
+}
