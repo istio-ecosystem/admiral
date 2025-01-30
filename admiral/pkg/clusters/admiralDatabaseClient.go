@@ -101,11 +101,11 @@ func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identit
 
 func checkIfDynamicConfigDatabaseClientIsInitialize(dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) error {
 	if dynamicConfigDatabaseClient == nil || dynamicConfigDatabaseClient.dynamoClient == nil {
-		return fmt.Errorf("DynamicConfig: dynamoClient is not initialized")
+		return fmt.Errorf("task=%s, dynamoClient is not initialized", common.DynamicConfigUpdate)
 	}
 
 	if dynamicConfigDatabaseClient.database == nil {
-		return fmt.Errorf("DynamicConfig: database is not initialized")
+		return fmt.Errorf("task=%s, database is not initialized", common.DynamicConfigUpdate)
 	}
 
 	return nil
@@ -121,23 +121,6 @@ func (databaseClient *DummyDatabaseClient) Delete(data interface{}, logger *log.
 
 func (databaseClient *DummyDatabaseClient) Get(env, identity string) (interface{}, error) {
 	return nil, nil
-}
-
-func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
-	//TODO implement me
-	//At point of release there is no plan to support push config to dyanmic config storage
-	panic("implement me")
-}
-
-func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
-	//TODO implement me
-	//At point of release there is no plan to support delete config to dyanmic config storage
-	panic("implement me")
-}
-
-func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
-	//Variable renaming is done to re-purpose existing interface
-	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
 }
 
 func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc func(string, string) (*DynamoClient, error)) (*WorkloadDatabaseClient, error) {
