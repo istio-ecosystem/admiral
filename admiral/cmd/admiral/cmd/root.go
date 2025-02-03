@@ -264,6 +264,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")
 
+	// Flags pertaining to VS based routing in-cluster
+	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRoutingInCluster, "enable_vs_routing_in_cluster", false, "Enable/Disable VS Based Routing in cluster")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledClusters, "vs_routing_in_cluster_enabled_clusters", []string{}, "The source clusters to enable VS based routing in-cluster on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledIdentities, "vs_routing_in_cluster_enabled_identities", []string{}, "The identities to enable VS based routing in-cluster on")
+
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
 	rootCmd.PersistentFlags().StringSliceVar(&params.DiscoveryClustersForNumaflow, "client_discovery_clusters_for_numaflow", []string{}, "List of clusters for client discovery for numaflow types")
