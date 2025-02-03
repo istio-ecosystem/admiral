@@ -912,8 +912,8 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
 		//Validate if provided LB information is not default dummy, If Dummy return CLB
 		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
-			return overwriteEndpoint, port
 			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
+			return overwriteEndpoint, port
 		}
 	}
 	return endpoint, port

@@ -90,7 +90,7 @@ func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data inte
 
 func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
 	//Variable renaming is done to re-purpose existing interface
-	err := checkIfDynamicConfigDatabaseClientIsInitialize(dynamicConfigDatabaseClient)
+	err := checkIfDynamicConfigDatabaseClientIsInitialized(dynamicConfigDatabaseClient)
 
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identit
 	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
 }
 
-func checkIfDynamicConfigDatabaseClientIsInitialize(dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) error {
+func checkIfDynamicConfigDatabaseClientIsInitialized(dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) error {
 	if dynamicConfigDatabaseClient == nil || dynamicConfigDatabaseClient.dynamoClient == nil {
 		return fmt.Errorf("task=%s, dynamoClient is not initialized", common.DynamicConfigUpdate)
 	}
