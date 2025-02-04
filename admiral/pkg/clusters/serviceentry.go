@@ -604,7 +604,15 @@ func modifyServiceEntryForNewServiceOrPod(
 				}
 			}
 
-			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+			clusterIngress, err := getClusterIngress(rc, common.GetAdmiralParams())
+			if err != nil {
+				err := fmt.Errorf(
+					"error getting cluster ingress for the cluster %s due to error %w", sourceCluster, err)
+				ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS,
+					sourceCluster, err.Error())
+				modifySEerr = common.AppendError(modifySEerr, err)
+				continue
+			}
 			for _, ep := range serviceEntry.Endpoints {
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisioned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
@@ -873,6 +881,23 @@ func modifyServiceEntryForNewServiceOrPod(
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", "", start)
 
 	return serviceEntries, modifySEerr
+}
+
+func getClusterIngress(rc *RemoteController, admiralParams common.AdmiralParams) (string, error) {
+	if rc == nil {
+		return "", fmt.Errorf("remote controller not initialized")
+	}
+	if rc.ServiceController == nil {
+		return "", fmt.Errorf("service controller not initialized")
+	}
+	if rc.ServiceController.Cache == nil {
+		return "", fmt.Errorf("service controller cache not initialized")
+	}
+	if admiralParams.LabelSet == nil {
+		return "", fmt.Errorf("admiralparams labelset not initialized")
+	}
+	clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiralParams.LabelSet.GatewayApp, common.NamespaceIstioSystem)
+	return clusterIngress, nil
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
