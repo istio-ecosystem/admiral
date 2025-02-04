@@ -10291,3 +10291,86 @@ func TestOrderSourceClusters(t *testing.T) {
 		})
 	}
 }
+
+func TestGetClusterIngressGateway(t *testing.T) {
+
+	stop := make(chan struct{})
+	config := rest.Config{Host: "localhost"}
+
+	serviceController, _ := admiral.NewServiceController(
+		stop, &test.MockServiceHandler{}, &config, time.Second*1, loader.GetFakeClientLoader())
+
+	invalidServiceController, _ := admiral.NewServiceController(
+		stop, &test.MockServiceHandler{}, &config, time.Second*1, loader.GetFakeClientLoader())
+	invalidServiceController.Cache = nil
+
+	testCases := []struct {
+		name            string
+		rc              *RemoteController
+		labelSet        *common.LabelSet
+		expectedIngress string
+		expectedError   error
+	}{
+		{
+			name: "Given nil remoteController" +
+				"When getClusterIngress func is called" +
+				"Then it should return an error",
+			rc:            nil,
+			expectedError: fmt.Errorf("remote controller not initialized"),
+		},
+		{
+			name: "Given nil ServiceController" +
+				"When getClusterIngress func is called" +
+				"Then it should return an error",
+			rc:            &RemoteController{},
+			expectedError: fmt.Errorf("service controller not initialized"),
+		},
+		{
+			name: "Given nil ServiceControllerCache" +
+				"When getClusterIngress func is called" +
+				"Then it should return an error",
+			rc: &RemoteController{
+				ServiceController: invalidServiceController,
+			},
+			expectedError: fmt.Errorf("service controller cache not initialized"),
+		},
+		{
+			name: "Given nil admiralParams.LabelSet" +
+				"When getClusterIngress func is called" +
+				"Then it should return an error",
+			rc: &RemoteController{
+				ServiceController: serviceController,
+			},
+			labelSet:      nil,
+			expectedError: fmt.Errorf("admiralparams labelset not initialized"),
+		},
+		{
+			name: "Given all valid params" +
+				"When getClusterIngress func is called" +
+				"Then it should return a valid cluster ingress and no errors",
+			rc: &RemoteController{
+				ServiceController: serviceController,
+			},
+			labelSet:        &common.LabelSet{GatewayApp: "gatewayapp"},
+			expectedError:   nil,
+			expectedIngress: "dummy.admiral.global",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams := common.AdmiralParams{
+				LabelSet: tc.labelSet,
+			}
+			actual, err := getClusterIngress(tc.rc, admiralParams)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedIngress, actual)
+			}
+		})
+	}
+
+}
