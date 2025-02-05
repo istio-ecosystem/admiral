@@ -498,7 +498,7 @@ func getDestinationsToBeProcessed(eventType admiral.EventType,
 	return updatedDestinations, nonMeshEnabledExists
 }
 
-func IsServiceControllerInitialized(rc *RemoteController) error {
+func isServiceControllerInitialized(rc *RemoteController) error {
 	if rc == nil {
 		fmt.Errorf("remote controller not initialized")
 	}

@@ -231,7 +231,7 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 	log.Infof("task=%s, Processing LB migration for %s. UpdateReceived=%s, ExistingCache=%s, ", common.LBUpdateProcessor, lbLabel, updatedLBs, existingCache)
 
 	for _, cluster := range getLBToProcess(updatedLBs, existingCache) {
-		err := IsServiceControllerInitialized(rr.remoteControllers[cluster])
+		err := isServiceControllerInitialized(rr.remoteControllers[cluster])
 		if err == nil {
 			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
 				if fetchService.Labels[common.App] == lbLabel {

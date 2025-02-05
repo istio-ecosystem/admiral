@@ -893,7 +893,7 @@ If provided cluster is overwritten with some other app label mention in nlb-isti
 */
 func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int, error) {
 
-	err := IsServiceControllerInitialized(rc)
+	err := isServiceControllerInitialized(rc)
 	if err != nil {
 		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, err
 	}
