@@ -242,16 +242,16 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.GatewayAssetAliases, "gateway_asset_aliases", []string{"Intuit.platform.servicesgateway.servicesgateway"}, "The asset aliases used for API Gateway")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableActivePassive, "enable_active_passive", false, "Enable/Disable Active-Passive behavior")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
-	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
-	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", false, "Enable/Disable Replica Count Check")
+	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", true, "Enable/Disable Replica Count Check")
 	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabled, "client_initiated_processing_enabled", true, "Enable/Disable Client Initiated Processing")
 	rootCmd.PersistentFlags().BoolVar(&params.PreventSplitBrain, "prevent_split_brain", true, "Enable/Disable Explicit Split Brain prevention logic")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IgnoreLabelsAnnotationsVSCopyList, "ignore_labels_annotations_vs_copy_list", []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"}, "Labels and annotations that should not be preserved during VS copy")
 
 	//Admiral 2.0 flags
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
+	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().StringVar(&params.OperatorSyncNamespace, "operator_sync_namespace", "admiral-operator-sync",
 		"Namespace in which Admiral Operator will put its generated configurations")
 	rootCmd.PersistentFlags().StringVar(&params.LabelSet.ShardIdentityLabelKey, "shard_identity_label_key", "admiral.io/shardIdentity", "used to filter which shard Admiral Operator will watch")
@@ -261,9 +261,10 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Filter tags for the specific admiral operator namespace secret to watch")
 	rootCmd.PersistentFlags().StringVar(&params.RegistryClientHost, "registry_client_host", "https://registry.com", "Host section of the url for a call to service registry")
 	rootCmd.PersistentFlags().StringVar(&params.RegistryClientAppId, "registry_client_app_id", "admiral", "App Id for auth header")
-	rootCmd.PersistentFlags().StringVar(&params.RegistryClientAppSecret, "registry_client_app_secret", "secrets/admiral/app/secret", "Path to secret for auth header")
+	rootCmd.PersistentFlags().StringVar(&params.RegistryClientAppSecret, "registry_client_app_secret", "secrets/admiral/credentials/preprod", "Path to secret for auth header")
 	rootCmd.PersistentFlags().StringVar(&params.RegistryClientBaseURI, "registry_client_base_uri", "v1", "Base URI section of of the url for a call to service registry")
 	rootCmd.PersistentFlags().StringVar(&params.AdmiralAppEnv, "admiral_app_env", "preProd", "The env of admiral used for a call to service registry")
+	rootCmd.PersistentFlags().StringSliceVar(&params.AdmiralStateSyncerClusters, "admiral_state_syncer_clusters", []string{}, "List of clusters that Admiral State Syncer syncs to registry for")
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
@@ -272,11 +273,6 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")
-
-	// Flags pertaining to VS based routing in-cluster
-	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRoutingInCluster, "enable_vs_routing_in_cluster", false, "Enable/Disable VS Based Routing in cluster")
-	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledClusters, "vs_routing_in_cluster_enabled_clusters", []string{}, "The source clusters to enable VS based routing in-cluster on")
-	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledIdentities, "vs_routing_in_cluster_enabled_identities", []string{}, "The identities to enable VS based routing in-cluster on")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")

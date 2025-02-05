@@ -646,7 +646,7 @@ func TestBuildServiceEntriesFromIdentityConfig_MultipleEndpoints(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
-	rr, _ := InitAdmiralOperator(context.Background(), admiralParams)
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
 	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
 	identityConfig := registry.GetSampleIdentityConfigWithRemoteEndpoints("sample")
 	expectedLocalServiceEntryPRF := createMockServiceEntryWithTwoEndpoints("prf", "sample", "app-1-spk-root-service.ns-1-usw2-prf.svc.cluster.local.", 8090, []string{"istio-system", "ns-1-usw2-e2e", "ns-1-usw2-prf", "ns-1-usw2-qal"})

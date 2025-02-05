@@ -367,7 +367,7 @@ func TestMakeCallToRegistry(t *testing.T) {
 			name: "Given a valid data format to marshal, " +
 				"When the response code is not 200, " +
 				"Then the err returned should match the expected err",
-			expectedError: fmt.Errorf("response code for request to %s was %v", registryUrl, 404),
+			expectedError: fmt.Errorf("response code for request to %s was %v with body: dummyRespBody", registryUrl, 404),
 			data:          validData,
 			client:        &baseClientResponseCodeNot200,
 		},

@@ -3,6 +3,7 @@ package registry
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -74,7 +75,16 @@ func makeCallToRegistry(url, tid, method string, data map[string]interface{}, cl
 		return fmt.Errorf("response for request to %s was nil", url)
 	}
 	if response.StatusCode != 200 {
-		return fmt.Errorf("response code for request to %s was %v", url, response.StatusCode)
+		respBody := "nil response body"
+		if response.Body != nil {
+			defer response.Body.Close()
+			bytes, err := io.ReadAll(response.Body)
+			if err != nil {
+				log.Errorf("op=%v type=%v url=%v data=%v, err=%s txId=%v", "readResponseBody", "responseErr", url, data, err.Error(), tid)
+			}
+			respBody = string(bytes)
+		}
+		return fmt.Errorf("response code for request to %s was %v with body: %v", url, response.StatusCode, respBody)
 	}
 	return nil
 }
@@ -116,40 +126,49 @@ func (c *registryClient) DeleteCustomData(cluster, namespace, name, resourceType
 }
 
 func (c *registryClient) PutHostingData(cluster, namespace, name, assetAlias, resourceType, tid string, value interface{}) error {
-	hostingMetadataUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
-	byteVal, _ := json.Marshal(value)
+	hostingMetadataUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s/metadata/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, "obj", resourceType, common.GetAdmiralAppEnv(), assetAlias)
+	byteVal, err := json.Marshal(value)
 	strVal := string(byteVal)
 	hostingMetadataPayload := map[string]interface{}{
 		"json": strVal,
-		"key":  name,
-		//"notes": "string",
+		"key":  "obj", //needs to be the same the value after metadata/
+		"type": resourceType,
 		//"value": "string",
+	}
+	if err != nil {
+		log.Errorf("op=%v type=%v name=%v cluster=%s message=%v", "registryEvent", "hosting", name, cluster, "jsonMarshalErr: "+err.Error()+", strVal: "+strVal+", hostingMetadataUrl: "+hostingMetadataUrl+", txId: "+tid)
+	} else {
+		log.Errorf("op=%v type=%v name=%v cluster=%s message=%v", "registryEvent", "hosting", name, cluster, "strVal: "+strVal+", hostingMetadataUrl: "+hostingMetadataUrl+", txId: "+tid)
 	}
 	metadataErr := makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
 	if metadataErr != nil {
-		// Check if call failed because this hosting did not exist in registry - if so, then create the hosting and populate with the metadata separately
+		// Check if call failed because this hosting did not exist in registry - if so, then create the namespace and hosting and populate with the metadata separately
 		// The metadata is added in a separate call so that we avoid a race condition between two hosting metadata calls for a new hosting overwriting one another
-		if strings.Contains(metadataErr.Error(), "No Namespace Found") {
-			hostingUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, assetAlias, resourceType, common.GetAdmiralAppEnv(), assetAlias)
+		log.Errorf("op=%v type=%v name=%v cluster=%s message=%v", "registryEvent", "hostingMetadataErr", name, cluster, "metadataerr: "+metadataErr.Error()+", hostingMetadataUrl: "+hostingMetadataUrl+", txId: "+tid)
+		if strings.Contains(metadataErr.Error(), "404") {
+			namespaceUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace)
+			namespacePayload := map[string]interface{}{
+				"name": namespace,
+			}
+			namespaceErr := makeCallToRegistry(namespaceUrl, tid, http.MethodPut, namespacePayload, c.client)
+			if namespaceErr != nil {
+				log.Errorf("op=%v type=%v name=%v cluster=%s message=%v", "registryEvent", "namespaceErr", name, cluster, "namespaceerr: "+namespaceErr.Error()+", namespaceUrl: "+namespaceUrl+", txId: "+tid)
+			}
+			hostingUrl := fmt.Sprintf("%s/%s/k8s/clusters/%s/namespaces/%s/hostings/%s?type=%s&env=%s&assetAlias=%s", c.client.GetConfig().Host, c.client.GetConfig().BaseURI, cluster, namespace, name, resourceType, common.GetAdmiralAppEnv(), assetAlias)
 			hostingPayload := map[string]interface{}{
 				"assetAlias": assetAlias,
-				//"assetId":    "string",
-				"env": common.GetAdmiralAppEnv(),
-				//"hostingMetaData": map[string]interface{}{
-				//	"json": strVal,
-				//	"key":  name,
-				//	//"notes": "string",
-				//	//"value": "string",
-				//},
-				"name": name,
-				//"notes": "string",
-				"type": resourceType,
+				"env":        common.GetAdmiralAppEnv(),
+				"name":       name, //k8s hosting object name
+				"type":       resourceType,
 			}
 			hostingErr := makeCallToRegistry(hostingUrl, tid, http.MethodPut, hostingPayload, c.client)
-			if hostingErr == nil {
-				return makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
-			} else {
+			if hostingErr != nil {
+				log.Errorf("op=%v type=%v name=%v cluster=%s message=%v", "registryEvent", "hostingErr", name, cluster, "hostingerr: "+hostingErr.Error()+", hostingUrl: "+hostingUrl+", txId: "+tid)
 				return hostingErr
+			} else {
+				//TODO: possibly this needs to run regardless of error or not - if two hostings picked up, could have race condition here
+				//Also, the hostingErr could fail due to duplicate key error
+				return makeCallToRegistry(hostingMetadataUrl, tid, http.MethodPut, hostingMetadataPayload, c.client)
 			}
 		}
 	}

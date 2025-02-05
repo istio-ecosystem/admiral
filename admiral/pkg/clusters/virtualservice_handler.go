@@ -87,7 +87,7 @@ func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.Virtua
 		}
 		return nil
 	}
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
 		err := vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
 		if err != nil {
 			log.Errorf(LogFormat, common.Add, "VirtualService", obj.Name, vh.clusterID, "failed to update VirtualService custom data")
@@ -108,7 +108,7 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 		}
 		return nil
 	}
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
 		err := vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
 		if err != nil {
 			log.Errorf(LogFormat, common.Update, "VirtualService", obj.Name, vh.clusterID, "failed to update VirtualService custom data")
@@ -129,7 +129,7 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 		}
 		return nil
 	}
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
 		err := vh.remoteRegistry.RegistryClient.DeleteCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string))
 		if err != nil {
 			log.Errorf(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "failed to delete VirtualService custom data")
@@ -394,7 +394,10 @@ func syncVirtualServiceToDependentCluster(
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
 	// Best effort delete for existing virtual service with old name
-	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
+	// only delete if not matching same name
+	if oldVSname != virtualService.Name {
+		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
+	}
 
 	return err
 }
@@ -501,7 +504,9 @@ func syncVirtualServiceToRemoteCluster(
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
 	// Best effort delete of existing virtual service with old name
-	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
+	if oldVSname != virtualService.Name {
+		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
+	}
 	// nolint
 	return err
 }

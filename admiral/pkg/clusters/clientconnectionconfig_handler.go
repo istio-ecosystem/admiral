@@ -77,7 +77,7 @@ func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "received")
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(c.ClusterID) {
 		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
 		if err != nil {
 			log.Errorf(LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
@@ -96,7 +96,7 @@ func (c *ClientConnectionConfigHandler) Updated(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(c.ClusterID) {
 		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
 		if err != nil {
 			log.Errorf(LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
@@ -115,7 +115,7 @@ func (c *ClientConnectionConfigHandler) Deleted(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
 	log.Infof(
 		LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(c.ClusterID) {
 		err := c.RemoteRegistry.RegistryClient.DeleteCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
 		if err != nil {
 			log.Errorf(LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to delete "+common.ClientConnectionConfig+" custom data")

@@ -46,7 +46,7 @@ func Test_ReadSecret(t *testing.T) {
 			"Empty secret value", StateSyncerSecret, "", errors.New("error reading statesyncer secret"),
 		},
 		{
-			"Empty secret value with AvisoAppId", StateSyncerAppId, "", errors.New("statesyncer_appId.txt not found. Using the default appId"),
+			"Empty secret value with StateSyncerAppId", StateSyncerAppId, "", errors.New("statesyncer_appId.txt not found. Using the default appId"),
 		},
 	}
 

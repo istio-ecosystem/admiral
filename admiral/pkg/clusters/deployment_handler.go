@@ -56,17 +56,17 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.Deployment)
 
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
 		// the globalIdentifier is partition + "." + assetAlias, not just assetAlias
 		if event != admiral.Delete {
 			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
 			if err != nil {
-				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to put "+common.Deployment+" hosting data for identity="+globalIdentifier)
+				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to put "+common.Deployment+" hosting data for identity="+globalIdentifier+"with err: "+err.Error())
 			}
 		} else {
 			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
 			if err != nil {
-				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to delete "+common.Deployment+" hosting data for identity="+globalIdentifier)
+				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to delete "+common.Deployment+" hosting data for identity="+globalIdentifier+"with err: "+err.Error())
 			}
 		}
 	}

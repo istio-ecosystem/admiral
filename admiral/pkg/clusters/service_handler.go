@@ -111,7 +111,7 @@ func handleServiceEventForDeployment(
 		log.Infof(LogFormat, "Event", "Deployment", "", clusterName,
 			fmt.Sprintf("updating %v deployments across the cluster for service %s",
 				len(deployments), svc.Name))
-		if common.IsAdmiralStateSyncerMode() {
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
 			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
 			if regErr != nil {
 				log.Errorf(LogFormat, "Event", "Deployment", "", clusterName,
@@ -142,20 +142,24 @@ func handleServiceEventForDeployment(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
-				if common.IsAdmiralStateSyncerMode() {
-					err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), svc.Kind, ctx.Value("txId").(string))
-					if err != nil {
-						allErrors = common.AppendError(allErrors, err)
+				if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+					if common.GetDeploymentGlobalIdentifier(&deployment) != "" {
+						err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), "service", ctx.Value("txId").(string))
+						if err != nil {
+							allErrors = common.AppendError(allErrors, err)
+						}
 					}
 				}
 			}
 		}
 
 		// Why are we deleting the svc and then adding it back in case of delete?
-		if common.IsAdmiralStateSyncerMode() {
-			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), svc.Kind, ctx.Value("txId").(string), svc)
-			if err != nil {
-				allErrors = common.AppendError(allErrors, err)
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+			if common.GetDeploymentGlobalIdentifier(&deployment) != "" {
+				err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), "service", ctx.Value("txId").(string), svc)
+				if err != nil {
+					allErrors = common.AppendError(allErrors, err)
+				}
 			}
 		}
 
@@ -195,7 +199,7 @@ func handleServiceEventForRollout(
 		log.Infof(LogFormat, "Event", "Rollout", "", clusterName,
 			fmt.Sprintf("updating %v rollouts across the cluster for service %s",
 				len(rollouts), svc.Name))
-		if common.IsAdmiralStateSyncerMode() {
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
 			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
 			if regErr != nil {
 				log.Errorf(LogFormat, "Event", "Rollout", "", clusterName,
@@ -226,20 +230,24 @@ func handleServiceEventForRollout(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
-				if common.IsAdmiralStateSyncerMode() {
-					err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), svc.Kind, ctx.Value("txId").(string))
-					if err != nil {
-						allErrors = common.AppendError(allErrors, err)
+				if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+					if common.GetRolloutGlobalIdentifier(&rollout) != "" {
+						err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), "service", ctx.Value("txId").(string))
+						if err != nil {
+							allErrors = common.AppendError(allErrors, err)
+						}
 					}
 				}
 			}
 		}
 
 		// Why are we deleting the svc and then adding it back in case of delete?
-		if common.IsAdmiralStateSyncerMode() {
-			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), svc.Kind, ctx.Value("txId").(string), svc)
-			if err != nil {
-				allErrors = common.AppendError(allErrors, err)
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+			if common.GetRolloutGlobalIdentifier(&rollout) != "" {
+				err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), "service", ctx.Value("txId").(string), svc)
+				if err != nil {
+					allErrors = common.AppendError(allErrors, err)
+				}
 			}
 		}
 

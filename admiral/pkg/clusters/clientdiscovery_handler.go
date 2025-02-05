@@ -36,15 +36,17 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
 
-	if event != admiral.Delete {
-		err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to put "+obj.Type+" hosting data for identity="+globalIdentifier)
-		}
-	} else {
-		err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to delete "+obj.Type+" hosting data for identity="+globalIdentifier)
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+		if event != admiral.Delete {
+			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to put "+obj.Type+" hosting data for identity="+globalIdentifier)
+			}
+		} else {
+			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to delete "+obj.Type+" hosting data for identity="+globalIdentifier)
+			}
 		}
 	}
 

@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -87,6 +88,8 @@ func (c *Client) MakePrivateAuthCall(url string, tid string, method string, body
 		c.Config.AppSecret,
 	)
 
+	log.Errorf("op=%v url=%v tid=%s", "privateAuthCall", url, tid)
+
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Authorization", authHeader)
 
@@ -101,7 +104,7 @@ func makeCall(url string, headers http.Header, method string, body []byte, c *Cl
 	var request *http.Request
 	var err error
 
-	request, err = http.NewRequest(method, url, bytes.NewBuffer(body))
+	request, _ = http.NewRequest(method, url, bytes.NewBuffer(body))
 
 	request.Header = headers
 
@@ -109,6 +112,7 @@ func makeCall(url string, headers http.Header, method string, body []byte, c *Cl
 	response, err = c.HttpClient.Do(request)
 
 	if err != nil {
+		log.Errorf("op=%v url=%v err=%v", "makeCall", url, err)
 		return nil, fmt.Errorf("error executing http request err:%v", err)
 	}
 

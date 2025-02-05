@@ -65,9 +65,8 @@ func (g *globalTrafficCache) Delete(identity string, environment string) error {
 }
 
 func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
-	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(gtp.ClusterID) {
 		err := gtp.RemoteRegistry.RegistryClient.PutCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string), obj)
 		if err != nil {
 			log.Errorf(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "failed to put GlobalTrafficPolicy custom data")
@@ -81,9 +80,8 @@ func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTraffi
 }
 
 func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
-	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(gtp.ClusterID) {
 		err := gtp.RemoteRegistry.RegistryClient.PutCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string), obj)
 		if err != nil {
 			log.Errorf(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "failed to put GlobalTrafficPolicy custom data")
@@ -98,7 +96,7 @@ func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTraf
 
 func (gtp *GlobalTrafficHandler) Deleted(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
 	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
-	if common.IsAdmiralStateSyncerMode() {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(gtp.ClusterID) {
 		err := gtp.RemoteRegistry.RegistryClient.DeleteCustomData(gtp.ClusterID, obj.Namespace, obj.Name, "GlobalTrafficPolicy", ctx.Value("txId").(string))
 		if err != nil {
 			log.Errorf(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "failed to delete GlobalTrafficPolicy custom data")

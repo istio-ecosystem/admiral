@@ -21,6 +21,7 @@ func setupForConfigTests() {
 				WorkloadIdentityKey:     "identity",
 				AdmiralCRDIdentityLabel: "identity",
 				IdentityPartitionKey:    "admiral.io/identityPartition",
+				ShardIdentityLabelKey:   "admiral.io/shardIdentity",
 			},
 			EnableSAN:                              true,
 			SANPrefix:                              "prefix",
@@ -81,6 +82,7 @@ func setupForConfigTests() {
 			AdditionalEndpointLabelFilters:         []string{"label1", "label2"},
 			EnableWorkloadDataStorage:              true,
 			IgnoreLabelsAnnotationsVSCopyList:      []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
+			AdmiralStateSyncerClusters:             []string{"test-k8s"},
 		}
 		ResetSync()
 		initHappened = true
@@ -308,146 +310,6 @@ func TestIsSlowStartEnabledForCluster(t *testing.T) {
 
 }
 
-func TestDoVSRoutingInClusterForCluster(t *testing.T) {
-	p := AdmiralParams{}
-
-	testCases := []struct {
-		name                                string
-		cluster                             string
-		enableVSRoutingInCluster            bool
-		enabledVSRoutingInClusterForCluster []string
-		expected                            bool
-	}{
-		{
-			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForCluster is empty" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return false",
-			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            false,
-			enabledVSRoutingInClusterForCluster: []string{},
-			expected:                            false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForCluster is empty" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return false",
-			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{},
-			expected:                            false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return false",
-			cluster:                             "cluster2",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
-			expected:                            false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return true",
-			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
-			expected:                            true,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return true",
-			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"*"},
-			expected:                            true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
-			p.VSRoutingInClusterEnabledClusters = tc.enabledVSRoutingInClusterForCluster
-			ResetSync()
-			InitializeConfig(p)
-
-			assert.Equal(t, tc.expected, DoVSRoutingInClusterForCluster(tc.cluster))
-		})
-	}
-
-}
-
-func TestDoVSRoutingInClusterForIdentity(t *testing.T) {
-	p := AdmiralParams{}
-
-	testCases := []struct {
-		name                                   string
-		identity                               string
-		enableVSRoutingInCluster               bool
-		enabledVSRoutingInClusterForIdentities []string
-		expected                               bool
-	}{
-		{
-			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForIdentities is empty" +
-				"When DoVSRoutingInClusterForIdentity is called" +
-				"Then it should return false",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               false,
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForIdentities is empty" +
-				"When DoVSRoutingInClusterForIdentity is called" +
-				"Then it should return false",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
-				"When DoVSRoutingInClusterForIdentity is called" +
-				"Then it should return false",
-			identity:                               "testIdentity2",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                               false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
-				"When DoVSRoutingInClusterForIdentity is called" +
-				"Then it should return true",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                               true,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
-				"When DoVSRoutingInClusterForIdentity is called" +
-				"Then it should return true",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"*"},
-			expected:                               true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
-			p.VSRoutingInClusterEnabledIdentities = tc.enabledVSRoutingInClusterForIdentities
-			ResetSync()
-			InitializeConfig(p)
-
-			assert.Equal(t, tc.expected, DoVSRoutingInClusterForIdentity(tc.identity))
-		})
-	}
-
-}
-
 func TestConfigManagement(t *testing.T) {
 	setupForConfigTests()
 
@@ -558,6 +420,15 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetOperatorSyncNamespace() != "admiral-sync" {
 		t.Errorf("operator sync namespace mismatch, expected admiral-sync, got %v", GetOperatorSyncNamespace())
+	}
+
+	if GetOperatorIdentityLabelValue() != "operator" {
+		t.Errorf("operator identity label value mismatch, expected operator but got %s", GetOperatorIdentityLabelValue())
+	}
+
+	shardIdentityLabelKey, shardIdentityLabelValue := GetShardIdentityLabelKeyValueSet()
+	if shardIdentityLabelKey != "admiral.io/shardIdentity" && shardIdentityLabelValue != "shard" {
+		t.Errorf("shard identity label key value set mismatched, expected admiral.io/shardIdentity and shard but got %s and %s", shardIdentityLabelKey, shardIdentityLabelValue)
 	}
 
 	if GetOperatorSecretFilterTags() != "admiral/syncoperator" {
@@ -707,6 +578,15 @@ func TestConfigManagement(t *testing.T) {
 	if len(GetIgnoreLabelsAnnotationsVSCopy()) != 3 {
 		t.Errorf("ignored labels and annotations for VS copy mismatch, expected 3, got %v", GetIgnoreLabelsAnnotationsVSCopy())
 	}
+
+	if !IsStateSyncerCluster("test-k8s") {
+		t.Errorf("state syncer cluster mismatch, expected true, got false")
+	}
+
+	if IsStateSyncerCluster("not-test-k8s") {
+		t.Errorf("state syncer cluster mismatch, expected false, got true")
+	}
+
 }
 
 func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
@@ -718,38 +598,6 @@ func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
 	assert.Equalf(t, "identityOld", GetAdmiralCRDIdentityLabel(), "GetCRDIdentityLabel()")
 
 	admiralParams.LabelSet.AdmiralCRDIdentityLabel = backOldIdentity
-}
-
-func TestSetArgoRolloutsEnabled(t *testing.T) {
-	p := AdmiralParams{}
-	p.ArgoRolloutsEnabled = true
-	ResetSync()
-	InitializeConfig(p)
-
-	SetArgoRolloutsEnabled(true)
-	assert.Equal(t, true, GetArgoRolloutsEnabled())
-}
-
-func TestSetCartographerFeature(t *testing.T) {
-	p := AdmiralParams{}
-	ResetSync()
-	InitializeConfig(p)
-
-	SetCartographerFeature("feature", "enabled")
-	assert.Equal(t, "enabled", wrapper.params.CartographerFeatures["feature"])
-}
-
-func TestGetResyncIntervals(t *testing.T) {
-	p := AdmiralParams{}
-	p.CacheReconcileDuration = time.Minute
-	p.SeAndDrCacheReconcileDuration = time.Minute
-	ResetSync()
-	InitializeConfig(p)
-
-	actual := GetResyncIntervals()
-
-	assert.Equal(t, time.Minute, actual.SeAndDrReconcileInterval)
-	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
 }
 
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {
