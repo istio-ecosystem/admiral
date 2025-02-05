@@ -215,7 +215,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 
-		ingressEndpoint, port := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
@@ -605,7 +605,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					modifySEerr = common.AppendError(modifySEerr, err)
 				}
 			}
-			clusterIngress, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+			clusterIngress, _, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
 
 			if err != nil {
 				err := fmt.Errorf(
@@ -891,19 +891,19 @@ If provided cluster is overwritten with some other app label mention in nlb-isti
 
 	then overwrite load balancer
 */
-func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int) {
-	//if rc == nil {
-	//	return "", fmt.Errorf("remote controller not initialized")
-	//}
-	//if rc.ServiceController == nil {
-	//	return "", fmt.Errorf("service controller not initialized")
-	//}
-	//if rc.ServiceController.Cache == nil {
-	//	return "", fmt.Errorf("service controller cache not initialized")
-	//}
-	//if admiralParams.LabelSet == nil {
-	//	return "", fmt.Errorf("admiralparams labelset not initialized")
-	//}
+func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int, error) {
+	if rc == nil {
+		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("remote controller not initialized")
+	}
+	if rc.ServiceController == nil {
+		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("service controller not initialized")
+	}
+	if rc.ServiceController.Cache == nil {
+		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("service controller cache not initialized")
+	}
+	if common.GetAdmiralParams().LabelSet == nil {
+		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("admiralparams labelset not initialized")
+	}
 
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
@@ -913,10 +913,10 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 		//Validate if provided LB information is not default dummy, If Dummy return CLB
 		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
 			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
-			return overwriteEndpoint, port
+			return overwriteEndpoint, port, nil
 		}
 	}
-	return endpoint, port
+	return endpoint, port, nil
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
@@ -2657,7 +2657,7 @@ func generateServiceEntry(
 	}
 
 	start = time.Now()
-	endpointAddress, port := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
+	endpointAddress, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
 	util.LogElapsedTimeSinceTask(ctxLogger, "GetLoadBalancer", "", "", rc.ClusterID, "", start)
 	var locality string
 	if rc.NodeController.Locality != nil {

@@ -10394,7 +10394,7 @@ func Test_getOverwrittenLoadBalancer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualEndpoint, actualPort := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
+			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
 			assert.Equalf(t, tt.expectedEndpoint, actualEndpoint, fmt.Sprintf("getOverwrittenLoadBalancer should return endpoint %s, but got %s", tt.expectedEndpoint, actualEndpoint))
 			assert.Equalf(t, tt.expectedPort, actualPort, fmt.Sprintf("getOverwrittenLoadBalancer should return port %d, but got %d", tt.expectedPort, actualPort))
 		})
@@ -10403,6 +10403,7 @@ func Test_getOverwrittenLoadBalancer(t *testing.T) {
 
 func TestGetClusterIngressGateway(t *testing.T) {
 
+	ctxLogger := logrus.New().WithContext(context.Background())
 	stop := make(chan struct{})
 	config := rest.Config{Host: "localhost"}
 
@@ -10468,10 +10469,10 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			admiralParams := common.AdmiralParams{
-				LabelSet: tc.labelSet,
-			}
-			actual, err := getClusterIngress(tc.rc, admiralParams)
+			//admiralParams := common.AdmiralParams{
+			//	LabelSet: tc.labelSet,
+			//}
+			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{})
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError, err)
