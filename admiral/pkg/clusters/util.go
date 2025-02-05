@@ -497,3 +497,19 @@ func getDestinationsToBeProcessed(eventType admiral.EventType,
 	}
 	return updatedDestinations, nonMeshEnabledExists
 }
+
+func IsServiceControllerInitialized(rc *RemoteController) error {
+	if rc == nil {
+		fmt.Errorf("remote controller not initialized")
+	}
+	if rc.ServiceController == nil {
+		fmt.Errorf("service controller not initialized")
+	}
+	if rc.ServiceController.Cache == nil {
+		fmt.Errorf("service controller cache not initialized")
+	}
+	if common.GetAdmiralParams().LabelSet == nil {
+		fmt.Errorf("admiralparams labelset not initialized")
+	}
+	return nil
+}

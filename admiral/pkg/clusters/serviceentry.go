@@ -892,17 +892,10 @@ If provided cluster is overwritten with some other app label mention in nlb-isti
 	then overwrite load balancer
 */
 func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int, error) {
-	if rc == nil {
-		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("remote controller not initialized")
-	}
-	if rc.ServiceController == nil {
-		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("service controller not initialized")
-	}
-	if rc.ServiceController.Cache == nil {
-		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("service controller cache not initialized")
-	}
-	if common.GetAdmiralParams().LabelSet == nil {
-		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, fmt.Errorf("admiralparams labelset not initialized")
+
+	err := IsServiceControllerInitialized(rc)
+	if err != nil {
+		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, err
 	}
 
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)

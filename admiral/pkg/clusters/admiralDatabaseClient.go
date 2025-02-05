@@ -180,8 +180,20 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 
 func UpdateASyncAdmiralConfig(rr *RemoteRegistry, syncTime int) {
 
-	for range time.Tick(time.Minute * time.Duration(syncTime)) {
-		ReadAndUpdateSyncAdmiralConfig(rr)
+	ctxDynamicConfig, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(time.Minute * time.Duration(syncTime))
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctxDynamicConfig.Done():
+			log.Infof("task=%v, context done stopping ticker", common.DynamicConfigUpdate)
+			return
+		case <-ticker.C:
+			ReadAndUpdateSyncAdmiralConfig(rr)
+		}
 	}
 }
 
@@ -219,12 +231,17 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 	log.Infof("task=%s, Processing LB migration for %s. UpdateReceived=%s, ExistingCache=%s, ", common.LBUpdateProcessor, lbLabel, updatedLBs, existingCache)
 
 	for _, cluster := range getLBToProcess(updatedLBs, existingCache) {
-		for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
-			if fetchService.Labels[common.App] == lbLabel {
-				log.Infof("task=%s, Processing LB migration for Cluster : %s", common.LBUpdateProcessor, cluster)
-				go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
-				go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
+		err := IsServiceControllerInitialized(rr.remoteControllers[cluster])
+		if err == nil {
+			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
+				if fetchService.Labels[common.App] == lbLabel {
+					log.Infof("task=%s, Cluster=%s, Processing LB migration for Cluster.", common.LBUpdateProcessor, cluster)
+					go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
+					go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
+				}
 			}
+		} else {
+			log.Infof("task=%s, Cluster=%s, Service Controller not initializ. Skipped LB migration for Cluster.", common.LBUpdateProcessor, cluster)
 		}
 	}
 }
@@ -233,23 +250,22 @@ func getLBToProcess(updatedLB []string, cache *[]string) []string {
 	var clusersToProcess []string
 	if cache == nil || len(*cache) == 0 {
 		*cache = updatedLB
-		clusersToProcess = updatedLB
-		return clusersToProcess
-	} else {
-		//Validate if New ClusterAdded
-		for _, clusterFromAdmiralParam := range updatedLB {
-			if !slices.Contains(*cache, clusterFromAdmiralParam) {
-				clusersToProcess = append(clusersToProcess, clusterFromAdmiralParam)
-			}
-		}
-
-		//Validate if cluster Removed
-		for _, clusterFromCache := range *cache {
-			if !slices.Contains(updatedLB, clusterFromCache) {
-				clusersToProcess = append(clusersToProcess, clusterFromCache)
-			}
+		return updatedLB
+	}
+	//Validate if New ClusterAdded
+	for _, clusterFromAdmiralParam := range updatedLB {
+		if !slices.Contains(*cache, clusterFromAdmiralParam) {
+			clusersToProcess = append(clusersToProcess, clusterFromAdmiralParam)
 		}
 	}
+
+	//Validate if cluster Removed
+	for _, clusterFromCache := range *cache {
+		if !slices.Contains(updatedLB, clusterFromCache) {
+			clusersToProcess = append(clusersToProcess, clusterFromCache)
+		}
+	}
+
 	return clusersToProcess
 }
 
