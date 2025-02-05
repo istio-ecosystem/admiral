@@ -1799,6 +1799,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1807,6 +1808,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.preview.test-env.test-identity.global": {
@@ -1901,6 +1903,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1909,6 +1912,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.west.test-env.test-identity.global": {
@@ -1919,6 +1923,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1927,6 +1932,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.east.test-env.test-identity.global": {
@@ -1937,6 +1943,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1945,6 +1952,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.preview.test-env.test-identity.global": {
@@ -2735,4 +2743,245 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetWeightSplits(t *testing.T) {
+
+	testCases := []struct {
+		name            string
+		trafficSplit    int
+		expectedWeights []int32
+	}{
+		{
+			name: "Given 0 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return an empty array of weights",
+			trafficSplit:    0,
+			expectedWeights: []int32{},
+		},
+		{
+			name: "Given 1 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{100}",
+			trafficSplit:    1,
+			expectedWeights: []int32{100},
+		},
+		{
+			name: "Given 2 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{50, 50}",
+			trafficSplit:    2,
+			expectedWeights: []int32{50, 50},
+		},
+		{
+			name: "Given 3 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{34, 33,33}",
+			trafficSplit:    3,
+			expectedWeights: []int32{34, 33, 33},
+		},
+		{
+			name: "Given 4 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{25, 25,25,25}",
+			trafficSplit:    4,
+			expectedWeights: []int32{25, 25, 25, 25},
+		},
+		{
+			name: "Given 9 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{12, 11, 11, 11, 11, 11, 11, 11, 11}",
+			trafficSplit:    9,
+			expectedWeights: []int32{12, 11, 11, 11, 11, 11, 11, 11, 11},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getWeightSplits(tc.trafficSplit)
+			require.Equal(t, tc.expectedWeights, actual)
+		})
+	}
+}
+
+func TestAddWeightsToRouteDestinations(t *testing.T) {
+
+	testCases := []struct {
+		name                     string
+		routeDestinations        map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedError            error
+	}{
+		{
+			name: "Given nil routeDestinations param " +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return an error",
+			routeDestinations: nil,
+			expectedError:     fmt.Errorf("route destinations map is nil"),
+		},
+		{
+			name: "Given a routeDestination with a single destination " +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return without adding any weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=100" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 98,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 2,
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 98,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 2,
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=50" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+			}},
+			expectedError: fmt.Errorf("total weight is 50, expected 100 or 0"),
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=0" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights 50-50",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a three destinations with no weights" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with weights 34-33-33",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 34,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 33,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 33,
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := addWeightsToRouteDestinations(tc.routeDestinations)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, len(tc.expectedRouteDestination), len(tc.routeDestinations))
+			}
+		})
+	}
 }

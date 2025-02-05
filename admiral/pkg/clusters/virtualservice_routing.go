@@ -627,7 +627,54 @@ func getAllVSRouteDestinationsByCluster(
 		}
 	}
 
+	addWeightsToRouteDestinations(destinations)
+
 	return destinations, nil
+}
+
+func addWeightsToRouteDestinations(destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	if destinations == nil {
+		return fmt.Errorf("route destinations map is nil")
+	}
+	for _, routeDestinations := range destinations {
+		if len(routeDestinations) > 1 {
+			// Check if their weights total to 100
+			totalWeight := int32(0)
+			for _, destination := range routeDestinations {
+				totalWeight += destination.Weight
+			}
+			if totalWeight == 100 {
+				continue
+			}
+			if totalWeight > 0 {
+				return fmt.Errorf("total weight is %d, expected 100 or 0", totalWeight)
+			}
+			weightSplits := getWeightSplits(len(routeDestinations))
+			for i, destination := range routeDestinations {
+				destination.Weight = weightSplits[i]
+			}
+		}
+	}
+	return nil
+}
+
+func getWeightSplits(numberOfSplits int) []int32 {
+	if numberOfSplits == 0 {
+		return []int32{}
+	}
+	base := 100 / numberOfSplits
+	r := 100 % numberOfSplits
+	weights := make([]int32, numberOfSplits)
+
+	for i := 0; i < numberOfSplits; i++ {
+		if r > 0 {
+			weights[i] = int32(base + 1)
+			r--
+			continue
+		}
+		weights[i] = int32(base)
+	}
+	return weights
 }
 
 func getDestinationsForGTPDNSPrefixes(
