@@ -75,6 +75,7 @@ type AdmiralParams struct {
 	DeprecatedEnvoyFilterVersion             string
 	EnvoyFilterAdditionalConfig              string
 	EnableRoutingPolicy                      bool
+	RoutingPolicyClusters                    []string
 	ExcludedIdentityList                     []string
 	AdditionalEndpointSuffixes               []string
 	AdditionalEndpointLabelFilters           []string
@@ -107,6 +108,7 @@ type AdmiralParams struct {
 	EnableGenerationCheck                    bool
 	EnableIsOnlyReplicaCountChangedCheck     bool
 	PreventSplitBrain                        bool
+	IgnoreLabelsAnnotationsVSCopyList        []string
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -134,16 +136,30 @@ type AdmiralParams struct {
 	AdmiralAppEnv            string
 
 	// VS Based Routing
-	EnableVSRouting             bool
-	VSRoutingGateways           []string
-	IngressVSExportToNamespaces []string
-	IngressLBPolicy             string
-	VSRoutingEnabledClusters    []string
+	EnableVSRouting                   bool
+	VSRoutingGateways                 []string
+	IngressVSExportToNamespaces       []string
+	IngressLBPolicy                   string
+	VSRoutingDisabledClusters         []string
+	VSRoutingSlowStartEnabledClusters []string
+
+	// VS Based Routing In-Cluster
+	EnableVSRoutingInCluster            bool
+	VSRoutingInClusterEnabledClusters   []string
+	VSRoutingInClusterEnabledIdentities []string
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool
 	ClientDiscoveryClustersForJobs []string
 	DiscoveryClustersForNumaflow   []string
+
+	//DynamicConfig setting
+	EnableDynamicConfig            bool
+	DynamicConfigDynamoDBTableName string
+	DynamicSyncPeriod              int
+	NLBEnabledClusters             []string
+	NLBEnabledIdentityList         []string
+	CLBEnabledClusters             []string
 }
 
 func (b AdmiralParams) String() string {

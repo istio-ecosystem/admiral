@@ -228,7 +228,7 @@ func TestRoutingPolicyAddUpdateDelete(t *testing.T) {
 	rpObj := makeK8sRoutingPolicyObj(rpName, "namespace1", rp)
 	routingPolicyController.Added(ctx, rpObj)
 
-	if !cmp.Equal(handler.Obj.Spec, rpObj.Spec) {
+	if !cmp.Equal(handler.New.Spec, rpObj.Spec) {
 		t.Errorf("Add should call the handler with the object")
 	}
 
@@ -242,13 +242,13 @@ func TestRoutingPolicyAddUpdateDelete(t *testing.T) {
 
 	routingPolicyController.Updated(ctx, updatedRpObj, rpObj)
 
-	if !cmp.Equal(handler.Obj.Spec, updatedRpObj.Spec) {
+	if !cmp.Equal(handler.New.Spec, updatedRpObj.Spec) {
 		t.Errorf("Update should call the handler with the updated object")
 	}
 
 	routingPolicyController.Deleted(ctx, updatedRpObj)
 
-	if handler.Obj != nil {
+	if handler.New != nil {
 		t.Errorf("Delete should delete the routing policy")
 	}
 

@@ -1730,3 +1730,228 @@ func TestMakeDnsPrefixRegionMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestSortGtpsByPriorityAndCreationTime(t *testing.T) {
+	identity := "test-identity"
+	env := "test"
+
+	creationTime1, _ := time.Parse(time.RFC3339, "2024-12-05T06:54:17Z")
+	creationTime2, _ := time.Parse(time.RFC3339, "2024-12-05T08:54:17Z")
+
+	testCases := []struct {
+		name        string
+		gtpsToOrder []*admiralV1Alpha1.GlobalTrafficPolicy
+		expected    []*admiralV1Alpha1.GlobalTrafficPolicy
+	}{
+		{
+			name: "Give lastUpdatedAt is set for both GTPs" +
+				"And priority is same" +
+				"Then sort GTPs based on lastUpdatedAt and ignore creation time",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Give lastUpdatedAt is set for only one GTP" +
+				"And priority is same" +
+				"Then sort GTPs based on creation time and ignore lastUpdatedAt time",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						Labels: map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Give creationTime is set for both GTPs" +
+				"And priority is same and update time is not set" +
+				"Then sort GTPs based on creationTime",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						CreationTimestamp: v1.Time{creationTime1},
+						Labels:            map[string]string{"priority": "10"},
+					},
+				},
+			},
+		},
+		{
+			name: "Given priority is set for both GTPs and different" +
+				"Then sort GTPs based on priority and ignore other fields",
+			gtpsToOrder: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime1},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "1000000"},
+					},
+				},
+			},
+			expected: []*admiralV1Alpha1.GlobalTrafficPolicy{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T08:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime1},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Annotations: map[string]string{
+							"lastUpdatedAt": "2024-12-05T06:54:17Z",
+						},
+						CreationTimestamp: v1.Time{creationTime2},
+						Labels:            map[string]string{"priority": "1000000"},
+					},
+				},
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			SortGtpsByPriorityAndCreationTime(c.gtpsToOrder, identity, env)
+			for i := range c.gtpsToOrder {
+				if !reflect.DeepEqual(c.gtpsToOrder[i], c.expected[i]) {
+					t.Errorf("Wanted the GTP sorting at this index: %v to be: %v, got: %v", i, c.expected[i], c.gtpsToOrder[i])
+				}
+			}
+
+		})
+	}
+}
+
+func TestIsIstioIngressGatewayService(t *testing.T) {
+	svc1 := k8sCoreV1.Service{
+		TypeMeta:   v1.TypeMeta{},
+		ObjectMeta: v1.ObjectMeta{},
+		Spec:       k8sCoreV1.ServiceSpec{},
+		Status:     k8sCoreV1.ServiceStatus{},
+	}
+
+	svc2 := svc1
+	svc2.Labels = map[string]string{"app": "istio-ingressgateway"}
+	svc2.Namespace = NamespaceIstioSystem
+
+	svc3 := svc2
+	svc3.Namespace = NamespaceIstioSystem + "_TEST"
+
+	svc4 := svc1
+	svc4.Namespace = NamespaceIstioSystem
+
+	type args struct {
+		svc *k8sCoreV1.Service
+		key string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"When Empty K8S Service is present then expect no exception & result is false", args{&svc1, "istio-ingressgateway"}, false},
+		{"When correct K8S service is present then expect no exception & result is true", args{&svc2, "istio-ingressgateway"}, true},
+		{"When K8S service containts wrong namespace then expect no exception & result is false", args{&svc3, "istio-ingressgateway"}, false},
+		{"When K8S service don't have correct label then expect no exception & result is false", args{&svc4, "istio-ingressgateway"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, IsIstioIngressGatewayService(tt.args.svc, tt.args.key), "IsIstioIngressGatewayService(%v, %v)", tt.args.svc, tt.args.key)
+		})
+	}
+}

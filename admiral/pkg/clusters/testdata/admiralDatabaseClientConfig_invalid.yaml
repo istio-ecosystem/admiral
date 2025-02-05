@@ -1,0 +1,20 @@
+ignoreIdentityList:
+  stateCheckerPeriodInSeconds: 60
+  dynamoDB:
+    region: "us-east-2"
+    role: "arn:aws:iam::1111111:role/Admiral-IKS-Dynamo-Read-Access"
+    tableName: "admiral-ignore-identity-state"
+    clusterEnvironment: "dev"
+dynamoDB:
+  leaseName: qal
+  podIdentifier: qal-east
+  waitTimeInSeconds: 15
+  failureThreshold: 3
+  tableName: admiral-lease
+  role: arn:aws:iam::11111111:role/Admiral-IKS-Access
+  region: us-east-2
+database:
+  region: "us-west-2"
+  role: "arn:aws:iam::11111111:role/Admiral-IKS-Dynamo-Read-Write-Access"
+  workloadDataTableName: admiral-workload-data-dev
+    testField: "testValue"

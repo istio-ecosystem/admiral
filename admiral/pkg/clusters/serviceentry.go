@@ -106,10 +106,12 @@ func modifyServiceEntryForNewServiceOrPod(
 	defer util.LogElapsedTimeForTask(ctxLogger, "event", "", "", "", "TotalModifySETime")()
 	var modifySEerr error
 	var isServiceEntryModifyCalledForSourceCluster bool
-	totalConfigWriterEvents.Increment(api.WithAttributes(
-		attribute.Key("identity").String(sourceIdentity),
-		attribute.Key("environment").String(env),
-	))
+	if common.IsAdmiralOperatorMode() {
+		totalConfigWriterEvents.Increment(api.WithAttributes(
+			attribute.Key("identity").String(sourceIdentity),
+			attribute.Key("environment").String(env),
+		))
+	}
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
 	partitionedIdentity := sourceIdentity
@@ -216,7 +218,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Infof(common.CtxLogFormat, "event", "", "", clusterId, "neither deployment nor rollouts found")
 			continue
 		}
-		ingressEndpoint, port := getIngressEndpointAndPort(rc)
+		ingressEndpoint, port := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
@@ -612,7 +614,15 @@ func modifyServiceEntryForNewServiceOrPod(
 				}
 			}
 
-			clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+			clusterIngress, err := getClusterIngress(rc, common.GetAdmiralParams())
+			if err != nil {
+				err := fmt.Errorf(
+					"error getting cluster ingress for the cluster %s due to error %w", sourceCluster, err)
+				ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS,
+					sourceCluster, err.Error())
+				modifySEerr = common.AppendError(modifySEerr, err)
+				continue
+			}
 			for _, ep := range serviceEntry.Endpoints {
 				//replace istio ingress-gateway address with local fqdn, note that ingress-gateway can be empty (not provisioned, or is not up)
 				if ep.Address == clusterIngress || ep.Address == "" {
@@ -823,6 +833,10 @@ func modifyServiceEntryForNewServiceOrPod(
 					eventNamespace + common.DotLocalDomainSuffix: drHost,
 				}
 			}
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				"", "", sourceCluster,
+				"Discovery phase: VS based routing disabled for cluster")
 		}
 	}
 
@@ -844,7 +858,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// VS Based Routing
 	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
-	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations)
+	err = addUpdateVirtualServicesForIngress(ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations, cname)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			deploymentOrRolloutName, namespace, "", err)
@@ -887,6 +901,23 @@ func modifyServiceEntryForNewServiceOrPod(
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", "", start)
 
 	return serviceEntries, modifySEerr
+}
+
+func getClusterIngress(rc *RemoteController, admiralParams common.AdmiralParams) (string, error) {
+	if rc == nil {
+		return "", fmt.Errorf("remote controller not initialized")
+	}
+	if rc.ServiceController == nil {
+		return "", fmt.Errorf("service controller not initialized")
+	}
+	if rc.ServiceController.Cache == nil {
+		return "", fmt.Errorf("service controller cache not initialized")
+	}
+	if admiralParams.LabelSet == nil {
+		return "", fmt.Errorf("admiralparams labelset not initialized")
+	}
+	clusterIngress, _ := rc.ServiceController.Cache.GetLoadBalancer(admiralParams.LabelSet.GatewayApp, common.NamespaceIstioSystem)
+	return clusterIngress, nil
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {

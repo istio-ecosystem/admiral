@@ -78,6 +78,10 @@ func GetRootCmd(args []string) *cobra.Command {
 				log.Fatalf("Error: %v", err)
 			}
 
+			if common.IsAdmiralDynamicConfigEnabled() {
+				go clusters.UpdateASyncAdmiralConfig(remoteRegistry.DynamicConfigDatabaseClient, params.DynamicSyncPeriod)
+			}
+
 			// This is required for PERF tests only.
 			// Perf tests requires remote registry object for validations.
 			// There is no way to inject this object
@@ -191,6 +195,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"The value of envoy filter is to add additional config to the filter config section")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableRoutingPolicy, "enable_routing_policy", false,
 		"If Routing Policy feature needs to be enabled")
+	rootCmd.PersistentFlags().StringSliceVar(&params.RoutingPolicyClusters, "routing_policy_enabled_clusters", []string{}, "The destination clusters to enable routing policy filters on")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ExcludedIdentityList, "excluded_identity_list", []string{},
 		"List of identities which should be excluded from getting processed")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableDiffCheck, "enable_diff_check", true, "Enable diff check")
@@ -239,11 +244,11 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralStateSyncerMode, "admiral_state_syncer_mode", false, "Enable/Disable admiral to run as state syncer only")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
-
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", false, "Enable/Disable Replica Count Check")
 	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabled, "client_initiated_processing_enabled", true, "Enable/Disable Client Initiated Processing")
 	rootCmd.PersistentFlags().BoolVar(&params.PreventSplitBrain, "prevent_split_brain", true, "Enable/Disable Explicit Split Brain prevention logic")
+	rootCmd.PersistentFlags().StringSliceVar(&params.IgnoreLabelsAnnotationsVSCopyList, "ignore_labels_annotations_vs_copy_list", []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"}, "Labels and annotations that should not be preserved during VS copy")
 
 	//Admiral 2.0 flags
 	rootCmd.PersistentFlags().BoolVar(&params.AdmiralOperatorMode, "admiral_operator_mode", false, "Enable/Disable admiral operator functionality")
@@ -262,14 +267,30 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	// Flags pertaining to VS based routing
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRouting, "enable_vs_routing", false, "Enable/Disable VS Based Routing")
-	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingEnabledClusters, "vs_routing_enabled_clusters", []string{}, "The source clusters to enable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingDisabledClusters, "vs_routing_disabled_clusters", []string{}, "The source clusters to disable VS based routing on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingSlowStartEnabledClusters, "vs_routing_slow_start_enabled_clusters", []string{}, "The source clusters to where VS routing is enabled and require slow start")
 	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingGateways, "vs_routing_gateways", []string{}, "The PASSTHROUGH gateways to use for VS based routing")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IngressVSExportToNamespaces, "ingress_vs_export_to_namespaces", []string{"istio-system"}, "List of namespaces where the ingress VS should be exported")
 	rootCmd.PersistentFlags().StringVar(&params.IngressLBPolicy, "ingress_lb_policy", "round_robin", "loadbalancer policy for ingress destination rule (round_robin/random/passthrough/least_request)")
 
+	// Flags pertaining to VS based routing in-cluster
+	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRoutingInCluster, "enable_vs_routing_in_cluster", false, "Enable/Disable VS Based Routing in cluster")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledClusters, "vs_routing_in_cluster_enabled_clusters", []string{}, "The source clusters to enable VS based routing in-cluster on")
+	rootCmd.PersistentFlags().StringSliceVar(&params.VSRoutingInClusterEnabledIdentities, "vs_routing_in_cluster_enabled_identities", []string{}, "The identities to enable VS based routing in-cluster on")
+
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
 	rootCmd.PersistentFlags().StringSliceVar(&params.DiscoveryClustersForNumaflow, "client_discovery_clusters_for_numaflow", []string{}, "List of clusters for client discovery for numaflow types")
+
+	//Parameter for DynamicConfigPush
+	rootCmd.PersistentFlags().BoolVar(&params.EnableDynamicConfig, "enable_dynamic_config", true, "Enable/Disable Dynamic Configuration")
+	rootCmd.PersistentFlags().StringVar(&params.DynamicConfigDynamoDBTableName, "dynamic_config_dynamodb_table_name", "dynamic-config-dev", "The name of the dynamic config dynamodb table")
+	rootCmd.PersistentFlags().IntVar(&params.DynamicSyncPeriod, "dynamic_sync_period", 10, "Duration in min after which the dynamic sync get performed")
+
+	//Parameter for NLB releated migration
+	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledClusters, "nlb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for NLB")
+	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledIdentityList, "nlb_enabled_identity_list", []string{}, "Comma seperated list of enabled idenity list to be enabled for NLB")
+	rootCmd.PersistentFlags().StringSliceVar(&params.CLBEnabledClusters, "clb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for CLB")
 
 	return rootCmd
 }

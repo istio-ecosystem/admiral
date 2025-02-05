@@ -8,11 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 
 	"github.com/google/uuid"
 
@@ -36,57 +37,58 @@ var (
 )
 
 const (
-	NamespaceKubeSystem            = "kube-system"
-	NamespaceIstioSystem           = "istio-system"
-	IstioIngressGatewayServiceName = "istio-ingressgateway"
-	Env                            = "env"
-	DefaultMtlsPort                = 15443
-	DefaultServiceEntryPort        = 80
-	Sep                            = "."
-	Dash                           = "-"
-	Slash                          = "/"
-	DotLocalDomainSuffix           = ".svc.cluster.local"
-	AssetAlias                     = "assetAlias"
-	Mesh                           = "mesh"
-	MulticlusterIngressGateway     = "istio-multicluster-ingressgateway"
-	LocalAddressPrefix             = "240.0"
-	NodeRegionLabel                = "failure-domain.beta.kubernetes.io/region"
-	SpiffePrefix                   = "spiffe://"
-	SidecarEnabledPorts            = "traffic.sidecar.istio.io/includeInboundPorts"
-	Default                        = "default"
-	SidecarInjectAnnotation        = "sidecar.istio.io/inject"
-	AdmiralIgnoreAnnotation        = "admiral.io/ignore"
-	AdmiralEnvAnnotation           = "admiral.io/env"
-	AdmiralCnameCaseSensitive      = "admiral.io/cname-case-sensitive"
-	BlueGreenRolloutPreviewPrefix  = "preview"
-	RolloutPodHashLabel            = "rollouts-pod-template-hash"
-	RolloutActiveServiceSuffix     = "active-service"
-	RolloutStableServiceSuffix     = "stable-service"
-	RolloutRootServiceSuffix       = "root-service"
-	CanaryRolloutCanaryPrefix      = "canary"
-	WASMPath                       = "wasmPath"
-	AdmiralProfileIntuit           = "intuit"
-	AdmiralProfileDefault          = "default"
-	AdmiralProfilePerf             = "perf"
-	Cartographer                   = "cartographer"
-	CreatedBy                      = "createdBy"
-	CreatedFor                     = "createdFor"
-	CreatedType                    = "createdType"
-	CreatedForEnv                  = "createdForEnv"
-	IsDisabled                     = "isDisabled"
-	TransactionID                  = "transactionID"
-	RevisionNumber                 = "revisionNumber"
-	EnvoyKind                      = "EnvoyFilter"
-	EnvoyApiVersion                = "networking.istio.io/v1alpha3"
-	SlashSTARRule                  = "/*"
-	AppThrottleConfigVersion       = "v1"
-	EnvoyFilterLogLevel            = "info"
-	EnvoyFilterLogLocation         = "proxy"
-	EnvoyFilterLogFormat           = "json"
-	ADD                            = "Add"
-	UPDATE                         = "Update"
-	DELETE                         = "Delete"
-	AssetLabel                     = "asset"
+	Admiral                       = "admiral"
+	NamespaceKubeSystem           = "kube-system"
+	NamespaceIstioSystem          = "istio-system"
+	IstioIngressGatewayLabelValue = "istio-ingressgateway"
+	Env                           = "env"
+	DefaultMtlsPort               = 15443
+	DefaultServiceEntryPort       = 80
+	Sep                           = "."
+	Dash                          = "-"
+	Slash                         = "/"
+	DotLocalDomainSuffix          = ".svc.cluster.local"
+	AssetAlias                    = "assetAlias"
+	Mesh                          = "mesh"
+	MulticlusterIngressGateway    = "istio-multicluster-ingressgateway"
+	LocalAddressPrefix            = "240.0"
+	NodeRegionLabel               = "failure-domain.beta.kubernetes.io/region"
+	SpiffePrefix                  = "spiffe://"
+	SidecarEnabledPorts           = "traffic.sidecar.istio.io/includeInboundPorts"
+	Default                       = "default"
+	SidecarInjectAnnotation       = "sidecar.istio.io/inject"
+	AdmiralIgnoreAnnotation       = "admiral.io/ignore"
+	AdmiralEnvAnnotation          = "admiral.io/env"
+	AdmiralCnameCaseSensitive     = "admiral.io/cname-case-sensitive"
+	BlueGreenRolloutPreviewPrefix = "preview"
+	RolloutPodHashLabel           = "rollouts-pod-template-hash"
+	RolloutActiveServiceSuffix    = "active-service"
+	RolloutStableServiceSuffix    = "stable-service"
+	RolloutRootServiceSuffix      = "root-service"
+	CanaryRolloutCanaryPrefix     = "canary"
+	WASMPath                      = "wasmPath"
+	AdmiralProfileIntuit          = "intuit"
+	AdmiralProfileDefault         = "default"
+	AdmiralProfilePerf            = "perf"
+	Cartographer                  = "cartographer"
+	CreatedBy                     = "createdBy"
+	CreatedFor                    = "createdFor"
+	CreatedType                   = "createdType"
+	CreatedForEnv                 = "createdForEnv"
+	IsDisabled                    = "isDisabled"
+	TransactionID                 = "transactionID"
+	RevisionNumber                = "revisionNumber"
+	EnvoyKind                     = "EnvoyFilter"
+	EnvoyApiVersion               = "networking.istio.io/v1alpha3"
+	SlashSTARRule                 = "/*"
+	AppThrottleConfigVersion      = "v1"
+	EnvoyFilterLogLevel           = "info"
+	EnvoyFilterLogLocation        = "proxy"
+	EnvoyFilterLogFormat          = "json"
+	ADD                           = "Add"
+	UPDATE                        = "Update"
+	DELETE                        = "Delete"
+	AssetLabel                    = "asset"
 
 	RollingWindow = "ROLLING_WINDOW"
 
@@ -120,6 +122,8 @@ const (
 	LastUpdatedAt = "lastUpdatedAt"
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
+
+	DynamicConfigUpdate = "DynamicConfigUpdate"
 )
 
 type Event string
@@ -486,8 +490,12 @@ func AppendError(err error, newError error) error {
 	return err
 }
 
-func IsIstioIngressGatewayService(svc *k8sV1.Service) bool {
-	return svc.Namespace == NamespaceIstioSystem && svc.Name == IstioIngressGatewayServiceName
+func IsIstioIngressGatewayService(svc *k8sV1.Service, key string) bool {
+
+	if svc != nil && len(svc.Labels) > 0 {
+		return svc.Namespace == NamespaceIstioSystem && svc.Labels["app"] == key
+	}
+	return false
 }
 
 func FetchTxIdOrGenNew(ctx context.Context) string {
@@ -610,14 +618,24 @@ func SortGtpsByPriorityAndCreationTime(gtpsToOrder []*v1.GlobalTrafficPolicy, id
 		iPriority := getGtpPriority(gtpsToOrder[i])
 		jPriority := getGtpPriority(gtpsToOrder[j])
 
-		iTime := gtpsToOrder[i].CreationTimestamp
-		jTime := gtpsToOrder[j].CreationTimestamp
+		iCreationTime := gtpsToOrder[i].CreationTimestamp
+		jCreationTime := gtpsToOrder[j].CreationTimestamp
 		if iPriority != jPriority {
-			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
+			log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iCreationTime, iPriority, gtpsToOrder[j].Name, jCreationTime, jPriority)
 			return iPriority > jPriority
 		}
-		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iTime, iPriority, gtpsToOrder[j].Name, jTime, jPriority)
-		return iTime.After(jTime.Time)
+
+		if gtpsToOrder[i].Annotations != nil && gtpsToOrder[j].Annotations != nil {
+			if iUpdateTime, ok := gtpsToOrder[i].Annotations["lastUpdatedAt"]; ok {
+				if jUpdateTime, ok := gtpsToOrder[j].Annotations["lastUpdatedAt"]; ok {
+					log.Debugf("GTP sorting identity=%s env=%s name1=%s updateTime1=%v priority1=%d name2=%s updateTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iUpdateTime, iPriority, gtpsToOrder[j].Name, jUpdateTime, jPriority)
+					return iUpdateTime > jUpdateTime
+				}
+			}
+		}
+
+		log.Debugf("GTP sorting identity=%s env=%s name1=%s creationTime1=%v priority1=%d name2=%s creationTime2=%v priority2=%d", identity, env, gtpsToOrder[i].Name, iCreationTime, iPriority, gtpsToOrder[j].Name, jCreationTime, jPriority)
+		return iCreationTime.After(jCreationTime.Time)
 	})
 }
 

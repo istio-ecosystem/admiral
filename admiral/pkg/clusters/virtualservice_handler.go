@@ -547,6 +547,12 @@ func addUpdateVirtualService(
 		skipAddingExportTo = true
 	}
 
+	// remove ignored labels and annotations from NewCopy (deleting on nil map or nonexistent keys is a no-op)
+	for _, ignored := range common.GetIgnoreLabelsAnnotationsVSCopy() {
+		delete(newCopy.Labels, ignored)
+		delete(newCopy.Annotations, ignored)
+	}
+
 	if common.EnableExportTo(newCopy.Spec.Hosts[0]) && !skipAddingExportTo {
 		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, newCopy.Spec.Hosts[0], rc.ClusterID, ctxLogger)
 		newCopy.Spec.ExportTo = sortedDependentNamespaces

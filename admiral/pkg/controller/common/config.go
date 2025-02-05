@@ -56,6 +56,10 @@ func GetAdmiralParams() AdmiralParams {
 	return wrapper.params
 }
 
+func UpdateAdmiralParams(params AdmiralParams) {
+	wrapper.params = params
+}
+
 func GetAdmiralProfile() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
@@ -144,6 +148,12 @@ func GetEnableWorkloadDataStorage() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.EnableWorkloadDataStorage
+}
+
+func IsAdmiralDynamicConfigEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableDynamicConfig
 }
 
 func GetHostnameSuffix() string {
@@ -450,7 +460,75 @@ func DoVSRoutingForCluster(cluster string) bool {
 	if !wrapper.params.EnableVSRouting {
 		return false
 	}
-	for _, c := range wrapper.params.VSRoutingEnabledClusters {
+	for _, c := range wrapper.params.VSRoutingDisabledClusters {
+		if c == "*" {
+			return false
+		}
+		if c == cluster {
+			return false
+		}
+	}
+	return true
+}
+
+func IsSlowStartEnabledForCluster(cluster string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if !wrapper.params.EnableVSRouting {
+		return false
+	}
+	for _, c := range wrapper.params.VSRoutingSlowStartEnabledClusters {
+		if c == "*" {
+			return true
+		}
+		if c == cluster {
+			return true
+		}
+	}
+	return false
+}
+
+func DoVSRoutingInClusterForCluster(cluster string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if !wrapper.params.EnableVSRoutingInCluster {
+		return false
+	}
+	for _, c := range wrapper.params.VSRoutingInClusterEnabledClusters {
+		if c == "*" {
+			return true
+		}
+		if c == cluster {
+			return true
+		}
+	}
+	return false
+}
+
+func DoVSRoutingInClusterForIdentity(identity string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if !wrapper.params.EnableVSRoutingInCluster {
+		return false
+	}
+	for _, c := range wrapper.params.VSRoutingInClusterEnabledIdentities {
+		if c == "*" {
+			return true
+		}
+		if c == identity {
+			return true
+		}
+	}
+	return false
+}
+
+func DoRoutingPolicyForCluster(cluster string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if !wrapper.params.EnableRoutingPolicy {
+		return false
+	}
+	for _, c := range wrapper.params.RoutingPolicyClusters {
 		if c == "*" {
 			return true
 		}
@@ -558,6 +636,12 @@ func GetOperatorSecretFilterTags() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.OperatorSecretFilterTags
+}
+
+func GetIgnoreLabelsAnnotationsVSCopy() []string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.IgnoreLabelsAnnotationsVSCopyList
 }
 
 func GetRegistryClientConfig() map[string]string {

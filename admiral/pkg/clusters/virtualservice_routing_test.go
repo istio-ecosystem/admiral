@@ -69,7 +69,6 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		IngressVSExportToNamespaces: []string{"istio-system"},
 		VSRoutingGateways:           []string{"istio-system/passthrough-gateway"},
 		EnableVSRouting:             true,
-		VSRoutingEnabledClusters:    []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -171,6 +170,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	testCases := []struct {
 		name                        string
 		remoteRegistry              *RemoteRegistry
+		vsName                      string
 		sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination
 		istioClient                 *istioFake.Clientset
 		expectedError               error
@@ -184,11 +184,20 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			expectedError:               fmt.Errorf("remoteRegistry is nil"),
 		},
 		{
+			name: "Given a empty vsName, " +
+				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
+				"Then it should return an error",
+			remoteRegistry:              rr,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("vsName is empty"),
+		},
+		{
 			name: "Given a valid sourceClusterToDestinations " +
 				"And the VS is a new VS" +
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -231,6 +240,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully update the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -273,6 +283,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the preview endpoint route",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithPreviewSvc,
 			expectedError:               nil,
@@ -336,6 +347,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then it should successfully create a VS including the canary endpoint routes with weights",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithCanarySvc,
 			expectedError:               nil,
@@ -410,6 +422,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				"When addUpdateVirtualServicesForSourceIngress is invoked, " +
 				"Then the VS created should not have the preview sniHost match in the VS",
 			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
@@ -457,7 +470,8 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 				context.Background(),
 				ctxLogger,
 				tc.remoteRegistry,
-				tc.sourceClusterToDestinations)
+				tc.sourceClusterToDestinations,
+				tc.vsName)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -468,6 +482,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 					VirtualServices(util.IstioSystemNamespace).
 					Get(context.Background(), "test-env.test-identity.global-routing-vs", metaV1.GetOptions{})
 				require.Nil(t, err)
+				require.Equal(t, tc.expectedVS.ObjectMeta.Name, actualVS.ObjectMeta.Name)
 				require.Equal(t, tc.expectedVS.Spec.Tls, actualVS.Spec.Tls)
 				require.Equal(t, tc.expectedVS.Spec.ExportTo, actualVS.Spec.ExportTo)
 				require.Equal(t, tc.expectedVS.Spec.Gateways, actualVS.Spec.Gateways)
@@ -1784,6 +1799,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1792,6 +1808,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.preview.test-env.test-identity.global": {
@@ -1886,6 +1903,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1894,6 +1912,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.west.test-env.test-identity.global": {
@@ -1904,6 +1923,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1912,6 +1932,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.east.test-env.test-identity.global": {
@@ -1922,6 +1943,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1930,6 +1952,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
+						Weight: 50,
 					},
 				},
 				"outbound_.80_._.preview.test-env.test-identity.global": {
@@ -2362,10 +2385,10 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		SANPrefix:                   "test-san-prefix",
-		IngressVSExportToNamespaces: []string{"istio-system"},
-		EnableVSRouting:             true,
-		VSRoutingEnabledClusters:    []string{"cluster-1"},
+		SANPrefix:                         "test-san-prefix",
+		IngressVSExportToNamespaces:       []string{"istio-system"},
+		EnableVSRouting:                   true,
+		VSRoutingSlowStartEnabledClusters: []string{"cluster-1"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -2385,6 +2408,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		istioClient              *istioFake.Clientset
+		drName                   string
 		sourceClusterToDRHosts   map[string]map[string]string
 		sourceIdentity           string
 		expectedError            error
@@ -2394,6 +2418,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a empty sourceIdentity " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should return an error",
+			drName: "test-ns.svc.cluster.local-routing-dr",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
 					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
@@ -2406,6 +2431,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a valid sourceClusterToDRHosts " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should create the destination rules",
+			drName:         "test-ns.svc.cluster.local-routing-dr",
 			sourceIdentity: "test-identity",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
@@ -2443,6 +2469,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 			name: "Given a valid sourceClusterToDRHosts " +
 				"When addUpdateDestinationRuleForSourceIngress is invoked, " +
 				"Then it should create the destination rules",
+			drName:         "test-ns.svc.cluster.local-routing-dr",
 			sourceIdentity: "test-identity",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
@@ -2476,6 +2503,44 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given a valid sourceClusterToDRHosts " +
+				"When addUpdateDestinationRuleForSourceIngress is invoked," +
+				"And the cluster is not enabled with slow start " +
+				"Then it should create the destination rules without warmupDurationSecs",
+			drName:         "test-ns2.svc.cluster.local-routing-dr",
+			sourceIdentity: "test-identity",
+			sourceClusterToDRHosts: map[string]map[string]string{
+				"cluster-2": {
+					"test-ns2.svc.cluster.local": "*.test-ns2.svc.cluster.local",
+				},
+			},
+			istioClient:   istioClientWithExistingDR,
+			expectedError: nil,
+			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-ns2.svc.cluster.local-routing-dr",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.DestinationRule{
+					Host:     "*.test-ns2.svc.cluster.local",
+					ExportTo: []string{util.IstioSystemNamespace},
+					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
+							},
+							LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+								Enabled: &wrappers.BoolValue{Value: false},
+							},
+						},
+						Tls: &networkingV1Alpha3.ClientTLSSettings{
+							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -2484,8 +2549,14 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				ClusterID:                 "cluster-1",
 				DestinationRuleController: &istio.DestinationRuleController{},
 			}
+			rc2 := &RemoteController{
+				ClusterID:                 "cluster-2",
+				DestinationRuleController: &istio.DestinationRuleController{},
+			}
 			rc.DestinationRuleController.IstioClient = tc.istioClient
+			rc2.DestinationRuleController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
+			rr.PutRemoteController("cluster-2", rc2)
 
 			err := addUpdateDestinationRuleForSourceIngress(
 				context.Background(),
@@ -2498,7 +2569,7 @@ func TestAaddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				actualDR, err := tc.istioClient.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
-					Get(context.Background(), "test-ns.svc.cluster.local-routing-dr", metaV1.GetOptions{})
+					Get(context.Background(), tc.drName, metaV1.GetOptions{})
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedDestinationRules.Spec.Host, actualDR.Spec.Host)
 				require.Equal(t, tc.expectedDestinationRules.Spec.TrafficPolicy, actualDR.Spec.TrafficPolicy)
@@ -2672,4 +2743,245 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGetWeightSplits(t *testing.T) {
+
+	testCases := []struct {
+		name            string
+		trafficSplit    int
+		expectedWeights []int32
+	}{
+		{
+			name: "Given 0 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return an empty array of weights",
+			trafficSplit:    0,
+			expectedWeights: []int32{},
+		},
+		{
+			name: "Given 1 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{100}",
+			trafficSplit:    1,
+			expectedWeights: []int32{100},
+		},
+		{
+			name: "Given 2 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{50, 50}",
+			trafficSplit:    2,
+			expectedWeights: []int32{50, 50},
+		},
+		{
+			name: "Given 3 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{34, 33,33}",
+			trafficSplit:    3,
+			expectedWeights: []int32{34, 33, 33},
+		},
+		{
+			name: "Given 4 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{25, 25,25,25}",
+			trafficSplit:    4,
+			expectedWeights: []int32{25, 25, 25, 25},
+		},
+		{
+			name: "Given 9 trafficSplit " +
+				"When getWeightSplits is invoked, " +
+				"Then it should return array of []int{12, 11, 11, 11, 11, 11, 11, 11, 11}",
+			trafficSplit:    9,
+			expectedWeights: []int32{12, 11, 11, 11, 11, 11, 11, 11, 11},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getWeightSplits(tc.trafficSplit)
+			require.Equal(t, tc.expectedWeights, actual)
+		})
+	}
+}
+
+func TestAddWeightsToRouteDestinations(t *testing.T) {
+
+	testCases := []struct {
+		name                     string
+		routeDestinations        map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedError            error
+	}{
+		{
+			name: "Given nil routeDestinations param " +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return an error",
+			routeDestinations: nil,
+			expectedError:     fmt.Errorf("route destinations map is nil"),
+		},
+		{
+			name: "Given a routeDestination with a single destination " +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return without adding any weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=100" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 98,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 2,
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 98,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 2,
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=50" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+			}},
+			expectedError: fmt.Errorf("total weight is 50, expected 100 or 0"),
+		},
+		{
+			name: "Given a routeDestination with a two destinations with weights=0" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with the same weights 50-50",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+			}},
+		},
+		{
+			name: "Given a routeDestination with a three destinations with no weights" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with weights 34-33-33",
+			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 34,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 33,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 33,
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := addWeightsToRouteDestinations(tc.routeDestinations)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, len(tc.expectedRouteDestination), len(tc.routeDestinations))
+			}
+		})
+	}
 }

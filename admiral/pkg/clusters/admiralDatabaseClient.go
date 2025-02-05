@@ -1,15 +1,24 @@
 package clusters
 
 import (
+	"crypto/md5"
+	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/apis/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"time"
 )
 
 // TODO: make this more generic to handle new dynamoDB tables
 type WorkloadDatabaseClient struct {
+	dynamoClient *DynamoClient
+	database     *v1.DynamoDB
+}
+
+type DynamicConfigDatabaseClient struct {
 	dynamoClient *DynamoClient
 	database     *v1.DynamoDB
 }
@@ -65,6 +74,23 @@ func checkIfDatabaseClientIsInitialize(workloadDatabaseClient *WorkloadDatabaseC
 	return nil
 }
 
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Update(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	//At point of release there is no plan to support push config to dyanmic config storage
+	panic("implement me")
+}
+
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Delete(data interface{}, logger *log.Entry) error {
+	//TODO implement me
+	//At point of release there is no plan to support delete config to dyanmic config storage
+	panic("implement me")
+}
+
+func (dynamicConfigDatabaseClient *DynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
+	//Variable renaming is done to re-purpose existing interface
+	return dynamicConfigDatabaseClient.dynamoClient.getDynamicConfig(env, identity, dynamicConfigDatabaseClient.database.TableName)
+}
+
 func (databaseClient *DummyDatabaseClient) Update(data interface{}, logger *log.Entry) error {
 	return nil
 }
@@ -78,17 +104,9 @@ func (databaseClient *DummyDatabaseClient) Get(env, identity string) (interface{
 }
 
 func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc func(string, string) (*DynamoClient, error)) (*WorkloadDatabaseClient, error) {
-	var (
-		workloadDatabaseClient = &WorkloadDatabaseClient{}
-		admiralConfig          *v1.AdmiralConfig
-	)
+	var workloadDatabaseClient = &WorkloadDatabaseClient{}
 
-	data, err := ioutil.ReadFile(admiralConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading admiral config file, err: %v", err)
-	}
-
-	err = yaml.Unmarshal(data, &admiralConfig)
+	admiralConfig, err := ReadDynamoConfigForDynamoDB(admiralConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
 	}
@@ -102,4 +120,105 @@ func NewAdmiralDatabaseClient(admiralConfigPath string, dynamoClientInitFunc fun
 		return nil, fmt.Errorf("unable to instantiate dynamo client, err: %v", err)
 	}
 	return workloadDatabaseClient, nil
+}
+
+func ReadDynamoConfigForDynamoDB(path string) (*v1.AdmiralConfig, error) {
+	var admiralConfig *v1.AdmiralConfig
+
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading admiral config file, err: %v", err)
+	}
+
+	err = yaml.Unmarshal(data, &admiralConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling admiral config file, err: %v", err)
+	}
+
+	return admiralConfig, nil
+}
+
+func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role string, region string) (*DynamoClient, error)) (*DynamicConfigDatabaseClient, error) {
+	var dynamicConfigClient = DynamicConfigDatabaseClient{}
+
+	admiralConfig, err := ReadDynamoConfigForDynamoDB(path)
+	if err != nil {
+		return nil, fmt.Errorf("task=%v, error unmarshalling admiral config file, err: %v", common.DynamicConfigUpdate, err)
+	}
+
+	dynamicConfigClient.database = &admiralConfig.DynamicConfigDatabase
+	dynamicConfigClient.database.TableName = common.GetAdmiralParams().DynamicConfigDynamoDBTableName
+	dynamicConfigClient.dynamoClient, err = dynamoClientInitFunc(
+		admiralConfig.WorkloadDatabase.Role,
+		admiralConfig.WorkloadDatabase.Region,
+	)
+	if err != nil {
+		return &dynamicConfigClient, fmt.Errorf("task=%v, unable to instantiate dynamo client for DynamicConfig, err: %v", common.DynamicConfigUpdate, err)
+	}
+	return &dynamicConfigClient, nil
+}
+
+func UpdateASyncAdmiralConfig(dbClient AdmiralDatabaseManager, syncTime int) {
+
+	for range time.Tick(time.Minute * time.Duration(syncTime)) {
+		ReadAndUpdateSyncAdmiralConfig(dbClient)
+	}
+}
+
+func ReadAndUpdateSyncAdmiralConfig(dbClient AdmiralDatabaseManager) error {
+
+	dbRawData, err := dbClient.Get("EnableDynamicConfig", common.Admiral)
+	if err != nil {
+		log.Errorf("task=%s, error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
+		return err
+	}
+
+	configData, ok := dbRawData.(DynamicConfigData)
+	if !ok {
+		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
+	}
+
+	if IsDynamicConfigChanged(configData) {
+		log.Infof(fmt.Sprintf("task=%s, updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
+		UpdateSyncAdmiralConfig(configData)
+	} else {
+		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
+	}
+
+	return nil
+}
+
+func IsDynamicConfigChanged(config DynamicConfigData) bool {
+
+	if config.EnableDynamicConfig != common.Admiral {
+		return false
+	}
+
+	if DynamicConfigCheckSum == md5.Sum([]byte(fmt.Sprintf("%v", config))) {
+		return false
+	} else {
+		DynamicConfigCheckSum = md5.Sum([]byte(fmt.Sprintf("%v", config)))
+		return true
+	}
+}
+
+func UpdateSyncAdmiralConfig(configData DynamicConfigData) {
+	if configData.EnableDynamicConfig == common.Admiral {
+		//Fetch Existing config and update which are changed.
+		newAdmiralConfig := common.GetAdmiralParams()
+		if len(configData.NLBEnabledClusters) > 0 {
+			newAdmiralConfig.NLBEnabledClusters = configData.NLBEnabledClusters
+		}
+
+		if len(configData.CLBEnabledClusters) > 0 {
+			newAdmiralConfig.CLBEnabledClusters = configData.CLBEnabledClusters
+		}
+
+		if len(configData.NLBEnabledIdentityList) > 0 {
+			newAdmiralConfig.NLBEnabledIdentityList = configData.NLBEnabledIdentityList
+		}
+
+		common.UpdateAdmiralParams(newAdmiralConfig)
+
+	}
 }

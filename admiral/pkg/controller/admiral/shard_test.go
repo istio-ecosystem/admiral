@@ -103,6 +103,66 @@ func TestShardController_Deleted(t *testing.T) {
 	}
 }
 
+func TestShardController_Get(t *testing.T) {
+
+	type args struct {
+		obj        interface{}
+		retry      bool
+		cacheItems map[string]*admiralapiv1.Shard
+	}
+
+	type want struct {
+		obj interface{}
+		err error
+	}
+	testCases := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "K8s client not initialized returns error",
+			args: args{
+				obj: nil,
+			},
+			want: want{
+				err: fmt.Errorf("kubernetes client is not initialized, txId=test"),
+			},
+		},
+		{
+			name: "lookup with retry",
+			args: args{
+				obj:   &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				retry: true,
+				cacheItems: map[string]*admiralapiv1.Shard{
+					"test": {ObjectMeta: v1.ObjectMeta{Name: "test"}},
+				},
+			},
+			want: want{
+				obj: &admiralapiv1.Shard{ObjectMeta: v1.ObjectMeta{Name: "test"}},
+			},
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			sCtrl, _ := getNewMockShardController()
+			for _, shard := range c.args.cacheItems {
+				sCtrl.Cache.UpdateShardToClusterCache("test", shard)
+			}
+			ctx := context.WithValue(context.Background(), "txId", "test")
+			r, err := sCtrl.Get(ctx, c.args.retry, c.args.obj)
+			if c.want.err == nil {
+				assert.Nil(t, err)
+			}
+			if c.want.err != nil && assert.Error(t, err) {
+				assert.Equal(t, c.want.err, err)
+			}
+			assert.Equal(t, c.want.obj, r)
+		})
+	}
+
+}
+
 func getNewMockShardController() (*ShardController, error) {
 	shardHandler := test.MockShardHandler{}
 	shardController, err := NewShardController(context.Background().Done(), &shardHandler, "../../test/resources/admins@fake-cluster.k8s.local", "test-ns", 0, loader.GetFakeClientLoader())

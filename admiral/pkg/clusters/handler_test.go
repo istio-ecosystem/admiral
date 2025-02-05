@@ -21,6 +21,50 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+type Option func(params *common.AdmiralParams)
+
+func argoEnabled(enabled bool) Option {
+	return func(params *common.AdmiralParams) {
+		params.ArgoRolloutsEnabled = enabled
+	}
+}
+
+func swAwareNsCache(enabled bool) Option {
+	return func(params *common.AdmiralParams) {
+		params.EnableSWAwareNSCaches = enabled
+	}
+}
+
+func dependencyProcessing(enabled bool) Option {
+	return func(params *common.AdmiralParams) {
+		params.EnableDependencyProcessing = enabled
+	}
+}
+
+func cacheWarmupTime(duration time.Duration) Option {
+	return func(params *common.AdmiralParams) {
+		params.CacheReconcileDuration = duration
+	}
+}
+
+func InitAdmiralForTesting(options ...Option) {
+	common.ResetSync()
+	params := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey:     "identity",
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+			DeploymentAnnotation:    "sidecar.istio.io/inject",
+			AdmiralIgnoreLabel:      "admiral-ignore",
+			IdentityPartitionKey:    "admiral.io/identityPartition",
+		},
+	}
+	for _, option := range options {
+		option(&params)
+	}
+	common.InitializeConfig(params)
+}
+
 func admiralParamsForHandlerTests(argoEnabled bool) common.AdmiralParams {
 	return common.AdmiralParams{
 		ArgoRolloutsEnabled: argoEnabled,

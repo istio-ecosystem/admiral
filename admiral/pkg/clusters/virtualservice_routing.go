@@ -455,15 +455,23 @@ func addUpdateVirtualServicesForIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
-	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination) error {
+	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination,
+	vsName string) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
 	}
 
+	if vsName == "" {
+		return fmt.Errorf("vsName is empty")
+	}
+
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
 		if !common.DoVSRoutingForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateVirtualServicesForIngress VS based routing disabled for cluster")
 			continue
 		}
 
@@ -482,29 +490,18 @@ func addUpdateVirtualServicesForIngress(
 		virtualService, err := getBaseVirtualServiceForIngress()
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+				vsName, util.IstioSystemNamespace, sourceCluster, err.Error())
 			return err
 		}
 
-		var vsName string
 		vsHosts := make([]string, 0)
 		tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
 
 		for globalFQDN, routeDestinations := range destination {
-			hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
-			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-					"", "", sourceCluster, err.Error())
-				continue
-			}
-			if !strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) &&
-				!strings.HasPrefix(hostWithoutSNIPrefix, common.CanaryRolloutCanaryPrefix) {
-				vsName = hostWithoutSNIPrefix + "-routing-vs"
-			}
 			if routeDestinations == nil || len(routeDestinations) == 0 {
 				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 					"", "", sourceCluster,
-					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", hostWithoutSNIPrefix))
+					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", globalFQDN))
 				continue
 			}
 			tlsRoute := networkingV1Alpha3.TLSRoute{
@@ -541,12 +538,7 @@ func addUpdateVirtualServicesForIngress(
 		})
 		virtualService.Spec.Tls = tlsRoutes
 
-		// If we were unable to find the default host in the above loop,
-		// then we pick the first one
-		if vsName == "" {
-			vsName = vsHosts[0] + "-routing-vs"
-		}
-		virtualService.Name = vsName
+		virtualService.Name = vsName + "-routing-vs"
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
@@ -635,7 +627,54 @@ func getAllVSRouteDestinationsByCluster(
 		}
 	}
 
+	addWeightsToRouteDestinations(destinations)
+
 	return destinations, nil
+}
+
+func addWeightsToRouteDestinations(destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	if destinations == nil {
+		return fmt.Errorf("route destinations map is nil")
+	}
+	for _, routeDestinations := range destinations {
+		if len(routeDestinations) > 1 {
+			// Check if their weights total to 100
+			totalWeight := int32(0)
+			for _, destination := range routeDestinations {
+				totalWeight += destination.Weight
+			}
+			if totalWeight == 100 {
+				continue
+			}
+			if totalWeight > 0 {
+				return fmt.Errorf("total weight is %d, expected 100 or 0", totalWeight)
+			}
+			weightSplits := getWeightSplits(len(routeDestinations))
+			for i, destination := range routeDestinations {
+				destination.Weight = weightSplits[i]
+			}
+		}
+	}
+	return nil
+}
+
+func getWeightSplits(numberOfSplits int) []int32 {
+	if numberOfSplits == 0 {
+		return []int32{}
+	}
+	base := 100 / numberOfSplits
+	r := 100 % numberOfSplits
+	weights := make([]int32, numberOfSplits)
+
+	for i := 0; i < numberOfSplits; i++ {
+		if r > 0 {
+			weights[i] = int32(base + 1)
+			r--
+			continue
+		}
+		weights[i] = int32(base)
+	}
+	return weights
 }
 
 func getDestinationsForGTPDNSPrefixes(
@@ -752,6 +791,9 @@ func addUpdateDestinationRuleForSourceIngress(
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
 
 		if !common.DoVSRoutingForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateDestinationRuleForSourceIngress VS based routing disabled for cluster")
 			continue
 		}
 
@@ -787,13 +829,18 @@ func addUpdateDestinationRuleForSourceIngress(
 						LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
 							Enabled: &wrappers.BoolValue{Value: false},
 						},
-						WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 					},
 					Tls: &networkingV1Alpha3.ClientTLSSettings{
 						SubjectAltNames: []string{san},
 					},
 				},
 			}
+
+			if common.IsSlowStartEnabledForCluster(sourceCluster) {
+				drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs =
+					&duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()}
+			}
+
 			drName := fmt.Sprintf("%s-routing-dr", name)
 
 			newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
