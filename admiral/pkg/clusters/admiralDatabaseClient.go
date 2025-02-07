@@ -247,6 +247,7 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 }
 
 func getLBToProcess(updatedLB []string, cache *[]string) []string {
+
 	var clusersToProcess []string
 	if cache == nil || len(*cache) == 0 {
 		*cache = updatedLB
@@ -256,13 +257,15 @@ func getLBToProcess(updatedLB []string, cache *[]string) []string {
 	for _, clusterFromAdmiralParam := range updatedLB {
 		if !slices.Contains(*cache, clusterFromAdmiralParam) {
 			clusersToProcess = append(clusersToProcess, clusterFromAdmiralParam)
+			*cache = append(*cache, clusterFromAdmiralParam)
 		}
 	}
 
 	//Validate if cluster Removed
-	for _, clusterFromCache := range *cache {
+	for i, clusterFromCache := range *cache {
 		if !slices.Contains(updatedLB, clusterFromCache) {
 			clusersToProcess = append(clusersToProcess, clusterFromCache)
+			*cache = slices.Delete(*cache, i, i+1)
 		}
 	}
 

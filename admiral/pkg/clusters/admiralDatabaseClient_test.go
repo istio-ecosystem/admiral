@@ -720,6 +720,7 @@ func Test_getLBToProcess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.want, getLBToProcess(tt.args.updatedLB, tt.args.cache), "getLBToProcess(%v, %v)", tt.args.updatedLB, *tt.args.cache)
+			assert.Equal(t, tt.args.updatedLB, *tt.args.cache, "getLBToProcess should update cache based upon params")
 		})
 	}
 }

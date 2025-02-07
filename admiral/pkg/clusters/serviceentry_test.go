@@ -10445,16 +10445,6 @@ func TestGetClusterIngressGateway(t *testing.T) {
 			expectedError: fmt.Errorf("service controller cache not initialized"),
 		},
 		{
-			name: "Given nil admiralParams.LabelSet" +
-				"When getClusterIngress func is called" +
-				"Then it should return an error",
-			rc: &RemoteController{
-				ServiceController: serviceController,
-			},
-			labelSet:      nil,
-			expectedError: fmt.Errorf("admiralparams labelset not initialized"),
-		},
-		{
 			name: "Given all valid params" +
 				"When getClusterIngress func is called" +
 				"Then it should return a valid cluster ingress and no errors",
@@ -10469,9 +10459,6 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			//admiralParams := common.AdmiralParams{
-			//	LabelSet: tc.labelSet,
-			//}
 			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{})
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
