@@ -3,6 +3,7 @@
 
 out/*
 out.yaml
+c.out.tmp
 *.tar.gz
 *.out
 *.prof

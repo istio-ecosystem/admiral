@@ -406,27 +406,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 	}
 
-	if common.IsAdmiralStateSyncerMode() {
-		ctxLogger.Infof(
-			common.CtxLogFormat, "AdmiralStateSyncer", deploymentOrRolloutName,
-			deploymentOrRolloutNS, "", "Running in admiral state syncer mode")
-		var sourceClusters []string
-		// fetch all clusters where a deployment
-		// for the identity is present
-		for cluster := range sourceDeployments {
-			sourceClusters = append(sourceClusters, cluster)
-		}
-		// fetch all clusters where a rollout
-		// for the identity is present
-		for cluster := range sourceRollouts {
-			sourceClusters = append(sourceClusters, cluster)
-		}
-		err := updateClusterIdentityCache(remoteRegistry, sourceClusters, sourceIdentity)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	// use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
@@ -844,16 +823,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("asset list=%v dependents=%v", registryConfig.ClientAssets, dependents))
 	util.LogElapsedTimeSinceTask(ctxLogger, "WriteServiceEntryToSourceClusters",
 		deploymentOrRolloutName, deploymentOrRolloutNS, sourceIdentity, "", start)
-
-	ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "")
-	if common.IsAdmiralStateSyncerMode() {
-		err = updateRegistryConfigForClusterPerEnvironment(ctxLogger, remoteRegistry, registryConfig)
-		if err != nil {
-			return nil, err
-		}
-		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
-		return nil, nil
-	}
 
 	// VS Based Routing
 	// Writing phase: We update the base ingress virtualservices with the RouteDestinations

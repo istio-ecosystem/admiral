@@ -190,11 +190,13 @@ func newFakeRollout(name, namespace string, matchLabels map[string]string) *argo
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    map[string]string{"identity": name},
 		},
 		Spec: argo.RolloutSpec{
 			Selector: &metaV1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
+			Template: coreV1.PodTemplateSpec{ObjectMeta: metaV1.ObjectMeta{Labels: map[string]string{"identity": name}}},
 		},
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	numa "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"io/ioutil"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -30,37 +32,37 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type MockClient struct {
-	expectedResponse       *http.Response
-	expectedPostResponse   *http.Response
-	expectedPutResponse    *http.Response
-	expectedDeleteResponse *http.Response
-	expectedGetErr         error
-	expectedPutErr         error
-	expectedPostErr        error
-	expectedDeleteErr      error
-	expectedConfig         *Config
-	Body                   []byte
-}
+//type MockClient struct {
+//	expectedResponse       *http.Response
+//	expectedPostResponse   *http.Response
+//	expectedPutResponse    *http.Response
+//	expectedDeleteResponse *http.Response
+//	expectedGetErr         error
+//	expectedPutErr         error
+//	expectedPostErr        error
+//	expectedDeleteErr      error
+//	expectedConfig         *Config
+//	Body                   []byte
+//}
 
-func (m *MockClient) MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
-	m.Body = body
-	switch method {
-	case "GET":
-		return m.expectedResponse, m.expectedGetErr
-	case "PUT":
-		return m.expectedPutResponse, m.expectedPutErr
-	case "POST":
-		return m.expectedPostResponse, m.expectedPostErr
-	case "DELETE":
-		return m.expectedDeleteResponse, m.expectedDeleteErr
-	}
-	return m.expectedResponse, nil
-}
-
-func (m *MockClient) GetConfig() *Config {
-	return m.expectedConfig
-}
+//func (m *MockClient) MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
+//	m.Body = body
+//	switch method {
+//	case "GET":
+//		return m.expectedResponse, m.expectedGetErr
+//	case "PUT":
+//		return m.expectedPutResponse, m.expectedPutErr
+//	case "POST":
+//		return m.expectedPostResponse, m.expectedPostErr
+//	case "DELETE":
+//		return m.expectedDeleteResponse, m.expectedDeleteErr
+//	}
+//	return m.expectedResponse, nil
+//}
+//
+//func (m *MockClient) GetConfig() *Config {
+//	return m.expectedConfig
+//}
 
 func admiralParamsForRegistryClientTests() common.AdmiralParams {
 	return common.AdmiralParams{
@@ -99,16 +101,16 @@ func admiralParamsForRegistryClientTests() common.AdmiralParams {
 	}
 }
 
-func newDefaultRegistryClient() *registryClient {
-	registryClientParams := common.GetRegistryClientConfig()
-	defaultRegistryClientConfig := &Config{
-		Host:      registryClientParams["Host"],
-		AppId:     registryClientParams["AppId"],
-		AppSecret: registryClientParams["AppSecret"],
-		BaseURI:   registryClientParams["BaseURI"],
-	}
-	return NewRegistryClient(WithBaseClientConfig(defaultRegistryClientConfig))
-}
+//func NewDefaultRegistryClient() *RegistryClient {
+//	registryClientParams := common.GetRegistryClientConfig()
+//	defaultRegistryClientConfig := &Config{
+//		Host:      registryClientParams["Host"],
+//		AppId:     registryClientParams["AppId"],
+//		AppSecret: registryClientParams["AppSecret"],
+//		BaseURI:   registryClientParams["BaseURI"],
+//	}
+//	return NewRegistryClient(WithBaseClientConfig(defaultRegistryClientConfig))
+//}
 
 func TestParseIdentityConfigJSON(t *testing.T) {
 	identityConfig := GetSampleIdentityConfig("sample")
@@ -305,38 +307,38 @@ func TestMakeCallToRegistry(t *testing.T) {
 	method := "PUT"
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
 	privateAuthCallErr := fmt.Errorf("failed private auth call")
-	baseClientPrivateAuthCallFailed := MockClient{
-		expectedPutResponse: &http.Response{
+	baseClientPrivateAuthCallFailed := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 404,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: privateAuthCallErr,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: privateAuthCallErr,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	baseClientResponseEmpty := MockClient{
-		expectedPutResponse: nil,
-		expectedPutErr:      nil,
-		expectedConfig:      &Config{Host: "host", BaseURI: "v1"},
+	baseClientResponseEmpty := test.MockClient{
+		ExpectedPutResponse: nil,
+		ExpectedPutErr:      nil,
+		ExpectedConfig:      &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	baseClientResponseCodeNot200 := MockClient{
-		expectedPutResponse: &http.Response{
+	baseClientResponseCodeNot200 := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 404,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: nil,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	validClient := MockClient{
-		expectedPutResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: nil,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
 	testCases := []struct {
 		name          string
-		client        BaseClient
+		client        util.BaseClient
 		expectedError error
 		data          map[string]interface{}
 	}{
@@ -399,16 +401,16 @@ func TestDeleteClusterGateway(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedDeleteResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedDeleteErr: nil,
-		expectedConfig:    &Config{Host: "host", BaseURI: "v1"},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	rc := newDefaultRegistryClient()
-	rc.client = &validClient
+	rc := NewDefaultRegistryClient()
+	rc.Client = &validClient
 	testCases := []struct {
 		name          string
 		expectedError error
@@ -438,16 +440,16 @@ func TestPutClusterGateway(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedPutResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: nil,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	rc := newDefaultRegistryClient()
-	rc.client = &validClient
+	rc := NewDefaultRegistryClient()
+	rc.Client = &validClient
 	testCases := []struct {
 		name          string
 		expectedError error
@@ -477,16 +479,16 @@ func TestPutCustomData(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedPutResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: nil,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	rc := newDefaultRegistryClient()
-	rc.client = &validClient
+	rc := NewDefaultRegistryClient()
+	rc.Client = &validClient
 	dummyVS := &apiNetworkingV1Alpha3.VirtualService{
 		Spec: networkingV1Alpha3.VirtualService{
 			Hosts: []string{"hostname"},
@@ -602,16 +604,16 @@ func TestDeleteCustomData(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedDeleteResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedDeleteErr: nil,
-		expectedConfig:    &Config{Host: "host", BaseURI: "v1"},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	rc := newDefaultRegistryClient()
-	rc.client = &validClient
+	rc := NewDefaultRegistryClient()
+	rc.Client = &validClient
 	testCases := []struct {
 		name          string
 		expectedError error
@@ -641,26 +643,26 @@ func TestPutHostingData(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedPutResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: nil,
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	errorClient := MockClient{
-		expectedPutResponse: &http.Response{
+	errorClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
 			StatusCode: 404,
 			Body:       dummyRespBody,
 		},
-		expectedPutErr: fmt.Errorf("error executing http request err:No Namespace Found with name=namespace and cluster=test-usw2-k8s"),
-		expectedConfig: &Config{Host: "host", BaseURI: "v1"},
+		ExpectedPutErr: fmt.Errorf("error executing http request err:No Namespace Found with name=namespace and cluster=test-usw2-k8s"),
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	vc := newDefaultRegistryClient()
-	vc.client = &validClient
-	ec := newDefaultRegistryClient()
-	ec.client = &errorClient
+	vc := NewDefaultRegistryClient()
+	vc.Client = &validClient
+	ec := NewDefaultRegistryClient()
+	ec.Client = &errorClient
 	dummyObjectMeta := metaV1.ObjectMeta{
 		Name:      "test",
 		Namespace: "namespace",
@@ -726,7 +728,7 @@ func TestPutHostingData(t *testing.T) {
 		name          string
 		expectedError error
 		resourceType  string
-		rc            *registryClient
+		rc            *RegistryClient
 		value         interface{}
 	}{
 		{
@@ -806,16 +808,16 @@ func TestDeleteHostingData(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
-	validClient := MockClient{
-		expectedDeleteResponse: &http.Response{
+	validClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
 			StatusCode: 200,
 			Body:       dummyRespBody,
 		},
-		expectedDeleteErr: nil,
-		expectedConfig:    &Config{Host: "host", BaseURI: "v1"},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
 	}
-	rc := newDefaultRegistryClient()
-	rc.client = &validClient
+	rc := NewDefaultRegistryClient()
+	rc.Client = &validClient
 	dummyObjectMeta := metaV1.ObjectMeta{
 		Name:      "test",
 		Namespace: "namespace",

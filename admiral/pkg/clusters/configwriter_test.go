@@ -511,7 +511,7 @@ func TestGetExportTo(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	registryClientParams := common.GetRegistryClientConfig()
-	defaultRegistryClientConfig := &registry.Config{
+	defaultRegistryClientConfig := &util.Config{
 		Host:      registryClientParams["Host"],
 		AppId:     registryClientParams["AppId"],
 		AppSecret: registryClientParams["AppSecret"],
