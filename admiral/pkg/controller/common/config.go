@@ -488,40 +488,6 @@ func IsSlowStartEnabledForCluster(cluster string) bool {
 	return false
 }
 
-func DoVSRoutingInClusterForCluster(cluster string) bool {
-	wrapper.RLock()
-	defer wrapper.RUnlock()
-	if !wrapper.params.EnableVSRoutingInCluster {
-		return false
-	}
-	for _, c := range wrapper.params.VSRoutingInClusterEnabledClusters {
-		if c == "*" {
-			return true
-		}
-		if c == cluster {
-			return true
-		}
-	}
-	return false
-}
-
-func DoVSRoutingInClusterForIdentity(identity string) bool {
-	wrapper.RLock()
-	defer wrapper.RUnlock()
-	if !wrapper.params.EnableVSRoutingInCluster {
-		return false
-	}
-	for _, c := range wrapper.params.VSRoutingInClusterEnabledIdentities {
-		if c == "*" {
-			return true
-		}
-		if c == identity {
-			return true
-		}
-	}
-	return false
-}
-
 func DoRoutingPolicyForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
@@ -642,4 +608,29 @@ func GetIgnoreLabelsAnnotationsVSCopy() []string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.IgnoreLabelsAnnotationsVSCopyList
+}
+
+func GetRegistryClientConfig() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return map[string]string{"Host": wrapper.params.RegistryClientHost, "AppId": wrapper.params.RegistryClientAppId, "AppSecret": wrapper.params.RegistryClientAppSecret, "BaseURI": wrapper.params.RegistryClientBaseURI}
+}
+
+func GetAdmiralAppEnv() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.AdmiralAppEnv
+}
+
+func IsStateSyncerCluster(clusterName string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if wrapper.params.AdmiralStateSyncerClusters != nil {
+		for _, cluster := range wrapper.params.AdmiralStateSyncerClusters {
+			if cluster != "" && (cluster == "*" || strings.ToLower(clusterName) == strings.ToLower(cluster)) {
+				return true
+			}
+		}
+	}
+	return false
 }

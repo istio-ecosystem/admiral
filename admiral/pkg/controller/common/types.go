@@ -123,12 +123,18 @@ type AdmiralParams struct {
 	GatewayAssetAliases []string
 
 	//Admiral 2.0 params
-	AdmiralOperatorMode      bool
-	OperatorSyncNamespace    string
-	AdmiralStateSyncerMode   bool
-	OperatorIdentityValue    string
-	ShardIdentityValue       string
-	OperatorSecretFilterTags string
+	AdmiralOperatorMode        bool
+	OperatorSyncNamespace      string
+	AdmiralStateSyncerMode     bool
+	OperatorIdentityValue      string
+	ShardIdentityValue         string
+	OperatorSecretFilterTags   string
+	RegistryClientHost         string
+	RegistryClientAppId        string
+	RegistryClientAppSecret    string
+	RegistryClientBaseURI      string
+	AdmiralAppEnv              string
+	AdmiralStateSyncerClusters []string
 
 	// VS Based Routing
 	EnableVSRouting                   bool
@@ -137,11 +143,6 @@ type AdmiralParams struct {
 	IngressLBPolicy                   string
 	VSRoutingDisabledClusters         []string
 	VSRoutingSlowStartEnabledClusters []string
-
-	// VS Based Routing In-Cluster
-	EnableVSRoutingInCluster            bool
-	VSRoutingInClusterEnabledClusters   []string
-	VSRoutingInClusterEnabledIdentities []string
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool

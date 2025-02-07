@@ -44,6 +44,10 @@ func admiralParamsForConfigWriterTests() common.AdmiralParams {
 		EnableAbsoluteFQDN:                  true,
 		EnableAbsoluteFQDNForLocalEndpoints: true,
 		AdmiralOperatorMode:                 true,
+		RegistryClientHost:                  "registry.com",
+		RegistryClientAppId:                 "registry-appid",
+		RegistryClientAppSecret:             "registry-appsecret",
+		RegistryClientBaseURI:               "v1",
 	}
 }
 
@@ -245,10 +249,18 @@ func TestGetExportTo(t *testing.T) {
 	admiralParams := admiralParamsForConfigWriterTests()
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
+	registryClientParams := common.GetRegistryClientConfig()
+	defaultRegistryClientConfig := &util.Config{
+		Host:      registryClientParams["Host"],
+		AppId:     registryClientParams["AppId"],
+		AppSecret: registryClientParams["AppSecret"],
+		BaseURI:   registryClientParams["BaseURI"],
+	}
+	defaultRegistryClient := registry.NewRegistryClient(registry.WithBaseClientConfig(defaultRegistryClientConfig))
 	ctxLogger := common.GetCtxLogger(context.Background(), "test", "")
 	testCases := []struct {
 		name                    string
-		registryClient          registry.IdentityConfiguration
+		registryClient          registry.ClientAPI
 		clientCluster           string
 		isServerOnClientCluster bool
 		clientAssets            map[string]string
@@ -258,7 +270,7 @@ func TestGetExportTo(t *testing.T) {
 			name: "Given asset info, cluster info, and client info, " +
 				"When the client cluster is the same as the server cluster" +
 				"Then the constructed dependent namespaces should include istio-system",
-			registryClient:          registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER")),
+			registryClient:          defaultRegistryClient,
 			clientCluster:           "cluster1",
 			isServerOnClientCluster: true,
 			clientAssets:            map[string]string{"sample": "sample"},
@@ -268,7 +280,7 @@ func TestGetExportTo(t *testing.T) {
 			name: "Given asset info, cluster info, and client info, " +
 				"When the client cluster is not the same as the server cluster" +
 				"Then the constructed dependent namespaces should not include istio-system",
-			registryClient:          registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER")),
+			registryClient:          defaultRegistryClient,
 			clientCluster:           "cluster1",
 			isServerOnClientCluster: false,
 			clientAssets:            map[string]string{"sample": "sample"},

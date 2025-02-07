@@ -6,6 +6,8 @@ import (
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"net/http"
 
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -424,4 +426,36 @@ type MockClientDiscoveryHandler struct {
 
 func (m *MockClientDiscoveryHandler) Added(ctx context.Context, obj *common.K8sObject) error {
 	return nil
+}
+
+type MockClient struct {
+	ExpectedResponse       *http.Response
+	ExpectedPostResponse   *http.Response
+	ExpectedPutResponse    *http.Response
+	ExpectedDeleteResponse *http.Response
+	ExpectedGetErr         error
+	ExpectedPutErr         error
+	ExpectedPostErr        error
+	ExpectedDeleteErr      error
+	ExpectedConfig         *util.Config
+	Body                   []byte
+}
+
+func (m *MockClient) MakePrivateAuthCall(url string, tid string, method string, body []byte) (*http.Response, error) {
+	m.Body = body
+	switch method {
+	case "GET":
+		return m.ExpectedResponse, m.ExpectedGetErr
+	case "PUT":
+		return m.ExpectedPutResponse, m.ExpectedPutErr
+	case "POST":
+		return m.ExpectedPostResponse, m.ExpectedPostErr
+	case "DELETE":
+		return m.ExpectedDeleteResponse, m.ExpectedDeleteErr
+	}
+	return m.ExpectedResponse, nil
+}
+
+func (m *MockClient) GetConfig() *util.Config {
+	return m.ExpectedConfig
 }
