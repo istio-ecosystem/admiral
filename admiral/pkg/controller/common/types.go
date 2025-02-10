@@ -144,6 +144,11 @@ type AdmiralParams struct {
 	VSRoutingDisabledClusters         []string
 	VSRoutingSlowStartEnabledClusters []string
 
+	// VS Based Routing In-Cluster
+	EnableVSRoutingInCluster            bool
+	VSRoutingInClusterEnabledClusters   []string
+	VSRoutingInClusterEnabledIdentities []string
+
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool
 	ClientDiscoveryClustersForJobs []string

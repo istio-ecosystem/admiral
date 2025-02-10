@@ -310,6 +310,146 @@ func TestIsSlowStartEnabledForCluster(t *testing.T) {
 
 }
 
+func TestDoVSRoutingInClusterForCluster(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                                string
+		cluster                             string
+		enableVSRoutingInCluster            bool
+		enabledVSRoutingInClusterForCluster []string
+		expected                            bool
+	}{
+		{
+			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForCluster is empty" +
+				"When DoVSRoutingInClusterForCluster is called" +
+				"Then it should return false",
+			cluster:                             "cluster1",
+			enableVSRoutingInCluster:            false,
+			enabledVSRoutingInClusterForCluster: []string{},
+			expected:                            false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForCluster is empty" +
+				"When DoVSRoutingInClusterForCluster is called" +
+				"Then it should return false",
+			cluster:                             "cluster1",
+			enableVSRoutingInCluster:            true,
+			enabledVSRoutingInClusterForCluster: []string{},
+			expected:                            false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
+				"When DoVSRoutingInClusterForCluster is called" +
+				"Then it should return false",
+			cluster:                             "cluster2",
+			enableVSRoutingInCluster:            true,
+			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			expected:                            false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
+				"When DoVSRoutingInClusterForCluster is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			enableVSRoutingInCluster:            true,
+			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			expected:                            true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
+				"When DoVSRoutingInClusterForCluster is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			enableVSRoutingInCluster:            true,
+			enabledVSRoutingInClusterForCluster: []string{"*"},
+			expected:                            true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
+			p.VSRoutingInClusterEnabledClusters = tc.enabledVSRoutingInClusterForCluster
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoVSRoutingInClusterForCluster(tc.cluster))
+		})
+	}
+
+}
+
+func TestDoVSRoutingInClusterForIdentity(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                                   string
+		identity                               string
+		enableVSRoutingInCluster               bool
+		enabledVSRoutingInClusterForIdentities []string
+		expected                               bool
+	}{
+		{
+			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForIdentities is empty" +
+				"When DoVSRoutingInClusterForIdentity is called" +
+				"Then it should return false",
+			identity:                               "testIdentity1",
+			enableVSRoutingInCluster:               false,
+			enabledVSRoutingInClusterForIdentities: []string{},
+			expected:                               false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForIdentities is empty" +
+				"When DoVSRoutingInClusterForIdentity is called" +
+				"Then it should return false",
+			identity:                               "testIdentity1",
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForIdentities: []string{},
+			expected:                               false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
+				"When DoVSRoutingInClusterForIdentity is called" +
+				"Then it should return false",
+			identity:                               "testIdentity2",
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
+			expected:                               false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
+				"When DoVSRoutingInClusterForIdentity is called" +
+				"Then it should return true",
+			identity:                               "testIdentity1",
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
+			expected:                               true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
+				"When DoVSRoutingInClusterForIdentity is called" +
+				"Then it should return true",
+			identity:                               "testIdentity1",
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForIdentities: []string{"*"},
+			expected:                               true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
+			p.VSRoutingInClusterEnabledIdentities = tc.enabledVSRoutingInClusterForIdentities
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoVSRoutingInClusterForIdentity(tc.identity))
+		})
+	}
+
+}
+
 func TestConfigManagement(t *testing.T) {
 	setupForConfigTests()
 
