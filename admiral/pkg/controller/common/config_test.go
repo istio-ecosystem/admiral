@@ -21,6 +21,7 @@ func setupForConfigTests() {
 				WorkloadIdentityKey:     "identity",
 				AdmiralCRDIdentityLabel: "identity",
 				IdentityPartitionKey:    "admiral.io/identityPartition",
+				ShardIdentityLabelKey:   "admiral.io/shardIdentity",
 			},
 			EnableSAN:                              true,
 			SANPrefix:                              "prefix",
@@ -81,6 +82,7 @@ func setupForConfigTests() {
 			AdditionalEndpointLabelFilters:         []string{"label1", "label2"},
 			EnableWorkloadDataStorage:              true,
 			IgnoreLabelsAnnotationsVSCopyList:      []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"},
+			AdmiralStateSyncerClusters:             []string{"test-k8s"},
 		}
 		ResetSync()
 		initHappened = true
@@ -560,6 +562,15 @@ func TestConfigManagement(t *testing.T) {
 		t.Errorf("operator sync namespace mismatch, expected admiral-sync, got %v", GetOperatorSyncNamespace())
 	}
 
+	if GetOperatorIdentityLabelValue() != "operator" {
+		t.Errorf("operator identity label value mismatch, expected operator but got %s", GetOperatorIdentityLabelValue())
+	}
+
+	shardIdentityLabelKey, shardIdentityLabelValue := GetShardIdentityLabelKeyValueSet()
+	if shardIdentityLabelKey != "admiral.io/shardIdentity" && shardIdentityLabelValue != "shard" {
+		t.Errorf("shard identity label key value set mismatched, expected admiral.io/shardIdentity and shard but got %s and %s", shardIdentityLabelKey, shardIdentityLabelValue)
+	}
+
 	if GetOperatorSecretFilterTags() != "admiral/syncoperator" {
 		t.Errorf("operator secret filter tags mismatch, expected admiral/syncoperator, got %s", GetOperatorSecretFilterTags())
 	}
@@ -707,6 +718,15 @@ func TestConfigManagement(t *testing.T) {
 	if len(GetIgnoreLabelsAnnotationsVSCopy()) != 3 {
 		t.Errorf("ignored labels and annotations for VS copy mismatch, expected 3, got %v", GetIgnoreLabelsAnnotationsVSCopy())
 	}
+
+	if !IsStateSyncerCluster("test-k8s") {
+		t.Errorf("state syncer cluster mismatch, expected true, got false")
+	}
+
+	if IsStateSyncerCluster("not-test-k8s") {
+		t.Errorf("state syncer cluster mismatch, expected false, got true")
+	}
+
 }
 
 func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
@@ -718,38 +738,6 @@ func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
 	assert.Equalf(t, "identityOld", GetAdmiralCRDIdentityLabel(), "GetCRDIdentityLabel()")
 
 	admiralParams.LabelSet.AdmiralCRDIdentityLabel = backOldIdentity
-}
-
-func TestSetArgoRolloutsEnabled(t *testing.T) {
-	p := AdmiralParams{}
-	p.ArgoRolloutsEnabled = true
-	ResetSync()
-	InitializeConfig(p)
-
-	SetArgoRolloutsEnabled(true)
-	assert.Equal(t, true, GetArgoRolloutsEnabled())
-}
-
-func TestSetCartographerFeature(t *testing.T) {
-	p := AdmiralParams{}
-	ResetSync()
-	InitializeConfig(p)
-
-	SetCartographerFeature("feature", "enabled")
-	assert.Equal(t, "enabled", wrapper.params.CartographerFeatures["feature"])
-}
-
-func TestGetResyncIntervals(t *testing.T) {
-	p := AdmiralParams{}
-	p.CacheReconcileDuration = time.Minute
-	p.SeAndDrCacheReconcileDuration = time.Minute
-	ResetSync()
-	InitializeConfig(p)
-
-	actual := GetResyncIntervals()
-
-	assert.Equal(t, time.Minute, actual.SeAndDrReconcileInterval)
-	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
 }
 
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {

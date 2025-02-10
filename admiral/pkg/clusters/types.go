@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"regexp"
 	"sync"
 	"time"
@@ -97,10 +98,7 @@ type RemoteRegistry struct {
 	DependencyController        *admiral.DependencyController
 	ShardController             *admiral.ShardController
 	ClientLoader                loader.ClientLoader
-	ClusterShardHandler         registry.ClusterShardStore
-	ClusterIdentityStoreHandler registry.ClusterIdentityStore
-	ConfigSyncer                registry.ConfigSyncer
-	RegistryClient              registry.IdentityConfiguration
+	RegistryClient              registry.ClientAPI
 	ConfigWriter                ConfigWriter
 }
 
@@ -196,13 +194,18 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		AdmiralDatabaseClient:       admiralDatabaseClient,
 		DynamicConfigDatabaseClient: admiralDynamicConfigDatabaseClient,
 		ClientLoader:                clientLoader,
-		ClusterIdentityStoreHandler: registry.NewClusterIdentityStoreHandler(),
-		ConfigSyncer:                registry.NewConfigSync(),
 		ConfigWriter:                NewConfigWriter(),
 	}
 
-	if common.IsAdmiralOperatorMode() {
-		rr.RegistryClient = registry.NewRegistryClient(registry.WithRegistryEndpoint("PLACEHOLDER"))
+	if common.IsAdmiralOperatorMode() || common.IsAdmiralStateSyncerMode() {
+		registryClientParams := common.GetRegistryClientConfig()
+		defaultRegistryClientConfig := &util.Config{
+			Host:      registryClientParams["Host"],
+			AppId:     registryClientParams["AppId"],
+			AppSecret: registryClientParams["AppSecret"],
+			BaseURI:   registryClientParams["BaseURI"],
+		}
+		rr.RegistryClient = registry.NewRegistryClient(registry.WithBaseClientConfig(defaultRegistryClientConfig))
 		rr.AdmiralCache.ClusterLocalityCache = common.NewMapOfMaps()
 	}
 
