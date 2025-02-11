@@ -11,10 +11,38 @@
         "test": {
           "name": "test",
           "namespace": "foobar-ns",
-          "services": null,
+          "services": {
+            "default": [
+              {
+                "name": "foobar",
+                "ports": {
+                  "http": 8090
+                },
+                "selectors": {
+                  "app": "identity"
+                }
+              },
+              {
+                "name": "foobar-stable",
+                "ports": {
+                  "http": 8090
+                },
+                "selectors": {
+                  "app": "identity"
+                }
+              }
+            ]
+          },
           "serviceName": "",
-          "type": "rollout",
-          "selectors": null,
+          "type": {
+            "rollout": {
+              "strategy": "",
+              "selectors": {
+                "app": "identity",
+                "identity": "identity"
+              }
+            }
+          },
           "ports": [
             {
               "number": 80,

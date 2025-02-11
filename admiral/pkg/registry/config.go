@@ -17,12 +17,13 @@ func (config *IdentityConfig) PutClusterConfig(name string, clusterConfig Identi
 }
 
 type IdentityConfigCluster struct {
-	Name            string                                `json:"name"`
-	Locality        string                                `json:"locality"`
-	IngressEndpoint string                                `json:"ingressEndpoint"`
-	IngressPort     string                                `json:"ingressPort"`
-	IngressPortName string                                `json:"ingressPortName"`
-	Environment     map[string]*IdentityConfigEnvironment `json:"environment"`
+	Name            string `json:"name"`
+	Locality        string `json:"locality"`
+	IngressEndpoint string `json:"ingressEndpoint"`
+	IngressPort     string `json:"ingressPort"`
+	IngressPortName string `json:"ingressPortName"`
+	// env -> rollout/deploy -> IdentityConfigEnvironment
+	Environment map[string]*IdentityConfigEnvironment `json:"environment"`
 }
 
 func (config *IdentityConfigCluster) PutEnvironment(name string, environmentConfig IdentityConfigEnvironment) error {
@@ -34,9 +35,10 @@ func (config *IdentityConfigCluster) PutClientAssets(clientAssets []string) erro
 }
 
 type RegistryServiceConfig struct {
-	Name   string            `json:"name"`
-	Weight int               `json:"weight"`
-	Ports  map[string]uint32 `json:"ports"`
+	Name      string            `json:"name"`
+	Weight    int               `json:"weight,omitempty,default=-1"`
+	Ports     map[string]uint32 `json:"ports"`
+	Selectors map[string]string `json:"selectors"`
 }
 
 type TrafficPolicy struct {
@@ -45,16 +47,20 @@ type TrafficPolicy struct {
 	ClientConnectionConfig admiralV1Alpha1.ClientConnectionConfig `json:"clientconnectionconfig"`
 }
 
+type TypeConfig struct {
+	Strategy  string            `json:"strategy"`
+	Selectors map[string]string `json:"selectors"`
+}
+
 type IdentityConfigEnvironment struct {
-	Name          string                            `json:"name"`
-	Namespace     string                            `json:"namespace"`
-	Services      map[string]*RegistryServiceConfig `json:"services"`
-	ServiceName   string                            `json:"serviceName"`
-	Type          string                            `json:"type"`
-	Selectors     map[string]string                 `json:"selectors"`
-	Ports         []*networking.ServicePort         `json:"ports"`
-	TrafficPolicy TrafficPolicy                     `json:"trafficPolicy"`
-	Event         admiral.EventType                 `json:"event"`
+	Name          string                              `json:"name"`
+	Namespace     string                              `json:"namespace"`
+	Services      map[string][]*RegistryServiceConfig `json:"services"`
+	ServiceName   string                              `json:"serviceName"`
+	Type          map[string]*TypeConfig              `json:"type"`
+	Ports         []*networking.ServicePort           `json:"ports"`
+	TrafficPolicy TrafficPolicy                       `json:"trafficPolicy"`
+	Event         admiral.EventType                   `json:"event"`
 }
 
 type RegistryServiceConfigSorted []*RegistryServiceConfig
