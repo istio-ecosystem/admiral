@@ -391,13 +391,6 @@ func modifyServiceEntryForNewServiceOrPod(
 					common.CtxLogFormat, "populateClientConnectionConfigCache", deploymentOrRolloutName,
 					deploymentOrRolloutNS, clusterId, err.Error())
 			}
-			ctxLogger.Infof(
-				common.CtxLogFormat, "populateClientConnectionConfigCache", deploymentOrRolloutName,
-				deploymentOrRolloutNS, clusterId, "Success")
-		} else {
-			ctxLogger.Infof(
-				common.CtxLogFormat, "populateClientConnectionConfigCache", deploymentOrRolloutName,
-				deploymentOrRolloutNS, clusterId, "Skipped as ClientConnectionConfig processing is disabled")
 		}
 	}
 
@@ -439,7 +432,6 @@ func modifyServiceEntryForNewServiceOrPod(
 	start = time.Now()
 	gtpPreferenceRegion, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
 	ctx = context.WithValue(ctx, common.GtpPreferenceRegion, gtpPreferenceRegion)
-	ctxLogger.Infof("GTP preference region is set to %v", ctx.Value(common.GtpPreferenceRegion))
 	if err != nil {
 		modifySEerr = common.AppendError(modifySEerr, err)
 	}
@@ -468,18 +460,13 @@ func modifyServiceEntryForNewServiceOrPod(
 	start = time.Now()
 
 	sourceClusterKeys := orderSourceClusters(ctx, remoteRegistry, sourceServices)
-	ctxLogger.Infof(common.CtxLogFormat, "OrderSourceClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", "sourceClusterKeys="+strings.Join(sourceClusterKeys, ","))
 
 	for _, sourceCluster := range sourceClusterKeys {
 		serviceInstance := sourceServices[sourceCluster]
 		resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 		if resourceLabels != nil {
 			// check if additional endpoint generation is required
-			ctxLogger.Infof(common.CtxLogFormat, "DoGenerateAdditionalEndpoints",
-				deploymentOrRolloutName, deploymentOrRolloutNS, "", "checking if we need additional endpoints. Resource label length:"+strconv.Itoa(len(resourceLabels)))
 			isAdditionalEndpointGenerationEnabled = doGenerateAdditionalEndpoints(ctxLogger, resourceLabels, partitionedIdentity, remoteRegistry.AdmiralCache)
-			ctxLogger.Infof(common.CtxLogFormat, "DoGenerateAdditionalEndpoints",
-				deploymentOrRolloutName, deploymentOrRolloutNS, "", "additional endpoint generation is="+strconv.FormatBool(isAdditionalEndpointGenerationEnabled))
 		} else {
 			ctxLogger.Warnf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "unable to find label for rollout or deployment in source cluster: "+sourceCluster)
 		}
@@ -995,15 +982,10 @@ func updateGlobalClientConnectionConfigCache(ctxLogger *logrus.Entry, cache *Adm
 	}
 
 	if len(clientConnectionSettingsOrdered) == 0 {
-		ctxLogger.Infof(common.CtxLogFormat, "UpdateGlobalClientConnectionConfigCache", "", "", "", fmt.Sprintf(
-			"no %s found for identity=%s in env=%s. Deleting global cache entries if any",
-			common.ClientConnectionConfig, identity, env))
 		cache.ClientConnectionConfigCache.Delete(identity, env)
 		return nil
 	}
 	if len(clientConnectionSettingsOrdered) > 1 {
-		ctxLogger.Infof(common.CtxLogFormat, "UpdateGlobalClientConnectionConfigCache", "", "", "", fmt.Sprintf(
-			"more than one %s found for identity=%s in env=%s.", common.ClientConnectionConfig, identity, env))
 		sortClientConnectionConfigByCreationTime(clientConnectionSettingsOrdered, identity, env)
 	}
 
@@ -1016,9 +998,6 @@ func updateGlobalClientConnectionConfigCache(ctxLogger *logrus.Entry, cache *Adm
 			common.ClientConnectionConfig, mostRecentClientConnectionConfig.Name, mostRecentClientConnectionConfig.Namespace,
 			identity, err)
 	}
-	ctxLogger.Infof(common.CtxLogFormat, "UpdateGlobalClientConnectionConfigCache", "", "", "",
-		fmt.Sprintf("%s with name=%s in namespace=%s is actively used for identity=%s",
-			common.ClientConnectionConfig, mostRecentClientConnectionConfig.Name, mostRecentClientConnectionConfig.Namespace, identity))
 	return nil
 }
 
@@ -1030,12 +1009,10 @@ func updateGlobalOutlierDetectionCache(ctxLogger *logrus.Entry, cache *AdmiralCa
 	}
 
 	if len(odOrder) == 0 {
-		ctxLogger.Infof("No %s found for identity=%s in env=%s. Deleting global cache entries if any", common.OutlierDetection, identity, env)
 		cache.OutlierDetectionCache.Delete(identity, env)
 		return
 	} else if len(odOrder) > 0 {
 		//TODO : Test with multiple outlier detection in use case of env alias qa, qa-west etc
-		ctxLogger.Infof("More than one %s found for identity=%s in env=%s.", common.OutlierDetection, identity, env)
 		sortOutlierDetectionByCreationTime(odOrder, identity, env)
 	}
 
@@ -1046,11 +1023,7 @@ func updateGlobalOutlierDetectionCache(ctxLogger *logrus.Entry, cache *AdmiralCa
 	if err != nil {
 		ctxLogger.Errorf("Error in updating %s with name=%s in namespace=%s as actively used for identity=%s with err=%v", common.OutlierDetection, mostRecentOd.Name, mostRecentOd.Namespace,
 			common.ConstructKeyWithEnvAndIdentity(common.GetODEnv(mostRecentOd), common.GetODIdentity(mostRecentOd)), err)
-	} else {
-		ctxLogger.Infof("%s with name=%s in namespace=%s is actively used for identity=%s", common.OutlierDetection, mostRecentOd.Name, mostRecentOd.Namespace,
-			common.ConstructKeyWithEnvAndIdentity(common.GetODEnv(mostRecentOd), common.GetODIdentity(mostRecentOd)))
 	}
-
 }
 
 // Does two things;
@@ -1076,7 +1049,6 @@ func updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry *RemoteRegistr
 		remoteRegistry.AdmiralCache.GlobalTrafficCache.Delete(identity, env)
 		return "", nil
 	} else if len(gtpsOrdered) > 1 {
-		ctxLogger.Infof("More than one GTP found for identity=%s in env=%s.", identity, env)
 		//sort by creation time and priority, gtp with highest priority and most recent at the beginning
 		common.SortGtpsByPriorityAndCreationTime(gtpsOrdered, identity, env)
 	}
@@ -1236,15 +1208,14 @@ func addUpdateSidecar(ctxLogger *logrus.Entry, ctx context.Context, obj *v1alpha
 	exist.Annotations = obj.Annotations
 	exist.Spec = obj.Spec
 	if commonUtil.IsAdmiralReadOnly() {
-		ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Skipped as Admiral pod is in read only mode")
 		return
 	}
 	_, err = rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Update(ctx, obj, v12.UpdateOptions{})
 	if err != nil {
-		err = retryUpdatingSidecar(ctxLogger, ctx, obj, exist, namespace, rc, err, "Update")
-		ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
-	} else {
-		ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, "Success")
+		err := retryUpdatingSidecar(ctxLogger, ctx, obj, exist, namespace, rc, err, "Update")
+		if err != nil {
+			ctxLogger.Infof(LogErrFormat, "Update", "Sidecar", obj.Name, rc.ClusterID, err)
+		}
 	}
 }
 
@@ -1257,11 +1228,9 @@ func retryUpdatingSidecar(ctxLogger *logrus.Entry, ctx context.Context, obj *v1a
 			updatedSidecar, err := rc.SidecarController.IstioClient.NetworkingV1alpha3().Sidecars(namespace).Get(ctx, exist.Name, v12.GetOptions{})
 			// if old sidecar not found, just create a new sidecar instead
 			if err != nil {
-				ctxLogger.Infof(common.CtxLogFormat, op, exist.Name, exist.Namespace, rc.ClusterID, err.Error()+fmt.Sprintf(". Error getting old sidecar"))
 				continue
 			}
 			existingResourceVersion := updatedSidecar.GetResourceVersion()
-			ctxLogger.Infof(common.CtxLogFormat, op, obj.Name, obj.Namespace, rc.ClusterID, fmt.Sprintf("existingResourceVersion=%s resourceVersionUsedForUpdate=%s", updatedSidecar.ResourceVersion, obj.ResourceVersion))
 			updatedSidecar.Spec = obj.Spec
 			updatedSidecar.Annotations = obj.Annotations
 			updatedSidecar.Labels = obj.Labels
@@ -1324,8 +1293,6 @@ func AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Co
 		if len(se.Hosts) == 0 {
 			return fmt.Errorf("failed to process service entry for identity %s and env %s as it is nil or has empty hosts", identityId, env)
 		}
-
-		ctxLogger.Infof("DependentClusterWorkerConcurrency: %v", common.DependentClusterWorkerConcurrency())
 
 		for w := 1; w <= common.DependentClusterWorkerConcurrency(); w++ {
 			go AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster,
@@ -1592,7 +1559,6 @@ func AddServiceEntriesWithDrWorker(
 						util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheSeClusterCachePut", "", "", cluster, "", start)
 						// Create additional endpoints if necessary
 						if isAdditionalEndpointsEnabled {
-							ctxLogger.Infof("gatewayAliases=%v", common.GetGatewayAssetAliases())
 							// build list of gateway clusters
 							gwClusters := []string{}
 							for _, gwAlias := range common.GetGatewayAssetAliases() {
@@ -1610,7 +1576,6 @@ func AddServiceEntriesWithDrWorker(
 									})
 								}
 							}
-							ctxLogger.Infof("gatewayClusters=%v", gwClusters)
 							vsDNSPrefix := getDNSPrefixFromServiceEntry(seDr)
 							// if env contains -air suffix remove it else return original string
 							trimmedAirEnv := strings.TrimSuffix(env, common.AIREnvSuffix)
@@ -1632,8 +1597,6 @@ func AddServiceEntriesWithDrWorker(
 									addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
 								}
 							}
-						} else {
-							ctxLogger.Infof(LogFormat, "Create", "VirtualService", env+"."+identityId, cluster, "skipped creating additional endpoints through VirtualService in "+syncNamespace+" namespace")
 						}
 
 						//update workloadEndpoint entry to dynamoDB workloadData table only for source entry
@@ -1645,8 +1608,6 @@ func AddServiceEntriesWithDrWorker(
 								addSEorDRToAClusterError = common.AppendError(addSEorDRToAClusterError, err)
 								ctxLogger.Errorf(LogErrFormat, "Create", "dynamoDbWorkloadData", env+"."+identityId, cluster, err.Error())
 							}
-						} else {
-							ctxLogger.Infof(LogFormat, "Create", "dynamoDbWorkloadData", env+"."+identityId, cluster, "skipped updating workload data as this is not source cluster")
 						}
 					}
 				}
@@ -1776,7 +1737,6 @@ func handleDynamoDbUpdateForOldGtp(oldGtp *v1.GlobalTrafficPolicy, remoteRegistr
 	}
 
 	if workloadData == nil {
-		ctxLogger.Infof("got nil workload data when get on admiral database client was called")
 		return nil
 	}
 
@@ -1835,7 +1795,6 @@ func calculateShasumForWorkloadData(workloadData WorkloadData) []byte {
 func verifyIfEndpointRecordNeedsUpdate(ctxLogger *logrus.Entry, cache *AdmiralCache, serviceEntryHost string, newWorkloadDataShasum []byte) bool {
 	existingShaSum, ok := cache.DynamoDbEndpointUpdateCache.Load(serviceEntryHost)
 	if ok && (fmt.Sprint(existingShaSum) == fmt.Sprint(newWorkloadDataShasum)) {
-		ctxLogger.Infof("no diff between new workload data and existing data for endpoint %v, hence not updating dynamoDB record", serviceEntryHost)
 		return false
 	}
 	return true
@@ -1931,8 +1890,6 @@ func getGTPDetails(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntry,
 				break
 			}
 		}
-	} else {
-		ctxLogger.Infof("creating workload entry without gtp details, as gtp or gtp policy is not configured for asset - %v", serviceEntry.Annotations[common.GetWorkloadIdentifier()])
 	}
 
 	return lbType, dnsPrefix, trafficDistribution, gtpManagedBy, gtpId, lastUpdatedAt
@@ -1946,19 +1903,15 @@ func getGTPDetails(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntry,
 func doGenerateAdditionalEndpoints(ctxLogger *logrus.Entry, labels map[string]string, identity string, admiralCache *AdmiralCache) bool {
 	additionalEndpointSuffixes := common.GetAdditionalEndpointSuffixes()
 	if len(additionalEndpointSuffixes) <= 0 {
-		ctxLogger.Infof(common.CtxLogFormat, "DoGenerateAdditionalEndpoints", "", "", "No additional endpoint suffixes found")
 		return false
 	}
 	// Check if admiral configured allowed labels are in the passed labels map
 	additionalEndpointAnnotationFilters := common.GetAdditionalEndpointLabelFilters()
 	if util.Contains(additionalEndpointAnnotationFilters, "*") {
-		ctxLogger.Infof(common.CtxLogFormat, "DoGenerateAdditionalEndpoints", "", "", "additional endpoints contains *")
 		return true
 	}
 	if doesContainLabel(ctxLogger, labels, additionalEndpointAnnotationFilters) {
 		// Store it in the map only if the labels match
-		ctxLogger.Infof(common.CtxLogFormat,
-			"DoGenerateAdditionalEndpoints", "", "", fmt.Sprintf("labels contains additionalEndpointAnnotationFilters=%v", additionalEndpointAnnotationFilters))
 		admiralCache.IdentitiesWithAdditionalEndpoints.Store(identity, identity)
 		return true
 	}
@@ -1971,13 +1924,10 @@ func doGenerateAdditionalEndpoints(ctxLogger *logrus.Entry, labels map[string]st
 		for _, dependent := range dependents.GetKeys() {
 			_, ok := admiralCache.IdentitiesWithAdditionalEndpoints.Load(dependent)
 			if ok {
-				ctxLogger.Infof(common.CtxLogFormat, "DoGenerateAdditionalEndpoints", "", "", fmt.Sprintf("dependentAssetWithAdditionalEndpoints=%s", dependent))
 				return true
 			}
 		}
 	}
-	ctxLogger.Infof(common.CtxLogFormat,
-		"DoGenerateAdditionalEndpoints", "", "", "no dependents found, additional endpoints creation=false")
 	return false
 }
 
@@ -1985,17 +1935,13 @@ func doGenerateAdditionalEndpoints(ctxLogger *logrus.Entry, labels map[string]st
 // resources's label's map
 func doesContainLabel(ctxLogger *logrus.Entry, labels map[string]string, allowedLabels []string) bool {
 	if labels == nil {
-		ctxLogger.Infof(common.CtxLogFormat, "doesContainLabel", "", "", "", "no labels found")
 		return false
 	}
 	for _, filter := range allowedLabels {
 		if _, ok := labels[filter]; ok {
-			ctxLogger.Infof(common.CtxLogFormat, "doesContainLabel", "", "", "", "found matching label")
 			return true
 		}
-		ctxLogger.Infof(common.CtxLogFormat, "doesContainLabel", "", "", "", "labels does not contain filter="+filter)
 	}
-	ctxLogger.Infof(common.CtxLogFormat, "doesContainLabel", "", "", "", "no matching label found")
 	return false
 }
 
@@ -2048,7 +1994,6 @@ func deleteAdditionalEndpoints(ctxLogger *logrus.Entry, ctx context.Context, rc 
 			ctxLogger.Errorf(LogErrFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, err)
 			return err
 		}
-		ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, "Success")
 	}
 	return nil
 }
@@ -2114,9 +2059,7 @@ func createAdditionalEndpoints(
 
 	if existingVS != nil {
 		if common.IsPresent(gatewayClusters, rc.ClusterID) && eventResourceType == common.Rollout && common.IsAirEnv(originalEnvLabel) {
-			ctxLogger.Infof(common.CtxLogFormat, "updateAdditionalEndpointInGWCluster", "admiral-sync", rc.ClusterID, "event for updating existing VS in Gateway cluster received. will be updating the VS.")
 		} else {
-			ctxLogger.Infof("VirtualService for additional endpoint already exists, skipping. name=%s cluster=%s", defaultVSName, rc.ClusterID)
 			return nil
 		}
 	}
@@ -2146,7 +2089,6 @@ func createAdditionalEndpoints(
 		if dependentClusterNamespaces != nil && dependentClusterNamespaces.Len() > 0 {
 			for _, vshostname := range virtualServiceHostnames {
 				rr.AdmiralCache.CnameDependentClusterNamespaceCache.PutMapofMaps(strings.ToLower(vshostname), dependentClusterNamespaces)
-				ctxLogger.Infof("clusterNamespaces for vs hostname %v  was empty, replacing with clusterNamespaces for %v", vshostname, defaultCname)
 				rr.AdmiralCache.CnameIdentityCache.Store(vshostname, partitionedIdentity)
 			}
 		}
@@ -2224,11 +2166,6 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 	if globalTrafficPolicy != nil {
 		gtp := globalTrafficPolicy.Spec
 		for _, gtpTrafficPolicy := range gtp.Policy {
-			ctxLogger.Infof("Processing dnsPrefix=%s, lbType=%s, "+
-				"outlier_detection=%s on gtp=%s from namespace=%s for identity=%s in env=%s",
-				gtpTrafficPolicy.DnsPrefix,
-				gtpTrafficPolicy.LbType, gtpTrafficPolicy.OutlierDetection.String(),
-				globalTrafficPolicy.Name, globalTrafficPolicy.Namespace, common.GetGtpIdentity(globalTrafficPolicy), env)
 			var modifiedSe = se
 			var host = se.Hosts[0]
 			var drName, seName = defaultDrName, defaultSeName
@@ -2324,7 +2261,6 @@ func loadServiceEntryCacheData(ctxLogger *logrus.Entry, ctx context.Context, c a
 
 	if entryCache != nil {
 		*admiralCache.ServiceEntryAddressStore = *entryCache
-		ctxLogger.Infof("Successfully updated service entry cache state")
 	}
 
 }

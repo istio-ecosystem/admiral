@@ -21,12 +21,9 @@ Utility function to start Admiral DR checks.
 DR checks can be run either on the main go routine or a new go routine
 */
 func RunAdmiralStateCheck(ctx context.Context, stateChecker string, asc AdmiralStateChecker) {
-	log.Infof("Starting %s state checker", stateChecker)
 	if asc.shouldRunOnIndependentGoRoutine() {
-		log.Infof("Starting %s state checker on a new Go Routine", stateChecker)
 		go asc.runStateCheck(ctx)
 	} else {
-		log.Infof("Starting %s state checker on existing Go Routine", stateChecker)
 		asc.runStateCheck(ctx)
 	}
 }

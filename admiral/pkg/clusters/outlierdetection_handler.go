@@ -9,7 +9,6 @@ import (
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 )
 
 type OutlierDetectionHandler struct {
@@ -47,7 +46,6 @@ func (cache *outlierDetectionCache) Put(od *v1.OutlierDetection) error {
 	identity := common.GetODIdentity(od)
 	env := common.GetODEnv(od)
 
-	log.Infof("Adding OutlierDetection with name=%s to OutlierDetectionCache. LabelMatch=%v env=%v", od.Name, identity, env)
 	key := common.ConstructKeyWithEnvAndIdentity(env, identity)
 	cache.identityCache[key] = od
 	return nil
@@ -58,7 +56,6 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 	defer cache.mutex.Unlock()
 	key := common.ConstructKeyWithEnvAndIdentity(env, identity)
 	if _, ok := cache.identityCache[key]; ok {
-		log.Infof("Deleting OutlierDetection with key=%s from OutlierDetection cache.", key)
 		delete(cache.identityCache, key)
 	} else {
 		return fmt.Errorf("OutlierDetection with key %s not found in cache", key)
@@ -67,7 +64,6 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 }
 
 func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDetection) error {
-	log.Infof(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	err := HandleEventForOutlierDetection(ctx, admiral.EventType(common.Add), obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -76,7 +72,6 @@ func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDete
 }
 
 func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDetection) error {
-	log.Infof(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -85,7 +80,6 @@ func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDe
 }
 
 func (od OutlierDetectionHandler) Deleted(ctx context.Context, obj *v1.OutlierDetection) error {
-	log.Infof(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, common.ReceivedStatus)
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())

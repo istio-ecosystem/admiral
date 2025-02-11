@@ -98,7 +98,6 @@ func (d *ServiceEntryCache) Get(identity string, cluster string) *networking.Ser
 			return se.ServiceEntry
 		}
 	}
-	log.Infof("no service entry found in cache for identity=%s cluster=%s", identity, cluster)
 	return nil
 }
 

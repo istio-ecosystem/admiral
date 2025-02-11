@@ -87,7 +87,6 @@ func (checker *ignoreIdentityStateChecker) shouldRunOnIndependentGoRoutine() boo
 
 func (checker *ignoreIdentityStateChecker) runStateCheck(ctx context.Context) {
 	period := time.Duration(checker.admiralConfig.IgnoreIdentityList.StateCheckerPeriodInSeconds) * time.Second
-	log.Infof("op=ignoreIdentityStateChecker message=starting ticker to fetch ignore list every %v seconds", period)
 	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	state, err := checker.getState()
@@ -99,7 +98,6 @@ func (checker *ignoreIdentityStateChecker) runStateCheck(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("op=ignoreIdentityStateChecker message=context done stopping ticker")
 			return
 		case <-ticker.C:
 			state, err := checker.getState()

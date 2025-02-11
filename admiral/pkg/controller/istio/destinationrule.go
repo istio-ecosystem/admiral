@@ -93,7 +93,6 @@ func (d *DestinationRuleCache) Get(identity string, namespace string) *networkin
 		return drItem.DestinationRule
 	}
 
-	log.Infof("no destinationrule found in cache for identity=%s", identity)
 	return nil
 }
 

@@ -47,7 +47,6 @@ func (dh *DependencyHandler) HandleDependencyRecord(ctx context.Context, obj *v1
 	remoteRegistry *RemoteRegistry, eventType admiral.EventType) error {
 	sourceIdentity := obj.Spec.Source
 	if len(sourceIdentity) == 0 {
-		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, obj.Name, "", "No identity found namespace="+obj.Namespace)
 		return nil
 	}
 
@@ -117,7 +116,6 @@ func (d *ProcessDestinationService) Process(ctx context.Context, dependency *v1.
 		// the rollout/deployment event hasn't gone through yet.
 		// This can be ignored, and not be added back to the dependency controller queue
 		// because it will be processed by the rollout/deployment controller
-		ctxLogger.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", fmt.Sprintf("identity: %s, does not have any clusters. Skipping calling modifySE", dependency.Spec.Source))
 		return nil
 	}
 

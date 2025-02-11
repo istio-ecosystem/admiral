@@ -47,14 +47,12 @@ func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
 func GetServiceSelector(clusterName string, destService *k8sV1.Service) *common.Map {
 	var selectors = destService.Spec.Selector
 	if len(selectors) == 0 {
-		logrus.Infof(LogFormat, "GetServiceLabels", "no selectors present", destService.Name, clusterName, selectors)
 		return nil
 	}
 	var tempMap = common.NewMap()
 	for key, value := range selectors {
 		tempMap.Put(key, value)
 	}
-	logrus.Infof(LogFormat, "GetServiceLabels", "selectors present", destService.Name, clusterName, selectors)
 	return tempMap
 }
 
@@ -152,7 +150,6 @@ func GetAllServicesForRollout(rc *RemoteController, rollout *argo.Rollout) map[s
 	}
 
 	if rollout.Spec.Selector == nil || rollout.Spec.Selector.MatchLabels == nil {
-		logrus.Infof("no selector for rollout=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
 		return nil
 	}
 
@@ -190,7 +187,6 @@ func generateSECanary(ctxLogger *logrus.Entry, ctx context.Context, event admira
 	// generating SE when disable_ip_generation=false. When disable_ip_generation=true, it still
 	// checks for non-empty fqdn but allows for empty address.
 	if len(fqdn) != 0 && (common.DisableIPGeneration() || len(address) != 0) {
-		logrus.Infof("se generated for canary fqdn - %v", fqdn)
 		generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, fqdn, rc, serviceEntries, address, san, common.Rollout)
 	}
 	return nil
@@ -214,8 +210,6 @@ func filterClusters(sourceClusters, destinationClusters *common.Map) *common.Map
 	sourceClusters.Range(func(k string, v string) {
 		if destinationClusters != nil && !destinationClusters.CheckIfPresent(k) {
 			filteredSourceClusters.Put(k, v)
-		} else {
-			logrus.Infof("Filtering out %v from sourceClusters list as it is present in destinationClusters", k)
 		}
 	})
 	return filteredSourceClusters
