@@ -521,3 +521,16 @@ func (r RouteDestinationSorted) Less(i, j int) bool {
 func (r RouteDestinationSorted) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
+
+func isServiceControllerInitialized(rc *RemoteController) error {
+	if rc == nil {
+		return fmt.Errorf("remote controller not initialized")
+	}
+	if rc.ServiceController == nil {
+		return fmt.Errorf("service controller not initialized")
+	}
+	if rc.ServiceController.Cache == nil {
+		return fmt.Errorf("service controller cache not initialized")
+	}
+	return nil
+}

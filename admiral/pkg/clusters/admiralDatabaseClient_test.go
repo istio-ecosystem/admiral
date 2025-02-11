@@ -4,10 +4,17 @@ import (
 	"errors"
 	"fmt"
 	v1 "github.com/istio-ecosystem/admiral/admiral/apis/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	k8sv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"testing"
+	"time"
 )
 
 /*
@@ -571,9 +578,9 @@ func (d DummyDynamicConfigDatabaseClient) Delete(data interface{}, logger *log.E
 func (d DummyDynamicConfigDatabaseClient) Get(env, identity string) (interface{}, error) {
 	dummyDynamicConfigData := DynamicConfigData{
 		EnableDynamicConfig:    common.Admiral,
-		NLBEnabledClusters:     []string{"cluster1", "cluster2"},
+		NLBEnabledClusters:     []string{"cluster1"},
 		NLBEnabledIdentityList: []string{"identity1", "identity2"},
-		CLBEnabledClusters:     []string{"cluster1", "cluster2"},
+		CLBEnabledClusters:     []string{"cluster1"},
 	}
 
 	return dummyDynamicConfigData, nil
@@ -582,6 +589,90 @@ func (d DummyDynamicConfigDatabaseClient) Get(env, identity string) (interface{}
 func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
 
 	var testData DummyDynamicConfigDatabaseClient
+
+	testAdmiralParam := common.GetAdmiralParams()
+	testAdmiralParam.LabelSet.GatewayApp = common.IstioIngressGatewayLabelValue
+	testAdmiralParam.NLBIngressLabel = common.NLBIstioIngressGatewayLabelValue
+	testAdmiralParam.NLBEnabledClusters = []string{"cluster1"}
+
+	common.UpdateAdmiralParams(testAdmiralParam)
+
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+
+	stop := make(chan struct{})
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	testService := k8sv1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "clb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.IstioIngressGatewayLabelValue},
+		},
+		Spec: k8sv1.ServiceSpec{},
+		Status: k8sv1.ServiceStatus{
+			LoadBalancer: k8sv1.LoadBalancerStatus{Ingress: make([]k8sv1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	portStatus := k8sv1.PortStatus{
+		Port:     007,
+		Protocol: "HTTP",
+		Error:    nil,
+	}
+
+	testLoadBalancerIngress := k8sv1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "clb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]k8sv1.PortStatus, 0),
+	}
+	testLoadBalancerIngress.Ports = append(testLoadBalancerIngress.Ports, portStatus)
+	testService.Status.LoadBalancer.Ingress = append(testService.Status.LoadBalancer.Ingress, testLoadBalancerIngress)
+
+	testService1 := testService.DeepCopy()
+	testService1.Name = "nlb"
+	testService1.Labels[common.App] = common.NLBIstioIngressGatewayLabelValue
+	testService1.Status.LoadBalancer.Ingress[0].Hostname = "nlb.istio.com"
+
+	testService2 := testService1.DeepCopy()
+	testService2.Labels[common.App] = common.NLBIstioIngressGatewayLabelValue + "TEST"
+	testService2.Name = "nlb2"
+
+	testServiceControler, _ := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testServiceControler.Cache.Put(&testService)
+	testServiceControler.Cache.Put(testService1)
+	testServiceControler.Cache.Put(testService2)
+
+	rr.remoteControllers["cluster1"] = &RemoteController{
+		ClusterID:                        "",
+		ApiServer:                        "",
+		StartTime:                        time.Time{},
+		GlobalTraffic:                    nil,
+		DeploymentController:             nil,
+		ServiceController:                testServiceControler,
+		NodeController:                   nil,
+		ServiceEntryController:           nil,
+		DestinationRuleController:        nil,
+		VirtualServiceController:         nil,
+		SidecarController:                nil,
+		RolloutController:                nil,
+		RoutingPolicyController:          nil,
+		OutlierDetectionController:       nil,
+		ClientConnectionConfigController: nil,
+		JobController:                    nil,
+		VertexController:                 nil,
+		MonoVertexController:             nil,
+		stop:                             nil,
+	}
+
+	rr.DynamicConfigDatabaseClient = testData
+
 	type args struct {
 		dbClient AdmiralDatabaseManager
 	}
@@ -596,12 +687,40 @@ func TestReadAndUpdateSyncAdmiralConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ReadAndUpdateSyncAdmiralConfig(tt.args.dbClient)
+			err := ReadAndUpdateSyncAdmiralConfig(rr)
 			if tt.wantErr != nil {
 				assert.Contains(t, err.Error(), tt.wantErr.Error(), "ReadAndUpdateSyncAdmiralConfig(). Expect error containing %s but got error = %v", tt.wantErr.Error(), err.Error())
 			} else {
 				assert.Nil(t, err, "ReadAndUpdateSyncAdmiralConfig(). Expect no error but got error - %s", err)
 			}
+		})
+	}
+}
+
+func Test_getLBToProcess(t *testing.T) {
+	rr := NewRemoteRegistry(nil, common.AdmiralParams{})
+	rr.AdmiralCache.NLBEnabledCluster = []string{}
+
+	type args struct {
+		updatedLB []string
+		cache     *[]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{"When cache is not updated then getLBToProcess should be all updated list ",
+			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{}}, []string{"cluster1", "cluster2"}},
+		{"When cluster is removed from update list then getLBToProcess should return removed cluster",
+			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{"cluster1", "cluster2", "cluster3"}}, []string{"cluster3"}},
+		{"When cluster is added from update list then getLBToProcess should return added cluster",
+			args{updatedLB: []string{"cluster1", "cluster2", "cluster3"}, cache: &[]string{"cluster1", "cluster2"}}, []string{"cluster3"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, getLBToProcess(tt.args.updatedLB, tt.args.cache), "getLBToProcess(%v, %v)", tt.args.updatedLB, *tt.args.cache)
+			assert.Equal(t, tt.args.updatedLB, *tt.args.cache, "getLBToProcess should update cache based upon params")
 		})
 	}
 }

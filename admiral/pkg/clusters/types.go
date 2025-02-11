@@ -82,6 +82,10 @@ type AdmiralCache struct {
 	CnameDependentClusterNamespaceCache *common.MapOfMapOfMaps
 	PartitionIdentityCache              *common.Map
 	ClientClusterNamespaceServerCache   *common.MapOfMapOfMaps
+
+	//LB Migration Cache
+	NLBEnabledCluster []string
+	CLBEnabledCluster []string
 }
 
 type RemoteRegistry struct {
@@ -162,6 +166,9 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		serviceEntrySuspender = NewDummyServiceEntrySuspender()
 	}
 
+	admiralCache.NLBEnabledCluster = params.NLBEnabledClusters
+	admiralCache.CLBEnabledCluster = params.CLBEnabledClusters
+
 	if common.IsAdmiralDynamicConfigEnabled() {
 		admiralDynamicConfigDatabaseClient, err = NewDynamicConfigDatabaseClient(common.GetAdmiralConfigPath(), NewDynamoClient)
 	} else {
@@ -215,7 +222,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		Later down the process like async processor will take on going config pushes.
 	*/
 	if common.IsAdmiralDynamicConfigEnabled() {
-		ReadAndUpdateSyncAdmiralConfig(rr.DynamicConfigDatabaseClient)
+		ReadAndUpdateSyncAdmiralConfig(rr)
 	}
 
 	return rr

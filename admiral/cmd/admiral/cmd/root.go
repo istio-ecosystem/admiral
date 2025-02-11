@@ -79,7 +79,9 @@ func GetRootCmd(args []string) *cobra.Command {
 			}
 
 			if common.IsAdmiralDynamicConfigEnabled() {
-				go clusters.UpdateASyncAdmiralConfig(remoteRegistry.DynamicConfigDatabaseClient, params.DynamicSyncPeriod)
+				ctxDynamicConfig, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go clusters.UpdateASyncAdmiralConfig(ctxDynamicConfig, remoteRegistry, params.DynamicSyncPeriod)
 			}
 
 			// This is required for PERF tests only.
@@ -292,6 +294,7 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledClusters, "nlb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for NLB")
 	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledIdentityList, "nlb_enabled_identity_list", []string{}, "Comma seperated list of enabled idenity list to be enabled for NLB")
 	rootCmd.PersistentFlags().StringSliceVar(&params.CLBEnabledClusters, "clb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for CLB")
+	rootCmd.PersistentFlags().StringVar(&params.NLBIngressLabel, "nlb_ingress_label", common.NLBIstioIngressGatewayLabelValue, "The value of the `app` label to use to match and find the service that represents the NLB ingress for cross cluster traffic")
 
 	return rootCmd
 }
