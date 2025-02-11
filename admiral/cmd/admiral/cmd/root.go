@@ -79,7 +79,9 @@ func GetRootCmd(args []string) *cobra.Command {
 			}
 
 			if common.IsAdmiralDynamicConfigEnabled() {
-				go clusters.UpdateASyncAdmiralConfig(remoteRegistry, params.DynamicSyncPeriod)
+				ctxDynamicConfig, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				go clusters.UpdateASyncAdmiralConfig(ctxDynamicConfig, remoteRegistry, params.DynamicSyncPeriod)
 			}
 
 			// This is required for PERF tests only.

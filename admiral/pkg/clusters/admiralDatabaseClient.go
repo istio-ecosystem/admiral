@@ -178,10 +178,7 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 	return &dynamicConfigClient, nil
 }
 
-func UpdateASyncAdmiralConfig(rr *RemoteRegistry, syncTime int) {
-
-	ctxDynamicConfig, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func UpdateASyncAdmiralConfig(ctxDynamicConfig context.Context, rr *RemoteRegistry, syncTime int) {
 
 	ticker := time.NewTicker(time.Minute * time.Duration(syncTime))
 	defer ticker.Stop()
