@@ -9901,8 +9901,118 @@ func TestOrderSourceClusters(t *testing.T) {
 	}
 }
 
+func Test_getOverwrittenLoadBalancer(t *testing.T) {
+	type args struct {
+		ctx          *logrus.Entry
+		rc           *RemoteController
+		clusterName  string
+		admiralCache *AdmiralCache
+	}
+
+	testArg := args{
+		ctx:          logrus.New().WithContext(context.Background()),
+		rc:           &RemoteController{},
+		clusterName:  "cluster1",
+		admiralCache: &AdmiralCache{NLBEnabledCluster: []string{"test-cluster1"}},
+	}
+
+	testArg1 := args{
+		ctx:          logrus.New().WithContext(context.Background()),
+		rc:           &RemoteController{},
+		clusterName:  "cluster1",
+		admiralCache: &AdmiralCache{NLBEnabledCluster: []string{"cluster1"}},
+	}
+
+	testArg2 := args{
+		ctx:          logrus.New().WithContext(context.Background()),
+		rc:           &RemoteController{},
+		clusterName:  "cluster1",
+		admiralCache: &AdmiralCache{NLBEnabledCluster: []string{"cluster1"}},
+	}
+
+	stop := make(chan struct{})
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	testAdmiralParam := common.GetAdmiralParams()
+	testAdmiralParam.LabelSet.GatewayApp = common.IstioIngressGatewayLabelValue
+	testAdmiralParam.NLBIngressLabel = common.NLBIstioIngressGatewayLabelValue
+
+	common.UpdateAdmiralParams(testAdmiralParam)
+
+	testService := v1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "clb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.IstioIngressGatewayLabelValue},
+		},
+		Spec: v1.ServiceSpec{},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{Ingress: make([]v1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	portStatus := v1.PortStatus{
+		Port:     007,
+		Protocol: "HTTP",
+		Error:    nil,
+	}
+
+	testLoadBalancerIngress := v1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "clb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]v1.PortStatus, 0),
+	}
+	testLoadBalancerIngress.Ports = append(testLoadBalancerIngress.Ports, portStatus)
+	testService.Status.LoadBalancer.Ingress = append(testService.Status.LoadBalancer.Ingress, testLoadBalancerIngress)
+
+	testArg.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testArg.rc.ServiceController.Cache.Put(&testService)
+
+	testService1 := testService.DeepCopy()
+	testService1.Name = "nlb"
+	testService1.Labels[common.App] = common.NLBIstioIngressGatewayLabelValue
+	testService1.Status.LoadBalancer.Ingress[0].Hostname = "nlb.istio.com"
+
+	testArg1.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testArg1.rc.ServiceController.Cache.Put(&testService)
+	testArg1.rc.ServiceController.Cache.Put(testService1)
+
+	testService2 := testService1.DeepCopy()
+	testService2.Labels[common.App] = common.NLBIstioIngressGatewayLabelValue + "TEST"
+
+	testArg2.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testArg2.rc.ServiceController.Cache.Put(&testService)
+	testArg2.rc.ServiceController.Cache.Put(testService2)
+
+	tests := []struct {
+		name             string
+		args             args
+		expectedEndpoint string
+		expectedPort     int
+	}{
+		{"When NLB Cluster Overwrite is not then getOverwrittenLoadBalancer should return CLB value", testArg, "clb.istio.com", 15443},
+		{"When NLB Cluster Overwrite is set then getOverwrittenLoadBalancer should return NLB value", testArg1, "nlb.istio.com", 15443},
+		{"When NLB Cluster Overwrite is set but NLB is not present then getOverwrittenLoadBalancer should return CLB value", testArg2, "clb.istio.com", 15443},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
+			assert.Equalf(t, tt.expectedEndpoint, actualEndpoint, fmt.Sprintf("getOverwrittenLoadBalancer should return endpoint %s, but got %s", tt.expectedEndpoint, actualEndpoint))
+			assert.Equalf(t, tt.expectedPort, actualPort, fmt.Sprintf("getOverwrittenLoadBalancer should return port %d, but got %d", tt.expectedPort, actualPort))
+		})
+	}
+}
+
 func TestGetClusterIngressGateway(t *testing.T) {
 
+	ctxLogger := logrus.New().WithContext(context.Background())
 	stop := make(chan struct{})
 	config := rest.Config{Host: "localhost"}
 
@@ -9944,16 +10054,6 @@ func TestGetClusterIngressGateway(t *testing.T) {
 			expectedError: fmt.Errorf("service controller cache not initialized"),
 		},
 		{
-			name: "Given nil admiralParams.LabelSet" +
-				"When getClusterIngress func is called" +
-				"Then it should return an error",
-			rc: &RemoteController{
-				ServiceController: serviceController,
-			},
-			labelSet:      nil,
-			expectedError: fmt.Errorf("admiralparams labelset not initialized"),
-		},
-		{
 			name: "Given all valid params" +
 				"When getClusterIngress func is called" +
 				"Then it should return a valid cluster ingress and no errors",
@@ -9968,10 +10068,7 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			admiralParams := common.AdmiralParams{
-				LabelSet: tc.labelSet,
-			}
-			actual, err := getClusterIngress(tc.rc, admiralParams)
+			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{})
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError, err)

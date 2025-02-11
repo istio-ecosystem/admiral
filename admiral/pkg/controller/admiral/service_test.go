@@ -430,7 +430,7 @@ func TestServiceCache_GetLoadBalancer(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			loadBalancer, port := c.cache.GetLoadBalancer(c.key, c.ns)
+			loadBalancer, port := c.cache.GetSingleLoadBalancer(c.key, c.ns)
 			if loadBalancer != c.expectedReturn || port != c.expectedPort {
 				t.Errorf("Unexpected load balancer returned. Got %v:%v, expected %v:%v", loadBalancer, port, c.expectedReturn, c.expectedPort)
 			}
@@ -578,7 +578,7 @@ func TestServiceCache_GetLoadBalancerWithAbsoluteFQDN(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			loadBalancer, port := c.cache.GetLoadBalancer(c.key, c.ns)
+			loadBalancer, port := c.cache.GetSingleLoadBalancer(c.key, c.ns)
 			if loadBalancer != c.expectedReturn || port != c.expectedPort {
 				t.Errorf("Unexpected load balancer returned. Got %v:%v, expected %v:%v", loadBalancer, port, c.expectedReturn, c.expectedPort)
 			}
