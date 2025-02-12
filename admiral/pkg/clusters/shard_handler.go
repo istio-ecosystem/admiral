@@ -193,7 +193,10 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 		// Get any type from the identityConfig
 		for _, cv := range identityConfig.Clusters {
 			for _, ev := range cv.Environment {
-				ctx = context.WithValue(ctx, common.EventResourceType, ev.Type)
+				for typeKey := range ev.Type {
+					ctx = context.WithValue(ctx, common.EventResourceType, typeKey)
+					break
+				}
 				break
 			}
 			break

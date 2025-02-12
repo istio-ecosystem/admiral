@@ -22,7 +22,6 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/secret/resolver"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
@@ -61,16 +60,15 @@ type removeSecretCallback func(dataKey string) error
 
 // Controller is the controller implementation for Secret resources
 type Controller struct {
-	kubeclientset            kubernetes.Interface
-	namespace                string
-	Cs                       *ClusterStore
-	queue                    workqueue.RateLimitingInterface
-	informer                 cache.SharedIndexInformer
-	addCallback              addSecretCallback
-	updateCallback           updateSecretCallback
-	removeCallback           removeSecretCallback
-	secretResolver           resolver.SecretResolver
-	clusterShardStoreHandler registry.ClusterShardStore
+	kubeclientset  kubernetes.Interface
+	namespace      string
+	Cs             *ClusterStore
+	queue          workqueue.RateLimitingInterface
+	informer       cache.SharedIndexInformer
+	addCallback    addSecretCallback
+	updateCallback updateSecretCallback
+	removeCallback removeSecretCallback
+	secretResolver resolver.SecretResolver
 }
 
 // RemoteCluster defines cluster structZZ
@@ -383,19 +381,4 @@ func getShardNameFromClusterSecret(secret *corev1.Secret) (string, error) {
 		return shard, nil
 	}
 	return "", fmt.Errorf("shard not found")
-}
-
-func (c *Controller) addClusterToShard(cluster, shard string) error {
-	if !common.IsAdmiralStateSyncerMode() {
-		return nil
-	}
-	return c.clusterShardStoreHandler.AddClusterToShard(cluster, shard)
-}
-
-// TODO: invoke function in delete workflow
-func (c *Controller) removeClusterFromShard(cluster, shard string) error {
-	if !common.IsAdmiralStateSyncerMode() {
-		return nil
-	}
-	return c.clusterShardStoreHandler.RemoveClusterFromShard(cluster, shard)
 }
