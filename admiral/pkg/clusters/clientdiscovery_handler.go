@@ -24,14 +24,11 @@ func (cdh *ClientDiscoveryHandler) Added(ctx context.Context, obj *common.K8sObj
 
 func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType, obj *common.K8sObject,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
-	log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, common.ReceivedStatus)
 	globalIdentifier := common.GetGlobalIdentifier(obj.Annotations, obj.Labels)
 	originalIdentifier := common.GetOriginalIdentifier(obj.Annotations, obj.Labels)
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, event, obj.Type, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return nil
 	}
-	ctxLogger := common.GetCtxLogger(ctx, globalIdentifier, "")
 
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
@@ -54,18 +51,15 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	}
 
 	if commonUtil.IsAdmiralReadOnly() {
-		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped as Admiral is in Read-only mode")
 		return nil
 	}
 
 	if IsCacheWarmupTime(remoteRegistry) {
-		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped during cache warm up state")
 		return fmt.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "processing skipped during cache warm up state for env="+" identity="+globalIdentifier)
 	}
 
 	//if we have a deployment/rollout in this namespace skip processing to save some cycles
 	if DeploymentOrRolloutExistsInNamespace(remoteRegistry, globalIdentifier, clusterName, obj.Namespace) {
-		log.Infof(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as Deployment/Rollout already present in namespace for client="+globalIdentifier)
 		return nil
 	}
 
@@ -73,7 +67,6 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	depRecord := remoteRegistry.DependencyController.Cache.Get(globalIdentifier)
 
 	if depRecord == nil {
-		log.Warnf(LogFormatAdv, "Process", obj.Type, obj.Name, obj.Namespace, clusterName, "Skipping client discovery as no dependency record found for client="+globalIdentifier)
 		return nil
 	}
 	err := remoteRegistry.DependencyController.DepHandler.Added(ctx, depRecord)

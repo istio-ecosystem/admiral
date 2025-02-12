@@ -9,7 +9,6 @@ import (
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 )
 
 type ClientConnectionConfigHandler struct {
@@ -52,10 +51,6 @@ func (c *clientConnectionSettingsCache) Put(clientConnectionSettings *v1.ClientC
 	var clientConnectionSettingsIdentity = common.GetClientConnectionConfigIdentity(clientConnectionSettings)
 	var clientConnectionSettingsEnv = common.GetClientConnectionConfigEnv(clientConnectionSettings)
 
-	log.Infof(
-		"adding clientConnectionSettings with name %v to clientConnectionSettingsCache. LabelMatch=%v env=%v",
-		clientConnectionSettings.Name, clientConnectionSettingsIdentity, clientConnectionSettingsEnv)
-
 	key := common.ConstructKeyWithEnvAndIdentity(clientConnectionSettingsEnv, clientConnectionSettingsIdentity)
 	c.identityCache[key] = clientConnectionSettings
 	return nil
@@ -66,7 +61,6 @@ func (c *clientConnectionSettingsCache) Delete(identity string, environment stri
 	defer c.mutex.Unlock()
 	key := common.ConstructKeyWithEnvAndIdentity(environment, identity)
 	if _, ok := c.identityCache[key]; ok {
-		log.Infof("deleting clientConnectionSettings with key=%s from clientConnectionSettingsCache", key)
 		delete(c.identityCache, key)
 		return nil
 	}
@@ -75,8 +69,6 @@ func (c *clientConnectionSettingsCache) Delete(identity string, environment stri
 
 func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	clientConnectionSettings *v1.ClientConnectionConfig) error {
-	log.Infof(
-		LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "received")
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Add, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -88,8 +80,6 @@ func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 
 func (c *ClientConnectionConfigHandler) Updated(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
-	log.Infof(
-		LogFormat, common.Update, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -101,8 +91,6 @@ func (c *ClientConnectionConfigHandler) Updated(
 
 func (c *ClientConnectionConfigHandler) Deleted(
 	ctx context.Context, clientConnectionSettings *v1.ClientConnectionConfig) error {
-	log.Infof(
-		LogFormat, common.Delete, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, common.ReceivedStatus)
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Update, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {

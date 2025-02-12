@@ -203,7 +203,6 @@ func (client *DynamoClient) getWorkloadDataItemByIdentityAndEnv(env, identity, t
 	}
 
 	if items == nil {
-		log.Infof("workload items came as nil for given env %s and identity %s in table %s", env, identity, tableName)
 		return workloadDataItems, nil
 	}
 

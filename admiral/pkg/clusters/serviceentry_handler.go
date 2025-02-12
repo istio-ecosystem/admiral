@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
-
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
 	networkingv1alpha3 "istio.io/api/networking/v1alpha3"
@@ -24,44 +22,14 @@ type ServiceEntryHandler struct {
 }
 
 func (se *ServiceEntryHandler) Added(obj *v1alpha3.ServiceEntry) error {
-	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
-		return nil
-	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Add", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "ServiceEntry", obj.Name, se.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
-	}
 	return nil
 }
 
 func (se *ServiceEntryHandler) Updated(obj *v1alpha3.ServiceEntry) error {
-	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
-		return nil
-	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Update", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "ServiceEntry", obj.Name, se.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
-	}
 	return nil
 }
 
 func (se *ServiceEntryHandler) Deleted(obj *v1alpha3.ServiceEntry) error {
-	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
-		return nil
-	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Delete", "ServiceEntry", obj.Name, se.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Debugf(LogFormat, "admiralIoIgnoreAnnotationCheck", "ServiceEntry", obj.Name, se.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
-	}
 	return nil
 }
 
@@ -128,7 +96,6 @@ func addUpdateServiceEntry(ctxLogger *log.Entry, ctx context.Context,
 				ctxLogger.Infof(LogFormat+" diff=%s", op, "ServiceEntry", obj.Name, rc.ClusterID, "Diff in update", diff)
 			}
 			if skipUpdate {
-				ctxLogger.Infof(LogFormat, op, "ServiceEntry", obj.Name, rc.ClusterID, "Update skipped as it was destructive during Admiral's bootup phase")
 				return nil
 			} else {
 				//nolint

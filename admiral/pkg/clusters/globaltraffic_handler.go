@@ -46,7 +46,6 @@ func (g *globalTrafficCache) Put(gtp *v1.GlobalTrafficPolicy) error {
 	var gtpIdentity = common.GetGtpIdentity(gtp)
 	var gtpEnv = common.GetGtpEnv(gtp)
 
-	log.Infof("adding GTP with name %v to GTP cache. LabelMatch=%v env=%v", gtp.Name, gtpIdentity, gtpEnv)
 	key := common.ConstructKeyWithEnvAndIdentity(gtpEnv, gtpIdentity)
 	g.identityCache[key] = gtp
 	return nil
@@ -57,7 +56,6 @@ func (g *globalTrafficCache) Delete(identity string, environment string) error {
 	defer g.mutex.Unlock()
 	key := common.ConstructKeyWithEnvAndIdentity(environment, identity)
 	if _, ok := g.identityCache[key]; ok {
-		log.Infof("deleting gtp with key=%s from global GTP cache", key)
 		delete(g.identityCache, key)
 		return nil
 	}
@@ -65,7 +63,6 @@ func (g *globalTrafficCache) Delete(identity string, environment string) error {
 }
 
 func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
-	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	log.Infof(LogFormat, "Added", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Add, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -75,7 +72,6 @@ func (gtp *GlobalTrafficHandler) Added(ctx context.Context, obj *v1.GlobalTraffi
 }
 
 func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
-	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	log.Infof(LogFormat, "Updated", "globaltrafficpolicy", obj.Name, gtp.ClusterID, fmt.Sprintf("received gtp: %v", obj))
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Update, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -85,7 +81,6 @@ func (gtp *GlobalTrafficHandler) Updated(ctx context.Context, obj *v1.GlobalTraf
 }
 
 func (gtp *GlobalTrafficHandler) Deleted(ctx context.Context, obj *v1.GlobalTrafficPolicy) error {
-	log.Infof(LogFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, "received")
 	err := HandleEventForGlobalTrafficPolicy(ctx, admiral.Delete, obj, gtp.RemoteRegistry, gtp.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, "Deleted", "globaltrafficpolicy", obj.Name, gtp.ClusterID, err.Error())

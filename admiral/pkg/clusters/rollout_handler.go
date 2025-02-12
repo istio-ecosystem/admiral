@@ -24,7 +24,6 @@ func (rh *RolloutHandler) Added(ctx context.Context, obj *argo.Rollout) error {
 }
 
 func (rh *RolloutHandler) Updated(ctx context.Context, obj *argo.Rollout) error {
-	log.Infof(LogFormat, common.Update, common.RolloutResourceType, obj.Name, rh.ClusterID, common.ReceivedStatus)
 	return nil
 }
 
@@ -42,11 +41,9 @@ type HandleEventForRolloutFunc func(ctx context.Context, event admiral.EventType
 // HandleEventForRollout helper function to handle add and delete for RolloutHandler
 func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *argo.Rollout,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
-	log.Infof(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, common.ReceivedStatus)
 	globalIdentifier := common.GetRolloutGlobalIdentifier(obj)
 	originalIdentifier := common.GetRolloutOriginalIdentifier(obj)
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return nil
 	}
 	env := common.GetEnvForRollout(obj)

@@ -110,7 +110,6 @@ func ExecuteStateCheck(ctx context.Context, dynamoDBConfig DynamoDBConfig, dynam
 		dynamodbClient.updatedReadWriteLease(readWriteLease, dynamoDBConfig.TableName)
 		//Not updating read-write mode until we confirm this pod has the lease
 	} else if skipLeaseCheckPodName == readWriteLease.LeaseOwner {
-		log.Info("DynamoDR: Lease held by skip lease check pod. Setting Admiral to read only mode")
 		commonUtil.CurrentAdmiralState.ReadOnly = ReadOnlyEnabled
 		commonUtil.CurrentAdmiralState.IsStateInitialized = StateInitialized
 	} else if remoteRegistry != nil && podIdentifier == readWriteLease.LeaseOwner && IsCacheWarmupTime(remoteRegistry) {

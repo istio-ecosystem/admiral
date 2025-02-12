@@ -77,14 +77,9 @@ type VirtualServiceHandler struct {
 
 func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) error {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, common.Add, "VirtualService", obj.Name, vh.clusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, common.Add, "VirtualService", obj.Name, vh.clusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
-		}
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Add)
@@ -92,14 +87,9 @@ func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.Virtua
 
 func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.VirtualService) error {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, common.Update, "VirtualService", obj.Name, vh.clusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, common.Update, "VirtualService", obj.Name, vh.clusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
-		}
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Update)

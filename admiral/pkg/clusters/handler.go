@@ -15,6 +15,7 @@ import (
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -45,7 +46,6 @@ func getIstioResourceName(host string, suffix string) string {
 
 func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {
 	if len(annotations) > 0 && annotations[common.AdmiralIgnoreAnnotation] == "true" {
-		log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "", "", "", "Value=true namespace="+namespace)
 		return true
 	}
 
@@ -128,7 +128,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 	}
 
 	if rollout.Spec.Selector == nil || rollout.Spec.Selector.MatchLabels == nil {
-		log.Infof("No selector for rollout=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
 		return nil
 	}
 
@@ -162,7 +161,7 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
 		if len(blueGreenActiveService) == 0 {
 			//pick a service that ends in RolloutActiveServiceSuffix if one is available
-			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices)
+			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices, rollout.Spec.Selector)
 		}
 	} else if rolloutStrategy.Canary != nil {
 		//If istio canary perform below operations
@@ -196,7 +195,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 								for _, route := range vs.Http {
 									if route.Name == virtualServiceRouteName {
 										httpRoute = route
-										log.Infof("VirtualService route referenced in rollout found, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, virtualServiceRouteName, rollout.Namespace, rc.ClusterID)
 										break
 									} else {
 										log.Debugf("Argo rollout VirtualService route name didn't match with a route, for rollout with name=%s route=%s in namespace=%s and cluster=%s", rollout.Name, route.Name, rollout.Namespace, rc.ClusterID)
@@ -240,7 +238,6 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 				for _, service := range cachedServices {
 					//skip services that are not referenced in the rollout
 					if service.ObjectMeta.Name != stableService {
-						log.Infof("Skipping service=%s for rollout=%s in namespace=%s and cluster=%s", service.Name, rollout.Name, rollout.Namespace, rc.ClusterID)
 						continue
 					}
 					match := common.IsServiceMatch(service.Spec.Selector, rollout.Spec.Selector)
@@ -262,11 +259,10 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 				since istio does not know the split info as there is no virtual service
 			*/
 
-			sName := GetServiceWithSuffixMatch(common.RolloutRootServiceSuffix, cachedServices)
+			sName := GetServiceWithSuffixMatch(common.RolloutRootServiceSuffix, cachedServices, rollout.Spec.Selector)
 			if len(sName) <= 0 {
 				//Fallback if root service not found
-				log.Infof("root service not found, falling back to stable for rollout=%s in namespace=%s and cluster=%s", rollout.Name, rollout.Namespace, rc.ClusterID)
-				sName = GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices)
+				sName = GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices, rollout.Spec.Selector)
 			}
 
 			// If root and stable not found, exit canary logic and use generic logic to choose random service
@@ -315,9 +311,12 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 	return matchedServices
 }
 
-func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service) string {
+func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service, rolloutSelector *v12.LabelSelector) string {
+	if rolloutSelector == nil || services == nil {
+		return ""
+	}
 	for _, service := range services {
-		if strings.HasSuffix(service.Name, suffix) {
+		if strings.HasSuffix(service.Name, suffix) && common.IsServiceMatch(service.Spec.Selector, rolloutSelector) {
 			return service.Name
 		}
 	}
@@ -339,6 +338,12 @@ func DeploymentOrRolloutExistsInNamespace(remoteRegistry *RemoteRegistry, global
 
 	deployments := remoteRegistry.remoteControllers[clusterName].DeploymentController.Cache.GetByIdentity(globalIdentifier)
 	for _, deployment := range deployments {
+		if deployment == nil {
+			continue
+		}
+		if deployment.Deployment == nil {
+			continue
+		}
 		if deployment.Deployment.Namespace == namespace {
 			return true
 		}
@@ -346,6 +351,12 @@ func DeploymentOrRolloutExistsInNamespace(remoteRegistry *RemoteRegistry, global
 
 	rollouts := remoteRegistry.remoteControllers[clusterName].RolloutController.Cache.GetByIdentity(globalIdentifier)
 	for _, rollout := range rollouts {
+		if rollout == nil {
+			continue
+		}
+		if rollout.Rollout == nil {
+			continue
+		}
 		if rollout.Rollout.Namespace == namespace {
 			return true
 		}

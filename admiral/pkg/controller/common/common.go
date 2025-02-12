@@ -229,7 +229,6 @@ func GetCname(deployment *k8sAppsV1.Deployment, identifier string, nameSuffix st
 	}
 	cname := GetCnameVal([]string{environment, alias, nameSuffix})
 	if deployment.Spec.Template.Annotations[AdmiralCnameCaseSensitive] == "true" {
-		log.Infof("admiral.io/cname-case-sensitive annotation enabled on deployment with name %v", deployment.Name)
 		return cname
 	}
 	return strings.ToLower(cname)

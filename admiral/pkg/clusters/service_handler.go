@@ -7,7 +7,6 @@ import (
 	rolloutsV1Alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +18,6 @@ type ServiceHandler struct {
 }
 
 func (sh *ServiceHandler) Added(ctx context.Context, obj *coreV1.Service) error {
-	log.Infof(LogFormat, common.Add, common.ServiceResourceType, obj.Name, sh.ClusterID, common.ReceivedStatus)
 	ctx = context.WithValue(ctx, common.EventType, admiral.Add)
 	err := handleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
@@ -29,7 +27,6 @@ func (sh *ServiceHandler) Added(ctx context.Context, obj *coreV1.Service) error 
 }
 
 func (sh *ServiceHandler) Updated(ctx context.Context, obj *coreV1.Service) error {
-	log.Infof(LogFormat, common.Update, common.ServiceResourceType, obj.Name, sh.ClusterID, common.ReceivedStatus)
 	ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 	err := handleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
@@ -39,7 +36,6 @@ func (sh *ServiceHandler) Updated(ctx context.Context, obj *coreV1.Service) erro
 }
 
 func (sh *ServiceHandler) Deleted(ctx context.Context, obj *coreV1.Service) error {
-	log.Infof(LogFormat, common.Delete, common.ServiceResourceType, obj.Name, sh.ClusterID, common.ReceivedStatus)
 	ctx = context.WithValue(ctx, common.EventType, admiral.Delete)
 	err := handleEventForService(ctx, obj, sh.RemoteRegistry, sh.ClusterID)
 	if err != nil {
@@ -108,14 +104,8 @@ func handleServiceEventForDeployment(
 		// else it would delete all the SEs in the source and dependent clusters
 		eventType = admiral.Update
 		deployments = deployController.Cache.List()
-		log.Infof(LogFormat, "Event", "Deployment", "", clusterName,
-			fmt.Sprintf("updating %v deployments across the cluster for service %s",
-				len(deployments), svc.Name))
 	} else {
 		deployments = deployController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
-		log.Infof(LogFormat, "Event", "Deployment", "", clusterName,
-			fmt.Sprintf("updating %v deployments across namespace %s for service %s",
-				len(deployments), svc.Namespace, svc.Name))
 	}
 
 	for _, deployment := range deployments {
@@ -171,14 +161,8 @@ func handleServiceEventForRollout(
 		// else it would delete all the SEs in the source and dependent clusters
 		eventType = admiral.Update
 		rollouts = rolloutController.Cache.List()
-		log.Infof(LogFormat, "Event", "Rollout", "", clusterName,
-			fmt.Sprintf("updating %v rollouts across the cluster for service %s",
-				len(rollouts), svc.Name))
 	} else {
 		rollouts = rolloutController.GetRolloutBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
-		log.Infof(LogFormat, "Event", "Rollout", "", clusterName,
-			fmt.Sprintf("updating %v rollouts across namespace %s for service %s",
-				len(rollouts), svc.Namespace, svc.Name))
 	}
 
 	for _, rollout := range rollouts {

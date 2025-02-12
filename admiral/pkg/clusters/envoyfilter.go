@@ -69,8 +69,6 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 		envoyFilterName := fmt.Sprintf("%s-dr-%s-%s-%s", strings.ToLower(routingPolicy.Spec.Plugin), routingPolicyNameSha, dependentIdentitySha, version)
 		envoyfilterSpec := constructEnvoyFilterStruct(routingPolicy, GetWorkloadSelectorLabels(workloadIdentityKey), version, envoyFilterName)
 
-		log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "version +"+version)
-
 		envoyfilter := &networking.EnvoyFilter{
 			TypeMeta: metaV1.TypeMeta{
 				Kind:       "EnvoyFilter",
@@ -99,11 +97,9 @@ func createOrUpdateEnvoyFilter(ctx context.Context, rc *RemoteController, routin
 				EnvoyFilters(filterNamespace).Get(ctx, envoyFilterName, metaV1.GetOptions{})
 
 			if k8sErrors.IsNotFound(err1) {
-				log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "creating the envoy filter")
 				filter, err2 = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
 					EnvoyFilters(filterNamespace).Create(ctx, envoyfilter, metaV1.CreateOptions{})
 			} else if err1 == nil {
-				log.Infof(LogFormat, eventType, envoyFilter, envoyFilterName, rc.ClusterID, "updating existing envoy filter")
 				envoyfilter.ResourceVersion = filter.ResourceVersion
 				filter, err2 = rc.RoutingPolicyController.IstioClient.NetworkingV1alpha3().
 					EnvoyFilters(filterNamespace).Update(ctx, envoyfilter, metaV1.UpdateOptions{})
@@ -153,8 +149,6 @@ func constructEnvoyFilterStruct(routingPolicy *v1.RoutingPolicy, workloadSelecto
 	}
 	envoyFilterStringConfig += getHosts(routingPolicy) + "\n"
 	envoyFilterStringConfig += getPlugin(routingPolicy)
-
-	log.Infof("msg=%s type=routingpolicy name=%s", "adding config", routingPolicy.Name)
 
 	configuration := structPb.Struct{
 		Fields: map[string]*structPb.Value{

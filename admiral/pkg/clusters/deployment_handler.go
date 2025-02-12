@@ -40,14 +40,10 @@ type HandleEventForDeploymentFunc func(
 func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj *k8sAppsV1.Deployment,
 	remoteRegistry *RemoteRegistry, clusterName string) error {
 
-	log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, common.ReceivedStatus)
 	globalIdentifier := common.GetDeploymentGlobalIdentifier(obj)
-	log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "globalIdentifier is "+globalIdentifier)
 	originalIdentifier := common.GetDeploymentOriginalIdentifier(obj)
-	log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "originalIdentifier is "+originalIdentifier)
 
 	if len(globalIdentifier) == 0 {
-		log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Skipped as '"+common.GetWorkloadIdentifier()+" was not found', namespace="+obj.Namespace)
 		return nil
 	}
 
@@ -66,7 +62,6 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 			}
 			if remoteRegistry.AdmiralCache.PartitionIdentityCache != nil && len(common.GetDeploymentIdentityPartition(obj)) > 0 {
 				remoteRegistry.AdmiralCache.PartitionIdentityCache.Put(globalIdentifier, originalIdentifier)
-				log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "PartitionIdentityCachePut "+globalIdentifier+" for "+originalIdentifier)
 			}
 		}
 	}

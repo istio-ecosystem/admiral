@@ -106,19 +106,6 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry, locality string, gt
 		dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 	}
 
-	if dr.TrafficPolicy.LoadBalancer.LocalityLbSetting != nil {
-		if dr.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute != nil {
-			ctxLogger.Infof(common.CtxLogFormat,
-				"getDestinationRule", dr.Host, "", "", "Running in Active-Passive Mode")
-		} else {
-			ctxLogger.Infof(common.CtxLogFormat,
-				"getDestinationRule", dr.Host, "", "", "Running in Active-Active Mode")
-		}
-	} else {
-		ctxLogger.Infof(common.CtxLogFormat,
-			"getDestinationRule", dr.Host, "", "", "Running in Active-Active Mode")
-	}
-
 	derivedOutlierDetection := getOutlierDetection(se, locality, gtpTrafficPolicy, outlierDetection, common.DisableDefaultAutomaticFailover())
 	if derivedOutlierDetection != nil {
 		dr.TrafficPolicy.OutlierDetection = derivedOutlierDetection
@@ -246,11 +233,8 @@ func getOutlierDetection(
 	outlierDetectionCrd *v1.OutlierDetection,
 	disableDefaultAutomaticFailover bool) *networkingV1Alpha3.OutlierDetection {
 	if disableDefaultAutomaticFailover {
-		log.Infoln("default automatic failover is disabled. outlier detection " +
-			"will be configured only if OutlierDetection OR GTP resource is present")
 		if (outlierDetectionCrd == nil || (outlierDetectionCrd.Spec.OutlierConfig == nil)) &&
 			(gtpTrafficPolicy == nil || gtpTrafficPolicy.OutlierDetection == nil) {
-			log.Infoln("Neither outlier not GTP configured, will not set outlier configuration")
 			return &networkingV1Alpha3.OutlierDetection{
 				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
 				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
@@ -272,12 +256,10 @@ func getOutlierDetection(
 	outlierDetection := getOutlierDetectionSkeleton(disableDefaultAutomaticFailover)
 	//Give priority to outlier detection crd than GTP. Eventually support for outlier detection via GTP will be stopped.
 	if outlierDetectionCrd != nil && outlierDetectionCrd.Spec.OutlierConfig != nil {
-		log.Infof("Using outlier detection config from Admiral Outlier Detection CRD. Hosts - %s", se.Hosts)
 		outlierDetection.ConsecutiveGatewayErrors = &wrappers.UInt32Value{Value: outlierDetectionCrd.Spec.OutlierConfig.ConsecutiveGatewayErrors}
 		outlierDetection.Interval = &duration.Duration{Seconds: outlierDetectionCrd.Spec.OutlierConfig.Interval}
 		outlierDetection.BaseEjectionTime = &duration.Duration{Seconds: outlierDetectionCrd.Spec.OutlierConfig.BaseEjectionTime}
 	} else if gtpTrafficPolicy != nil && gtpTrafficPolicy.OutlierDetection != nil {
-		log.Infof("Using outlier detection config from Admiral Global Traffic Policy CRD. Hosts - %s", se.Hosts)
 		setDefaultValuesOfOutlierDetection(outlierDetection)
 		if gtpTrafficPolicy.OutlierDetection.BaseEjectionTime > 0 {
 			outlierDetection.BaseEjectionTime = &duration.Duration{
@@ -333,14 +315,9 @@ func setDefaultValuesOfOutlierDetection(outlierDetection *networkingV1Alpha3.Out
 
 func (dh *DestinationRuleHandler) Added(ctx context.Context, obj *v1alpha3.DestinationRule) error {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Add", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "DestinationRule", obj.Name, dh.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
 		return nil
 	}
 	txId := common.FetchTxIdOrGenNew(ctx)
@@ -354,14 +331,9 @@ func (dh *DestinationRuleHandler) Added(ctx context.Context, obj *v1alpha3.Desti
 
 func (dh *DestinationRuleHandler) Updated(ctx context.Context, obj *v1alpha3.DestinationRule) error {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Update", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "DestinationRule", obj.Name, dh.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
 		return nil
 	}
 	txId := common.FetchTxIdOrGenNew(ctx)
@@ -375,14 +347,9 @@ func (dh *DestinationRuleHandler) Updated(ctx context.Context, obj *v1alpha3.Des
 
 func (dh *DestinationRuleHandler) Deleted(ctx context.Context, obj *v1alpha3.DestinationRule) error {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
-		log.Infof(LogFormat, "Delete", "DestinationRule", obj.Name, dh.ClusterID, "Skipping resource from namespace="+obj.Namespace)
-		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
-			log.Infof(LogFormat, "admiralIoIgnoreAnnotationCheck", "DestinationRule", obj.Name, dh.ClusterID, "Value=true namespace="+obj.Namespace)
-		}
 		return nil
 	}
 	txId := common.FetchTxIdOrGenNew(ctx)
@@ -406,7 +373,6 @@ func handleDestinationRuleEvent(ctxLogger *log.Entry, ctx context.Context, obj *
 	)
 
 	if len(dependentClusters) > 0 {
-		log.Infof(LogFormat, "Event", resourceType, obj.Name, clusterId, "Processing")
 		util.MapCopy(allDependentClusters, dependentClusters)
 		allDependentClusters[clusterId] = clusterId
 		for _, dependentCluster := range allDependentClusters {

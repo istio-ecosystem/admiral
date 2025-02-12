@@ -80,7 +80,6 @@ func (r *RoutingPolicyService) ProcessDependency(ctx context.Context, eventType 
 	}
 
 	if !common.IsDependencyProcessingEnabled() {
-		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, dependency.Name, "", "dependency processing is disabled")
 		return nil
 	}
 	newDestinations, _ := getDestinationsToBeProcessed(eventType, dependency, r.RemoteRegistry)
@@ -221,7 +220,6 @@ func (r *RoutingPolicyCache) Put(identity string, env string, name string, rp *v
 
 func (r *RoutingPolicyCache) Delete(identity string, env string, name string) {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, admiral.Delete, "routingpolicy", fmt.Sprintf("%s.%s.%s", identity, env, name), "", "skipping read-only mode")
 		return
 	}
 	if common.GetEnableRoutingPolicy() {
@@ -274,7 +272,6 @@ func (r *routingPolicyFilterCache) Put(identityEnvKey string, clusterId string, 
 
 func (r *routingPolicyFilterCache) Delete(identityEnvKey string) {
 	if commonUtil.IsAdmiralReadOnly() {
-		log.Infof(LogFormat, admiral.Delete, "routingpolicy", identityEnvKey, "", "skipping read-only mode")
 		return
 	}
 	if common.GetEnableRoutingPolicy() {
