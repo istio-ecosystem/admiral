@@ -51,6 +51,20 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
 
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+		if event != admiral.Delete {
+			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string), obj)
+			if err != nil {
+				log.Errorf(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, "failed to put "+common.Rollout+" hosting data for identity="+globalIdentifier)
+			}
+		} else {
+			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string))
+			if err != nil {
+				log.Errorf(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, "failed to delete "+common.Rollout+" hosting data for identity="+globalIdentifier)
+			}
+		}
+	}
+
 	if remoteRegistry.AdmiralCache != nil {
 		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
 			remoteRegistry.AdmiralCache.IdentityClusterCache.Put(globalIdentifier, clusterName, clusterName)

@@ -82,6 +82,12 @@ func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.Virtua
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		return nil
 	}
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
+		err := vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Add, "VirtualService", obj.Name, vh.clusterID, "failed to update VirtualService custom data")
+		}
+	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Add)
 }
 
@@ -91,6 +97,12 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 	}
 	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
 		return nil
+	}
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
+		err := vh.remoteRegistry.RegistryClient.PutCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Update, "VirtualService", obj.Name, vh.clusterID, "failed to update VirtualService custom data")
+		}
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Update)
 }
@@ -106,6 +118,12 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 			log.Debugf(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
 		}
 		return nil
+	}
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(vh.clusterID) {
+		err := vh.remoteRegistry.RegistryClient.DeleteCustomData(vh.clusterID, obj.Namespace, obj.Name, "VirtualService", ctx.Value("txId").(string))
+		if err != nil {
+			log.Errorf(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "failed to delete VirtualService custom data")
+		}
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Delete)
 }

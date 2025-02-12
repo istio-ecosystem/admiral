@@ -1,8 +1,13 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"io/ioutil"
+	"net/http"
 	"testing"
 	"time"
 
@@ -26,6 +31,7 @@ func TestHandleEventForService(t *testing.T) {
 	ctx := context.Background()
 	params := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
+		Profile:        common.AdmiralProfileDefault,
 	}
 
 	registry, _ := InitAdmiral(context.Background(), params)
@@ -146,7 +152,49 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 		stop           = make(chan struct{})
 		config         = rest.Config{Host: "localhost"}
 		resyncPeriod   = time.Millisecond * 1
+		params         = common.AdmiralParams{
+			LabelSet: &common.LabelSet{
+				WorkloadIdentityKey:     "identity",
+				EnvKey:                  "admiral.io/env",
+				AdmiralCRDIdentityLabel: "identity",
+				PriorityKey:             "priority",
+				GatewayApp:              "app",
+			},
+			Profile:                    common.AdmiralProfileDefault,
+			KubeconfigPath:             "testdata/fake.config",
+			AdmiralStateSyncerMode:     true,
+			AdmiralStateSyncerClusters: []string{"cluster-name"},
+		}
 	)
+	common.ResetSync()
+	common.InitializeConfig(params)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	remoteRegistry.RegistryClient = invalidRegistryClient
 	deploymentController = remoteControllers[clusterName].DeploymentController
 	deploymentController.Cache.UpdateDeploymentToClusterCache("asset1", deployment1InNamespace1)
 	deploymentController.Cache.UpdateDeploymentToClusterCache("asset2", deployment2InNamespace1)
@@ -161,6 +209,7 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 	cases := []struct {
 		name                         string
 		svc                          *coreV1.Service
+		registryClient               *registry.RegistryClient
 		fakeHandleEventForDeployment *fakeHandleEventForDeployment
 		assertFunc                   func(fakeHandler *fakeHandleEventForDeployment) error
 		expectedErr                  error
@@ -169,7 +218,8 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 			name: "Given, there is a change in a service, and there are two deployments in the same namespace, " +
 				"When, HandleServiceEventForDeployment is invoked, " +
 				"Then, handler should be called for both the deployments",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -193,7 +243,8 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 				"When, HandleServiceEventForDeployment is invoked, " +
 				"When, handler for deployment returns nil for both deployments, " +
 				"Then, it should return nil",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -212,7 +263,8 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 				"When, HandleServiceEventForDeployment is invoked, " +
 				"When, handler for deployment returns an error for one of the deployments, " +
 				"Then, it should process both the deployments, but still return an error",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: invalidRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -224,13 +276,15 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 			assertFunc: func(fakeHandler *fakeHandleEventForDeployment) error {
 				return nil
 			},
-			expectedErr: fmt.Errorf("error processing %s", deploymentName2),
+			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; error processing %s", deploymentName2),
 		},
 		{
 			name: "Given, there is a change in istio ingressgateway service, " +
-				"When, HandleServiceEventForDeployment is invoked, " +
-				"Then, it should call handler for deployment with all the deployments in the cluster",
-			svc: istioIngressGatewayService,
+				"When, HandleServiceEventForDeployment is invoked with invalid registryClient, " +
+				"Then, it should call handler for deployment with all the deployments in the cluster, " +
+				"Then, it should get an error for each registry call",
+			svc:            istioIngressGatewayService,
+			registryClient: invalidRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -242,6 +296,7 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 					},
 				},
 			),
+			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; failed private auth call"),
 			assertFunc: func(fakeHandler *fakeHandleEventForDeployment) error {
 				if fakeHandler.CalledDeploymentForNamespace(deploymentName1, namespace1) &&
 					fakeHandler.CalledDeploymentForNamespace(deploymentName2, namespace1) &&
@@ -256,7 +311,8 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 				"When, HandleServiceEventForDeployment is invoked, " +
 				"Then, it should call handler for deployment with all the deployments in the namespace, " +
 				"And, it should not call handler for deployment in namespaces other than the namespace of the service",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -283,7 +339,8 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ctx = context.WithValue(ctx, "eventType", admiral.Update)
+			remoteRegistry.RegistryClient = c.registryClient
+			ctx = context.WithValue(context.WithValue(ctx, "eventType", admiral.Update), "txId", "txidvalue")
 			err := handleServiceEventForDeployment(
 				ctx,
 				c.svc,
@@ -342,7 +399,49 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 		stop           = make(chan struct{})
 		config         = rest.Config{Host: "localhost"}
 		resyncPeriod   = time.Millisecond * 1
+		params         = common.AdmiralParams{
+			LabelSet: &common.LabelSet{
+				WorkloadIdentityKey:     "identity",
+				EnvKey:                  "admiral.io/env",
+				AdmiralCRDIdentityLabel: "identity",
+				PriorityKey:             "priority",
+				GatewayApp:              "app",
+			},
+			Profile:                    common.AdmiralProfileDefault,
+			KubeconfigPath:             "testdata/fake.config",
+			AdmiralStateSyncerMode:     true,
+			AdmiralStateSyncerClusters: []string{"cluster-name"},
+		}
 	)
+	common.ResetSync()
+	common.InitializeConfig(params)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	remoteRegistry.RegistryClient = invalidRegistryClient
 	rolloutController = remoteControllers[clusterName].RolloutController
 	rolloutController.Cache.UpdateRolloutToClusterCache("asset1", rollout1InNamespace1)
 	rolloutController.Cache.UpdateRolloutToClusterCache("asset2", rollout2InNamespace1)
@@ -357,6 +456,7 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 	cases := []struct {
 		name                      string
 		svc                       *coreV1.Service
+		registryClient            *registry.RegistryClient
 		fakeHandleEventForRollout *fakeHandleEventForRollout
 		assertFunc                func(fakeHandler *fakeHandleEventForRollout) error
 		expectedErr               error
@@ -365,7 +465,8 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 			name: "Given, there is a change in a service, and there are two rollouts in the same namespace, " +
 				"When, HandleServiceEventForRollout is invoked, " +
 				"Then, handler should be called for both the rollout",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForRollout: newFakeHandleEventForRolloutsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -389,7 +490,8 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 				"When, HandleServiceEventForRollout is invoked, " +
 				"When, handler for rollout returns nil for both deployments, " +
 				"Then, it should return nil",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForRollout: newFakeHandleEventForRolloutsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -408,7 +510,8 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 				"When, HandleServiceEventForRollout is invoked, " +
 				"When, handler for rollout returns an error for one of the rollouts, " +
 				"Then, it should process both the rollouts, but still return an error",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: invalidRegistryClient,
 			fakeHandleEventForRollout: newFakeHandleEventForRolloutsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -420,13 +523,14 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 			assertFunc: func(fakeHandler *fakeHandleEventForRollout) error {
 				return nil
 			},
-			expectedErr: fmt.Errorf("error processing %s", rolloutName2),
+			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; error processing %s", rolloutName2),
 		},
 		{
 			name: "Given, there is a change in istio ingressgateway service, " +
 				"When, HandleServiceEventForRollout is invoked, " +
 				"Then, it should call handler for rollout with all the rollouts in the cluster",
-			svc: istioIngressGatewayService,
+			svc:            istioIngressGatewayService,
+			registryClient: invalidRegistryClient,
 			fakeHandleEventForRollout: newFakeHandleEventForRolloutsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -446,13 +550,15 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 				}
 				return nil
 			},
+			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; failed private auth call"),
 		},
 		{
 			name: "Given, there is a change in a service other than the istio ingressgateway service, " +
 				"When, HandleServiceEventForRollout is invoked, " +
 				"Then, it should call handler for rollout with all the rollouts in the namespace, " +
 				"And, it should not call handler for rollout in namespaces other than the namespace of the service",
-			svc: applicationServiceInNamespace1,
+			svc:            applicationServiceInNamespace1,
+			registryClient: validRegistryClient,
 			fakeHandleEventForRollout: newFakeHandleEventForRolloutsByError(
 				map[string]map[string]error{
 					namespace1: map[string]error{
@@ -479,7 +585,8 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ctx = context.WithValue(ctx, "eventType", admiral.Update)
+			remoteRegistry.RegistryClient = c.registryClient
+			ctx = context.WithValue(context.WithValue(ctx, "eventType", admiral.Update), "txId", "txidvalue")
 			err := handleServiceEventForRollout(
 				ctx,
 				c.svc,
@@ -512,9 +619,15 @@ func newFakeService(name, namespace string, selectorLabels map[string]string) *c
 		ObjectMeta: apiMachineryMetaV1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    selectorLabels,
 		},
 		Spec: coreV1.ServiceSpec{
 			Selector: selectorLabels,
+		},
+		Status: coreV1.ServiceStatus{
+			LoadBalancer: coreV1.LoadBalancerStatus{
+				Ingress: []coreV1.LoadBalancerIngress{{Hostname: "hosturl"}},
+			},
 		},
 	}
 }

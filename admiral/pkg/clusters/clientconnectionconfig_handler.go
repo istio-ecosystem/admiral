@@ -9,6 +9,7 @@ import (
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 )
 
 type ClientConnectionConfigHandler struct {
@@ -69,6 +70,12 @@ func (c *clientConnectionSettingsCache) Delete(identity string, environment stri
 
 func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	clientConnectionSettings *v1.ClientConnectionConfig) error {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(c.ClusterID) {
+		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		if err != nil {
+			log.Errorf(LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
+		}
+	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Add, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {

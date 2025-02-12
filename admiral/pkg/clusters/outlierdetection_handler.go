@@ -9,6 +9,7 @@ import (
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 )
 
 type OutlierDetectionHandler struct {
@@ -64,6 +65,12 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 }
 
 func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDetection) error {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
+		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
+		}
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.EventType(common.Add), obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -72,6 +79,12 @@ func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDete
 }
 
 func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDetection) error {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
+		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
+		if err != nil {
+			log.Errorf(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
+		}
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -80,6 +93,12 @@ func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDe
 }
 
 func (od OutlierDetectionHandler) Deleted(ctx context.Context, obj *v1.OutlierDetection) error {
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
+		err := od.RemoteRegistry.RegistryClient.DeleteCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string))
+		if err != nil {
+			log.Errorf(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, "failed to delete "+common.OutlierDetection+" custom data")
+		}
+	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())

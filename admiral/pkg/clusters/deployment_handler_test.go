@@ -1,7 +1,14 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +48,8 @@ func admiralParamsForDeploymentHandlerTests() common.AdmiralParams {
 		EnableSWAwareNSCaches:      true,
 		ExportToIdentityList:       []string{"*"},
 		ExportToMaxNamespaces:      35,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"cluster-1"},
 	}
 }
 
@@ -102,13 +111,13 @@ func TestDeploymentHandlerPartitionCache(t *testing.T) {
 
 func TestDeploymentHandler(t *testing.T) {
 	setupForDeploymentHandlerTests()
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), "txId", "txidvalue")
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 
-	registry, _ := InitAdmiral(context.Background(), p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
 
 	handler := DeploymentHandler{}
 
@@ -124,11 +133,42 @@ func TestDeploymentHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	remoteRegistry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
-	registry.AdmiralCache.GlobalTrafficCache = gtpCache
-	handler.RemoteRegistry = registry
+	remoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
+	handler.RemoteRegistry = remoteRegistry
 	handler.ClusterID = "cluster-1"
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: nil,
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: fmt.Errorf("failed private auth call"),
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
 
 	deployment := appsV1.Deployment{
 		ObjectMeta: metaV1.ObjectMeta{
@@ -155,6 +195,7 @@ func TestDeploymentHandler(t *testing.T) {
 		expectedDeploymentCacheKey   string
 		expectedIdentityCacheValue   *v1.GlobalTrafficPolicy
 		expectedDeploymentCacheValue *appsV1.Deployment
+		registryClient               *registry.RegistryClient
 	}{
 		{
 			name:                         "Shouldn't throw errors when called",
@@ -162,6 +203,15 @@ func TestDeploymentHandler(t *testing.T) {
 			expectedDeploymentCacheKey:   "myGTP1",
 			expectedIdentityCacheValue:   nil,
 			expectedDeploymentCacheValue: nil,
+			registryClient:               validRegistryClient,
+		},
+		{
+			name:                         "Should log an error for failed registry call",
+			addedDeployment:              &deployment,
+			expectedDeploymentCacheKey:   "myGTP1",
+			expectedIdentityCacheValue:   nil,
+			expectedDeploymentCacheValue: nil,
+			registryClient:               invalidRegistryClient,
 		},
 	}
 
@@ -176,7 +226,7 @@ func TestDeploymentHandler(t *testing.T) {
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
-
+			handler.RemoteRegistry.RegistryClient = c.registryClient
 			handler.Added(ctx, &deployment)
 			ns := handler.RemoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get("bar").Get("cluster-1").GetKeys()[0]
 			if ns != "namespace" {
@@ -228,11 +278,13 @@ func newFakeDeployment(name, namespace string, matchLabels map[string]string) *a
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    map[string]string{"identity": name},
 		},
 		Spec: appsV1.DeploymentSpec{
 			Selector: &metaV1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
+			Template: coreV1.PodTemplateSpec{ObjectMeta: metaV1.ObjectMeta{Labels: map[string]string{"identity": name}}},
 		},
 	}
 }
