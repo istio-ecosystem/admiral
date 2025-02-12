@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"k8s.io/utils/strings/slices"
 	"math"
 	"math/rand"
 	"reflect"
@@ -13,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -169,7 +171,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		deployRolloutMigration                = make(map[string]bool)
 
 		// Holds the VS destinations for the TLSRoutes
-		sourceClusterToDestinations = make(map[string]map[string][]*networking.RouteDestination)
+		sourceClusterToDestinations = make(map[string]map[string][]*vsrouting.RouteDestination)
 		// Holds the DR hosts (*.svc.cluster.local) used for VS based routing
 		sourceClusterToDRHosts = make(map[string]map[string]string)
 		// Holds the source cluster to namespace mapping from where the event is received
