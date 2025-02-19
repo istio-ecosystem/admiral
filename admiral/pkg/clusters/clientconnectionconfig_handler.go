@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sync"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
-	log "github.com/sirupsen/logrus"
 )
 
 type ClientConnectionConfigHandler struct {
@@ -70,12 +70,6 @@ func (c *clientConnectionSettingsCache) Delete(identity string, environment stri
 
 func (c *ClientConnectionConfigHandler) Added(ctx context.Context,
 	clientConnectionSettings *v1.ClientConnectionConfig) error {
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(c.ClusterID) {
-		err := c.RemoteRegistry.RegistryClient.PutCustomData(c.ClusterID, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
-		if err != nil {
-			log.Errorf(LogFormat, common.Add, common.ClientConnectionConfig, clientConnectionSettings.Name, c.ClusterID, "failed to put "+common.ClientConnectionConfig+" custom data")
-		}
-	}
 	err := HandleEventForClientConnectionConfig(
 		ctx, admiral.Add, clientConnectionSettings, c.RemoteRegistry, c.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
@@ -128,7 +122,28 @@ func HandleEventForClientConnectionConfig(
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.ClientConnectionConfig)
 
+	_ = callRegistryForClientConnectionConfig(ctx, event, registry, clusterName, clientConnectionSettings)
+
 	_, err := modifySE(ctx, admiral.Update, env, identity, registry)
 
+	return err
+}
+
+func callRegistryForClientConnectionConfig(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, clientConnectionSettings *v1.ClientConnectionConfig) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.ClientConnectionConfig, clientConnectionSettings.Name, clusterName, "failed to "+string(event)+" "+common.ClientConnectionConfig+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
 	return err
 }

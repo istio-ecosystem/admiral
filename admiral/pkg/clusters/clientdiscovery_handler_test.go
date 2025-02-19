@@ -1,15 +1,20 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net/http"
 	"testing"
 	"time"
 
@@ -322,6 +327,111 @@ func TestClientDiscoveryHandler_Added(t *testing.T) {
 
 			if c.want.depCtrlAddCalled > 0 {
 				assert.Equal(t, c.want.depCtrlAddCalled, mockDepCtrl.AddedCnt)
+			}
+		})
+	}
+}
+
+func TestCallRegistryForClientDiscovery(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	k8sObj := &common.K8sObject{
+		Namespace: "testns",
+		Name:      "obj",
+		Type:      "testtype",
+		Labels: map[string]string{
+			"admiral.io/identityPartition": "test",
+			"admiral.io/env":               "testEnv",
+			"identity":                     "testId",
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		obj            *common.K8sObject
+		registryClient *registry.RegistryClient
+		event          admiral.EventType
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			obj:            k8sObj,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			obj:            k8sObj,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			obj:            k8sObj,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          admiral.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=testtype name=obj cluster=test-k8s message=failed to Delete testtype with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForClientDiscovery(tc.ctx, tc.event, remoteRegistry, "test.testId", clusterName, tc.obj)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
 			}
 		})
 	}

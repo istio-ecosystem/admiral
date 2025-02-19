@@ -29,24 +29,11 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	if len(globalIdentifier) == 0 {
 		return nil
 	}
-	ctxLogger := common.GetCtxLogger(ctx, globalIdentifier, "")
 
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
 
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-		if event != admiral.Delete {
-			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to put "+obj.Type+" hosting data for identity="+globalIdentifier)
-			}
-		} else {
-			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, event, obj.Name, obj.Namespace, clusterName, "failed to delete "+obj.Type+" hosting data for identity="+globalIdentifier)
-			}
-		}
-	}
+	_ = callRegistryForClientDiscovery(ctx, event, remoteRegistry, globalIdentifier, clusterName, obj)
 
 	if remoteRegistry.AdmiralCache != nil {
 
@@ -91,4 +78,23 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	}
 
 	return nil
+}
+
+func callRegistryForClientDiscovery(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *common.K8sObject) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, obj.Type, obj.Name, clusterName, "failed to "+string(event)+" "+obj.Type+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

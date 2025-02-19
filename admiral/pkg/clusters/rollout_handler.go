@@ -3,7 +3,6 @@ package clusters
 import (
 	"context"
 	"fmt"
-
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -51,19 +50,7 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
 
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-		if event != admiral.Delete {
-			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string), obj)
-			if err != nil {
-				log.Errorf(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, "failed to put "+common.Rollout+" hosting data for identity="+globalIdentifier)
-			}
-		} else {
-			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string))
-			if err != nil {
-				log.Errorf(LogFormat, event, common.RolloutResourceType, obj.Name, clusterName, "failed to delete "+common.Rollout+" hosting data for identity="+globalIdentifier)
-			}
-		}
-	}
+	_ = callRegistryForRollout(ctx, event, remoteRegistry, globalIdentifier, clusterName, obj)
 
 	if remoteRegistry.AdmiralCache != nil {
 		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
@@ -87,6 +74,25 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 		rolloutProcessErr := processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
 		if rolloutProcessErr != nil {
 			return common.AppendError(err, rolloutProcessErr)
+		}
+	}
+	return err
+}
+
+func callRegistryForRollout(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *argo.Rollout) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Rollout, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.Rollout, obj.Name, clusterName, "failed to "+string(event)+" "+common.Rollout+" with err: "+err.Error())
+			log.Error(err)
 		}
 	}
 	return err

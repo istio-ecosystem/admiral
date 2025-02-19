@@ -3,7 +3,6 @@ package clusters
 import (
 	"context"
 	"fmt"
-
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	log "github.com/sirupsen/logrus"
@@ -52,20 +51,7 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.Deployment)
 
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-		// the globalIdentifier is partition + "." + assetAlias, not just assetAlias
-		if event != admiral.Delete {
-			err := remoteRegistry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
-			if err != nil {
-				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to put "+common.Deployment+" hosting data for identity="+globalIdentifier+"with err: "+err.Error())
-			}
-		} else {
-			err := remoteRegistry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
-			if err != nil {
-				log.Errorf(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "failed to delete "+common.Deployment+" hosting data for identity="+globalIdentifier+"with err: "+err.Error())
-			}
-		}
-	}
+	_ = callRegistryForDeployment(ctx, event, remoteRegistry, globalIdentifier, clusterName, obj)
 
 	if remoteRegistry.AdmiralCache != nil {
 		if remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
@@ -88,6 +74,25 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 		depProcessErr := processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
 		if depProcessErr != nil {
 			return common.AppendError(err, depProcessErr)
+		}
+	}
+	return err
+}
+
+func callRegistryForDeployment(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *k8sAppsV1.Deployment) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, common.Deployment, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.Deployment, obj.Name, clusterName, "failed to "+string(event)+" "+common.Deployment+" with err: "+err.Error())
+			log.Error(err)
 		}
 	}
 	return err

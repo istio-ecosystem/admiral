@@ -65,12 +65,6 @@ func (cache *outlierDetectionCache) Delete(identity string, env string) error {
 }
 
 func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDetection) error {
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
-		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
-		if err != nil {
-			log.Errorf(LogFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
-		}
-	}
 	err := HandleEventForOutlierDetection(ctx, admiral.EventType(common.Add), obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Add, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -79,12 +73,6 @@ func (od OutlierDetectionHandler) Added(ctx context.Context, obj *v1.OutlierDete
 }
 
 func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDetection) error {
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
-		err := od.RemoteRegistry.RegistryClient.PutCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string), obj)
-		if err != nil {
-			log.Errorf(LogFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, "failed to put "+common.OutlierDetection+" custom data")
-		}
-	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Update, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -93,12 +81,6 @@ func (od OutlierDetectionHandler) Updated(ctx context.Context, obj *v1.OutlierDe
 }
 
 func (od OutlierDetectionHandler) Deleted(ctx context.Context, obj *v1.OutlierDetection) error {
-	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(od.ClusterID) {
-		err := od.RemoteRegistry.RegistryClient.DeleteCustomData(od.ClusterID, obj.Namespace, obj.Name, common.OutlierDetection, ctx.Value("txId").(string))
-		if err != nil {
-			log.Errorf(LogFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, "failed to delete "+common.OutlierDetection+" custom data")
-		}
-	}
 	err := HandleEventForOutlierDetection(ctx, admiral.Update, obj, od.RemoteRegistry, od.ClusterID, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return fmt.Errorf(LogErrFormat, common.Delete, common.OutlierDetection, obj.Name, od.ClusterID, err.Error())
@@ -122,6 +104,8 @@ func HandleEventForOutlierDetection(ctx context.Context, event admiral.EventType
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.OutlierDetection)
 
+	_ = callRegistryForOutlierDetection(ctx, event, registry, clusterName, od)
+
 	_, err := modifySE(ctx, admiral.Update, env, identity, registry)
 
 	return err
@@ -132,4 +116,23 @@ func NewOutlierDetectionCache() *outlierDetectionCache {
 	odCache.identityCache = make(map[string]*v1.OutlierDetection)
 	odCache.mutex = &sync.Mutex{}
 	return odCache
+}
+
+func callRegistryForOutlierDetection(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, od *v1.OutlierDetection) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string), od)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string), od)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.OutlierDetection, od.Name, clusterName, "failed to "+string(event)+" "+common.OutlierDetection+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

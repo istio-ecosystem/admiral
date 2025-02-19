@@ -144,7 +144,6 @@ func handleServiceEventForDeployment(
 			}
 		}
 
-		// Why are we deleting the svc and then adding it back in case of delete?
 		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
 			if common.GetDeploymentGlobalIdentifier(&deployment) != "" {
 				err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), "service", ctx.Value("txId").(string), svc)

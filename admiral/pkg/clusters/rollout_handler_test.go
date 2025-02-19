@@ -1,7 +1,15 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -181,6 +189,118 @@ func TestRolloutHandler(t *testing.T) {
 			}
 			handler.Deleted(ctx, c.addedRollout)
 			handler.Updated(ctx, c.addedRollout)
+		})
+	}
+}
+
+func TestCallRegistryForRollout(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	rollout := &argo.Rollout{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test",
+			Namespace: "namespace",
+			Labels:    map[string]string{"identity": "app1"},
+		},
+		Spec: argo.RolloutSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		obj            *argo.Rollout
+		registryClient *registry.RegistryClient
+		event          admiral.EventType
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			obj:            rollout,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			obj:            rollout,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			obj:            rollout,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          admiral.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=rollout name=test cluster=test-k8s message=failed to Delete rollout with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForRollout(tc.ctx, tc.event, remoteRegistry, "test.testId", clusterName, tc.obj)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
 		})
 	}
 }
