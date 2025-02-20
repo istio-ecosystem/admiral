@@ -310,6 +310,7 @@ func (r RoutingPolicyHandler) Added(ctx context.Context, obj *v1.RoutingPolicy) 
 			return err
 		}
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "finished processing routing policy")
+		_ = callRegistryForRoutingPolicy(ctx, admiral.Add, r.RemoteRegistry, r.ClusterID, obj)
 	} else {
 		log.Infof(LogFormat, admiral.Add, "routingpolicy", obj.Name, "", "routingpolicy disabled")
 	}
@@ -343,6 +344,7 @@ func (r RoutingPolicyHandler) Updated(ctx context.Context, newRP *v1.RoutingPoli
 			log.Errorf(LogErrFormat, admiral.Update, "routingpolicy", newRP.Name, "", "failed to process routing policy")
 			return err
 		}
+		_ = callRegistryForRoutingPolicy(ctx, admiral.Update, r.RemoteRegistry, r.ClusterID, newRP)
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", newRP.Name, "", "updated routing policy")
 	} else {
 		log.Infof(LogFormat, admiral.Update, "routingpolicy", newRP.Name, "", "routingpolicy disabled")
@@ -371,6 +373,26 @@ func (r RoutingPolicyHandler) Deleted(ctx context.Context, obj *v1.RoutingPolicy
 	err := r.RoutingPolicyService.Delete(ctx, admiral.Delete, obj)
 	if err != nil {
 		log.Infof(LogFormat, admiral.Delete, "routingpolicy", obj.Name, "", "deleted envoy filter for routing policy")
+	}
+	_ = callRegistryForRoutingPolicy(ctx, admiral.Delete, r.RemoteRegistry, r.ClusterID, obj)
+	return err
+}
+
+func callRegistryForRoutingPolicy(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, routingPolicy *v1.RoutingPolicy) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, routingPolicy.Namespace, routingPolicy.Name, "RoutingPolicy", ctx.Value("txId").(string), routingPolicy)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, routingPolicy.Namespace, routingPolicy.Name, "RoutingPolicy", ctx.Value("txId").(string), routingPolicy)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, routingPolicy.Namespace, routingPolicy.Name, "RoutingPolicy", ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, "RoutingPolicy", routingPolicy.Name, clusterName, "failed to "+string(event)+" RoutingPolicy with err: "+err.Error())
+			log.Error(err)
+		}
 	}
 	return err
 }
