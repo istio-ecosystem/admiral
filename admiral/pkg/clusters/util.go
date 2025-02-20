@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/prometheus/common/log"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/prometheus/common/log"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
@@ -23,7 +24,6 @@ import (
 )
 
 type WorkloadEntrySorted []*networking.WorkloadEntry
-type RouteDestinationSorted []*networking.RouteDestination
 type TLSRoutesSorted []*networking.TLSRoute
 
 func GetMeshPortsForRollout(clusterName string, destService *k8sV1.Service,
@@ -502,18 +502,6 @@ func getDestinationsToBeProcessed(eventType admiral.EventType,
 		}
 	}
 	return updatedDestinations, nonMeshEnabledExists
-}
-
-func (r RouteDestinationSorted) Len() int {
-	return len(r)
-}
-
-func (r RouteDestinationSorted) Less(i, j int) bool {
-	return r[i].Destination.Host < r[j].Destination.Host
-}
-
-func (r RouteDestinationSorted) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
 }
 
 func isServiceControllerInitialized(rc *RemoteController) error {

@@ -13,6 +13,7 @@ import (
 	v1alpha12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -90,7 +91,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	previewFQDN := "outbound_.80_._.preview.test-env.test-identity.global"
 	canaryFQDN := "outbound_.80_._.canary.test-env.test-identity.global"
 
-	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*networkingV1Alpha3.RouteDestination{
+	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
 			defaultFQDN: {
 				{
@@ -104,7 +105,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			},
 		},
 	}
-	sourceDestinationsWithPreviewSvc := map[string]map[string][]*networkingV1Alpha3.RouteDestination{
+	sourceDestinationsWithPreviewSvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
 			defaultFQDN: {
 				{
@@ -128,7 +129,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 			},
 		},
 	}
-	sourceDestinationsWithCanarySvc := map[string]map[string][]*networkingV1Alpha3.RouteDestination{
+	sourceDestinationsWithCanarySvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
 			defaultFQDN: {
 				{
@@ -171,7 +172,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		name                        string
 		remoteRegistry              *RemoteRegistry
 		vsName                      string
-		sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination
+		sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination
 		istioClient                 *istioFake.Clientset
 		expectedError               error
 		expectedVS                  *apiNetworkingV1Alpha3.VirtualService
@@ -592,10 +593,10 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 	testCases := []struct {
 		name                     string
 		serviceInstance          map[string]*coreV1.Service
-		destinations             map[string][]*networkingV1Alpha3.RouteDestination
+		destinations             map[string][]*vsrouting.RouteDestination
 		deployment               *v1.Deployment
 		expectedError            error
-		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*vsrouting.RouteDestination
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -635,7 +636,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 					},
 				},
 			},
-			destinations: make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations: make(map[string][]*vsrouting.RouteDestination),
 			deployment: &v1.Deployment{
 				ObjectMeta: metaV1.ObjectMeta{},
 				Spec: v1.DeploymentSpec{
@@ -650,7 +651,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -688,7 +689,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 					},
 				},
 			},
-			destinations: map[string][]*networkingV1Alpha3.RouteDestination{
+			destinations: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -701,7 +702,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -757,9 +758,9 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 		serviceInstance          map[string]*coreV1.Service
 		weightedServices         map[string]*WeightedService
 		rollout                  *v1alpha1.Rollout
-		destinations             map[string][]*networkingV1Alpha3.RouteDestination
+		destinations             map[string][]*vsrouting.RouteDestination
 		expectedError            error
-		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*vsrouting.RouteDestination
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -847,9 +848,9 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -924,9 +925,9 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -989,9 +990,9 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1043,9 +1044,9 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 		name                     string
 		weightedServices         map[string]*WeightedService
 		rollout                  *v1alpha1.Rollout
-		destinations             map[string][]*networkingV1Alpha3.RouteDestination
+		destinations             map[string][]*vsrouting.RouteDestination
 		expectedError            error
-		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*vsrouting.RouteDestination
 	}{
 		{
 			name: "Given a nil rollout" +
@@ -1121,9 +1122,9 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1185,9 +1186,9 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 		serviceInstance          *coreV1.Service
 		weightedServices         map[string]*WeightedService
 		rollout                  *v1alpha1.Rollout
-		destinations             map[string][]*networkingV1Alpha3.RouteDestination
+		destinations             map[string][]*vsrouting.RouteDestination
 		expectedError            error
-		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination map[string][]*vsrouting.RouteDestination
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -1274,9 +1275,9 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 					},
 				},
 			},
-			destinations:  make(map[string][]*networkingV1Alpha3.RouteDestination),
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1601,7 +1602,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		rollout                   *v1alpha1.Rollout
 		deployment                *v1.Deployment
 		expectedError             error
-		expectedRouteDestination  map[string][]*networkingV1Alpha3.RouteDestination
+		expectedRouteDestination  map[string][]*vsrouting.RouteDestination
 		sourceIdentity            string
 		env                       string
 	}{
@@ -1659,7 +1660,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1710,7 +1711,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1790,7 +1791,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1894,7 +1895,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			sourceIdentity: "test-identity",
 			env:            "test-env",
 			expectedError:  nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -1992,7 +1993,8 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 					require.NotNil(t, actual[fqdn])
 					require.Equal(t, len(destinations), len(actual[fqdn]))
 					for i := 0; i < len(destinations); i++ {
-						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Destination.Host, actual[fqdn][i].Destination.Host)
+						require.Equal(t, destinations[i].Destination.Port.Number, actual[fqdn][i].Destination.Port.Number)
 						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
 					}
 				}
@@ -2586,9 +2588,9 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 	testCases := []struct {
 		name                        string
 		gtp                         *v1alpha12.GlobalTrafficPolicy
-		routeDestination            map[string][]*networkingV1Alpha3.RouteDestination
+		routeDestination            map[string][]*vsrouting.RouteDestination
 		expectedError               error
-		expectedGTPRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		expectedGTPRouteDestination map[string][]*vsrouting.RouteDestination
 	}{
 		{
 			name: "Given nil gtp " +
@@ -2608,9 +2610,9 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 				"When getDestinationsForGTPDNSPrefixes is invoked, " +
 				"Then it should return an empty gtpRouteDestinations",
 			gtp:                         &v1alpha12.GlobalTrafficPolicy{},
-			routeDestination:            make(map[string][]*networkingV1Alpha3.RouteDestination),
+			routeDestination:            make(map[string][]*vsrouting.RouteDestination),
 			expectedError:               nil,
-			expectedGTPRouteDestination: make(map[string][]*networkingV1Alpha3.RouteDestination),
+			expectedGTPRouteDestination: make(map[string][]*vsrouting.RouteDestination),
 		},
 		{
 			name: "Given a valid params " +
@@ -2639,7 +2641,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 					},
 				},
 			},
-			routeDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			routeDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -2672,7 +2674,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 				},
 			},
 			expectedError: nil,
-			expectedGTPRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{
+			expectedGTPRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"outbound_.80_._.east.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -2735,7 +2737,8 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 					require.NotNil(t, actual[fqdn])
 					require.Equal(t, len(destinations), len(actual[fqdn]))
 					for i := 0; i < len(destinations); i++ {
-						require.Equal(t, destinations[i].Destination, actual[fqdn][i].Destination)
+						require.Equal(t, destinations[i].Destination.Host, actual[fqdn][i].Destination.Host)
+						require.Equal(t, destinations[i].Destination.Port.Number, actual[fqdn][i].Destination.Port.Number)
 						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
 					}
 				}
@@ -2808,8 +2811,8 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 
 	testCases := []struct {
 		name                     string
-		routeDestinations        map[string][]*networkingV1Alpha3.RouteDestination
-		expectedRouteDestination map[string][]*networkingV1Alpha3.RouteDestination
+		routeDestinations        map[string][]*vsrouting.RouteDestination
+		expectedRouteDestination map[string][]*vsrouting.RouteDestination
 		expectedError            error
 	}{
 		{
@@ -2823,7 +2826,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 			name: "Given a routeDestination with a single destination " +
 				"When addWeightsToRouteDestinations is invoked, " +
 				"Then it should return without adding any weights",
-			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2831,7 +2834,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 				},
 			}},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2843,7 +2846,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 			name: "Given a routeDestination with a two destinations with weights=100" +
 				"When addWeightsToRouteDestinations is invoked, " +
 				"Then it should return with the same weights",
-			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2858,7 +2861,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 				},
 			}},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2877,7 +2880,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 			name: "Given a routeDestination with a two destinations with weights=50" +
 				"When addWeightsToRouteDestinations is invoked, " +
 				"Then it should return with the same weights",
-			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2897,7 +2900,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 			name: "Given a routeDestination with a two destinations with weights=0" +
 				"When addWeightsToRouteDestinations is invoked, " +
 				"Then it should return with the same weights 50-50",
-			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2912,7 +2915,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 				},
 			}},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2931,7 +2934,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 			name: "Given a routeDestination with a three destinations with no weights" +
 				"When addWeightsToRouteDestinations is invoked, " +
 				"Then it should return with weights 34-33-33",
-			routeDestinations: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",
@@ -2949,7 +2952,7 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 				},
 			}},
 			expectedError: nil,
-			expectedRouteDestination: map[string][]*networkingV1Alpha3.RouteDestination{"test-svc.test-ns.mesh": {
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-svc.test-ns.svc.cluster.local",

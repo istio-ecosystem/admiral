@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
@@ -163,8 +164,8 @@ func getFQDNFromSNIHost(sniHost string) (string, error) {
 }
 
 // getRouteDestination generates a RouteDestination object for the given host and port
-func getRouteDestination(host string, port uint32, weight int32) *networkingV1Alpha3.RouteDestination {
-	routeDestination := &networkingV1Alpha3.RouteDestination{
+func getRouteDestination(host string, port uint32, weight int32) *vsrouting.RouteDestination {
+	routeDestination := &vsrouting.RouteDestination{
 		Destination: &networkingV1Alpha3.Destination{
 			Host: host,
 			Port: &networkingV1Alpha3.PortSelector{
@@ -194,7 +195,7 @@ func populateVSRouteDestinationForDeployment(
 	serviceInstance map[string]*k8sV1.Service,
 	meshPort uint32,
 	deployment *k8sAppsV1.Deployment,
-	destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	destinations map[string][]*vsrouting.RouteDestination) error {
 
 	if serviceInstance == nil {
 		return fmt.Errorf("serviceInstance is nil")
@@ -214,7 +215,7 @@ func populateVSRouteDestinationForDeployment(
 	host := serviceInstance[common.Deployment].Name + "." +
 		serviceInstance[common.Deployment].Namespace + common.DotLocalDomainSuffix
 	if destinations[globalFQDN] == nil {
-		destinations[globalFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+		destinations[globalFQDN] = make([]*vsrouting.RouteDestination, 0)
 	}
 	destinations[globalFQDN] = append(destinations[globalFQDN], getRouteDestination(host, meshPort, 0))
 	return nil
@@ -268,7 +269,7 @@ func populateVSRouteDestinationForRollout(
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
 	meshPort uint32,
-	destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	destinations map[string][]*vsrouting.RouteDestination) error {
 
 	if serviceInstance == nil {
 		return fmt.Errorf("serviceInstance is nil")
@@ -317,12 +318,12 @@ func populateVSRouteDestinationForRollout(
 	host := serviceInstance[common.Rollout].Name + "." +
 		serviceInstance[common.Rollout].Namespace + common.DotLocalDomainSuffix
 	if destinations[defaultFQDN] == nil {
-		destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+		destinations[defaultFQDN] = make([]*vsrouting.RouteDestination, 0)
 	}
 	destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
 
 	if len(destinations[defaultFQDN]) > 1 {
-		sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+		sort.Sort(vsrouting.RouteDestinationSorted(destinations[defaultFQDN]))
 	}
 
 	return nil
@@ -334,7 +335,7 @@ func populateDestinationsForBlueGreenStrategy(
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
 	meshPort uint32,
-	destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	destinations map[string][]*vsrouting.RouteDestination) error {
 
 	if rollout == nil {
 		return fmt.Errorf("populateDestinationsForBlueGreenStrategy, rollout is nil")
@@ -359,7 +360,7 @@ func populateDestinationsForBlueGreenStrategy(
 		host := previewServiceInstance.Name + common.Sep +
 			previewServiceInstance.Namespace + common.DotLocalDomainSuffix
 		if destinations[previewFQDN] == nil {
-			destinations[previewFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+			destinations[previewFQDN] = make([]*vsrouting.RouteDestination, 0)
 		}
 		destinations[previewFQDN] = append(destinations[previewFQDN], getRouteDestination(host, meshPort, 0))
 	}
@@ -373,12 +374,12 @@ func populateDestinationsForBlueGreenStrategy(
 		host := activeServiceInstance.Name + common.Sep +
 			activeServiceInstance.Namespace + common.DotLocalDomainSuffix
 		if destinations[defaultFQDN] == nil {
-			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+			destinations[defaultFQDN] = make([]*vsrouting.RouteDestination, 0)
 		}
 		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, 0))
 
 		if len(destinations[defaultFQDN]) > 1 {
-			sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+			sort.Sort(vsrouting.RouteDestinationSorted(destinations[defaultFQDN]))
 		}
 	}
 	return nil
@@ -391,7 +392,7 @@ func populateDestinationsForCanaryStrategy(
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
 	meshPort uint32,
-	destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+	destinations map[string][]*vsrouting.RouteDestination) error {
 
 	if serviceInstance == nil {
 		return fmt.Errorf("populateDestinationsForCanaryStrategy, serviceInstance is nil")
@@ -424,7 +425,7 @@ func populateDestinationsForCanaryStrategy(
 	for serviceName, service := range weightedServices {
 		host := serviceName + common.Sep + service.Service.Namespace + common.DotLocalDomainSuffix
 		if destinations[defaultFQDN] == nil {
-			destinations[defaultFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+			destinations[defaultFQDN] = make([]*vsrouting.RouteDestination, 0)
 		}
 		if service.Weight > 0 {
 			weight = service.Weight
@@ -433,7 +434,7 @@ func populateDestinationsForCanaryStrategy(
 	}
 
 	if len(destinations[defaultFQDN]) > 1 {
-		sort.Sort(RouteDestinationSorted(destinations[defaultFQDN]))
+		sort.Sort(vsrouting.RouteDestinationSorted(destinations[defaultFQDN]))
 	}
 
 	// Here we will create a separate canary destination for the canary FQDN
@@ -441,7 +442,7 @@ func populateDestinationsForCanaryStrategy(
 	serviceNamespace := serviceInstance.Namespace
 	host := canaryServiceName + common.Sep + serviceNamespace + common.DotLocalDomainSuffix
 	if destinations[canaryFQDN] == nil {
-		destinations[canaryFQDN] = make([]*networkingV1Alpha3.RouteDestination, 0)
+		destinations[canaryFQDN] = make([]*vsrouting.RouteDestination, 0)
 	}
 	destinations[canaryFQDN] = append(destinations[canaryFQDN], getRouteDestination(host, meshPort, 0))
 
@@ -455,7 +456,7 @@ func addUpdateVirtualServicesForIngress(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
-	sourceClusterToDestinations map[string]map[string][]*networkingV1Alpha3.RouteDestination,
+	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
 	vsName string) error {
 
 	if remoteRegistry == nil {
@@ -511,8 +512,12 @@ func addUpdateVirtualServicesForIngress(
 						SniHosts: []string{globalFQDN},
 					},
 				},
-				Route: routeDestinations,
 			}
+			tlsRouteDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
+			for _, routeDestination := range routeDestinations {
+				tlsRouteDestinations = append(tlsRouteDestinations, routeDestination.ToTLSRouteDestination())
+			}
+			tlsRoute.Route = tlsRouteDestinations
 			tlsRoutes = append(tlsRoutes, &tlsRoute)
 			vsHosts = append(vsHosts, globalFQDN)
 		}
@@ -576,13 +581,13 @@ func getAllVSRouteDestinationsByCluster(
 	deployment *k8sAppsV1.Deployment,
 	remoteRegistry *RemoteRegistry,
 	sourceIdentity string,
-	env string) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
+	env string) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
 	}
 
-	destinations := make(map[string][]*networkingV1Alpha3.RouteDestination)
+	destinations := make(map[string][]*vsrouting.RouteDestination)
 
 	// Populate the route destinations(svc.cluster.local services) for the deployment
 	if serviceInstance[common.Deployment] != nil {
@@ -632,7 +637,7 @@ func getAllVSRouteDestinationsByCluster(
 	return destinations, nil
 }
 
-func addWeightsToRouteDestinations(destinations map[string][]*networkingV1Alpha3.RouteDestination) error {
+func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDestination) error {
 	if destinations == nil {
 		return fmt.Errorf("route destinations map is nil")
 	}
@@ -680,8 +685,8 @@ func getWeightSplits(numberOfSplits int) []int32 {
 func getDestinationsForGTPDNSPrefixes(
 	ctxLogger *log.Entry,
 	globalTrafficPolicy *v1alpha1.GlobalTrafficPolicy,
-	destinations map[string][]*networkingV1Alpha3.RouteDestination,
-	env string) (map[string][]*networkingV1Alpha3.RouteDestination, error) {
+	destinations map[string][]*vsrouting.RouteDestination,
+	env string) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if globalTrafficPolicy == nil {
 		return nil, fmt.Errorf("globaltrafficpolicy is nil")
@@ -690,7 +695,7 @@ func getDestinationsForGTPDNSPrefixes(
 		return nil, fmt.Errorf("destinations map is nil")
 	}
 
-	gtpDestinations := make(map[string][]*networkingV1Alpha3.RouteDestination)
+	gtpDestinations := make(map[string][]*vsrouting.RouteDestination)
 	for globalFQDN, routeDestinations := range destinations {
 
 		if routeDestinations == nil {
@@ -729,13 +734,13 @@ func getDestinationsForGTPDNSPrefixes(
 }
 
 func copyRouteDestinations(
-	routeDestination []*networkingV1Alpha3.RouteDestination) ([]*networkingV1Alpha3.RouteDestination, error) {
+	routeDestination []*vsrouting.RouteDestination) ([]*vsrouting.RouteDestination, error) {
 	if routeDestination == nil {
 		return nil, fmt.Errorf("routeDestination is nil")
 	}
-	newRouteDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
+	newRouteDestinations := make([]*vsrouting.RouteDestination, 0)
 	for _, rd := range routeDestination {
-		var newRD = &networkingV1Alpha3.RouteDestination{}
+		var newRD = &vsrouting.RouteDestination{}
 		rd.DeepCopyInto(newRD)
 		newRouteDestinations = append(newRouteDestinations, newRD)
 	}
