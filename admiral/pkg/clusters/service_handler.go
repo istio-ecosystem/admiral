@@ -123,6 +123,7 @@ func handleServiceEventForDeployment(
 		// If No - We are safe to assume that there was only one associate service and the related SE is deleted
 		// NOTE: if there is an err returned from checkIfThereAreMultipleMatchingServices we continue to prevent any
 		// destructive updates
+		_ = callRegistryForService(ctx, eventType, remoteRegistry, common.GetDeploymentGlobalIdentifier(&deployment), clusterName, svc)
 		if eventType == admiral.Delete {
 			multipleSvcExist, err := checkIfThereAreMultipleMatchingServices(svc, serviceController, deployment, clusterName)
 			if err != nil {
@@ -133,23 +134,6 @@ func handleServiceEventForDeployment(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
-				if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-					if common.GetDeploymentGlobalIdentifier(&deployment) != "" {
-						err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), "service", ctx.Value("txId").(string))
-						if err != nil {
-							allErrors = common.AppendError(allErrors, err)
-						}
-					}
-				}
-			}
-		}
-
-		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-			if common.GetDeploymentGlobalIdentifier(&deployment) != "" {
-				err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetDeploymentGlobalIdentifier(&deployment), "service", ctx.Value("txId").(string), svc)
-				if err != nil {
-					allErrors = common.AppendError(allErrors, err)
-				}
 			}
 		}
 
@@ -204,6 +188,7 @@ func handleServiceEventForRollout(
 		// If No - We are safe to assume that there was only one associate service and the related SE is deleted
 		// NOTE: if there is an err returned from checkIfThereAreMultipleMatchingServices we continue to prevent any
 		// destructive updates
+		_ = callRegistryForService(ctx, eventType, remoteRegistry, common.GetRolloutGlobalIdentifier(&rollout), clusterName, svc)
 		if eventType == admiral.Delete {
 			multipleSvcExist, err := checkIfThereAreMultipleMatchingServices(svc, serviceController, rollout, clusterName)
 			if err != nil {
@@ -214,24 +199,6 @@ func handleServiceEventForRollout(
 				eventType = admiral.Update
 				ctx = context.WithValue(ctx, common.EventType, admiral.Update)
 				serviceController.Cache.Delete(svc)
-				if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-					if common.GetRolloutGlobalIdentifier(&rollout) != "" {
-						err = remoteRegistry.RegistryClient.DeleteHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), "service", ctx.Value("txId").(string))
-						if err != nil {
-							allErrors = common.AppendError(allErrors, err)
-						}
-					}
-				}
-			}
-		}
-
-		// Why are we deleting the svc and then adding it back in case of delete?
-		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
-			if common.GetRolloutGlobalIdentifier(&rollout) != "" {
-				err := remoteRegistry.RegistryClient.PutHostingData(clusterName, svc.Namespace, svc.Name, common.GetRolloutGlobalIdentifier(&rollout), "service", ctx.Value("txId").(string), svc)
-				if err != nil {
-					allErrors = common.AppendError(allErrors, err)
-				}
 			}
 		}
 
@@ -301,4 +268,23 @@ func checkIfThereAreMultipleMatchingServices(svc *coreV1.Service, serviceControl
 	}
 
 	return false, nil
+}
+
+func callRegistryForService(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *coreV1.Service) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, "Service", obj.Name, clusterName, "failed to "+string(event)+" Service with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

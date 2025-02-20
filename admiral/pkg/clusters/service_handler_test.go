@@ -276,13 +276,13 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 			assertFunc: func(fakeHandler *fakeHandleEventForDeployment) error {
 				return nil
 			},
-			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; error processing %s", deploymentName2),
+			expectedErr: fmt.Errorf("error processing %s", deploymentName2),
 		},
 		{
 			name: "Given, there is a change in istio ingressgateway service, " +
 				"When, HandleServiceEventForDeployment is invoked with invalid registryClient, " +
 				"Then, it should call handler for deployment with all the deployments in the cluster, " +
-				"Then, it should get an error for each registry call",
+				"Then, it should get no errors even if registryClient errors",
 			svc:            istioIngressGatewayService,
 			registryClient: invalidRegistryClient,
 			fakeHandleEventForDeployment: newFakeHandleEventForDeploymentsByError(
@@ -296,7 +296,7 @@ func TestHandleServiceEventForDeployment(t *testing.T) {
 					},
 				},
 			),
-			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; failed private auth call"),
+			expectedErr: nil,
 			assertFunc: func(fakeHandler *fakeHandleEventForDeployment) error {
 				if fakeHandler.CalledDeploymentForNamespace(deploymentName1, namespace1) &&
 					fakeHandler.CalledDeploymentForNamespace(deploymentName2, namespace1) &&
@@ -523,7 +523,7 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 			assertFunc: func(fakeHandler *fakeHandleEventForRollout) error {
 				return nil
 			},
-			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; error processing %s", rolloutName2),
+			expectedErr: fmt.Errorf("error processing %s", rolloutName2),
 		},
 		{
 			name: "Given, there is a change in istio ingressgateway service, " +
@@ -550,7 +550,7 @@ func TestHandleServiceEventForRollout(t *testing.T) {
 				}
 				return nil
 			},
-			expectedErr: fmt.Errorf("failed private auth call; failed private auth call; failed private auth call"),
+			expectedErr: nil,
 		},
 		{
 			name: "Given, there is a change in a service other than the istio ingressgateway service, " +
@@ -770,6 +770,102 @@ func TestCheckIfThereAreMultipleMatchingServices(t *testing.T) {
 			eventType, err := checkIfThereAreMultipleMatchingServices(c.eventForService, c.serviceController, c.obj, clusterName)
 			assert.Equal(t, c.expectedRes, eventType)
 			assert.Equal(t, c.expectedErr, err)
+		})
+	}
+}
+
+func TestCallRegistryForService(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	svc := newFakeService("testsvc", "ns", map[string]string{"app": "app"})
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		obj            *coreV1.Service
+		registryClient *registry.RegistryClient
+		event          admiral.EventType
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			obj:            svc,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			obj:            svc,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			obj:            svc,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          admiral.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=Service name=testsvc cluster=test-k8s message=failed to Delete Service with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForService(tc.ctx, tc.event, remoteRegistry, "test.testId", clusterName, tc.obj)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
 		})
 	}
 }
