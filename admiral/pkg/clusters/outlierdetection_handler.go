@@ -9,6 +9,7 @@ import (
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 )
 
 type OutlierDetectionHandler struct {
@@ -103,6 +104,8 @@ func HandleEventForOutlierDetection(ctx context.Context, event admiral.EventType
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.OutlierDetection)
 
+	_ = callRegistryForOutlierDetection(ctx, event, registry, clusterName, od)
+
 	_, err := modifySE(ctx, admiral.Update, env, identity, registry)
 
 	return err
@@ -113,4 +116,23 @@ func NewOutlierDetectionCache() *outlierDetectionCache {
 	odCache.identityCache = make(map[string]*v1.OutlierDetection)
 	odCache.mutex = &sync.Mutex{}
 	return odCache
+}
+
+func callRegistryForOutlierDetection(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, od *v1.OutlierDetection) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string), od)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string), od)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, od.Namespace, od.Name, common.OutlierDetection, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.OutlierDetection, od.Name, clusterName, "failed to "+string(event)+" "+common.OutlierDetection+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

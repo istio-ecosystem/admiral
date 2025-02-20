@@ -7,6 +7,7 @@ import (
 	rolloutsV1Alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	log "github.com/sirupsen/logrus"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,6 +105,13 @@ func handleServiceEventForDeployment(
 		// else it would delete all the SEs in the source and dependent clusters
 		eventType = admiral.Update
 		deployments = deployController.Cache.List()
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
+			if regErr != nil {
+				log.Errorf(LogFormat, "Event", "Deployment", "", clusterName,
+					fmt.Sprintf("failed to push cluster gateway in namespace %s for service %s", svc.Namespace, svc.Name))
+			}
+		}
 	} else {
 		deployments = deployController.GetDeploymentBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 	}
@@ -115,6 +123,7 @@ func handleServiceEventForDeployment(
 		// If No - We are safe to assume that there was only one associate service and the related SE is deleted
 		// NOTE: if there is an err returned from checkIfThereAreMultipleMatchingServices we continue to prevent any
 		// destructive updates
+		_ = callRegistryForService(ctx, eventType, remoteRegistry, common.GetDeploymentGlobalIdentifier(&deployment), clusterName, svc)
 		if eventType == admiral.Delete {
 			multipleSvcExist, err := checkIfThereAreMultipleMatchingServices(svc, serviceController, deployment, clusterName)
 			if err != nil {
@@ -161,6 +170,13 @@ func handleServiceEventForRollout(
 		// else it would delete all the SEs in the source and dependent clusters
 		eventType = admiral.Update
 		rollouts = rolloutController.Cache.List()
+		if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) {
+			regErr := remoteRegistry.RegistryClient.PutClusterGateway(clusterName, svc.Name, svc.Status.LoadBalancer.Ingress[0].Hostname, "", "istio-ingressgateway", ctx.Value("txId").(string), nil)
+			if regErr != nil {
+				log.Errorf(LogFormat, "Event", "Rollout", "", clusterName,
+					fmt.Sprintf("failed to push cluster gateway in namespace %s for service %s", svc.Namespace, svc.Name))
+			}
+		}
 	} else {
 		rollouts = rolloutController.GetRolloutBySelectorInNamespace(ctx, svc.Spec.Selector, svc.Namespace)
 	}
@@ -172,6 +188,7 @@ func handleServiceEventForRollout(
 		// If No - We are safe to assume that there was only one associate service and the related SE is deleted
 		// NOTE: if there is an err returned from checkIfThereAreMultipleMatchingServices we continue to prevent any
 		// destructive updates
+		_ = callRegistryForService(ctx, eventType, remoteRegistry, common.GetRolloutGlobalIdentifier(&rollout), clusterName, svc)
 		if eventType == admiral.Delete {
 			multipleSvcExist, err := checkIfThereAreMultipleMatchingServices(svc, serviceController, rollout, clusterName)
 			if err != nil {
@@ -251,4 +268,23 @@ func checkIfThereAreMultipleMatchingServices(svc *coreV1.Service, serviceControl
 	}
 
 	return false, nil
+}
+
+func callRegistryForService(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *coreV1.Service) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, "Service", ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, "Service", obj.Name, clusterName, "failed to "+string(event)+" Service with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

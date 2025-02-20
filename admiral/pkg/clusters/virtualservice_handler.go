@@ -195,6 +195,7 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 		log.Warnf(LogErrFormat, "Sync", common.VirtualServiceResourceType, virtualService.Name, "*", err.Error()+": sync to remote clusters will not be retried")
 		return nil
 	}
+	_ = callRegistryForVirtualService(ctx, event, vh.remoteRegistry, vh.clusterID, virtualService, vSName)
 	log.Infof(LogFormat, "Sync", common.VirtualServiceResourceType, virtualService.Name, "*", "synced to remote clusters")
 	return nil
 }
@@ -240,6 +241,25 @@ func handleVirtualServiceEventForRollout(
 		}
 	}
 	return isRolloutCanaryVS, allErrors
+}
+
+func callRegistryForVirtualService(ctx context.Context, event common.Event, registry *RemoteRegistry, clusterName string, vs *v1alpha3.VirtualService, vsName string) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case common.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, vs.Namespace, vsName, "VirtualService", ctx.Value("txId").(string), vs)
+		case common.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, vs.Namespace, vsName, "VirtualService", ctx.Value("txId").(string), vs)
+		case common.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, vs.Namespace, vsName, "VirtualService", ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, "VirtualService", vsName, clusterName, "failed to "+string(event)+" VirtualService with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }
 
 func syncVirtualServicesToAllDependentClusters(

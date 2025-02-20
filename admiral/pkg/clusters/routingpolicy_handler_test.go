@@ -1,9 +1,14 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"io/ioutil"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -974,6 +979,117 @@ func TestRoutingPolicyCache_GetForIdentity(t *testing.T) {
 	assert.NotNil(t, actual)
 	assert.Equal(t, 4, len(actual))
 
+}
+
+func TestCallRegistryForRoutingPolicy(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	rp := &admiralV1.RoutingPolicy{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "rpfoo",
+			Labels: map[string]string{
+				"identity":       "foo",
+				"admiral.io/env": "dev",
+			},
+		},
+		Spec: model.RoutingPolicy{
+			Plugin: "test",
+			Hosts:  []string{"e2e.testservice.mesh"},
+			Config: map[string]string{
+				"routingServiceUrl": "e2e.test.routing.service.mesh",
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		routingPolicy  *admiralV1.RoutingPolicy
+		registryClient *registry.RegistryClient
+		event          admiral.EventType
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			routingPolicy:  rp,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			routingPolicy:  rp,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			routingPolicy:  rp,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          admiral.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=RoutingPolicy name=rpfoo cluster=test-k8s message=failed to Delete RoutingPolicy with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForRoutingPolicy(tc.ctx, tc.event, remoteRegistry, clusterName, tc.routingPolicy)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
+		})
+	}
 }
 
 type MockPolicyProcessor struct {

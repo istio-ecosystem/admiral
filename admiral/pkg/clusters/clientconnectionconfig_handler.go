@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sync"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
@@ -121,7 +122,28 @@ func HandleEventForClientConnectionConfig(
 	ctx = context.WithValue(ctx, common.ClusterName, clusterName)
 	ctx = context.WithValue(ctx, common.EventResourceType, common.ClientConnectionConfig)
 
+	_ = callRegistryForClientConnectionConfig(ctx, event, registry, clusterName, clientConnectionSettings)
+
 	_, err := modifySE(ctx, admiral.Update, env, identity, registry)
 
+	return err
+}
+
+func callRegistryForClientConnectionConfig(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, clientConnectionSettings *v1.ClientConnectionConfig) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string), clientConnectionSettings)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, clientConnectionSettings.Namespace, clientConnectionSettings.Name, common.ClientConnectionConfig, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, common.ClientConnectionConfig, clientConnectionSettings.Name, clusterName, "failed to "+string(event)+" "+common.ClientConnectionConfig+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
 	return err
 }

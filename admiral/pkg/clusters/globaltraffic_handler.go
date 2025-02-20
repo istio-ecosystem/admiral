@@ -107,6 +107,27 @@ func HandleEventForGlobalTrafficPolicy(ctx context.Context, event admiral.EventT
 	ctx = context.WithValue(ctx, "eventResourceType", common.GTP)
 	ctx = context.WithValue(ctx, common.EventType, event)
 
+	_ = callRegistryForGlobalTrafficPolicy(ctx, event, remoteRegistry, clusterName, gtp)
+
 	_, err := modifySE(ctx, admiral.Update, env, globalIdentifier, remoteRegistry)
+	return err
+}
+
+func callRegistryForGlobalTrafficPolicy(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, clusterName string, gtp *v1.GlobalTrafficPolicy) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutCustomData(clusterName, gtp.Namespace, gtp.Name, "globaltrafficpolicy", ctx.Value("txId").(string), gtp)
+		case admiral.Update:
+			err = registry.RegistryClient.PutCustomData(clusterName, gtp.Namespace, gtp.Name, "globaltrafficpolicy", ctx.Value("txId").(string), gtp)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteCustomData(clusterName, gtp.Namespace, gtp.Name, "globaltrafficpolicy", ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, "globaltrafficpolicy", gtp.Name, clusterName, "failed to "+string(event)+" globaltrafficpolicy with err: "+err.Error())
+			log.Error(err)
+		}
+	}
 	return err
 }

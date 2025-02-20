@@ -1,17 +1,22 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"sync"
-	"testing"
-
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	networkingAlpha3 "istio.io/api/networking/v1alpha3"
 	apiMachineryMetaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net/http"
+	"sync"
+	"testing"
 )
 
 func TestHandleEventForClientConnectionConfig(t *testing.T) {
@@ -123,6 +128,111 @@ func TestHandleEventForClientConnectionConfig(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCallRegistryForClientConnectionConfig(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	ccc := &v1.ClientConnectionConfig{
+		ObjectMeta: apiMachineryMetaV1.ObjectMeta{
+			Name:      "ccsName",
+			Namespace: "testns",
+			Labels: map[string]string{
+				"admiral.io/env": "testEnv",
+				"identity":       "testId",
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                     string
+		ctx                      context.Context
+		clientConnectionSettings *v1.ClientConnectionConfig
+		registryClient           *registry.RegistryClient
+		event                    admiral.EventType
+		expectedError            error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			clientConnectionSettings: ccc,
+			ctx:                      context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient:           validRegistryClient,
+			event:                    admiral.Add,
+			expectedError:            nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			clientConnectionSettings: ccc,
+			ctx:                      context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient:           validRegistryClient,
+			event:                    admiral.Update,
+			expectedError:            nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			clientConnectionSettings: ccc,
+			ctx:                      context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient:           invalidRegistryClient,
+			event:                    admiral.Delete,
+			expectedError:            fmt.Errorf("op=Delete type=ClientConnectionConfig name=ccsName cluster=test-k8s message=failed to Delete ClientConnectionConfig with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForClientConnectionConfig(tc.ctx, tc.event, remoteRegistry, clusterName, tc.clientConnectionSettings)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
+		})
+	}
 }
 
 func TestDelete(t *testing.T) {
