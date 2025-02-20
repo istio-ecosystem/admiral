@@ -740,6 +740,38 @@ func TestGetCRDIdentityLabelWithCRDIdentity(t *testing.T) {
 	admiralParams.LabelSet.AdmiralCRDIdentityLabel = backOldIdentity
 }
 
+func TestSetArgoRolloutsEnabled(t *testing.T) {
+	p := AdmiralParams{}
+	p.ArgoRolloutsEnabled = true
+	ResetSync()
+	InitializeConfig(p)
+
+	SetArgoRolloutsEnabled(true)
+	assert.Equal(t, true, GetArgoRolloutsEnabled())
+}
+
+func TestSetCartographerFeature(t *testing.T) {
+	p := AdmiralParams{}
+	ResetSync()
+	InitializeConfig(p)
+
+	SetCartographerFeature("feature", "enabled")
+	assert.Equal(t, "enabled", wrapper.params.CartographerFeatures["feature"])
+}
+
+func TestGetResyncIntervals(t *testing.T) {
+	p := AdmiralParams{}
+	p.CacheReconcileDuration = time.Minute
+	p.SeAndDrCacheReconcileDuration = time.Minute
+	ResetSync()
+	InitializeConfig(p)
+
+	actual := GetResyncIntervals()
+
+	assert.Equal(t, time.Minute, actual.SeAndDrReconcileInterval)
+	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
+}
+
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {
 //
 //	admiralParams := GetAdmiralParams()

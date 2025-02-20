@@ -33,6 +33,8 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	ctx = context.WithValue(ctx, "clusterName", clusterName)
 	ctx = context.WithValue(ctx, "eventResourceType", obj.Type)
 
+	_ = callRegistryForClientDiscovery(ctx, event, remoteRegistry, globalIdentifier, clusterName, obj)
+
 	if remoteRegistry.AdmiralCache != nil {
 
 		UpdateIdentityClusterCache(remoteRegistry, globalIdentifier, clusterName)
@@ -76,4 +78,23 @@ func HandleEventForClientDiscovery(ctx context.Context, event admiral.EventType,
 	}
 
 	return nil
+}
+
+func callRegistryForClientDiscovery(ctx context.Context, event admiral.EventType, registry *RemoteRegistry, globalIdentifier string, clusterName string, obj *common.K8sObject) error {
+	var err error
+	if common.IsAdmiralStateSyncerMode() && common.IsStateSyncerCluster(clusterName) && registry.RegistryClient != nil {
+		switch event {
+		case admiral.Add:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+		case admiral.Update:
+			err = registry.RegistryClient.PutHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string), obj)
+		case admiral.Delete:
+			err = registry.RegistryClient.DeleteHostingData(clusterName, obj.Namespace, obj.Name, globalIdentifier, obj.Type, ctx.Value("txId").(string))
+		}
+		if err != nil {
+			err = fmt.Errorf(LogFormat, event, obj.Type, obj.Name, clusterName, "failed to "+string(event)+" "+obj.Type+" with err: "+err.Error())
+			log.Error(err)
+		}
+	}
+	return err
 }

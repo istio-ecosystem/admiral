@@ -1,7 +1,15 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -41,6 +49,8 @@ func admiralParamsForDeploymentHandlerTests() common.AdmiralParams {
 		EnableSWAwareNSCaches:      true,
 		ExportToIdentityList:       []string{"*"},
 		ExportToMaxNamespaces:      35,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"cluster-1"},
 	}
 }
 
@@ -102,13 +112,13 @@ func TestDeploymentHandlerPartitionCache(t *testing.T) {
 
 func TestDeploymentHandler(t *testing.T) {
 	setupForDeploymentHandlerTests()
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), "txId", "txidvalue")
 
 	p := common.AdmiralParams{
 		KubeconfigPath: "testdata/fake.config",
 	}
 
-	registry, _ := InitAdmiral(context.Background(), p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
 
 	handler := DeploymentHandler{}
 
@@ -124,12 +134,11 @@ func TestDeploymentHandler(t *testing.T) {
 	})
 	remoteController.GlobalTraffic = gtpController
 
-	registry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
+	remoteRegistry.remoteControllers = map[string]*RemoteController{"cluster-1": remoteController}
 
-	registry.AdmiralCache.GlobalTrafficCache = gtpCache
-	handler.RemoteRegistry = registry
+	remoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
+	handler.RemoteRegistry = remoteRegistry
 	handler.ClusterID = "cluster-1"
-
 	deployment := appsV1.Deployment{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test",
@@ -176,13 +185,124 @@ func TestDeploymentHandler(t *testing.T) {
 			gtpCache.identityCache = make(map[string]*v1.GlobalTrafficPolicy)
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
-
 			handler.Added(ctx, &deployment)
 			ns := handler.RemoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get("bar").Get("cluster-1").GetKeys()[0]
 			if ns != "namespace" {
 				t.Errorf("expected namespace: %v but got %v", "namespace", ns)
 			}
 			handler.Deleted(ctx, &deployment)
+		})
+	}
+}
+
+func TestCallRegistryForDeployment(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := test.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := test.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &util.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	deploy := &appsV1.Deployment{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test",
+			Namespace: "namespace",
+			Labels:    map[string]string{"identity": "app1"},
+		},
+		Spec: appsV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"identity": "bar"},
+			},
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"identity": "bar", "istio-injected": "true", "env": "dev"},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		obj            *appsV1.Deployment
+		registryClient *registry.RegistryClient
+		event          admiral.EventType
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			obj:            deploy,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			obj:            deploy,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          admiral.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			obj:            deploy,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          admiral.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=deployment name=test cluster=test-k8s message=failed to Delete deployment with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForDeployment(tc.ctx, tc.event, remoteRegistry, "test.testId", clusterName, tc.obj)
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
 		})
 	}
 }
@@ -228,11 +348,13 @@ func newFakeDeployment(name, namespace string, matchLabels map[string]string) *a
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    map[string]string{"identity": name},
 		},
 		Spec: appsV1.DeploymentSpec{
 			Selector: &metaV1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
+			Template: coreV1.PodTemplateSpec{ObjectMeta: metaV1.ObjectMeta{Labels: map[string]string{"identity": name}}},
 		},
 	}
 }

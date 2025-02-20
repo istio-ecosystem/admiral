@@ -1,8 +1,12 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -1543,6 +1547,112 @@ func TestDeleteVirtualService(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCallRegistryForVirtualService(t *testing.T) {
+	p := common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			EnvKey:                  "admiral.io/env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		Profile:                    common.AdmiralProfileDefault,
+		AdmiralStateSyncerMode:     true,
+		AdmiralStateSyncerClusters: []string{"test-k8s"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(p)
+	remoteRegistry, _ := InitAdmiral(context.Background(), p)
+	dummyRespBody := ioutil.NopCloser(bytes.NewBufferString("dummyRespBody"))
+	validRegistryClient := registry.NewDefaultRegistryClient()
+	validClient := testMocks.MockClient{
+		ExpectedPutResponse: &http.Response{
+			StatusCode: 200,
+			Body:       dummyRespBody,
+		},
+		ExpectedPutErr: nil,
+		ExpectedConfig: &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	validRegistryClient.Client = &validClient
+	invalidRegistryClient := registry.NewDefaultRegistryClient()
+	invalidClient := testMocks.MockClient{
+		ExpectedDeleteResponse: &http.Response{
+			StatusCode: 404,
+			Body:       dummyRespBody,
+		},
+		ExpectedDeleteErr: fmt.Errorf("failed private auth call"),
+		ExpectedConfig:    &commonUtil.Config{Host: "host", BaseURI: "v1"},
+	}
+	invalidRegistryClient.Client = &invalidClient
+	vs := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:        "testvs",
+			Namespace:   common.GetSyncNamespace(),
+			Labels:      map[string]string{"identity": "testapp"},
+			Annotations: map[string]string{"admiral.io/env": "testenv"},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts: []string{"old.host"},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		ctx            context.Context
+		virtualService *apiNetworkingV1Alpha3.VirtualService
+		registryClient *registry.RegistryClient
+		event          common.Event
+		expectedError  error
+	}{
+		{
+			name: "Given valid registry client " +
+				"When calling for add event " +
+				"Then error should be nil",
+			virtualService: vs,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          common.Add,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid registry client " +
+				"When calling for update event " +
+				"Then error should be nil",
+			virtualService: vs,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: validRegistryClient,
+			event:          common.Update,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params to call registry func " +
+				"When registry func returns an error " +
+				"Then handler should receive an error",
+			virtualService: vs,
+			ctx:            context.WithValue(context.Background(), "txId", "txidvalue"),
+			registryClient: invalidRegistryClient,
+			event:          common.Delete,
+			expectedError:  fmt.Errorf("op=Delete type=VirtualService name=testvs cluster=test-k8s message=failed to Delete VirtualService with err: failed private auth call"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteRegistry.RegistryClient = tc.registryClient
+			clusterName := "test-k8s"
+			actualError := callRegistryForVirtualService(tc.ctx, tc.event, remoteRegistry, clusterName, tc.virtualService, "testvs")
+			if tc.expectedError != nil {
+				if actualError == nil {
+					t.Fatalf("expected error %s but got nil", tc.expectedError.Error())
+				}
+				assert.Equal(t, tc.expectedError.Error(), actualError.Error())
+			} else {
+				if actualError != nil {
+					t.Fatalf("expected error nil but got %s", actualError.Error())
+				}
+			}
+		})
+	}
 }
 
 type fakeSyncResource struct {
