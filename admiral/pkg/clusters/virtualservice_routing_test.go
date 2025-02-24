@@ -25,6 +25,514 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func TestAddUpdateInClusterVirtualServices(t *testing.T) {
+
+	existingVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test-env.test-identity.global-incluster-vs",
+			Namespace: util.IstioSystemNamespace,
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts:    []string{"test-env.test-identity.global"},
+			ExportTo: []string{"istio-system"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "test-env.test-identity.global",
+								},
+							},
+						},
+					},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "test-rollout-svc.test-ns.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	admiralParams := common.AdmiralParams{
+		LabelSet:                            &common.LabelSet{},
+		EnableSWAwareNSCaches:               true,
+		EnableVSRoutingInCluster:            true,
+		VSRoutingInClusterEnabledIdentities: []string{"test-identity"},
+		VSRoutingInClusterEnabledClusters:   []string{"cluster-1"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	istioClientWithExistingVS := istioFake.NewSimpleClientset()
+	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
+		Create(context.Background(), existingVS, metaV1.CreateOptions{})
+
+	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
+	rc := &RemoteController{
+		ClusterID:                "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{},
+	}
+
+	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr.PutRemoteController("cluster-1", rc)
+
+	rr.AdmiralCache.CnameIdentityCache = &sync.Map{}
+	rr.AdmiralCache.CnameIdentityCache.Store("test-env.test-identity.global", "test-identity")
+
+	rr.AdmiralCache.IdentityClusterCache = common.NewMapOfMaps()
+	rr.AdmiralCache.IdentityClusterCache.Put("test-identity", "cluster-1", "cluster-1")
+
+	rr.AdmiralCache.IdentityClusterCache = common.NewMapOfMaps()
+	rr.AdmiralCache.IdentityClusterNamespaceCache.Put(
+		"test-identity", "cluster-1", "test-dependent-ns0", "test-dependent-ns0")
+	rr.AdmiralCache.IdentityClusterNamespaceCache.Put(
+		"test-identity", "cluster-1", "test-dependent-ns1", "test-dependent-ns1")
+
+	rr.AdmiralCache.CnameDependentClusterNamespaceCache = common.NewMapOfMapOfMaps()
+	rr.AdmiralCache.CnameDependentClusterNamespaceCache.Put(
+		"test-env.test-identity.global", "cluster-1", "test-ns", "test-ns")
+
+	defaultFQDN := "test-env.test-identity.global"
+	previewFQDN := "preview.test-env.test-identity.global"
+	canaryFQDN := "canary.test-env.test-identity.global"
+
+	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
+		"cluster-1": {
+			defaultFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-deployment-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+				},
+			},
+		},
+	}
+	sourceDestinationsWithPreviewSvc := map[string]map[string][]*vsrouting.RouteDestination{
+		"cluster-1": {
+			defaultFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-rollout-active-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+				},
+			},
+			previewFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-rollout-preview-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+				},
+			},
+		},
+	}
+	sourceDestinationsWithCanarySvc := map[string]map[string][]*vsrouting.RouteDestination{
+		"cluster-1": {
+			defaultFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-rollout-stable-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+					Weight: 90,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+					Weight: 10,
+				},
+			},
+			canaryFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	testCases := []struct {
+		name                        string
+		remoteRegistry              *RemoteRegistry
+		vsName                      string
+		sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination
+		istioClient                 *istioFake.Clientset
+		sourceIdentity              string
+		expectedError               error
+		expectedVS                  *apiNetworkingV1Alpha3.VirtualService
+	}{
+		{
+			name: "Given a empty sourceIdentity, " +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should return an error",
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("identity is empty"),
+		},
+		{
+			name: "Given a nil remoteRegistry, " +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should return an error",
+			sourceIdentity:              "test-identity",
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a empty vsName, " +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should return an error",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               fmt.Errorf("vsName is empty"),
+		},
+		{
+			name: "Given a valid sourceClusterToDestinations " +
+				"And the VS is a new VS" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should successfully create the VS",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
+			istioClient:                 istioClientWithNoExistingVS,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity.global-incluster-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"test-env.test-identity.global"},
+					ExportTo: []string{"test-ns", "test-dependent-ns0", "test-dependent-ns1"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-deployment-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDestination " +
+				"And there is VS with same name already exists" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should successfully update the VS",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
+			istioClient:                 istioClientWithExistingVS,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity.global-routing-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"test-env.test-identity.global"},
+					ExportTo: []string{"test-ns", "test-dependent-ns0", "test-dependent-ns1"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-deployment-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDestination " +
+				"And there is a preview endpoint in the sourceIngressVirtualService" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should successfully create a VS including the preview endpoint route",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
+			istioClient:                 istioClientWithNoExistingVS,
+			sourceClusterToDestinations: sourceDestinationsWithPreviewSvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity.global-routing-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{
+						"preview.test-env.test-identity.global",
+						"test-env.test-identity.global",
+					},
+					ExportTo: []string{"test-ns", "test-dependent-ns0", "test-dependent-ns1"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "preview.test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-preview-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-active-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDestination " +
+				"And there is a canary endpoint" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should successfully create a VS including the canary endpoint routes with weights",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
+			istioClient:                 istioClientWithNoExistingVS,
+			sourceClusterToDestinations: sourceDestinationsWithCanarySvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity.global-routing-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{
+						"canary.test-env.test-identity.global",
+						"test-env.test-identity.global",
+					},
+					ExportTo: []string{"test-ns", "test-dependent-ns0", "test-dependent-ns1"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "canary.test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-stable-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+									Weight: 90,
+								},
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-rollout-desired-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+									Weight: 10,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDestination " +
+				"And there is a preview endpoint match in the VS but there is no corresponding svc found" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then the VS created should not have the preview match in the VS",
+			sourceIdentity:              "test-identity",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity.global",
+			istioClient:                 istioClientWithNoExistingVS,
+			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity.global-routing-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"test-env.test-identity.global"},
+					ExportTo: []string{"test-ns", "test-dependent-ns0", "test-dependent-ns1"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-deployment-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rc := rr.GetRemoteController("cluster-1")
+			rc.VirtualServiceController.IstioClient = tc.istioClient
+			rr.PutRemoteController("cluster-1", rc)
+			err := addUpdateInClusterVirtualServices(
+				context.Background(),
+				ctxLogger,
+				tc.remoteRegistry,
+				tc.sourceClusterToDestinations,
+				tc.vsName,
+				tc.sourceIdentity)
+			if tc.expectedError != nil {
+				require.NotNil(t, err)
+				require.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				actualVS, err := tc.istioClient.
+					NetworkingV1alpha3().
+					VirtualServices(util.IstioSystemNamespace).
+					Get(context.Background(), "test-env.test-identity.global-routing-vs", metaV1.GetOptions{})
+				require.Nil(t, err)
+				require.Equal(t, tc.expectedVS.ObjectMeta.Name, actualVS.ObjectMeta.Name)
+				require.Equal(t, tc.expectedVS.Spec.Tls, actualVS.Spec.Tls)
+				require.Equal(t, tc.expectedVS.Spec.ExportTo, actualVS.Spec.ExportTo)
+				require.Equal(t, tc.expectedVS.Spec.Gateways, actualVS.Spec.Gateways)
+				require.Equal(t, tc.expectedVS.Spec.Hosts, actualVS.Spec.Hosts)
+			}
+		})
+	}
+
+}
+
 func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{

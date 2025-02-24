@@ -1023,6 +1023,7 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 		cnameDependentClusterNamespaceCache *common.MapOfMapOfMaps
 		cname                               string
 		clusterId                           string
+		skipIstioNSFromExportTo             bool
 		expectedResult                      []string
 	}{
 		{
@@ -1125,6 +1126,18 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 			clusterId:                           "cluster3",
 			expectedResult:                      []string{"*"},
 		},
+		{
+			name: "Given the cname has dependent cluster namespaces and some dependents in the source cluster " +
+				"And we skip adding istio-system NS to the exportTo list" +
+				"Then we should return a sorted slice of the dependent cluster namespaces excluding istio-system",
+			identityClusterCache:                idclustercache,
+			cnameIdentityCache:                  cnameidcache,
+			cnameDependentClusterNamespaceCache: cndepclusternscache,
+			cname:                               "cname",
+			clusterId:                           "cluster2",
+			skipIstioNSFromExportTo:             true,
+			expectedResult:                      []string{"ns1", "ns2"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1132,7 +1145,8 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 			admiralCache.IdentityClusterCache = c.identityClusterCache
 			admiralCache.CnameIdentityCache = c.cnameIdentityCache
 			admiralCache.CnameDependentClusterNamespaceCache = c.cnameDependentClusterNamespaceCache
-			result := getSortedDependentNamespaces(admiralCache, c.cname, c.clusterId, ctxLogger)
+			result := getSortedDependentNamespaces(
+				admiralCache, c.cname, c.clusterId, ctxLogger, c.skipIstioNSFromExportTo)
 			if !reflect.DeepEqual(result, c.expectedResult) {
 				t.Errorf("expected: %v, got: %v", c.expectedResult, result)
 			}
@@ -1216,4 +1230,3 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 		})
 	}
 }
-

@@ -220,7 +220,13 @@ func filterClusters(sourceClusters, destinationClusters *common.Map) *common.Map
 // Then, it fetches the dependent namespaces based on the cname or cnameWithoutPrefix and adds them to the list of dependent namespaces
 // If the list is above the maximum number of allowed exportTo values, it replaces the entries with "*"
 // Otherwise, it sorts and dedups the list of dependent namespaces and returns them.
-func getSortedDependentNamespaces(admiralCache *AdmiralCache, cname string, clusterId string, ctxLogger *logrus.Entry) []string {
+func getSortedDependentNamespaces(
+	admiralCache *AdmiralCache,
+	cname string,
+	clusterId string,
+	ctxLogger *logrus.Entry,
+	skipIstioNSFromExportTo bool) []string {
+
 	var clusterNamespaces *common.MapOfMaps
 	var namespaceSlice []string
 	var cnameWithoutPrefix string
@@ -241,7 +247,9 @@ func getSortedDependentNamespaces(admiralCache *AdmiralCache, cname string, clus
 		if ok && admiralCache.IdentityClusterCache != nil {
 			sourceClusters := admiralCache.IdentityClusterCache.Get(partitionedIdentity.(string))
 			if sourceClusters != nil && sourceClusters.Get(clusterId) != "" {
-				namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
+				if !skipIstioNSFromExportTo {
+					namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
+				}
 
 				// Add source namespaces s.t. throttle filter can query envoy clusters
 				if admiralCache.IdentityClusterNamespaceCache != nil && admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)) != nil {

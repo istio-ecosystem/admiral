@@ -362,8 +362,15 @@ func syncVirtualServiceToDependentCluster(
 			}
 		}
 	}
+
+	if len(virtualService.Spec.Hosts) == 0 {
+		return fmt.Errorf(
+			"VirtualService %s has no hosts, cannot sync to dependent clusters", virtualService.Name)
+	}
+
 	// nolint
-	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
+	err = addUpdateVirtualService(
+		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0], false)
 
 	// Best effort delete for existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -470,7 +477,14 @@ func syncVirtualServiceToRemoteCluster(
 		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
 		return nil
 	}
-	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
+
+	if len(virtualService.Spec.Hosts) == 0 {
+		return fmt.Errorf(
+			"VirtualService %s has no hosts, cannot sync to dependent clusters", virtualService.Name)
+	}
+
+	err = addUpdateVirtualService(
+		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0], false)
 
 	// Best effort delete of existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -497,7 +511,11 @@ func addUpdateVirtualService(
 	ctx context.Context,
 	new *v1alpha3.VirtualService,
 	exist *v1alpha3.VirtualService,
-	namespace string, rc *RemoteController, rr *RemoteRegistry) error {
+	namespace string,
+	rc *RemoteController,
+	rr *RemoteRegistry,
+	cname string,
+	skipIstioNSFromExportTo bool) error {
 	var (
 		err     error
 		op      string
@@ -526,7 +544,8 @@ func addUpdateVirtualService(
 	}
 
 	if common.EnableExportTo(newCopy.Spec.Hosts[0]) && !skipAddingExportTo {
-		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, newCopy.Spec.Hosts[0], rc.ClusterID, ctxLogger)
+		sortedDependentNamespaces := getSortedDependentNamespaces(
+			rr.AdmiralCache, cname, rc.ClusterID, ctxLogger, skipIstioNSFromExportTo)
 		newCopy.Spec.ExportTo = sortedDependentNamespaces
 		ctxLogger.Infof(LogFormat, "ExportTo", common.VirtualServiceResourceType, newCopy.Name, rc.ClusterID, fmt.Sprintf("VS usecase-ExportTo updated to %v", newCopy.Spec.ExportTo))
 	}

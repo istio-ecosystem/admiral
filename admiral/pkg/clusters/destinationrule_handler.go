@@ -459,7 +459,7 @@ func addUpdateDestinationRule(
 	// 1. Through modifyse, in which case obj will already have exportTo filled and we don't want to do a repeat call of getSortedDependentNamespaces
 	// 2. Through the flow where we copy customer created DRs to other clusters, in which case it shouldn't have exportTo set and we need to calculate it here.
 	if common.EnableExportTo(obj.Spec.Host) && len(obj.Spec.ExportTo) == 0 {
-		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, obj.Spec.Host, rc.ClusterID, ctxLogger)
+		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, obj.Spec.Host, rc.ClusterID, ctxLogger, false)
 		obj.Spec.ExportTo = sortedDependentNamespaces
 	}
 	drIsNew := exist == nil || exist.Name == "" || exist.Spec.Host == ""

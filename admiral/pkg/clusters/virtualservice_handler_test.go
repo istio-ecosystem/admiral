@@ -1822,7 +1822,7 @@ func TestAddUpdateVirtualService(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			addUpdateVirtualService(ctxLogger, ctx, c.newVS, c.existingVS, namespace, rc, rr)
+			addUpdateVirtualService(ctxLogger, ctx, c.newVS, c.existingVS, namespace, rc, rr, c.newVS.Spec.Hosts[0], false)
 			vs, err := istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(namespace).Get(ctx, fooVS.Name, metaV1.GetOptions{})
 			if err != nil {
 				t.Errorf("failed to get VS with error: %v", err)
