@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/apis/v1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -207,17 +209,20 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
 
+	if IsCacheWarmupTime(rr) {
+		log.Infof("task=%s, NeedToUpdateConfig=false, processing skipped during cache warm up state", common.DynamicConfigUpdate)
+		return nil
+	}
+
 	if IsDynamicConfigChanged(configData) {
-		log.Infof(fmt.Sprintf("task=%s, updating DynamicConfigData with Admiral config", common.DynamicConfigUpdate))
+		log.Infof(fmt.Sprintf("task=%s, NeedToUpdateConfig=true", common.DynamicConfigUpdate))
 		UpdateSyncAdmiralConfig(configData)
 
 		ctx := context.Context(context.Background())
 		//Process NLB Cluster
 		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
-		//Process CLB Cluster
-		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, &rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().LabelSet.GatewayApp)
 	} else {
-		log.Infof(fmt.Sprintf("task=%s, no need to update DynamicConfigData", common.DynamicConfigUpdate))
+		log.Infof(fmt.Sprintf("task=%s, NeedToUpdateConfig=false", common.DynamicConfigUpdate))
 	}
 
 	return nil
@@ -225,30 +230,49 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
 func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, existingCache *[]string, lbLabel string) {
 
-	log.Infof("task=%s, Processing LB migration for %s. UpdateReceived=%s, ExistingCache=%s, ", common.LBUpdateProcessor, lbLabel, updatedLBs, existingCache)
+	ctxLogger := log.WithField("task", common.LBUpdateProcessor)
 
-	for _, cluster := range getLBToProcess(updatedLBs, existingCache) {
+	clusterToProcess := getLBToProcess(updatedLBs, existingCache)
+	ctxLogger.Infof("ClusterToProccess=%s, LBLabel=%s", clusterToProcess, lbLabel)
+
+	for _, cluster := range clusterToProcess {
 		err := isServiceControllerInitialized(rr.remoteControllers[cluster])
 		if err == nil {
 			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
 				if fetchService.Labels[common.App] == lbLabel {
-					log.Infof("task=%s, Cluster=%s, Processing LB migration for Cluster.", common.LBUpdateProcessor, cluster)
-					go handleServiceEventForDeployment(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).DeploymentController, rr.GetRemoteController(cluster).ServiceController, HandleEventForDeployment)
-					go handleServiceEventForRollout(ctx, fetchService, rr, cluster, rr.GetRemoteController(cluster).RolloutController, rr.GetRemoteController(cluster).ServiceController, HandleEventForRollout)
+					start := time.Now()
+					ctxLogger.Infof("Cluster=%s, Processing LB migration for Cluster.", cluster)
+
+					//Trigger Service event explicitly for migration
+					ctx = context.WithValue(ctx, common.EventType, admiral.Update)
+					err := handleEventForService(ctx, fetchService, rr, cluster)
+					if err != nil {
+						util.LogElapsedTimeSinceTask(ctxLogger, common.LBUpdateProcessor,
+							lbLabel, "", cluster, "Error="+err.Error(), start)
+					} else {
+						util.LogElapsedTimeSinceTask(ctxLogger, common.LBUpdateProcessor,
+							lbLabel, "", cluster, "Completed", start)
+					}
 				}
 			}
 		} else {
-			log.Infof("task=%s, Cluster=%s, Service Controller not initializ. Skipped LB migration for Cluster.", common.LBUpdateProcessor, cluster)
+			ctxLogger.Infof("Cluster=%s, Service Controller not initialize. Skipped LB migration for Cluster. Err: %s", cluster, err.Error())
 		}
 	}
 }
 
 func getLBToProcess(updatedLB []string, cache *[]string) []string {
 
-	var clusersToProcess []string
+	clusersToProcess := make([]string, 0)
 	if cache == nil || len(*cache) == 0 {
 		*cache = updatedLB
 		return updatedLB
+	}
+
+	if len(updatedLB) == 0 {
+		clusersToProcess = *cache
+		*cache = updatedLB
+		return clusersToProcess
 	}
 	//Validate if New ClusterAdded
 	for _, clusterFromAdmiralParam := range updatedLB {
@@ -259,13 +283,13 @@ func getLBToProcess(updatedLB []string, cache *[]string) []string {
 	}
 
 	//Validate if cluster Removed
-	for i, clusterFromCache := range *cache {
+	for _, clusterFromCache := range *cache {
 		if !slices.Contains(updatedLB, clusterFromCache) {
 			clusersToProcess = append(clusersToProcess, clusterFromCache)
-			*cache = slices.Delete(*cache, i, i+1)
 		}
 	}
-
+	//Final dynamoDB data as cache
+	*cache = updatedLB
 	return clusersToProcess
 }
 

@@ -216,15 +216,6 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		rr.AdmiralCache.ClusterLocalityCache = common.NewMapOfMaps()
 	}
 
-	/*
-		Load data from dynamoDB before async process starts.
-		This is done to avoid any transitive state where component starts with outofsync config.
-		Later down the process like async processor will take on going config pushes.
-	*/
-	if common.IsAdmiralDynamicConfigEnabled() {
-		ReadAndUpdateSyncAdmiralConfig(rr)
-	}
-
 	return rr
 }
 
