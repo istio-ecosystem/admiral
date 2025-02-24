@@ -876,17 +876,42 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 		return common.DummyAdmiralGlobal, common.DefaultMtlsPort, err
 	}
 
+	ctx = ctx.WithFields(logrus.Fields{
+		"task":        common.LBUpdateProcessor,
+		"clusterName": clusterName,
+	})
+
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
 
+	ctx = ctx.WithFields(logrus.Fields{
+		"RegularLB": endpoint,
+		"Port":      port,
+	})
+
+	//Overwrite for NLB
 	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
-		ctx = ctx.WithField("task", common.LBUpdateProcessor)
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
-		//Validate if provided LB information is not default dummy, If Dummy return CLB
+		ctx = ctx.WithFields(logrus.Fields{
+			"OverwritenLB":     overwriteEndpoint,
+			"Port":             overwritePort,
+			"OverwrittenLabel": common.GetAdmiralParams().NLBIngressLabel,
+		})
+
+		//Validate if provided LB information is not default dummy, If Dummy then coutinue default LB
 		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
-			ctx.Info("Overwriting LB:", endpoint, ", port:", port, ", clusterName:", clusterName)
-			return overwriteEndpoint, port, nil
+			ctx = ctx.WithFields(logrus.Fields{
+				"Overwritten": true,
+			})
+			ctx.Info("")
+			return overwriteEndpoint, overwritePort, nil
 		}
+
+		ctx = ctx.WithFields(logrus.Fields{
+			"Overwritten": false,
+		})
 	}
+
+	ctx.Info("")
 	return endpoint, port, nil
 }
 
