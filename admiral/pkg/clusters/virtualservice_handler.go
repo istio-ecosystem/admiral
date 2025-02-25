@@ -21,10 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	vsRoutingLabel = "admiral.io/vs-routing"
-)
-
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
 // the required properties are set correctly
 func NewVirtualServiceHandler(remoteRegistry *RemoteRegistry, clusterID string) (*VirtualServiceHandler, error) {
@@ -370,7 +366,7 @@ func syncVirtualServiceToDependentCluster(
 
 	// nolint
 	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0], false)
+		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0])
 
 	// Best effort delete for existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -484,7 +480,7 @@ func syncVirtualServiceToRemoteCluster(
 	}
 
 	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0], false)
+		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0])
 
 	// Best effort delete of existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -514,8 +510,7 @@ func addUpdateVirtualService(
 	namespace string,
 	rc *RemoteController,
 	rr *RemoteRegistry,
-	cname string,
-	skipIstioNSFromExportTo bool) error {
+	cname string) error {
 	var (
 		err     error
 		op      string
@@ -545,7 +540,7 @@ func addUpdateVirtualService(
 
 	if common.EnableExportTo(newCopy.Spec.Hosts[0]) && !skipAddingExportTo {
 		sortedDependentNamespaces := getSortedDependentNamespaces(
-			rr.AdmiralCache, cname, rc.ClusterID, ctxLogger, skipIstioNSFromExportTo)
+			rr.AdmiralCache, cname, rc.ClusterID, ctxLogger, false)
 		newCopy.Spec.ExportTo = sortedDependentNamespaces
 		ctxLogger.Infof(LogFormat, "ExportTo", common.VirtualServiceResourceType, newCopy.Name, rc.ClusterID, fmt.Sprintf("VS usecase-ExportTo updated to %v", newCopy.Spec.ExportTo))
 	}

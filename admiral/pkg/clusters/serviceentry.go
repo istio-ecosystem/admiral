@@ -847,14 +847,15 @@ func modifyServiceEntryForNewServiceOrPod(
 			deploymentOrRolloutName, namespace, "", err)
 		modifySEerr = common.AppendError(modifySEerr, err)
 	} else {
-		err := addUpdateDestinationRuleForSourceIngress(
+		err := addUpdateInClusterDestinationRule(
 			ctx,
 			ctxLogger,
 			remoteRegistry,
 			sourceClusterToDRHosts,
-			sourceIdentity)
+			sourceIdentity,
+			cname)
 		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
 				deploymentOrRolloutName, namespace, "", err)
 			modifySEerr = common.AppendError(modifySEerr, err)
 		}
@@ -2171,7 +2172,7 @@ func createAdditionalEndpoints(
 	}
 
 	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr, virtualService.Spec.Hosts[0], false)
+		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr, virtualService.Spec.Hosts[0])
 	if err != nil {
 		return fmt.Errorf("failed generating additional endpoints from serviceentry due to error: %w", err)
 	}
