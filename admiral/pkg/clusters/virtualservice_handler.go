@@ -365,8 +365,7 @@ func syncVirtualServiceToDependentCluster(
 	}
 
 	// nolint
-	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0])
+	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
 	// Best effort delete for existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -479,8 +478,7 @@ func syncVirtualServiceToRemoteCluster(
 			"VirtualService %s has no hosts, cannot sync to dependent clusters", virtualService.Name)
 	}
 
-	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry, virtualService.Spec.Hosts[0])
+	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
 	// Best effort delete of existing virtual service with old name
 	_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, oldVSname, metav1.DeleteOptions{})
@@ -508,9 +506,7 @@ func addUpdateVirtualService(
 	new *v1alpha3.VirtualService,
 	exist *v1alpha3.VirtualService,
 	namespace string,
-	rc *RemoteController,
-	rr *RemoteRegistry,
-	cname string) error {
+	rc *RemoteController, rr *RemoteRegistry) error {
 	var (
 		err     error
 		op      string
@@ -540,7 +536,7 @@ func addUpdateVirtualService(
 
 	if common.EnableExportTo(newCopy.Spec.Hosts[0]) && !skipAddingExportTo {
 		sortedDependentNamespaces := getSortedDependentNamespaces(
-			rr.AdmiralCache, cname, rc.ClusterID, ctxLogger, false)
+			rr.AdmiralCache, newCopy.Spec.Hosts[0], rc.ClusterID, ctxLogger, false)
 		newCopy.Spec.ExportTo = sortedDependentNamespaces
 		ctxLogger.Infof(LogFormat, "ExportTo", common.VirtualServiceResourceType, newCopy.Name, rc.ClusterID, fmt.Sprintf("VS usecase-ExportTo updated to %v", newCopy.Spec.ExportTo))
 	}

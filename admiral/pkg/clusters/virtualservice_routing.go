@@ -656,7 +656,7 @@ func addUpdateInClusterVirtualServices(
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
 		err = addUpdateVirtualService(
-			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry, vsName)
+			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
@@ -724,7 +724,7 @@ func addUpdateVirtualServicesForIngress(
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
 		err = addUpdateVirtualService(
-			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry, vsName)
+			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())

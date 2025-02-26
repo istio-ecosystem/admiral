@@ -2172,7 +2172,7 @@ func createAdditionalEndpoints(
 	}
 
 	err = addUpdateVirtualService(
-		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr, virtualService.Spec.Hosts[0])
+		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr)
 	if err != nil {
 		return fmt.Errorf("failed generating additional endpoints from serviceentry due to error: %w", err)
 	}
