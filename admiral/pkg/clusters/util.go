@@ -247,9 +247,7 @@ func getSortedDependentNamespaces(
 		if ok && admiralCache.IdentityClusterCache != nil {
 			sourceClusters := admiralCache.IdentityClusterCache.Get(partitionedIdentity.(string))
 			if sourceClusters != nil && sourceClusters.Get(clusterId) != "" {
-				if !skipIstioNSFromExportTo {
-					namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
-				}
+				namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
 
 				// Add source namespaces s.t. throttle filter can query envoy clusters
 				if admiralCache.IdentityClusterNamespaceCache != nil && admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)) != nil {
@@ -285,6 +283,9 @@ func getSortedDependentNamespaces(
 	var dedupNamespaceSlice []string
 	for i := 0; i < len(namespaceSlice); i++ {
 		if i == 0 || namespaceSlice[i] != namespaceSlice[i-1] {
+			if skipIstioNSFromExportTo && namespaceSlice[i] == common.NamespaceIstioSystem {
+				continue
+			}
 			dedupNamespaceSlice = append(dedupNamespaceSlice, namespaceSlice[i])
 		}
 	}
