@@ -247,7 +247,7 @@ func getSortedDependentNamespaces(
 		if ok && admiralCache.IdentityClusterCache != nil {
 			sourceClusters := admiralCache.IdentityClusterCache.Get(partitionedIdentity.(string))
 			if sourceClusters != nil && sourceClusters.Get(clusterId) != "" {
-				if skipIstioNSFromExportTo {
+				if !skipIstioNSFromExportTo {
 					namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
 				}
 
