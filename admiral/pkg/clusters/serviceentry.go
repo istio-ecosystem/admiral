@@ -2166,11 +2166,6 @@ func createAdditionalEndpoints(
 	}
 	virtualService.Annotations = vsAnnotations
 
-	if len(virtualService.Spec.Hosts) == 0 {
-		return fmt.Errorf(
-			"failed generating additional endpoints since no virtual service contained no hosts")
-	}
-
 	err = addUpdateVirtualService(
 		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr)
 	if err != nil {
