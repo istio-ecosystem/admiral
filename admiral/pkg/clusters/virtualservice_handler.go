@@ -359,11 +359,6 @@ func syncVirtualServiceToDependentCluster(
 		}
 	}
 
-	if len(virtualService.Spec.Hosts) == 0 {
-		return fmt.Errorf(
-			"VirtualService %s has no hosts, cannot sync to dependent clusters", virtualService.Name)
-	}
-
 	// nolint
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
@@ -471,11 +466,6 @@ func syncVirtualServiceToRemoteCluster(
 	if isDeadCluster(err) {
 		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
 		return nil
-	}
-
-	if len(virtualService.Spec.Hosts) == 0 {
-		return fmt.Errorf(
-			"VirtualService %s has no hosts, cannot sync to dependent clusters", virtualService.Name)
 	}
 
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
