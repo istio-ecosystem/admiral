@@ -349,10 +349,8 @@ func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRe
 
 	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
 	log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
-	var sourceClusterMap = common.NewMap()
-	sourceClusterMap.Put(clusterName, clusterName)
 
-	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, sourceClusterMap, destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, common.NewMap(), destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
 	if err != nil {
 		return errors.New("failed to perform client initiated processing for " + globalIdentifier + ", got error: " + err.Error())
 	}
