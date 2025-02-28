@@ -837,6 +837,30 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 	}
 
+	// VS Based Routing - In Cluster
+	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
+	// gathered during the discovery phase and write them to the source cluster
+	err = addUpdateInClusterVirtualServices(
+		ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations, cname, sourceIdentity)
+	if err != nil {
+		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+			deploymentOrRolloutName, namespace, "", err)
+		modifySEerr = common.AppendError(modifySEerr, err)
+	} else {
+		err := addUpdateInClusterDestinationRule(
+			ctx,
+			ctxLogger,
+			remoteRegistry,
+			sourceClusterToDRHosts,
+			sourceIdentity,
+			cname)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
+				deploymentOrRolloutName, namespace, "", err)
+			modifySEerr = common.AppendError(modifySEerr, err)
+		}
+	}
+
 	//Write to dependent clusters
 	start = time.Now()
 	isServiceEntryModifyCalledForSourceCluster = false
@@ -2142,7 +2166,8 @@ func createAdditionalEndpoints(
 	}
 	virtualService.Annotations = vsAnnotations
 
-	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr)
+	err = addUpdateVirtualService(
+		ctxLogger, ctx, virtualService, existingVS, namespace, rc, rr)
 	if err != nil {
 		return fmt.Errorf("failed generating additional endpoints from serviceentry due to error: %w", err)
 	}
@@ -2193,7 +2218,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 
 	// This is calculated elsewhere for Operator
 	if !common.IsAdmiralOperatorMode() && common.EnableExportTo(se.Hosts[0]) && se != nil {
-		sortedDependentNamespaces := getSortedDependentNamespaces(cache, se.Hosts[0], cluster, ctxLogger)
+		sortedDependentNamespaces := getSortedDependentNamespaces(cache, se.Hosts[0], cluster, ctxLogger, false)
 		se.ExportTo = sortedDependentNamespaces
 	}
 

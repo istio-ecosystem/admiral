@@ -21,10 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	vsRoutingLabel = "admiral.io/vs-routing"
-)
-
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
 // the required properties are set correctly
 func NewVirtualServiceHandler(remoteRegistry *RemoteRegistry, clusterID string) (*VirtualServiceHandler, error) {
@@ -382,6 +378,7 @@ func syncVirtualServiceToDependentCluster(
 			}
 		}
 	}
+
 	// nolint
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
@@ -490,6 +487,7 @@ func syncVirtualServiceToRemoteCluster(
 		ctxLogger.Warnf(LogErrFormat, "Create/Update", common.VirtualServiceResourceType, vSName, cluster, "dead cluster")
 		return nil
 	}
+
 	err = addUpdateVirtualService(ctxLogger, ctx, virtualService, exist, syncNamespace, rc, remoteRegistry)
 
 	// Best effort delete of existing virtual service with old name
@@ -517,7 +515,8 @@ func addUpdateVirtualService(
 	ctx context.Context,
 	new *v1alpha3.VirtualService,
 	exist *v1alpha3.VirtualService,
-	namespace string, rc *RemoteController, rr *RemoteRegistry) error {
+	namespace string,
+	rc *RemoteController, rr *RemoteRegistry) error {
 	var (
 		err     error
 		op      string
@@ -546,7 +545,8 @@ func addUpdateVirtualService(
 	}
 
 	if common.EnableExportTo(newCopy.Spec.Hosts[0]) && !skipAddingExportTo {
-		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, newCopy.Spec.Hosts[0], rc.ClusterID, ctxLogger)
+		sortedDependentNamespaces := getSortedDependentNamespaces(
+			rr.AdmiralCache, newCopy.Spec.Hosts[0], rc.ClusterID, ctxLogger, false)
 		newCopy.Spec.ExportTo = sortedDependentNamespaces
 		ctxLogger.Infof(LogFormat, "ExportTo", common.VirtualServiceResourceType, newCopy.Name, rc.ClusterID, fmt.Sprintf("VS usecase-ExportTo updated to %v", newCopy.Spec.ExportTo))
 	}

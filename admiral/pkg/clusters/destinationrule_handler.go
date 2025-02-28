@@ -454,12 +454,21 @@ func addUpdateDestinationRule(
 		obj.Annotations = map[string]string{}
 	}
 	obj.Annotations["app.kubernetes.io/created-by"] = "admiral"
+
+	//Check if DR has the admiral.io/vs-routing label
+	// If it does, skip adding ExportTo since it is already set to "istio-system" only
+	// The DR created for routing cross cluster traffic should only be exported to istio-system
+	skipAddingExportTo := false
+	if obj.Labels != nil && obj.Labels[vsRoutingLabel] == "enabled" {
+		skipAddingExportTo = true
+	}
+
 	// At this step we check to make sure the DR does not already have an exportTo value before setting the exportTo value
 	// This is because there are two ways to enter this function
 	// 1. Through modifyse, in which case obj will already have exportTo filled and we don't want to do a repeat call of getSortedDependentNamespaces
 	// 2. Through the flow where we copy customer created DRs to other clusters, in which case it shouldn't have exportTo set and we need to calculate it here.
-	if common.EnableExportTo(obj.Spec.Host) && len(obj.Spec.ExportTo) == 0 {
-		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, obj.Spec.Host, rc.ClusterID, ctxLogger)
+	if common.EnableExportTo(obj.Spec.Host) && len(obj.Spec.ExportTo) == 0 && !skipAddingExportTo {
+		sortedDependentNamespaces := getSortedDependentNamespaces(rr.AdmiralCache, obj.Spec.Host, rc.ClusterID, ctxLogger, false)
 		obj.Spec.ExportTo = sortedDependentNamespaces
 	}
 	drIsNew := exist == nil || exist.Name == "" || exist.Spec.Host == ""

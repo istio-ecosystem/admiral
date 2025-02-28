@@ -21,6 +21,23 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	vsRoutingLabel = "admiral.io/vs-routing"
+)
+
+// getBaseInClusterVirtualService generates the base in-cluster virtual service
+func getBaseInClusterVirtualService() (*v1alpha3.VirtualService, error) {
+	return &v1alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Namespace: util.IstioSystemNamespace,
+			Labels: map[string]string{
+				vsRoutingLabel: "enabled",
+			},
+		},
+		Spec: networkingV1Alpha3.VirtualService{},
+	}, nil
+}
+
 // getBaseVirtualServiceForIngress generates the base virtual service for the ingress gateway
 // This is just the barebones of the ingress virtual service
 func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
@@ -449,6 +466,209 @@ func populateDestinationsForCanaryStrategy(
 	return nil
 }
 
+// generateVirtualServiceForIncluster generates the VirtualService for the in-cluster routing
+func generateVirtualServiceForIncluster(
+	destination map[string][]*vsrouting.RouteDestination,
+	vsName string) (*v1alpha3.VirtualService, error) {
+
+	virtualService, err := getBaseInClusterVirtualService()
+	if err != nil {
+		return nil, err
+	}
+
+	vsHosts := make([]string, 0)
+	httpRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+
+	for globalFQDN, routeDestinations := range destination {
+		if routeDestinations == nil || len(routeDestinations) == 0 {
+			continue
+		}
+		fqdn, err := getFQDNFromSNIHost(globalFQDN)
+		if err != nil {
+			continue
+		}
+		httpRoute := networkingV1Alpha3.HTTPRoute{
+			Match: []*networkingV1Alpha3.HTTPMatchRequest{
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: fqdn,
+						},
+					},
+				},
+			},
+		}
+		httpRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+		for _, routeDestination := range routeDestinations {
+			httpRouteDestinations = append(httpRouteDestinations, routeDestination.ToHTTPRouteDestination())
+		}
+		httpRoute.Route = httpRouteDestinations
+		httpRoutes = append(httpRoutes, &httpRoute)
+		vsHosts = append(vsHosts, fqdn)
+	}
+
+	if len(vsHosts) == 0 {
+		return nil, fmt.Errorf(
+			"skipped creating virtualservice as there are no valid hosts found")
+	}
+	if len(httpRoutes) == 0 {
+		return nil, fmt.Errorf(
+			"skipped creating virtualservice on cluster as there are no valid http routes found")
+	}
+	sort.Strings(vsHosts)
+	virtualService.Spec.Hosts = vsHosts
+	sort.Slice(httpRoutes, func(i, j int) bool {
+		return httpRoutes[i].Match[0].Authority.String() < httpRoutes[j].Match[0].Authority.String()
+	})
+	virtualService.Spec.Http = httpRoutes
+
+	virtualService.Name = vsName + "-incluster-vs"
+
+	return virtualService, nil
+
+}
+
+// generateVirtualServiceForIngress generates the VirtualService for the cross-cluster routing
+func generateVirtualServiceForIngress(
+	destination map[string][]*vsrouting.RouteDestination,
+	vsName string) (*v1alpha3.VirtualService, error) {
+
+	virtualService, err := getBaseVirtualServiceForIngress()
+	if err != nil {
+		return nil, err
+	}
+
+	vsHosts := make([]string, 0)
+	tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
+
+	for globalFQDN, routeDestinations := range destination {
+		if routeDestinations == nil || len(routeDestinations) == 0 {
+			continue
+		}
+		tlsRoute := networkingV1Alpha3.TLSRoute{
+			Match: []*networkingV1Alpha3.TLSMatchAttributes{
+				{
+					Port:     common.DefaultMtlsPort,
+					SniHosts: []string{globalFQDN},
+				},
+			},
+		}
+		tlsRouteDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
+		for _, routeDestination := range routeDestinations {
+			tlsRouteDestinations = append(tlsRouteDestinations, routeDestination.ToTLSRouteDestination())
+		}
+		tlsRoute.Route = tlsRouteDestinations
+		tlsRoutes = append(tlsRoutes, &tlsRoute)
+		vsHosts = append(vsHosts, globalFQDN)
+	}
+
+	if len(vsHosts) == 0 {
+		return nil, fmt.Errorf(
+			"skipped creating virtualservice as there are no valid hosts found")
+	}
+	if len(tlsRoutes) == 0 {
+		return nil, fmt.Errorf(
+			"skipped creating virtualservice on cluster as there are no valid tls routes found")
+	}
+	sort.Strings(vsHosts)
+	virtualService.Spec.Hosts = vsHosts
+	sort.Slice(tlsRoutes, func(i, j int) bool {
+		return tlsRoutes[i].Match[0].SniHosts[0] < tlsRoutes[j].Match[0].SniHosts[0]
+	})
+	virtualService.Spec.Tls = tlsRoutes
+
+	virtualService.Name = vsName + "-routing-vs"
+
+	return virtualService, nil
+}
+
+// addUpdateInClusterVirtualServices adds or updates the in-cluster routing VirtualServices
+// This is where the VirtualServices are created using the services that were discovered during the
+// discovery phase.
+func addUpdateInClusterVirtualServices(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
+	vsName string,
+	sourceIdentity string) error {
+
+	if sourceIdentity == "" {
+		return fmt.Errorf("identity is empty")
+	}
+
+	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
+		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", "",
+			fmt.Sprintf(
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for identity %s",
+				sourceIdentity))
+		return nil
+	}
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	if vsName == "" {
+		return fmt.Errorf("vsName is empty")
+	}
+
+	for sourceCluster, destination := range sourceClusterToDestinations {
+
+		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
+			continue
+		}
+
+		ctxLogger.Debugf(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", sourceCluster,
+			"Writing phase: addUpdateInClusterVirtualServices VS based routing enabled for cluster")
+
+		rc := remoteRegistry.GetRemoteController(sourceCluster)
+
+		if rc == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				"", "", sourceCluster, "remote controller not initialized on this cluster")
+			continue
+		}
+
+		virtualService, err := generateVirtualServiceForIncluster(destination, vsName)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				"", "", sourceCluster, err.Error())
+			return err
+		}
+
+		// Add the exportTo namespaces to the virtual service
+		exportToNamespaces := getSortedDependentNamespaces(
+			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
+		virtualService.Spec.ExportTo = exportToNamespaces
+
+		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
+		if err != nil {
+			ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+		}
+
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
+		err = addUpdateVirtualService(
+			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+			return err
+		}
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+			virtualService.Name, virtualService.Namespace, sourceCluster, "virtualservice created successfully")
+	}
+
+	return nil
+}
+
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices
 // This is where the VirtualServices are created using the services that were discovered during the
 // discovery phase.
@@ -488,62 +708,12 @@ func addUpdateVirtualServicesForIngress(
 			continue
 		}
 
-		virtualService, err := getBaseVirtualServiceForIngress()
+		virtualService, err := generateVirtualServiceForIngress(destination, vsName)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-				vsName, util.IstioSystemNamespace, sourceCluster, err.Error())
+				"", "", sourceCluster, err.Error())
 			return err
 		}
-
-		vsHosts := make([]string, 0)
-		tlsRoutes := make([]*networkingV1Alpha3.TLSRoute, 0)
-
-		for globalFQDN, routeDestinations := range destination {
-			if routeDestinations == nil || len(routeDestinations) == 0 {
-				ctxLogger.Warnf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-					"", "", sourceCluster,
-					fmt.Sprintf("skipped adding host %s, no valid route destinaton found", globalFQDN))
-				continue
-			}
-			tlsRoute := networkingV1Alpha3.TLSRoute{
-				Match: []*networkingV1Alpha3.TLSMatchAttributes{
-					{
-						Port:     common.DefaultMtlsPort,
-						SniHosts: []string{globalFQDN},
-					},
-				},
-			}
-			tlsRouteDestinations := make([]*networkingV1Alpha3.RouteDestination, 0)
-			for _, routeDestination := range routeDestinations {
-				tlsRouteDestinations = append(tlsRouteDestinations, routeDestination.ToTLSRouteDestination())
-			}
-			tlsRoute.Route = tlsRouteDestinations
-			tlsRoutes = append(tlsRoutes, &tlsRoute)
-			vsHosts = append(vsHosts, globalFQDN)
-		}
-
-		if len(vsHosts) == 0 {
-			err := fmt.Errorf(
-				"skipped creating virtualservice on cluster %s, no valid hosts found", sourceCluster)
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
-			return err
-		}
-		if len(tlsRoutes) == 0 {
-			err := fmt.Errorf(
-				"skipped creating virtualservice on cluster %s, no valid tls routes found", sourceCluster)
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
-			return err
-		}
-		sort.Strings(vsHosts)
-		virtualService.Spec.Hosts = vsHosts
-		sort.Slice(tlsRoutes, func(i, j int) bool {
-			return tlsRoutes[i].Match[0].SniHosts[0] < tlsRoutes[j].Match[0].SniHosts[0]
-		})
-		virtualService.Spec.Tls = tlsRoutes
-
-		virtualService.Name = vsName + "-routing-vs"
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
@@ -778,6 +948,71 @@ func getMeshHTTPPortForDeployment(ports map[string]map[string]uint32) (uint32, e
 	return getMeshHTTPPort(common.Deployment, ports)
 }
 
+// addUpdateInClusterDestinationRule adds or updates the DestinationRule for the source cluster client proxies
+// This is where the DestinationRules are created for the in-cluster VS based routing
+// The DestinationRule is created for the .svc.cluster.local hosts that were discovered during the discovery phase
+// on each source cluster
+func addUpdateInClusterDestinationRule(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceClusterToDRHosts map[string]map[string]string,
+	sourceIdentity string,
+	cname string) error {
+
+	if sourceIdentity == "" {
+		return fmt.Errorf("sourceIdentity is empty")
+	}
+
+	if cname == "" {
+		return fmt.Errorf("cname is empty")
+	}
+
+	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
+		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", "",
+			fmt.Sprintf(
+				"Writing phase: addUpdateInClusterDestinationRule VS based routing disabled for identity %s",
+				sourceIdentity))
+		return nil
+	}
+
+	for sourceCluster, drHosts := range sourceClusterToDRHosts {
+
+		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateInClusterDestinationRule VS based routing in-cluster disabled for cluster")
+			continue
+		}
+
+		ctxLogger.Info(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", sourceCluster,
+			"Writing phase: addUpdateInClusterDestinationRule VS based routing in-cluster enabled for cluster")
+
+		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
+
+		clientTLSSettings := &networkingV1Alpha3.ClientTLSSettings{
+			Mode:            networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
+			SubjectAltNames: []string{san},
+		}
+
+		exportToNamespaces := getSortedDependentNamespaces(
+			remoteRegistry.AdmiralCache, cname, sourceCluster, ctxLogger, true)
+
+		err := addUpdateRoutingDestinationRule(
+			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
+			"incluster-dr", exportToNamespaces, clientTLSSettings)
+
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				"", "", sourceCluster, err.Error())
+			continue
+		}
+	}
+	return nil
+}
+
 // addUpdateDestinationRuleForSourceIngress adds or updates the DestinationRule for the source ingress
 // This is where the DestinationRules are created for the cross-cluster VS based routing
 // The DestinationRule is created for the .svc.cluster.local hosts that were discovered during the discovery phase
@@ -788,10 +1023,6 @@ func addUpdateDestinationRuleForSourceIngress(
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDRHosts map[string]map[string]string,
 	sourceIdentity string) error {
-
-	if remoteRegistry == nil {
-		return fmt.Errorf("remoteRegistry is nil")
-	}
 
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
 
@@ -815,72 +1046,102 @@ func addUpdateDestinationRuleForSourceIngress(
 
 		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
 
-		rc := remoteRegistry.GetRemoteController(sourceCluster)
-		if rc == nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-				"", "", sourceCluster, "remote controller not initialized on this cluster")
+		clientTLSSettings := &networkingV1Alpha3.ClientTLSSettings{
+			SubjectAltNames: []string{san},
+		}
+
+		err := addUpdateRoutingDestinationRule(
+			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
+			"routing-dr", common.GetIngressVSExportToNamespace(), clientTLSSettings)
+
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
+				"", "", sourceCluster, err.Error())
+			continue
+		}
+	}
+	return nil
+}
+
+// addUpdateRoutingDestinationRule creates the DR for VS Based Routing
+func addUpdateRoutingDestinationRule(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	drHosts map[string]string,
+	sourceCluster string,
+	drNameSuffix string,
+	exportToNamespaces []string,
+	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings) error {
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	rc := remoteRegistry.GetRemoteController(sourceCluster)
+	if rc == nil {
+		return fmt.Errorf("remote controller not initialized on this cluster")
+	}
+
+	for name, drHost := range drHosts {
+		drObj := networkingV1Alpha3.DestinationRule{
+			Host:     drHost,
+			ExportTo: common.GetIngressVSExportToNamespace(),
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+						Simple: getIngressDRLoadBalancerPolicy(),
+					},
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Enabled: &wrappers.BoolValue{Value: false},
+					},
+				},
+				Tls: clientTLSSettings,
+			},
+		}
+
+		if common.IsSlowStartEnabledForCluster(sourceCluster) {
+			drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs =
+				&duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()}
+		}
+
+		drName := fmt.Sprintf("%s-%s", name, drNameSuffix)
+
+		newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
+
+		newDR.Labels = map[string]string{
+			vsRoutingLabel: "enabled",
+		}
+
+		newDR.Spec.ExportTo = exportToNamespaces
+
+		//Get existing DR
+		existingDR, err := rc.
+			DestinationRuleController.
+			IstioClient.
+			NetworkingV1alpha3().
+			DestinationRules(util.IstioSystemNamespace).Get(ctx, drName, metaV1.GetOptions{})
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat,
+				"addUpdateRoutingDestinationRule",
+				drName,
+				util.IstioSystemNamespace,
+				sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
+			existingDR = nil
+		}
+
+		err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
+				drName, util.IstioSystemNamespace, sourceCluster, err.Error())
 			continue
 		}
 
-		for name, drHost := range drHosts {
-			drObj := networkingV1Alpha3.DestinationRule{
-				Host:     drHost,
-				ExportTo: common.GetIngressVSExportToNamespace(),
-				TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
-					LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
-						LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
-							Simple: getIngressDRLoadBalancerPolicy(),
-						},
-						LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
-							Enabled: &wrappers.BoolValue{Value: false},
-						},
-					},
-					Tls: &networkingV1Alpha3.ClientTLSSettings{
-						SubjectAltNames: []string{san},
-					},
-				},
-			}
-
-			if common.IsSlowStartEnabledForCluster(sourceCluster) {
-				drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs =
-					&duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()}
-			}
-
-			drName := fmt.Sprintf("%s-routing-dr", name)
-
-			newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
-
-			//Get existing DR
-			existingDR, err := rc.
-				DestinationRuleController.
-				IstioClient.
-				NetworkingV1alpha3().
-				DestinationRules(util.IstioSystemNamespace).Get(ctx, drName, metaV1.GetOptions{})
-			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat,
-					"addUpdateDestinationRuleForSourceIngress",
-					drName,
-					util.IstioSystemNamespace,
-					sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
-				existingDR = nil
-			}
-
-			ctxLogger.Infof(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-				drName, util.IstioSystemNamespace, sourceCluster, "Add/Update ingress destinationrule")
-
-			err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-					drName, util.IstioSystemNamespace, sourceCluster, err.Error())
-				return err
-			}
-
-			ctxLogger.Infof(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
-				drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
-
-		}
+		ctxLogger.Infof(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
+			drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
 
 	}
+
 	return nil
 }
 
