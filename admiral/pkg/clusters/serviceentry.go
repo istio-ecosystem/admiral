@@ -516,7 +516,8 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		var meshPorts map[string]uint32
-		if len(sourceDeployments) > 0 {
+		_, ok := sourceDeployments[sourceCluster]
+		if ok {
 			if deployRolloutMigration[sourceCluster] {
 				meshPorts = GetMeshPortsForRollout(sourceCluster, serviceInstance[common.Rollout], sourceRollouts[sourceCluster])
 				meshDeployAndRolloutPorts[common.Rollout] = meshPorts
