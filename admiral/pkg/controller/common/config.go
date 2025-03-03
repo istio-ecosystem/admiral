@@ -57,6 +57,8 @@ func GetAdmiralParams() AdmiralParams {
 }
 
 func UpdateAdmiralParams(params AdmiralParams) {
+	wrapper.Lock()
+	defer wrapper.Unlock()
 	wrapper.params = params
 }
 
