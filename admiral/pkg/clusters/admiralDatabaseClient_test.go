@@ -710,12 +710,20 @@ func Test_getLBToProcess(t *testing.T) {
 		args args
 		want []string
 	}{
+		{"When cache is not updated and update config is also empty", args{updatedLB: []string{}, cache: &[]string{}}, []string{}},
+		{"When cache is not updated and update config is has one item", args{updatedLB: []string{"cluster1"}, cache: &[]string{}}, []string{"cluster1"}},
+		{"When cache has single item and update config removed that item", args{updatedLB: []string{}, cache: &[]string{"cluster1"}}, []string{"cluster1"}},
 		{"When cache is not updated then getLBToProcess should be all updated list ",
 			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{}}, []string{"cluster1", "cluster2"}},
 		{"When cluster is removed from update list then getLBToProcess should return removed cluster",
 			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{"cluster1", "cluster2", "cluster3"}}, []string{"cluster3"}},
 		{"When cluster is added from update list then getLBToProcess should return added cluster",
 			args{updatedLB: []string{"cluster1", "cluster2", "cluster3"}, cache: &[]string{"cluster1", "cluster2"}}, []string{"cluster3"}},
+		{"When object is removed and cache become empty", args{updatedLB: []string{}, cache: &[]string{"cluster1", "cluster2"}}, []string{"cluster1", "cluster2"}},
+		{"When cache and config is same then expect no value to be returned",
+			args{updatedLB: []string{"cluster1", "cluster2"}, cache: &[]string{"cluster1", "cluster2"}}, []string{}},
+		{"When config is adding and removing cluster at same time",
+			args{updatedLB: []string{"cluster2"}, cache: &[]string{"cluster1"}}, []string{"cluster2", "cluster1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
