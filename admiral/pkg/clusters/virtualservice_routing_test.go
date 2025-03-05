@@ -2068,39 +2068,6 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 
-	//gtpCache := &globalTrafficCache{}
-	//gtpCache.identityCache = make(map[string]*v1alpha12.GlobalTrafficPolicy)
-	//gtpCache.mutex = &sync.Mutex{}
-	//
-	//gtpCache.Put(&v1alpha12.GlobalTrafficPolicy{
-	//	ObjectMeta: metaV1.ObjectMeta{
-	//		Name:        "test-gtp",
-	//		Annotations: map[string]string{"env": "test-env"},
-	//		Labels:      map[string]string{"identity": "test-identity"},
-	//	},
-	//	Spec: model.GlobalTrafficPolicy{
-	//		Policy: []*model.TrafficPolicy{
-	//			{
-	//				DnsPrefix: "default",
-	//			},
-	//			{
-	//				DnsPrefix: "test-env",
-	//			},
-	//			{
-	//				DnsPrefix: "west",
-	//			},
-	//			{
-	//				DnsPrefix: "east",
-	//			},
-	//		},
-	//	},
-	//})
-
-	//rr := NewRemoteRegistry(context.Background(), admiralParams)
-	//rr.AdmiralCache = &AdmiralCache{
-	//	GlobalTrafficCache: gtpCache,
-	//}
-
 	meshPort := uint32(8080)
 	testCases := []struct {
 		name                      string
@@ -2111,9 +2078,6 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		deployment                *v1.Deployment
 		expectedError             error
 		expectedRouteDestination  map[string][]*vsrouting.RouteDestination
-		//sourceIdentity            string
-		//env                       string
-		//sourceClusterLocality     string
 	}{
 		{
 			name: "Given nil serviceInstance " +
@@ -2309,7 +2273,6 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
-						Weight: 50,
 					},
 					{
 						Destination: &networkingV1Alpha3.Destination{
@@ -2318,7 +2281,6 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 								Number: meshPort,
 							},
 						},
-						Weight: 50,
 					},
 				},
 				"outbound_.80_._.preview.test-env.test-identity.global": {
@@ -2333,150 +2295,6 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 		},
-		//{
-		//	name: "Given an empty route destinations map and valid sourceIdenity and env" +
-		//		"And serviceInstance has both rollout and deployment" +
-		//		"And there is corresponding GTP" +
-		//		"When getAllVSRouteDestinationsByCluster is invoked, " +
-		//		"Then it should populate the destinations with deployment, rollout service" +
-		//		"And additional GTP dns prefixed endpoints sans preview",
-		//	meshDeployAndRolloutPorts: map[string]map[string]uint32{
-		//		common.Rollout:    {"http": meshPort},
-		//		common.Deployment: {"http": meshPort},
-		//	},
-		//	serviceInstance: map[string]*coreV1.Service{
-		//		common.Rollout: {},
-		//		common.Deployment: {
-		//			ObjectMeta: metaV1.ObjectMeta{
-		//				Name:      "test-deployment-svc",
-		//				Namespace: "test-ns",
-		//			},
-		//		},
-		//	},
-		//	deployment: &v1.Deployment{
-		//		Spec: v1.DeploymentSpec{
-		//			Template: coreV1.PodTemplateSpec{
-		//				ObjectMeta: metaV1.ObjectMeta{
-		//					Annotations: map[string]string{
-		//						"identity": "test-identity",
-		//						"env":      "test-env",
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//	rollout: &v1alpha1.Rollout{
-		//		Spec: v1alpha1.RolloutSpec{
-		//			Strategy: v1alpha1.RolloutStrategy{
-		//				BlueGreen: &v1alpha1.BlueGreenStrategy{
-		//					ActiveService:  "active-svc",
-		//					PreviewService: "preview-svc",
-		//				},
-		//			},
-		//			Template: coreV1.PodTemplateSpec{
-		//				ObjectMeta: metaV1.ObjectMeta{
-		//					Annotations: map[string]string{
-		//						"identity": "test-identity",
-		//						"env":      "test-env",
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//	weightedServices: map[string]*WeightedService{
-		//		"preview-svc": {
-		//			Service: &coreV1.Service{
-		//				ObjectMeta: metaV1.ObjectMeta{
-		//					Name:      "preview-svc",
-		//					Namespace: "test-ns",
-		//				},
-		//			},
-		//		},
-		//		"active-svc": {
-		//			Service: &coreV1.Service{
-		//				ObjectMeta: metaV1.ObjectMeta{
-		//					Name:      "active-svc",
-		//					Namespace: "test-ns",
-		//				},
-		//			},
-		//		},
-		//	},
-		//	sourceIdentity: "test-identity",
-		//	env:            "test-env",
-		//	expectedError:  nil,
-		//	expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-		//		"outbound_.80_._.test-env.test-identity.global": {
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "active-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "test-deployment-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//		},
-		//		"outbound_.80_._.west.test-env.test-identity.global": {
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "active-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "test-deployment-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//		},
-		//		"outbound_.80_._.east.test-env.test-identity.global": {
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "active-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "test-deployment-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//				Weight: 50,
-		//			},
-		//		},
-		//		"outbound_.80_._.preview.test-env.test-identity.global": {
-		//			{
-		//				Destination: &networkingV1Alpha3.Destination{
-		//					Host: "preview-svc.test-ns.svc.cluster.local",
-		//					Port: &networkingV1Alpha3.PortSelector{
-		//						Number: meshPort,
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//},
 	}
 
 	ctxLogger := log.WithFields(log.Fields{})
@@ -2501,7 +2319,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 					for i := 0; i < len(destinations); i++ {
 						require.Equal(t, destinations[i].Destination.Host, actual[fqdn][i].Destination.Host)
 						require.Equal(t, destinations[i].Destination.Port.Number, actual[fqdn][i].Destination.Port.Number)
-						//require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
+						require.Equal(t, destinations[i].Weight, actual[fqdn][i].Weight)
 					}
 				}
 			}
