@@ -2717,11 +2717,6 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			} else {
 				require.Nil(t, err)
 				for fqdn, destinations := range tc.destinations {
-					fmt.Println(fqdn)
-					for i := 0; i < len(destinations); i++ {
-						fmt.Println(destinations[i].Destination.Host)
-						fmt.Println(destinations[i].Weight)
-					}
 					require.NotNil(t, destinations)
 					require.Equal(t, len(destinations), len(tc.expectedRouteDestination[fqdn]))
 					for i := 0; i < len(destinations); i++ {
