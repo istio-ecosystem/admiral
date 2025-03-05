@@ -121,8 +121,8 @@ func modifyServiceEntryForNewServiceOrPod(
 	sourceIdentity = getNonPartitionedIdentity(remoteRegistry.AdmiralCache, sourceIdentity)
 	if remoteRegistry.ServiceEntrySuspender.SuspendUpdate(sourceIdentity, env) {
 		ctxLogger.Infof(common.CtxLogFormat, "SuspenderCheck", "", "",
-			"processing skipped as service entry update is suspended for identity")
-		return nil, fmt.Errorf("processing skipped as service entry update is suspended for identity %s in environment %s", sourceIdentity, env)
+			"processing skipped as service entry update is suspended for identity "+sourceIdentity+" in environment "+env)
+		return nil, nil
 	}
 	if commonUtil.IsAdmiralReadOnly() {
 		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped as Admiral is in Read-only mode")
