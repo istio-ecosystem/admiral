@@ -468,8 +468,11 @@ func populateDestinationsForCanaryStrategy(
 
 // generateVirtualServiceForIncluster generates the VirtualService for the in-cluster routing
 func generateVirtualServiceForIncluster(
+	ctxLogger *log.Entry,
 	destination map[string][]*vsrouting.RouteDestination,
-	vsName string) (*v1alpha3.VirtualService, error) {
+	vsName string,
+	remoteRegistry *RemoteRegistry,
+	sourceCluster string) (*v1alpha3.VirtualService, error) {
 
 	virtualService, err := getBaseInClusterVirtualService()
 	if err != nil {
@@ -523,6 +526,13 @@ func generateVirtualServiceForIncluster(
 	virtualService.Spec.Http = httpRoutes
 
 	virtualService.Name = vsName + "-incluster-vs"
+
+	// Add the exportTo namespaces to the virtual service
+	if common.EnableExportTo(vsName) {
+		exportToNamespaces := getSortedDependentNamespaces(
+			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
+		virtualService.Spec.ExportTo = exportToNamespaces
+	}
 
 	return virtualService, nil
 
@@ -635,17 +645,13 @@ func addUpdateInClusterVirtualServices(
 			continue
 		}
 
-		virtualService, err := generateVirtualServiceForIncluster(destination, vsName)
+		virtualService, err := generateVirtualServiceForIncluster(
+			ctxLogger, destination, vsName, remoteRegistry, sourceCluster)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
 			return err
 		}
-
-		// Add the exportTo namespaces to the virtual service
-		exportToNamespaces := getSortedDependentNamespaces(
-			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
-		virtualService.Spec.ExportTo = exportToNamespaces
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
