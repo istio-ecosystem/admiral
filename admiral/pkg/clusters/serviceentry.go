@@ -172,6 +172,8 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		// Holds the VS destinations for the TLSRoutes
 		sourceClusterToDestinations = make(map[string]map[string][]*vsrouting.RouteDestination)
+		// Holds the VS destinations for the HTTPRoutes
+		sourceClusterToInClusterDestinations = make(map[string]map[string][]*vsrouting.RouteDestination)
 		// Holds the DR hosts (*.svc.cluster.local) used for VS based routing
 		sourceClusterToDRHosts = make(map[string]map[string]string)
 		// Holds the source cluster to namespace mapping from where the event is received
@@ -775,6 +777,13 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
 				"Discovery phase: VS based routing enabled for cluster")
+
+			sourceClusterLocality, err := getClusterRegion(remoteRegistry, sourceCluster, rc)
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+			}
+
 			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 			// endpoints.
@@ -784,10 +793,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				meshDeployAndRolloutPorts,
 				sourceWeightedServices[sourceCluster],
 				sourceRollouts[sourceCluster],
-				sourceDeployments[sourceCluster],
-				remoteRegistry,
-				sourceIdentity,
-				env)
+				sourceDeployments[sourceCluster])
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
@@ -797,7 +803,41 @@ func modifyServiceEntryForNewServiceOrPod(
 					deploymentOrRolloutName, eventNamespace, sourceCluster,
 					"No RouteDestinations generated for VS based routing ")
 			} else {
+				inClusterDestinations := make(map[string][]*vsrouting.RouteDestination)
+				for key, value := range destinations {
+					inClusterDestinations[key] = value
+				}
+
+				err = processGTPAndAddWeightsByCluster(ctxLogger,
+					remoteRegistry,
+					sourceIdentity,
+					env,
+					sourceClusterLocality,
+					destinations,
+					false)
+
+				if err != nil {
+					ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+						deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+					modifySEerr = common.AppendError(modifySEerr, err)
+				}
+
+				err = processGTPAndAddWeightsByCluster(ctxLogger,
+					remoteRegistry,
+					sourceIdentity,
+					env,
+					sourceClusterLocality,
+					inClusterDestinations,
+					true)
+
+				if err != nil {
+					ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+						deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+					modifySEerr = common.AppendError(modifySEerr, err)
+				}
+
 				sourceClusterToDestinations[sourceCluster] = destinations
+				sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 				drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
 				sourceClusterToDRHosts[sourceCluster] = map[string]string{
 					eventNamespace + common.DotLocalDomainSuffix: drHost,
@@ -841,7 +881,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateInClusterVirtualServices(
-		ctx, ctxLogger, remoteRegistry, sourceClusterToDestinations, cname, sourceIdentity)
+		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			deploymentOrRolloutName, namespace, "", err)
