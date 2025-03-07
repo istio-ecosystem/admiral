@@ -808,6 +808,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					inClusterDestinations[key] = value
 				}
 
+				//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP, no GTP weights are updated for ingress destinations
 				err = processGTPAndAddWeightsByCluster(ctxLogger,
 					remoteRegistry,
 					sourceIdentity,
@@ -822,6 +823,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					modifySEerr = common.AppendError(modifySEerr, err)
 				}
 
+				//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
 				err = processGTPAndAddWeightsByCluster(ctxLogger,
 					remoteRegistry,
 					sourceIdentity,

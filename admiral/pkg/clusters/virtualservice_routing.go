@@ -785,6 +785,10 @@ func getAllVSRouteDestinationsByCluster(
 	return ingressDestinations, nil
 }
 
+// processGTPAndAddWeightsByCluster updates the route destinations map with global traffic policy (GTP) destinations
+// and adjusts the weights of the route destinations based on the GTP configuration.
+// This method updates the provided destinations map with GTP based entries.
+// Also calls addWeightsToRouteDestinations to ensure that the weights of the route destinations are correctly adjusted.
 func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
 	sourceIdentity string,
@@ -818,6 +822,8 @@ func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
 	return nil
 }
 
+// addWeightsToRouteDestinations ensures that the weights of route destinations in the provided map
+// are correctly distributed to sum to 100 or 0.
 func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDestination) error {
 	if destinations == nil {
 		return fmt.Errorf("route destinations map is nil")
@@ -863,6 +869,8 @@ func getWeightSplits(numberOfSplits int) []int32 {
 	return weights
 }
 
+// getDestinationsForGTPDNSPrefixes processes the provided GlobalTrafficPolicy and updates the route destinations
+// map with DNS-prefixed hosts and adjusted weights based on the policy configuration.
 func getDestinationsForGTPDNSPrefixes(
 	ctxLogger *log.Entry,
 	globalTrafficPolicy *v1alpha1.GlobalTrafficPolicy,
