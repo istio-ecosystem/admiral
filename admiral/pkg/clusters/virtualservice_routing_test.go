@@ -3655,6 +3655,13 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 						{
 							DnsPrefix: "test-env",
+							LbType:    model.TrafficPolicy_TOPOLOGY,
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: 100,
+								},
+							},
 						},
 						{
 							DnsPrefix: "west",

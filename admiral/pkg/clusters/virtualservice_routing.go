@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"sort"
 	"strings"
 
@@ -934,27 +935,35 @@ func getDestinationsForGTPDNSPrefixes(
 				return nil, err
 			}
 
-			if len(weights) > 0 && updateWeights {
-				for _, rd := range newRD {
-					if strings.HasSuffix(rd.Destination.Host, "svc.cluster.local") {
-						if weights[sourceClusterLocality] == 0 {
-							rd.Destination.Host = routeHost
-							rd.Destination.Port = &networkingV1Alpha3.PortSelector{
-								Number: 80,
-							}
-						} else if weights[sourceClusterLocality] != 100 {
-							if rd.Weight != 0 {
-								weight := (float32(rd.Weight) / 100) * float32(weights[sourceClusterLocality])
-								rd.Weight = int32(weight)
-							} else {
-								rd.Weight = weights[sourceClusterLocality]
-							}
-							remoteRD = getRouteDestination(routeHost, 80, 100-weights[sourceClusterLocality])
-						}
-					}
-				}
+			if policy.LbType == model.TrafficPolicy_TOPOLOGY || !updateWeights || len(weights) == 0 {
+				gtpDestinations[newDNSPrefixedSNIHost] = newRD
+				continue
 			}
 
+			for _, rd := range newRD {
+				if !strings.HasSuffix(rd.Destination.Host, common.DotLocalDomainSuffix) {
+					continue
+				}
+				weightForLocality := weights[sourceClusterLocality]
+				if weightForLocality == 100 {
+					continue
+				}
+
+				if weightForLocality == 0 {
+					rd.Destination.Host = routeHost
+					rd.Destination.Port = &networkingV1Alpha3.PortSelector{
+						Number: 80,
+					}
+					continue
+				}
+
+				if rd.Weight != 0 {
+					rd.Weight = int32((float32(rd.Weight) / 100) * float32(weightForLocality))
+				} else {
+					rd.Weight = weightForLocality
+				}
+				remoteRD = getRouteDestination(routeHost, 80, 100-weightForLocality)
+			}
 			if remoteRD != nil {
 				newRD = append(newRD, remoteRD)
 			}
