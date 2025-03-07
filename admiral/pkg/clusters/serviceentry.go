@@ -772,83 +772,100 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry.AdmiralCache.DependencyNamespaceCache.Put(val, serviceInstance[appType[sourceCluster]].Namespace, localFqdn, cnames)
 		}
 
-		if common.DoVSRoutingForCluster(sourceCluster) {
+		var (
+			sourceClusterLocality string
+			eventNamespace        string
+			ingressDestinations   = make(map[string][]*vsrouting.RouteDestination)
+			inClusterDestinations = make(map[string][]*vsrouting.RouteDestination)
+		)
+
+		// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
+		// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
+		// endpoints.
+		if common.DoVSRoutingForCluster(sourceCluster) || common.DoVSRoutingInClusterForCluster(sourceCluster) {
 			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
 				"Discovery phase: VS based routing enabled for cluster")
 
-			sourceClusterLocality, err := getClusterRegion(remoteRegistry, sourceCluster, rc)
+			sourceClusterLocality, err = getClusterRegion(remoteRegistry, sourceCluster, rc)
 			if err != nil {
 				ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
 			}
 
-			// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
-			// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
-			// endpoints.
-			destinations, err := getAllVSRouteDestinationsByCluster(
+			ingressDestinations, err = getAllVSRouteDestinationsByCluster(
 				ctxLogger,
 				serviceInstance,
 				meshDeployAndRolloutPorts,
 				sourceWeightedServices[sourceCluster],
 				sourceRollouts[sourceCluster],
 				sourceDeployments[sourceCluster])
+
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
 				modifySEerr = common.AppendError(modifySEerr, err)
-			} else if len(destinations) == 0 {
+			} else if len(ingressDestinations) == 0 {
 				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster,
 					"No RouteDestinations generated for VS based routing ")
 			} else {
-				inClusterDestinations := make(map[string][]*vsrouting.RouteDestination)
-				for key, value := range destinations {
+				for key, value := range ingressDestinations {
 					inClusterDestinations[key] = value
 				}
+			}
 
-				//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP, no GTP weights are updated for ingress destinations
-				err = processGTPAndAddWeightsByCluster(ctxLogger,
-					remoteRegistry,
-					sourceIdentity,
-					env,
-					sourceClusterLocality,
-					destinations,
-					false)
-
-				if err != nil {
-					ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-						deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
-
-				//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
-				err = processGTPAndAddWeightsByCluster(ctxLogger,
-					remoteRegistry,
-					sourceIdentity,
-					env,
-					sourceClusterLocality,
-					inClusterDestinations,
-					true)
-
-				if err != nil {
-					ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-						deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-					modifySEerr = common.AppendError(modifySEerr, err)
-				}
-
-				sourceClusterToDestinations[sourceCluster] = destinations
-				sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
-				drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
-				sourceClusterToDRHosts[sourceCluster] = map[string]string{
-					eventNamespace + common.DotLocalDomainSuffix: drHost,
-				}
+			drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
+			sourceClusterToDRHosts[sourceCluster] = map[string]string{
+				eventNamespace + common.DotLocalDomainSuffix: drHost,
 			}
 		} else {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 				"", "", sourceCluster,
 				"Discovery phase: VS based routing disabled for cluster")
+		}
+
+		//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
+		if common.DoVSRoutingForCluster(sourceCluster) {
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				ingressDestinations,
+				false)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToDestinations[sourceCluster] = ingressDestinations
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+				"", "", sourceCluster,
+				"Discovery phase: Skipped GTP processing as VS based routing disabled for cluster")
+		}
+
+		//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
+		if common.DoVSRoutingInClusterForCluster(sourceCluster) {
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				inClusterDestinations,
+				true)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+				"", "", sourceCluster,
+				"Discovery phase: Skipped GTP processing as in-cluster VS based routing disabled for cluster")
 		}
 	}
 
