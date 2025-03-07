@@ -848,7 +848,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
-		if common.DoVSRoutingInClusterForCluster(sourceCluster) {
+		if common.DoVSRoutingInClusterForCluster(sourceCluster) && common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
 			err = processGTPAndAddWeightsByCluster(ctxLogger,
 				remoteRegistry,
 				sourceIdentity,
@@ -864,7 +864,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 		} else {
 			ctxLogger.Infof(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				"", "", sourceCluster,
+				sourceIdentity, "", sourceCluster,
 				"Discovery phase: Skipped GTP processing as in-cluster VS based routing disabled for cluster")
 		}
 	}
