@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"sort"
 	"strings"
 
@@ -754,16 +755,13 @@ func getAllVSRouteDestinationsByCluster(
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
-	deployment *k8sAppsV1.Deployment,
-	remoteRegistry *RemoteRegistry,
-	sourceIdentity string,
-	env string) (map[string][]*vsrouting.RouteDestination, error) {
+	deployment *k8sAppsV1.Deployment) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
 	}
 
-	destinations := make(map[string][]*vsrouting.RouteDestination)
+	ingressDestinations := make(map[string][]*vsrouting.RouteDestination)
 
 	// Populate the route destinations(svc.cluster.local services) for the deployment
 	if serviceInstance[common.Deployment] != nil {
@@ -772,7 +770,7 @@ func getAllVSRouteDestinationsByCluster(
 			return nil, err
 		}
 		err = populateVSRouteDestinationForDeployment(
-			serviceInstance, meshPort, deployment, destinations)
+			serviceInstance, meshPort, deployment, ingressDestinations)
 		if err != nil {
 			return nil, err
 		}
@@ -785,34 +783,54 @@ func getAllVSRouteDestinationsByCluster(
 			return nil, err
 		}
 		err = populateVSRouteDestinationForRollout(
-			serviceInstance, weightedServices, rollout, meshPort, destinations)
+			serviceInstance, weightedServices, rollout, meshPort, ingressDestinations)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	return ingressDestinations, nil
+}
+
+// processGTPAndAddWeightsByCluster updates the route destinations map with global traffic policy (GTP) destinations
+// and adjusts the weights of the route destinations based on the GTP configuration.
+// This method updates the provided destinations map with GTP based entries.
+// Also calls addWeightsToRouteDestinations to ensure that the weights of the route destinations are correctly adjusted.
+func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceIdentity string,
+	env string,
+	sourceClusterLocality string,
+	destinations map[string][]*vsrouting.RouteDestination,
+	updateWeights bool) error {
+	//update ingress gtp destination
 	// Get the global traffic policy for the env and identity
 	// and add the additional endpoints/hosts to the destination map
 	globalTrafficPolicy, err := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if globalTrafficPolicy != nil {
-		// Add the global traffic policy destinations to the destination map
-		gtpDestinations, err := getDestinationsForGTPDNSPrefixes(ctxLogger, globalTrafficPolicy, destinations, env)
+		// Add the global traffic policy destinations to the destination map for ingress vs
+		gtpDestinations, err := getDestinationsForGTPDNSPrefixes(ctxLogger, globalTrafficPolicy, destinations, env, sourceClusterLocality, updateWeights)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for fqdn, routeDestinations := range gtpDestinations {
 			destinations[fqdn] = routeDestinations
 		}
 	}
 
-	addWeightsToRouteDestinations(destinations)
+	err = addWeightsToRouteDestinations(destinations)
+	if err != nil {
+		return err
+	}
 
-	return destinations, nil
+	return nil
 }
 
+// addWeightsToRouteDestinations ensures that the weights of route destinations in the provided map
+// are correctly distributed to sum to 100 or 0.
 func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDestination) error {
 	if destinations == nil {
 		return fmt.Errorf("route destinations map is nil")
@@ -858,11 +876,15 @@ func getWeightSplits(numberOfSplits int) []int32 {
 	return weights
 }
 
+// getDestinationsForGTPDNSPrefixes processes the provided GlobalTrafficPolicy and updates the route destinations
+// map with DNS-prefixed hosts and adjusted weights based on the policy configuration.
 func getDestinationsForGTPDNSPrefixes(
 	ctxLogger *log.Entry,
 	globalTrafficPolicy *v1alpha1.GlobalTrafficPolicy,
 	destinations map[string][]*vsrouting.RouteDestination,
-	env string) (map[string][]*vsrouting.RouteDestination, error) {
+	env string,
+	sourceClusterLocality string,
+	updateWeights bool) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if globalTrafficPolicy == nil {
 		return nil, fmt.Errorf("globaltrafficpolicy is nil")
@@ -881,6 +903,7 @@ func getDestinationsForGTPDNSPrefixes(
 		}
 
 		hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
+
 		if err != nil {
 			return nil, err
 		}
@@ -889,21 +912,69 @@ func getDestinationsForGTPDNSPrefixes(
 			continue
 		}
 
+		var newDNSPrefixedSNIHost, routeHost string
+
 		for _, policy := range globalTrafficPolicy.Spec.Policy {
-			if policy.DnsPrefix == common.Default || policy.DnsPrefix == env {
-				continue
+			weights := make(map[string]int32)
+			var remoteRD *vsrouting.RouteDestination
+			if policy.Target != nil {
+				for _, target := range policy.Target {
+					weights[target.Region] = target.Weight
+				}
 			}
-			newDNSPrefixedSNIHost, err := generateSNIHost(policy.DnsPrefix + common.Sep + hostWithoutSNIPrefix)
+
+			if !updateWeights && len(weights) == 0 && (policy.DnsPrefix == common.Default || policy.DnsPrefix == env) {
+				continue
+			} else if policy.DnsPrefix == common.Default || policy.DnsPrefix == env {
+				routeHost = hostWithoutSNIPrefix
+			} else {
+				routeHost = policy.DnsPrefix + common.Sep + hostWithoutSNIPrefix
+			}
+
+			newDNSPrefixedSNIHost, err = generateSNIHost(routeHost)
 			if err != nil {
 				return nil, err
 			}
+
 			newRD, err := copyRouteDestinations(routeDestinations)
 			if err != nil {
 				return nil, err
 			}
+
+			if policy.LbType == model.TrafficPolicy_TOPOLOGY || !updateWeights || len(weights) == 0 {
+				gtpDestinations[newDNSPrefixedSNIHost] = newRD
+				continue
+			}
+
+			for _, rd := range newRD {
+				if !strings.HasSuffix(rd.Destination.Host, common.DotLocalDomainSuffix) {
+					continue
+				}
+				weightForLocality := weights[sourceClusterLocality]
+				if weightForLocality == 100 {
+					continue
+				}
+
+				if weightForLocality == 0 {
+					rd.Destination.Host = routeHost
+					rd.Destination.Port = &networkingV1Alpha3.PortSelector{
+						Number: 80,
+					}
+					continue
+				}
+
+				if rd.Weight != 0 {
+					rd.Weight = int32((float32(rd.Weight) / 100) * float32(weightForLocality))
+				} else {
+					rd.Weight = weightForLocality
+				}
+				remoteRD = getRouteDestination(routeHost, 80, 100-weightForLocality)
+			}
+			if remoteRD != nil {
+				newRD = append(newRD, remoteRD)
+			}
 			gtpDestinations[newDNSPrefixedSNIHost] = newRD
 		}
-
 	}
 
 	return gtpDestinations, nil
