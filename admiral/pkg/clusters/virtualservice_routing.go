@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"k8s.io/apimachinery/pkg/labels"
 	"sort"
 	"strings"
 
@@ -613,6 +614,15 @@ func addUpdateInClusterVirtualServices(
 		return fmt.Errorf("identity is empty")
 	}
 
+	if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
+		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", "",
+			fmt.Sprintf(
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for identity %s",
+				sourceIdentity))
+		return nil
+	}
+
 	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
 		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 			"", "", "",
@@ -631,6 +641,13 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
+
+		if common.IsVSRoutingInClusterDisabledForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
+			continue
+		}
 
 		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
@@ -1270,9 +1287,7 @@ func performInVSRoutingRollback(
 		return fmt.Errorf("vsname is empty")
 	}
 
-	labelSelector := metaV1.LabelSelector{
-		MatchLabels: map[string]string{vsRoutingType: vsRoutingTypeInCluster},
-	}
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{vsRoutingType: vsRoutingTypeInCluster}}
 
 	errs := make([]error, 0)
 	for clusterID := range sourceClusterToEventNsCache {
@@ -1284,7 +1299,7 @@ func performInVSRoutingRollback(
 			// Disable all in-cluster VS
 			virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, util.IstioSystemNamespace,
 				metaV1.ListOptions{
-					LabelSelector: labelSelector.String(),
+					LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
 				})
 			if err != nil {
 				e := fmt.Errorf(
