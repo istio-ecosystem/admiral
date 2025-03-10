@@ -4108,6 +4108,75 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 
 func TestPerformInVSRoutingRollback(t *testing.T) {
 
+	existingVS0 := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test-env.test-identity1.global-incluster-vs",
+			Namespace: util.IstioSystemNamespace,
+			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts:    []string{"test-env.test-identity1.global"},
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "test-env.test-identity1.global",
+								},
+							},
+						},
+					},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "test-rollout-svc.test-ns.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	existingVS1 := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "test-env.test-identity2.global-incluster-vs",
+			Namespace: util.IstioSystemNamespace,
+			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts:    []string{"test-env.test-identity2.global"},
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "test-env.test-identity2.global",
+								},
+							},
+						},
+					},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "test-rollout-svc.test-ns.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity.global-incluster-vs",
@@ -4150,23 +4219,32 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		EnableSWAwareNSCaches:                true,
 		EnableVSRoutingInCluster:             true,
 		VSRoutingInClusterDisabledIdentities: []string{"test-identity"},
-		VSRoutingInClusterEnabledIdentities:  []string{},
-		VSRoutingInClusterEnabledClusters:    []string{"cluster-1"},
+		VSRoutingInClusterDisabledClusters:   []string{"cluster-2"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 
-	istioClientWithExistingVS := istioFake.NewSimpleClientset()
-	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
+	istioClientCluster1 := istioFake.NewSimpleClientset()
+	istioClientCluster1.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
 		Create(context.Background(), existingVS, metaV1.CreateOptions{})
+	istioClientCluster2 := istioFake.NewSimpleClientset()
+	istioClientCluster2.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
+		Create(context.Background(), existingVS0, metaV1.CreateOptions{})
+	istioClientCluster2.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
+		Create(context.Background(), existingVS1, metaV1.CreateOptions{})
 
 	rc := &RemoteController{
 		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		VirtualServiceController: &istio.VirtualServiceController{IstioClient: istioClientCluster1},
+	}
+	rc1 := &RemoteController{
+		ClusterID:                "cluster-2",
+		VirtualServiceController: &istio.VirtualServiceController{IstioClient: istioClientCluster2},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
 	rr.PutRemoteController("cluster-1", rc)
+	rr.PutRemoteController("cluster-2", rc1)
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type": "VirtualService",
@@ -4177,10 +4255,11 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		remoteRegistry              *RemoteRegistry
 		vsName                      string
 		sourceClusterToEventNsCache map[string]string
-		istioClient                 *istioFake.Clientset
 		sourceIdentity              string
+		cluster                     string
+		vsNames                     []string
 		expectedError               error
-		expectedVS                  *apiNetworkingV1Alpha3.VirtualService
+		expectedVSExportTo          []string
 	}{
 		{
 			name: "Given a nil remoteRegistry, " +
@@ -4214,56 +4293,40 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 			expectedError:               fmt.Errorf("vsname is empty"),
 		},
 		{
-			name: "Given all valid params " +
+			name: "Given an identity which needs to be rolled back " +
 				"When performInVSRoutingRollback is invoked, " +
-				"Then it should successfully update the VS",
-			sourceIdentity:              "test-identity",
-			remoteRegistry:              rr,
-			vsName:                      "test-env.test-identity.global",
-			istioClient:                 istioClientWithExistingVS,
+				"Then it should successfully update the VS of the identity with sync namespace in exportTo",
+			sourceIdentity: "test-identity",
+			remoteRegistry: rr,
+			vsName:         "test-env.test-identity.global",
+			cluster:        "cluster-1",
+			vsNames: []string{
+				"test-env.test-identity.global-incluster-vs",
+			},
 			sourceClusterToEventNsCache: map[string]string{"cluster-1": "test-ns"},
 			expectedError:               nil,
-			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
-				ObjectMeta: metaV1.ObjectMeta{
-					Name:      "test-env.test-identity.global-incluster-vs",
-					Namespace: "test-sync-ns",
-				},
-				Spec: networkingV1Alpha3.VirtualService{
-					Hosts:    []string{"test-env.test-identity.global"},
-					ExportTo: []string{"test-sync-ns"},
-					Http: []*networkingV1Alpha3.HTTPRoute{
-						{
-							Match: []*networkingV1Alpha3.HTTPMatchRequest{
-								{
-									Authority: &networkingV1Alpha3.StringMatch{
-										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-											Prefix: "test-env.test-identity.global",
-										},
-									},
-								},
-							},
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "test-rollout-svc.test-ns.svc.cluster.local",
-										Port: &networkingV1Alpha3.PortSelector{
-											Number: 8080,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+			expectedVSExportTo:          []string{"test-sync-ns"},
+		},
+		{
+			name: "Given a cluster where all incluster VSs should be rolled back " +
+				"When performInVSRoutingRollback is invoked, " +
+				"Then it should successfully update all VSs in the given cluster with sync namespace in exportTo",
+			sourceIdentity: "test-identity1",
+			remoteRegistry: rr,
+			vsName:         "test-env.test-identity1.global",
+			cluster:        "cluster-2",
+			vsNames: []string{
+				"test-env.test-identity1.global-incluster-vs",
+				"test-env.test-identity2.global-incluster-vs",
 			},
+			sourceClusterToEventNsCache: map[string]string{"cluster-2": "test-ns"},
+			expectedError:               nil,
+			expectedVSExportTo:          []string{"test-sync-ns"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rc := rr.GetRemoteController("cluster-1")
-			rc.VirtualServiceController.IstioClient = tc.istioClient
-			rr.PutRemoteController("cluster-1", rc)
 			err := performInVSRoutingRollback(
 				context.Background(),
 				ctxLogger,
@@ -4276,12 +4339,15 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 				require.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				require.Nil(t, err)
-				actualVS, err := tc.istioClient.
-					NetworkingV1alpha3().
-					VirtualServices(util.IstioSystemNamespace).
-					Get(context.Background(), "test-env.test-identity.global-incluster-vs", metaV1.GetOptions{})
-				require.Nil(t, err)
-				require.Equal(t, tc.expectedVS.Spec.ExportTo, actualVS.Spec.ExportTo)
+				istioClient := tc.remoteRegistry.GetRemoteController(tc.cluster).VirtualServiceController.IstioClient
+				for _, vsName := range tc.vsNames {
+					actualVS, err := istioClient.
+						NetworkingV1alpha3().
+						VirtualServices(util.IstioSystemNamespace).
+						Get(context.Background(), vsName, metaV1.GetOptions{})
+					require.Nil(t, err)
+					require.Equal(t, tc.expectedVSExportTo, actualVS.Spec.ExportTo)
+				}
 			}
 		})
 	}
