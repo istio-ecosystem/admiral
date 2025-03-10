@@ -898,6 +898,18 @@ func modifyServiceEntryForNewServiceOrPod(
 	}
 
 	// VS Based Routing - In Cluster
+	// Rollback if this identity exists in vs_routing_in_cluster_disabled_identities list
+	// Rollback for all identities if the current identity's source clusters are in
+	// vs_routing_in_cluster_disabled_clusters list
+	err = performInVSRoutingRollback(
+		ctx, ctxLogger, remoteRegistry, sourceIdentity, sourceClusterToEventNsCache, cname)
+	if err != nil {
+		ctxLogger.Errorf(
+			common.CtxLogFormat, "performInVSRoutingRollback", deploymentOrRolloutName, namespace, "",
+			fmt.Errorf("failed to rollback incluster vs routing due to error: %w", err))
+	}
+
+	// VS Based Routing - In Cluster
 	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateInClusterVirtualServices(
@@ -1057,6 +1069,20 @@ func getExistingVS(ctxLogger *logrus.Entry, ctx context.Context, rc *RemoteContr
 		return nil, err
 	}
 	return existingVS, nil
+}
+
+func getAllVirtualServices(
+	ctxLogger *logrus.Entry,
+	ctx context.Context,
+	rc *RemoteController,
+	namespace string,
+	listOptions v12.ListOptions) (*v1alpha3.VirtualServiceList, error) {
+	virtualServicesList, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).List(ctx, listOptions)
+	if err != nil && k8sErrors.IsNotFound(err) {
+		ctxLogger.Debugf(LogFormat, "list", common.VirtualServiceResourceType, "", rc.ClusterID, "virtualservices not found")
+		return nil, err
+	}
+	return virtualServicesList, nil
 }
 
 func getAdmiralGeneratedVirtualService(ctx context.Context, remoteController *RemoteController, vsName string,
