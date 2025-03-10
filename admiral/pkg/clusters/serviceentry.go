@@ -1536,8 +1536,10 @@ func AddServiceEntriesWithDrWorker(
 		start = time.Now()
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
+
+		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
-			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR)
+			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
 		for _, seDr := range seDrSet {
@@ -2281,7 +2283,7 @@ func isGeneratedByCartographer(annotations map[string]string) bool {
 
 func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region string, cluster string,
 	se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection,
-	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule) (map[string]*SeDrTuple, []string) {
+	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule, doDRUpdateForInClusterRouting bool) (map[string]*SeDrTuple, []string) {
 	var (
 		defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 		defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -2343,7 +2345,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 			var seDr = &SeDrTuple{
 				DrName:                      drName,
 				SeName:                      seName,
-				DestinationRule:             getDestinationRule(modifiedSe, region, gtpTrafficPolicy, outlierDetection, clientConnectionSettings, currentDR, eventResourceType, ctxLogger, event),
+				DestinationRule:             getDestinationRule(modifiedSe, region, gtpTrafficPolicy, outlierDetection, clientConnectionSettings, currentDR, eventResourceType, ctxLogger, event, doDRUpdateForInClusterRouting),
 				ServiceEntry:                modifiedSe,
 				SeDnsPrefix:                 gtpTrafficPolicy.DnsPrefix,
 				SeDrGlobalTrafficPolicyName: globalTrafficPolicy.Name,
@@ -2363,7 +2365,7 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 		var seDr = &SeDrTuple{
 			DrName:          defaultDrName,
 			SeName:          defaultSeName,
-			DestinationRule: getDestinationRule(se, region, nil, outlierDetection, clientConnectionSettings, currentDR, eventResourceType, ctxLogger, event),
+			DestinationRule: getDestinationRule(se, region, nil, outlierDetection, clientConnectionSettings, currentDR, eventResourceType, ctxLogger, event, doDRUpdateForInClusterRouting),
 			ServiceEntry:    se,
 		}
 		if strings.HasPrefix(se.Hosts[0], common.CanaryRolloutCanaryPrefix) {

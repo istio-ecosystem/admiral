@@ -90,6 +90,8 @@ const (
 	UPDATE                           = "Update"
 	DELETE                           = "Delete"
 	AssetLabel                       = "asset"
+	WestLocality                     = "us-west-2"
+	EastLocality                     = "us-east-2"
 
 	RollingWindow = "ROLLING_WINDOW"
 
