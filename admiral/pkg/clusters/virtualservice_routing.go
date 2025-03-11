@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"k8s.io/apimachinery/pkg/labels"
 	"sort"
 	"strings"
 
@@ -24,6 +25,10 @@ import (
 
 const (
 	vsRoutingLabel = "admiral.io/vs-routing"
+	// This label has been added in order to make the API call efficient
+	vsRoutingType          = "admiral.io/vs-routing-type"
+	inclusterVSNameSuffix  = "incluster-vs"
+	vsRoutingTypeInCluster = "incluster"
 )
 
 // getBaseInClusterVirtualService generates the base in-cluster virtual service
@@ -33,6 +38,7 @@ func getBaseInClusterVirtualService() (*v1alpha3.VirtualService, error) {
 			Namespace: util.IstioSystemNamespace,
 			Labels: map[string]string{
 				vsRoutingLabel: "enabled",
+				vsRoutingType:  vsRoutingTypeInCluster,
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
@@ -526,7 +532,7 @@ func generateVirtualServiceForIncluster(
 	})
 	virtualService.Spec.Http = httpRoutes
 
-	virtualService.Name = vsName + "-incluster-vs"
+	virtualService.Name = fmt.Sprintf("%s-%s", vsName, inclusterVSNameSuffix)
 
 	// Add the exportTo namespaces to the virtual service
 	if common.EnableExportTo(vsName) {
@@ -608,6 +614,15 @@ func addUpdateInClusterVirtualServices(
 		return fmt.Errorf("identity is empty")
 	}
 
+	if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
+		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+			"", "", "",
+			fmt.Sprintf(
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for identity %s",
+				sourceIdentity))
+		return nil
+	}
+
 	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
 		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 			"", "", "",
@@ -626,6 +641,13 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
+
+		if common.IsVSRoutingInClusterDisabledForCluster(sourceCluster) {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
+			continue
+		}
 
 		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
@@ -1239,4 +1261,111 @@ func getIngressDRLoadBalancerPolicy() networkingV1Alpha3.LoadBalancerSettings_Si
 		return networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN
 	}
 
+}
+
+// performInVSRoutingRollback This function will rollback either all the in-cluster virtualservices
+// or rollback a specific vs of a specific identity.
+// The rollback is performed by setting the exportTo to the sync namespace.
+func performInVSRoutingRollback(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceIdentity string,
+	sourceClusterToEventNsCache map[string]string,
+	vsname string) error {
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+	if sourceIdentity == "" {
+		return fmt.Errorf("source identity is empty")
+	}
+	if sourceClusterToEventNsCache == nil {
+		return fmt.Errorf("sourceClusterToEventNsCache is nil")
+	}
+	if vsname == "" {
+		return fmt.Errorf("vsname is empty")
+	}
+
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{vsRoutingType: vsRoutingTypeInCluster}}
+
+	errs := make([]error, 0)
+	for clusterID := range sourceClusterToEventNsCache {
+		rc := remoteRegistry.GetRemoteController(clusterID)
+		if rc == nil {
+			return fmt.Errorf("remote controller not initialized on cluster %v", clusterID)
+		}
+		if common.IsVSRoutingInClusterDisabledForCluster(clusterID) {
+			// Disable all in-cluster VS
+			virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, util.IstioSystemNamespace,
+				metaV1.ListOptions{
+					LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+				})
+			if err != nil {
+				e := fmt.Errorf(
+					"error while getting all virtualservices, rollback failed on cluster %v due to %w",
+					clusterID, err)
+				ctxLogger.Errorf(common.LogErrFormat, "Delete",
+					"performInVSRoutingRollback", "", clusterID, e)
+				errs = append(errs, err)
+				continue
+			}
+			for _, virtualService := range virtualServiceList.Items {
+				virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
+				err := updateVirtualService(ctx, virtualService, util.IstioSystemNamespace, rc)
+				if err != nil {
+					e := fmt.Errorf(
+						"failed to rollback in-cluster virtual service on cluster %v due to %w", clusterID, err)
+					ctxLogger.Errorf(common.LogErrFormat, "Delete",
+						"performInVSRoutingRollback", virtualService.Name, clusterID, e)
+					errs = append(errs, e)
+				}
+			}
+			if len(errs) == 0 {
+				ctxLogger.Infof(common.CtxLogFormat, "performInVSRoutingRollback",
+					"", util.IstioSystemNamespace, clusterID, "successfully rolled back to in-cluster virtualservices")
+			}
+			continue
+		}
+		if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
+			// If we enter this block that means the entire cluster is not disabled
+			// just a single identity's VS need to be rolled back.
+			virtualServiceName := fmt.Sprintf("%s-%s", vsname, inclusterVSNameSuffix)
+			existingVS, err := getExistingVS(
+				ctxLogger, ctx, rc, virtualServiceName, util.IstioSystemNamespace)
+			if err != nil {
+				e := fmt.Errorf(
+					"error while getting virtualservice %v, rollback failed on cluster %v due to %w",
+					virtualServiceName, clusterID, err)
+				ctxLogger.Errorf(common.LogErrFormat, "Delete",
+					"performInVSRoutingRollback", virtualServiceName, clusterID, e)
+				errs = append(errs, e)
+				continue
+			}
+			if existingVS == nil {
+				ctxLogger.Infof(common.CtxLogFormat, "performInVSRoutingRollback",
+					virtualServiceName, util.IstioSystemNamespace, clusterID, "virtualservice does not exist")
+				continue
+			}
+			existingVS.Spec.ExportTo = []string{common.GetSyncNamespace()}
+			err = updateVirtualService(ctx, existingVS, util.IstioSystemNamespace, rc)
+			if err != nil {
+				e := fmt.Errorf(
+					"failed rolling back virtualservice %v due to %w",
+					virtualServiceName, err)
+				ctxLogger.Errorf(common.LogErrFormat, "Delete",
+					"performInVSRoutingRollback", virtualServiceName, clusterID, e)
+				errs = append(errs, e)
+				continue
+			}
+			if len(errs) == 0 {
+				ctxLogger.Infof(common.CtxLogFormat, "performInVSRoutingRollback",
+					virtualServiceName, util.IstioSystemNamespace, clusterID, "successfully rolled back in-cluster virtualservice")
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("%v", errs)
+	}
+	return nil
 }

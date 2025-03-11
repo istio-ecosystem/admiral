@@ -488,6 +488,44 @@ func IsSlowStartEnabledForCluster(cluster string) bool {
 	return false
 }
 
+func ShouldInClusterVSRoutingPerformRollback() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if len(wrapper.params.VSRoutingInClusterDisabledClusters) > 0 ||
+		len(wrapper.params.VSRoutingInClusterDisabledIdentities) > 0 {
+		return true
+	}
+	return false
+}
+
+func IsVSRoutingInClusterDisabledForCluster(cluster string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	for _, c := range wrapper.params.VSRoutingInClusterDisabledClusters {
+		if c == "*" {
+			return true
+		}
+		if c == cluster {
+			return true
+		}
+	}
+	return false
+}
+
+func IsVSRoutingInClusterDisabledForIdentity(identity string) bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	for _, c := range wrapper.params.VSRoutingInClusterDisabledIdentities {
+		if c == "*" {
+			return true
+		}
+		if c == identity {
+			return true
+		}
+	}
+	return false
+}
+
 func DoVSRoutingInClusterForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

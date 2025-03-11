@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -1944,6 +1945,142 @@ func TestAddUpdateVirtualService(t *testing.T) {
 				if vs.Annotations[ignored] != "" {
 					t.Errorf("expected VS to not ignored annotations, but got annotations: %v", ignored)
 				}
+			}
+		})
+	}
+}
+
+func TestUpdateVirtualService(t *testing.T) {
+	var (
+		ctx = context.Background()
+
+		namespace = "testns"
+		fooVS     = &apiNetworkingV1Alpha3.VirtualService{
+			ObjectMeta: metaV1.ObjectMeta{
+				Name: "stage.test00.foo.incluster-vs",
+				Labels: map[string]string{
+					vsRoutingType: vsRoutingTypeInCluster,
+				},
+			},
+			Spec: networkingV1Alpha3.VirtualService{
+				Hosts:    []string{"stage.test00.foo", "stage.test00.bar"},
+				ExportTo: []string{"client-ns"},
+			},
+		}
+		istioClientWithExistingVS = istioFake.NewSimpleClientset()
+	)
+	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(namespace).
+		Create(ctx, fooVS, metaV1.CreateOptions{})
+	rc := &RemoteController{
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: istioClientWithExistingVS,
+		},
+	}
+	admiralParams := common.AdmiralParams{
+		LabelSet:      &common.LabelSet{},
+		SyncNamespace: "test-sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	cases := []struct {
+		name       string
+		newVS      *apiNetworkingV1Alpha3.VirtualService
+		namespace  string
+		rc         *RemoteController
+		expectedVS *apiNetworkingV1Alpha3.VirtualService
+		expErr     error
+	}{
+		{
+			name: "Given vs is nil," +
+				"When updateVirtualService func is called," +
+				"Then the func should return an error",
+			newVS:  nil,
+			expErr: fmt.Errorf("virtualservice is nil"),
+		},
+		{
+			name: "Given namespace is empty," +
+				"When updateVirtualService func is called," +
+				"Then the func should return an error",
+			newVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						vsRoutingType: vsRoutingTypeInCluster,
+					},
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"stage.test00.foo", "stage.test00.bar"},
+					ExportTo: []string{"client-ns"},
+				},
+			},
+			expErr: fmt.Errorf("namespace is empty"),
+		},
+		{
+			name: "Given remoteController is nil," +
+				"When updateVirtualService func is called," +
+				"Then the func should return an error",
+			newVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						vsRoutingType: vsRoutingTypeInCluster,
+					},
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"stage.test00.foo", "stage.test00.bar"},
+					ExportTo: []string{"client-ns"},
+				},
+			},
+			namespace: "testns",
+			expErr:    fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given a valid is vs," +
+				"When updateVirtualService func is called," +
+				"Then the func should update the VS correctly",
+			newVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						vsRoutingType: vsRoutingTypeInCluster,
+					},
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"stage.test00.foo", "stage.test00.bar"},
+					ExportTo: []string{"test-sync-ns"},
+				},
+			},
+			namespace: "testns",
+			rc:        rc,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						vsRoutingType: vsRoutingTypeInCluster,
+					},
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"stage.test00.foo", "stage.test00.bar"},
+					ExportTo: []string{"test-sync-ns"},
+				},
+			},
+			expErr: nil,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := updateVirtualService(ctx, c.newVS, c.namespace, c.rc)
+			if c.expErr != nil {
+				require.NotNil(t, err)
+				require.Equal(t, c.expErr.Error(), err.Error())
+			} else {
+				require.Nil(t, err)
+				updatedVS, _ := istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(c.namespace).
+					Get(ctx, c.newVS.Name, metaV1.GetOptions{})
+				require.Equal(t, c.expectedVS.Spec.ExportTo, updatedVS.Spec.ExportTo)
 			}
 		})
 	}

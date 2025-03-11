@@ -310,6 +310,116 @@ func TestIsSlowStartEnabledForCluster(t *testing.T) {
 
 }
 
+func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                                 string
+		cluster                              string
+		disabledVSRoutingInClusterForCluster []string
+		expected                             bool
+	}{
+		{
+			name: "Given disabledVSRoutingInClusterForCluster is empty" +
+				"When IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then it should return false",
+			cluster:                              "cluster1",
+			disabledVSRoutingInClusterForCluster: []string{},
+			expected:                             false,
+		},
+		{
+			name: "Given cluster doesn't exists in the list" +
+				"When IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then it should return false",
+			cluster:                              "cluster2",
+			disabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			expected:                             false,
+		},
+		{
+			name: "Given cluster does exists in the list" +
+				"When IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then it should return true",
+			cluster:                              "cluster1",
+			disabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			expected:                             true,
+		},
+		{
+			name: "Given VS routing is disabled in all clusters using '*'" +
+				"When IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then it should return true",
+			cluster:                              "cluster1",
+			disabledVSRoutingInClusterForCluster: []string{"*"},
+			expected:                             true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.VSRoutingInClusterDisabledClusters = tc.disabledVSRoutingInClusterForCluster
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForCluster(tc.cluster))
+		})
+	}
+
+}
+
+func TestIsVSRoutingInClusterDisabledForIdentity(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                                    string
+		identity                                string
+		disabledVSRoutingInClusterForIdentities []string
+		expected                                bool
+	}{
+		{
+			name: "Given disabledVSRoutingInClusterForIdentities is empty" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			identity:                                "testIdentity1",
+			disabledVSRoutingInClusterForIdentities: []string{},
+			expected:                                false,
+		},
+		{
+			name: "Given identity doesn't exists in the list" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			identity:                                "testIdentity2",
+			disabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
+			expected:                                false,
+		},
+		{
+			name: "Given identity does exists in the list" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			identity:                                "testIdentity1",
+			disabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
+			expected:                                true,
+		},
+		{
+			name: "Given  VS routing is disabled for all identities using '*'" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			identity:                                "testIdentity1",
+			disabledVSRoutingInClusterForIdentities: []string{"*"},
+			expected:                                true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.VSRoutingInClusterDisabledIdentities = tc.disabledVSRoutingInClusterForIdentities
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForIdentity(tc.identity))
+		})
+	}
+
+}
+
 func TestDoVSRoutingInClusterForCluster(t *testing.T) {
 	p := AdmiralParams{}
 
@@ -770,6 +880,60 @@ func TestGetResyncIntervals(t *testing.T) {
 
 	assert.Equal(t, time.Minute, actual.SeAndDrReconcileInterval)
 	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
+}
+
+func TestShouldPerformRollback(t *testing.T) {
+	p := AdmiralParams{}
+	testCases := []struct {
+		name                        string
+		vsRoutingDisabledClusters   []string
+		vsRoutingDisabledIdentities []string
+		expectedResult              bool
+	}{
+		{
+			name: "Given empty vs routing disabled cluster and disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return false",
+			expectedResult: false,
+		},
+		{
+			name: "Given empty vs routing disabled cluster" +
+				"And non-empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:              true,
+			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
+		},
+		{
+			name: "Given non-empty vs routing disabled cluster" +
+				"And empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:            true,
+			vsRoutingDisabledClusters: []string{"cluster1", "cluster2"},
+		},
+		{
+			name: "Given non-empty vs routing disabled cluster" +
+				"And non-empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:              true,
+			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
+			vsRoutingDisabledClusters:   []string{"cluster1", "cluster2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.VSRoutingInClusterDisabledClusters = tc.vsRoutingDisabledClusters
+			p.VSRoutingInClusterDisabledIdentities = tc.vsRoutingDisabledIdentities
+			ResetSync()
+			InitializeConfig(p)
+			actual := ShouldInClusterVSRoutingPerformRollback()
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
 }
 
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {

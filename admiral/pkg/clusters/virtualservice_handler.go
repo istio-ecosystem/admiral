@@ -507,6 +507,37 @@ func matchRolloutCanaryStrategy(rolloutStrategy argo.RolloutStrategy, virtualSer
 }
 
 /*
+updateVirtualService Updates the passed virtualservice
+*/
+func updateVirtualService(
+	ctx context.Context,
+	vs *v1alpha3.VirtualService,
+	namespace string,
+	rc *RemoteController) error {
+	if vs == nil {
+		return fmt.Errorf("virtualservice is nil")
+	}
+	if namespace == "" {
+		return fmt.Errorf("namespace is empty")
+	}
+	if rc == nil {
+		return fmt.Errorf("remoteController is nil")
+	}
+	maxRetries := 5
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		_, err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Update(ctx, vs, metav1.UpdateOptions{})
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+/*
 Add/Update Virtual service after checking if the current pod is in ReadOnly mode.
 Virtual Service object is not added/updated if the current pod is in ReadOnly mode.
 */
