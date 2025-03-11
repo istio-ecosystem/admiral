@@ -310,6 +310,95 @@ func TestIsSlowStartEnabledForCluster(t *testing.T) {
 
 }
 
+func TestDoDRUpdateForInClusterVSRouting(t *testing.T) {
+	p := AdmiralParams{}
+
+	testCases := []struct {
+		name                                   string
+		cluster                                string
+		identity                               string
+		isSourceCluster                        bool
+		enableVSRoutingInCluster               bool
+		enabledVSRoutingInClusterForCluster    []string
+		enabledVSRoutingInClusterForIdentities []string
+		expected                               bool
+	}{
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                                "cluster1",
+			identity:                               "identity1",
+			isSourceCluster:                        true,
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
+			enabledVSRoutingInClusterForIdentities: []string{"identity1"},
+			expected:                               true,
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is remote cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                                "cluster1",
+			identity:                               "identity1",
+			isSourceCluster:                        false,
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
+			enabledVSRoutingInClusterForIdentities: []string{"identity1"},
+			expected:                               false,
+		},
+		{
+			name: "Given VSRoutingInCluster is not enabled for cluster1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                                "cluster1",
+			identity:                               "identity1",
+			isSourceCluster:                        true,
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForCluster:    []string{"cluster2"},
+			enabledVSRoutingInClusterForIdentities: []string{},
+			expected:                               false,
+		},
+		{
+			name: "Given VSRoutingInCluster is not enabled, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                                "cluster1",
+			identity:                               "identity1",
+			isSourceCluster:                        true,
+			enableVSRoutingInCluster:               false,
+			enabledVSRoutingInClusterForCluster:    []string{},
+			enabledVSRoutingInClusterForIdentities: []string{},
+			expected:                               false,
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1,  VSRoutingInCluster not enabled for identity1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                                "cluster1",
+			identity:                               "identity1",
+			isSourceCluster:                        true,
+			enableVSRoutingInCluster:               true,
+			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
+			enabledVSRoutingInClusterForIdentities: []string{},
+			expected:                               false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
+			p.VSRoutingInClusterEnabledClusters = tc.enabledVSRoutingInClusterForCluster
+			p.VSRoutingInClusterEnabledIdentities = tc.enabledVSRoutingInClusterForIdentities
+			ResetSync()
+			InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoDRUpdateForInClusterVSRouting(tc.cluster, tc.identity, tc.isSourceCluster))
+		})
+	}
+
+}
+
 func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
 	p := AdmiralParams{}
 

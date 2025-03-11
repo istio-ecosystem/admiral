@@ -488,6 +488,15 @@ func IsSlowStartEnabledForCluster(cluster string) bool {
 	return false
 }
 
+// DoDRUpdateForInClusterVSRouting determines whether admiral-sync namespace DestinationRule should be updated
+// for in-cluster virtual service routing for the given cluster and identity.
+func DoDRUpdateForInClusterVSRouting(cluster string, identity string, isSourceCluster bool) bool {
+	if isSourceCluster && DoVSRoutingInClusterForCluster(cluster) && DoVSRoutingInClusterForIdentity(identity) {
+		return true
+	}
+	return false
+}
+
 func ShouldInClusterVSRoutingPerformRollback() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

@@ -352,7 +352,7 @@ func TestGetDestinationRule(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getDestinationRule(c.se, c.locality, c.gtpPolicy, nil, nil, nil, common.GTP, ctxLogger, admiral.Add)
+			result := getDestinationRule(c.se, c.locality, c.gtpPolicy, nil, nil, nil, common.GTP, ctxLogger, admiral.Add, false)
 			if !cmp.Equal(result, c.destinationRule, protocmp.Transform()) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.destinationRule, protocmp.Transform()))
 			}
@@ -786,7 +786,7 @@ func TestGetDestinationRuleActivePassive(t *testing.T) {
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getDestinationRule(c.se, c.locality, c.gtpPolicy, nil, nil, c.destinationRuleInCache, c.eventResourceType, ctxLogger, c.eventType)
+			result := getDestinationRule(c.se, c.locality, c.gtpPolicy, nil, nil, c.destinationRuleInCache, c.eventResourceType, ctxLogger, c.eventType, false)
 			if !cmp.Equal(result, c.expectedDestinationRule, protocmp.Transform()) {
 				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.expectedDestinationRule, protocmp.Transform()))
 			}
@@ -1013,7 +1013,6 @@ func TestGetOutlierDetection(t *testing.T) {
 	testCases := []struct {
 		name                            string
 		se                              *v1alpha3.ServiceEntry
-		locality                        string
 		gtpPolicy                       *model.TrafficPolicy
 		expectedOutlierDetection        *v1alpha3.OutlierDetection
 		admiralOutlierDetectionCRD      *v1.OutlierDetection
@@ -1026,7 +1025,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"Then outlier configurations should be derived from outlier detection, " +
 				"and not from global traffic policy",
 			se:                       se,
-			locality:                 "uswest2",
 			gtpPolicy:                gtpPolicyWithOutlierDetection,
 			expectedOutlierDetection: outlierDetectionFromOutlierCRD,
 			admiralOutlierDetectionCRD: &v1.OutlierDetection{
@@ -1048,7 +1046,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"Then outlier configurations should be derived from outlier detection, " +
 				"and not from global traffic policy",
 			se:                       se,
-			locality:                 "uswest2",
 			gtpPolicy:                nil,
 			expectedOutlierDetection: outlierDetectionFromOutlierCRD,
 			admiralOutlierDetectionCRD: &v1.OutlierDetection{
@@ -1071,7 +1068,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"When the function is called, " +
 				"Then, it should not return any outlier configuration",
 			se:                         seOneHostLocal,
-			locality:                   "uswest2",
 			gtpPolicy:                  gtpPolicyWithOutlierDetection,
 			expectedOutlierDetection:   nil,
 			admiralOutlierDetectionCRD: nil,
@@ -1083,7 +1079,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"When the function is called, " +
 				"Then, it should not return any outlier configuration",
 			se:                         seOneHostRemoteIp,
-			locality:                   "uswest2",
 			gtpPolicy:                  gtpPolicyWithOutlierDetection,
 			expectedOutlierDetection:   nil,
 			admiralOutlierDetectionCRD: nil,
@@ -1093,7 +1088,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"And the associated service entry has an endpoint, which is neither an IP nor a local endpoint, " +
 				"Then the the max ejection percentage should be set to 33%",
 			se:                         seOneHostRemote,
-			locality:                   "uswest2",
 			gtpPolicy:                  gtpPolicyWithOutlierDetection,
 			expectedOutlierDetection:   outlierDetectionWithRemoteHostUsingGTP,
 			admiralOutlierDetectionCRD: nil,
@@ -1103,7 +1097,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"And the associated service entry has two endpoints, " +
 				"Then the max ejection percentage should be set to 100%",
 			se:                         se,
-			locality:                   "uswest2",
 			gtpPolicy:                  gtpPolicyWithOutlierDetection,
 			expectedOutlierDetection:   outlierDetectionFromGTP,
 			admiralOutlierDetectionCRD: nil,
@@ -1113,7 +1106,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"And default automatic failover is not enabled, " +
 				"Then, the outlier detection property should exist but should be empty",
 			se:                              se,
-			locality:                        "uswest2",
 			gtpPolicy:                       nil,
 			expectedOutlierDetection:        outlierDetectionDisabledSpec,
 			admiralOutlierDetectionCRD:      nil,
@@ -1124,7 +1116,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"And default automatic failover is not disabled, " +
 				"Then, the outlier detection should return with default values",
 			se:        se,
-			locality:  "uswest2",
 			gtpPolicy: nil,
 			expectedOutlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: DefaultBaseEjectionTime},
@@ -1141,8 +1132,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			name: "Given base ejection is not configured in the Global Traffic Policy, " +
 				"When there is no outlier resource, " +
 				"Then the default value of BaseEjectionTime should be used",
-			se:       se,
-			locality: "uswest2",
+			se: se,
 			gtpPolicy: &model.TrafficPolicy{
 				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
 					ConsecutiveGatewayErrors: 10,
@@ -1162,8 +1152,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			name: "Given base ejection is not configured in the Global Traffic Policy, " +
 				"When there is no outlier resource, " +
 				"Then the default value of ConsecutiveGatewayErrors should be used",
-			se:       se,
-			locality: "uswest2",
+			se: se,
 			gtpPolicy: &model.TrafficPolicy{
 				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
 					BaseEjectionTime: 600,
@@ -1183,8 +1172,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			name: "Given base ejection is not configured in the Global Traffic Policy, " +
 				"When there is no outlier resource, " +
 				"Then the default value of Interval should be used",
-			se:       se,
-			locality: "uswest2",
+			se: se,
 			gtpPolicy: &model.TrafficPolicy{
 				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
 					BaseEjectionTime:         600,
@@ -1204,8 +1192,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			name: "Given there is a GTP for an asset, " +
 				"When the GTP contains overrides for BaseEjectionTime, ConsecutiveGatewayErrors, and Interval, " +
 				"Then the overrides should be used for the outlier detection configuration",
-			se:       se,
-			locality: "uswest2",
+			se: se,
 			gtpPolicy: &model.TrafficPolicy{
 				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
 					BaseEjectionTime:         600,
@@ -1226,8 +1213,7 @@ func TestGetOutlierDetection(t *testing.T) {
 			name: "Given there is a GTP for an asset, " +
 				"When the GTP contains all possible overrides, " +
 				"Then the Consecutive_5XxErrors should be 0",
-			se:       se,
-			locality: "uswest2",
+			se: se,
 			gtpPolicy: &model.TrafficPolicy{
 				OutlierDetection: &model.TrafficPolicy_OutlierDetection{
 					BaseEjectionTime:         600,
@@ -1249,7 +1235,6 @@ func TestGetOutlierDetection(t *testing.T) {
 				"When outlier contains all possible configurations, " +
 				"Then the Consecutive_5XxErrors should be 0",
 			se:        se,
-			locality:  "uswest2",
 			gtpPolicy: nil,
 			expectedOutlierDetection: &v1alpha3.OutlierDetection{
 				BaseEjectionTime:         &duration.Duration{Seconds: 10},
@@ -1276,7 +1261,7 @@ func TestGetOutlierDetection(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := getOutlierDetection(c.se, c.locality, c.gtpPolicy, c.admiralOutlierDetectionCRD, c.disableDefaultAutomaticFailover)
+			result := getOutlierDetection(c.se, c.gtpPolicy, c.admiralOutlierDetectionCRD, c.disableDefaultAutomaticFailover)
 			if c.expectedOutlierDetection != nil {
 				assert.Equal(t, result.BaseEjectionTime, c.expectedOutlierDetection.BaseEjectionTime, "BaseEjectionTime for Outlier Detection for "+c.name)
 				assert.Equal(t, result.Interval, c.expectedOutlierDetection.Interval, "Interval for Outlier Detection for "+c.name)
@@ -1857,6 +1842,155 @@ func TestGetClientConnectionPoolOverrides(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			actual := getClientConnectionPoolOverrides(c.overrides)
 			assert.Equal(t, c.expectedSettings, actual)
+		})
+	}
+}
+
+func TestGetDestinationRuleVSRoutingInCluster(t *testing.T) {
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "destinationRule",
+	})
+	// Enable Active-Passive
+	admiralParams := common.AdmiralParams{
+		CacheReconcileDuration: 10 * time.Minute,
+		LabelSet: &common.LabelSet{
+			EnvKey: "env",
+		},
+		DefaultWarmupDurationSecs: 45,
+	}
+	admiralParams.EnableActivePassive = false
+	admiralParams.EnableVSRoutingInCluster = true
+	admiralParams.VSRoutingInClusterEnabledClusters = []string{"*"}
+	admiralParams.VSRoutingInClusterEnabledIdentities = []string{"*"}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	se := &v1alpha3.ServiceEntry{
+		Hosts: []string{"qa.myservice.global"},
+		Endpoints: []*v1alpha3.WorkloadEntry{
+			{Address: "east.com", Locality: "us-east-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+			{Address: "west.com", Locality: "us-west-2", Labels: map[string]string{"security.istio.io/tlsMode": "istio"}},
+		}}
+
+	gtp := &model.TrafficPolicy{
+		LbType: model.TrafficPolicy_FAILOVER,
+		Target: []*model.TrafficGroup{
+			{
+				Region: "us-west-2",
+				Weight: 100,
+			},
+			{
+				Region: "us-east-2",
+				Weight: 0,
+			},
+		},
+	}
+
+	trafficPolicy := &v1alpha3.TrafficPolicy{
+		Tls: &v1alpha3.ClientTLSSettings{
+			Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL,
+		},
+		ConnectionPool: &v1alpha3.ConnectionPoolSettings{
+			Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
+				MaxRequestsPerConnection: common.MaxRequestsPerConnection(),
+			},
+		},
+		LoadBalancer: &v1alpha3.LoadBalancerSettings{
+			LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{
+				Simple: v1alpha3.LoadBalancerSettings_LEAST_REQUEST,
+			},
+			LocalityLbSetting: &v1alpha3.LocalityLoadBalancerSetting{
+				Distribute: []*v1alpha3.LocalityLoadBalancerSetting_Distribute{
+					{
+						From: "*",
+						To:   map[string]uint32{"us-east-2": 100},
+					},
+				},
+			},
+			WarmupDurationSecs: &duration.Duration{Seconds: 45},
+		},
+		OutlierDetection: &v1alpha3.OutlierDetection{
+			BaseEjectionTime:         &duration.Duration{Seconds: 300},
+			ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+			Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+			Interval:                 &duration.Duration{Seconds: 60},
+			MaxEjectionPercent:       100,
+		},
+	}
+
+	dr := v1alpha3.DestinationRule{
+		Host:          "qa.myservice.global",
+		TrafficPolicy: trafficPolicy,
+	}
+
+	trafficPolicy1 := &v1alpha3.TrafficPolicy{
+		Tls: &v1alpha3.ClientTLSSettings{
+			Mode: v1alpha3.ClientTLSSettings_ISTIO_MUTUAL,
+		},
+		ConnectionPool: &v1alpha3.ConnectionPoolSettings{
+			Http: &v1alpha3.ConnectionPoolSettings_HTTPSettings{
+				MaxRequestsPerConnection: common.MaxRequestsPerConnection(),
+			},
+		},
+		LoadBalancer: &v1alpha3.LoadBalancerSettings{
+			LbPolicy: &v1alpha3.LoadBalancerSettings_Simple{
+				Simple: v1alpha3.LoadBalancerSettings_LEAST_REQUEST,
+			},
+			WarmupDurationSecs: &duration.Duration{Seconds: 45},
+		},
+		OutlierDetection: &v1alpha3.OutlierDetection{
+			BaseEjectionTime:         &duration.Duration{Seconds: 300},
+			ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 50},
+			Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+			Interval:                 &duration.Duration{Seconds: 60},
+			MaxEjectionPercent:       100,
+		},
+	}
+
+	dr1 := v1alpha3.DestinationRule{
+		Host:          "qa.myservice.global",
+		TrafficPolicy: trafficPolicy1,
+	}
+
+	testCases := []struct {
+		name                          string
+		se                            *v1alpha3.ServiceEntry
+		locality                      string
+		gtpPolicy                     *model.TrafficPolicy
+		destinationRuleInCache        *v1alpha32.DestinationRule
+		eventResourceType             string
+		updateDRForInClusterVSRouting bool
+		eventType                     admiral.EventType
+		expectedDestinationRule       *v1alpha3.DestinationRule
+	}{
+		{
+			name: "Given vs based routing is enabled for cluster1 and identity1" +
+				"locality of the cluster is us-west-2" +
+				"Then the DR should have the traffic distribution set to 100% to east remote region",
+			se:                            se,
+			locality:                      "us-west-2",
+			gtpPolicy:                     gtp,
+			updateDRForInClusterVSRouting: true,
+			expectedDestinationRule:       &dr,
+		},
+		{
+			name: "Given vs based routing is not enabled for cluster1 and identity1" +
+				"locality of the cluster is us-west-2" +
+				"Then the DR should have the traffic distribution set to 100% to east remote region",
+			se:                            se,
+			locality:                      "us-west-2",
+			gtpPolicy:                     nil,
+			updateDRForInClusterVSRouting: false,
+			expectedDestinationRule:       &dr1,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			result := getDestinationRule(c.se, c.locality, c.gtpPolicy, nil, nil, nil, "", ctxLogger, "", c.updateDRForInClusterVSRouting)
+			if !cmp.Equal(result, c.expectedDestinationRule, protocmp.Transform()) {
+				t.Fatalf("DestinationRule Mismatch. Diff: %v", cmp.Diff(result, c.expectedDestinationRule, protocmp.Transform()))
+			}
 		})
 	}
 }

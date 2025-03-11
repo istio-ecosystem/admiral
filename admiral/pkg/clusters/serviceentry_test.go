@@ -2292,7 +2292,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
 			admiralCache.ConfigMapController = c.cc
-			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil)
+			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil, false)
 			if c.seDrSet == nil {
 				if !reflect.DeepEqual(result, c.seDrSet) {
 					t.Fatalf("Expected nil seDrSet but got %+v", result)

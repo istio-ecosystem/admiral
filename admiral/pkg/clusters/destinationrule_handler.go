@@ -35,37 +35,55 @@ type DestinationRuleHandler struct {
 	ClusterID      string
 }
 
-func getDestinationRule(se *networkingV1Alpha3.ServiceEntry, locality string, gtpTrafficPolicy *model.TrafficPolicy,
-	outlierDetection *v1.OutlierDetection, clientConnectionSettings *v1.ClientConnectionConfig, currentDR *v1alpha3.DestinationRule, eventResourceType string, ctxLogger *logrus.Entry, event admiral.EventType) *networkingV1Alpha3.DestinationRule {
-	var (
-		processGtp = true
-		dr         = &networkingV1Alpha3.DestinationRule{}
-	)
+// getDestinationRule constructs a DestinationRule for a given ServiceEntry, applying traffic policies
+// such as load balancing, outlier detection, and connection pool settings based on various configurations.
+func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
+	locality string,
+	gtpTrafficPolicy *model.TrafficPolicy,
+	outlierDetection *v1.OutlierDetection,
+	clientConnectionSettings *v1.ClientConnectionConfig,
+	currentDR *v1alpha3.DestinationRule,
+	eventResourceType string,
+	ctxLogger *logrus.Entry,
+	event admiral.EventType,
+	doDRUpdateForInClusterRouting bool) *networkingV1Alpha3.DestinationRule {
 
-	dr.Host = se.Hosts[0]
+	dr := &networkingV1Alpha3.DestinationRule{
+		Host: se.Hosts[0],
+		TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+			Tls: &networkingV1Alpha3.ClientTLSSettings{
+				Mode: networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
+			},
+			LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+				LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
+					Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
+				},
+				WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
+			},
+		},
+	}
+
 	// In Operator mode, exportTo will be present in the se as well
 	if common.EnableExportTo(dr.Host) || common.IsAdmiralOperatorMode() {
 		dr.ExportTo = se.ExportTo
 	}
-	dr.TrafficPolicy = &networkingV1Alpha3.TrafficPolicy{
-		Tls: &networkingV1Alpha3.ClientTLSSettings{
-			Mode: networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
-		},
-		LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
-			LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
-				Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST,
-			},
-			WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
-		},
+
+	derivedOutlierDetection := getOutlierDetection(se, gtpTrafficPolicy, outlierDetection, common.DisableDefaultAutomaticFailover())
+	if derivedOutlierDetection != nil {
+		dr.TrafficPolicy.OutlierDetection = derivedOutlierDetection
+	}
+
+	clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
+	if clientConnectionSettingsOverride != nil {
+		dr.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
 	}
 
 	if common.EnableActivePassive() &&
 		((eventResourceType != common.GTP) || (eventResourceType == common.GTP && event != admiral.Delete)) {
-		distribute := calculateDistribution(se, currentDR)
 
 		// This is present to avoid adding the LocalityLbSetting to DRs associated to application which to do
 		// not need it
-		if len(distribute) != 0 {
+		if distribute := calculateDistribution(se, currentDR); len(distribute) != 0 {
 			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{
 				Distribute: distribute,
 			}
@@ -74,46 +92,58 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry, locality string, gt
 
 	if len(locality) == 0 {
 		log.Warnf(LogErrFormat, "Process", "GlobalTrafficPolicy", dr.Host, "", "Skipping gtp processing, locality of the cluster nodes cannot be determined. Is this minikube?")
-		processGtp = false
+		return dr
 	}
 
-	if gtpTrafficPolicy != nil && processGtp {
-		var loadBalancerSettings = &networkingV1Alpha3.LoadBalancerSettings{
+	if doDRUpdateForInClusterRouting {
+		remoteRegion := common.WestLocality
+		if locality == common.WestLocality {
+			remoteRegion = common.EastLocality
+		}
+
+		dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{
+			Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+				{
+					From: "*",
+					To:   map[string]uint32{remoteRegion: 100},
+				},
+			},
+		}
+		return dr
+	}
+
+	if gtpTrafficPolicy == nil {
+		return dr
+	}
+
+	if len(gtpTrafficPolicy.Target) == 0 {
+		dr.TrafficPolicy.LoadBalancer = &networkingV1Alpha3.LoadBalancerSettings{
 			LbPolicy:           &networkingV1Alpha3.LoadBalancerSettings_Simple{Simple: networkingV1Alpha3.LoadBalancerSettings_LEAST_REQUEST},
 			WarmupDurationSecs: &duration.Duration{Seconds: common.GetDefaultWarmupDurationSecs()},
 		}
+		return dr
+	}
 
-		if len(gtpTrafficPolicy.Target) > 0 {
-			var localityLbSettings = &networkingV1Alpha3.LocalityLoadBalancerSetting{}
-			if gtpTrafficPolicy.LbType == model.TrafficPolicy_FAILOVER {
-				distribute := make([]*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute, 0)
-				targetTrafficMap := make(map[string]uint32)
-				for _, tg := range gtpTrafficPolicy.Target {
-					//skip 0 values from GTP as that's implicit for locality settings
-					if tg.Weight != int32(0) {
-						targetTrafficMap[tg.Region] = uint32(tg.Weight)
-					}
-				}
-				distribute = append(distribute, &networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-					From: locality + "/*",
-					To:   targetTrafficMap,
-				})
-				localityLbSettings.Distribute = distribute
-			}
-			// else default behavior
-			loadBalancerSettings.LocalityLbSetting = localityLbSettings
+	if gtpTrafficPolicy.LbType != model.TrafficPolicy_FAILOVER {
+		dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{}
+		return dr
+	}
+
+	targetTrafficMap := make(map[string]uint32)
+	for _, tg := range gtpTrafficPolicy.Target {
+		//skip 0 values from GTP as that's implicit for locality settings
+		if tg.Weight != int32(0) {
+			targetTrafficMap[tg.Region] = uint32(tg.Weight)
 		}
-		dr.TrafficPolicy.LoadBalancer = loadBalancerSettings
 	}
 
-	derivedOutlierDetection := getOutlierDetection(se, locality, gtpTrafficPolicy, outlierDetection, common.DisableDefaultAutomaticFailover())
-	if derivedOutlierDetection != nil {
-		dr.TrafficPolicy.OutlierDetection = derivedOutlierDetection
-	}
-
-	clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
-	if clientConnectionSettingsOverride != nil {
-		dr.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
+	dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{
+		Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+			{
+				From: locality + "/*",
+				To:   targetTrafficMap,
+			},
+		},
 	}
 
 	return dr
@@ -228,7 +258,6 @@ func getClientConnectionPoolOverrides(clientConnectionSettings *v1.ClientConnect
 
 func getOutlierDetection(
 	se *networkingV1Alpha3.ServiceEntry,
-	locality string,
 	gtpTrafficPolicy *model.TrafficPolicy,
 	outlierDetectionCrd *v1.OutlierDetection,
 	disableDefaultAutomaticFailover bool) *networkingV1Alpha3.OutlierDetection {
