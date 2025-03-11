@@ -901,12 +901,14 @@ func modifyServiceEntryForNewServiceOrPod(
 	// Rollback if this identity exists in vs_routing_in_cluster_disabled_identities list
 	// Rollback for all identities if the current identity's source clusters are in
 	// vs_routing_in_cluster_disabled_clusters list
-	err = performInVSRoutingRollback(
-		ctx, ctxLogger, remoteRegistry, sourceIdentity, sourceClusterToEventNsCache, cname)
-	if err != nil {
-		ctxLogger.Errorf(
-			common.CtxLogFormat, "performInVSRoutingRollback", deploymentOrRolloutName, namespace, "",
-			fmt.Errorf("failed to rollback incluster vs routing due to error: %w", err))
+	if common.ShouldInClusterVSRoutingPerformRollback() {
+		err = performInVSRoutingRollback(
+			ctx, ctxLogger, remoteRegistry, sourceIdentity, sourceClusterToEventNsCache, cname)
+		if err != nil {
+			ctxLogger.Errorf(
+				common.CtxLogFormat, "performInVSRoutingRollback", deploymentOrRolloutName, namespace, "",
+				fmt.Errorf("failed to rollback incluster vs routing due to error: %w", err))
+		}
 	}
 
 	// VS Based Routing - In Cluster

@@ -882,6 +882,60 @@ func TestGetResyncIntervals(t *testing.T) {
 	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
 }
 
+func TestShouldPerformRollback(t *testing.T) {
+	p := AdmiralParams{}
+	testCases := []struct {
+		name                        string
+		vsRoutingDisabledClusters   []string
+		vsRoutingDisabledIdentities []string
+		expectedResult              bool
+	}{
+		{
+			name: "Given empty vs routing disabled cluster and disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return false",
+			expectedResult: false,
+		},
+		{
+			name: "Given empty vs routing disabled cluster" +
+				"And non-empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:              true,
+			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
+		},
+		{
+			name: "Given non-empty vs routing disabled cluster" +
+				"And empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:            true,
+			vsRoutingDisabledClusters: []string{"cluster1", "cluster2"},
+		},
+		{
+			name: "Given non-empty vs routing disabled cluster" +
+				"And non-empty vs routing disabled identities" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:              true,
+			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
+			vsRoutingDisabledClusters:   []string{"cluster1", "cluster2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.VSRoutingInClusterDisabledClusters = tc.vsRoutingDisabledClusters
+			p.VSRoutingInClusterDisabledIdentities = tc.vsRoutingDisabledIdentities
+			ResetSync()
+			InitializeConfig(p)
+			actual := ShouldInClusterVSRoutingPerformRollback()
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
+}
+
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {
 //
 //	admiralParams := GetAdmiralParams()
