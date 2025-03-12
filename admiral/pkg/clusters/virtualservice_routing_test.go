@@ -1366,7 +1366,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -1376,7 +1376,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -1443,7 +1443,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1463,7 +1463,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 						Weight: 90,
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1508,7 +1508,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-rollout-svc.test-ns.svc.cluster.local",
@@ -1640,7 +1640,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -1650,7 +1650,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -1793,7 +1793,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 			destinations:  make(map[string][]*vsrouting.RouteDestination),
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -1813,7 +1813,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 						Weight: 90,
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "canary-svc.test-ns.svc.cluster.local",
@@ -2141,7 +2141,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2151,7 +2151,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2192,7 +2192,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -2272,7 +2272,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2290,7 +2290,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2426,7 +2426,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			expectedError:         nil,
 			updateWeights:         true,
 			destinations: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2446,7 +2446,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						Weight: 20,
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2456,7 +2456,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2468,7 +2468,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 				},
 			},
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2488,7 +2488,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						Weight: 20,
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2498,7 +2498,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2508,7 +2508,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.west.test-env.test-identity.global": {
+				"west.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2528,7 +2528,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						Weight: 20,
 					},
 				},
-				"outbound_.80_._.west.canary.test-env.test-identity.global": {
+				"west.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2538,7 +2538,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.east.test-env.test-identity.global": {
+				"east.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2567,7 +2567,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						Weight: 20,
 					},
 				},
-				"outbound_.80_._.east.canary.test-env.test-identity.global": {
+				"east.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2600,7 +2600,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			updateWeights:         false,
 			sourceClusterLocality: "us-east-2",
 			destinations: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2610,7 +2610,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2620,7 +2620,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2632,7 +2632,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 				},
 			},
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2642,7 +2642,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -2652,7 +2652,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2662,7 +2662,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.east.test-env.test-identity.global": {
+				"east.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2672,7 +2672,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.west.test-env.test-identity.global": {
+				"west.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -2682,7 +2682,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.east.canary.test-env.test-identity.global": {
+				"east.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -2692,7 +2692,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.west.canary.test-env.test-identity.global": {
+				"west.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
