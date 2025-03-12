@@ -190,7 +190,7 @@ func getRouteDestination(host string, port uint32, weight int32) *vsrouting.Rout
 //
 // Example:
 //
-// "outbound_.80_._.stage.greeting.global" ->
+// "stage.greeting.global" ->
 //
 //	 route:
 //	- destination:
@@ -239,7 +239,7 @@ func populateVSRouteDestinationForDeployment(
 //     port:
 //     number: 80
 //
-// "outbound_.80_._.preview.stage.greeting.global" ->
+// "preview.stage.greeting.global" ->
 //
 // route:
 //   - destination:
@@ -249,7 +249,7 @@ func populateVSRouteDestinationForDeployment(
 //
 // Example Canary:
 //
-// "outbound_.80_._.stage.greeting.global" ->
+// "stage.greeting.global" ->
 //
 //		route:
 //		- destination:
@@ -263,7 +263,7 @@ func populateVSRouteDestinationForDeployment(
 //		      number: 80
 //	     weight: 90
 //
-// "outbound_.80_._.canary.stage.greeting.global" ->
+// "canary.stage.greeting.global" ->
 //
 //	route:
 //	- destination:
