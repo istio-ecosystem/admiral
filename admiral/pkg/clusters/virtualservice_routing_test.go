@@ -1167,7 +1167,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -1205,7 +1205,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 				},
 			},
 			destinations: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -1218,7 +1218,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-deployment-svc.test-ns.svc.cluster.local",
