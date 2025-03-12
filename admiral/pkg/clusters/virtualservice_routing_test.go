@@ -102,9 +102,9 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	rr.AdmiralCache.CnameDependentClusterNamespaceCache.Put(
 		"test-env.test-identity.global", "cluster-1", "test-dependent-ns1", "test-dependent-ns1")
 
-	defaultFQDN := "outbound_.80_._.test-env.test-identity.global"
-	previewFQDN := "outbound_.80_._.preview.test-env.test-identity.global"
-	canaryFQDN := "outbound_.80_._.canary.test-env.test-identity.global"
+	defaultFQDN := "test-env.test-identity.global"
+	previewFQDN := "preview.test-env.test-identity.global"
+	canaryFQDN := "canary.test-env.test-identity.global"
 
 	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
@@ -596,9 +596,9 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
 	rr.PutRemoteController("cluster-1", rc)
 
-	defaultFQDN := "outbound_.80_._.test-env.test-identity.global"
-	previewFQDN := "outbound_.80_._.preview.test-env.test-identity.global"
-	canaryFQDN := "outbound_.80_._.canary.test-env.test-identity.global"
+	defaultFQDN := "test-env.test-identity.global"
+	previewFQDN := "preview.test-env.test-identity.global"
+	canaryFQDN := "canary.test-env.test-identity.global"
 
 	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
@@ -2731,7 +2731,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 
 }
 
-func TestGetDefaultSNIHostFromDeployment(t *testing.T) {
+func TestGetDefaultFQDNFromDeployment(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -2780,13 +2780,13 @@ func TestGetDefaultSNIHostFromDeployment(t *testing.T) {
 				},
 			},
 			expectedError:   nil,
-			expectedSNIHost: "outbound_.80_._.test-env.test-identity.global",
+			expectedSNIHost: "test-env.test-identity.global",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getDefaultSNIHostFromDeployment(tc.deployment)
+			actual, err := getDefaultFQDNFromDeployment(tc.deployment)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -2799,7 +2799,7 @@ func TestGetDefaultSNIHostFromDeployment(t *testing.T) {
 
 }
 
-func TestGetDefaultSNIHostFromRollout(t *testing.T) {
+func TestGetDefaultFQDNFromRollout(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -2854,13 +2854,13 @@ func TestGetDefaultSNIHostFromRollout(t *testing.T) {
 				},
 			},
 			expectedError:   nil,
-			expectedSNIHost: "outbound_.80_._.test-env.test-identity.global",
+			expectedSNIHost: "test-env.test-identity.global",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getDefaultSNIHostFromRollout(tc.rollout)
+			actual, err := getDefaultFQDNFromRollout(tc.rollout)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -2873,7 +2873,7 @@ func TestGetDefaultSNIHostFromRollout(t *testing.T) {
 
 }
 
-func TestGetCanarySNIHostFromRollout(t *testing.T) {
+func TestGetCanaryFQDNFromRollout(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -2931,13 +2931,13 @@ func TestGetCanarySNIHostFromRollout(t *testing.T) {
 				},
 			},
 			expectedError:   nil,
-			expectedSNIHost: "outbound_.80_._.canary.test-env.test-identity.global",
+			expectedSNIHost: "canary.test-env.test-identity.global",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getCanarySNIHostFromRollout(tc.rollout)
+			actual, err := getCanaryFQDNFromRollout(tc.rollout)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -2950,7 +2950,7 @@ func TestGetCanarySNIHostFromRollout(t *testing.T) {
 
 }
 
-func TestGetPreviewSNIHostFromRollout(t *testing.T) {
+func TestGetPreviewFQDNFromRollout(t *testing.T) {
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -3005,13 +3005,13 @@ func TestGetPreviewSNIHostFromRollout(t *testing.T) {
 				},
 			},
 			expectedError:   nil,
-			expectedSNIHost: "outbound_.80_._.preview.test-env.test-identity.global",
+			expectedSNIHost: "preview.test-env.test-identity.global",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getPreviewSNIHostFromRollout(tc.rollout)
+			actual, err := getPreviewFQDNFromRollout(tc.rollout)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -3626,7 +3626,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 				"Then it should return an empty gtpRouteDestinations",
 			gtp: &v1alpha12.GlobalTrafficPolicy{},
 			routeDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": nil,
+				"test-env.test-identity.global": nil,
 			},
 			expectedError:               nil,
 			expectedGTPRouteDestination: make(map[string][]*vsrouting.RouteDestination),
@@ -3698,7 +3698,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 			},
 			sourceClusterLocality: "us-west-2",
 			routeDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.test-env.test-identity.global": {
+				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -3708,7 +3708,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.preview.test-env.test-identity.global": {
+				"preview.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "preview-svc.test-ns.svc.cluster.local",
@@ -3718,7 +3718,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.canary.test-env.test-identity.global": {
+				"canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -3731,7 +3731,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedGTPRouteDestination: map[string][]*vsrouting.RouteDestination{
-				"outbound_.80_._.east.test-env.test-identity.global": {
+				"east.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -3741,7 +3741,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.west.test-env.test-identity.global": {
+				"west.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -3751,7 +3751,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.east.canary.test-env.test-identity.global": {
+				"east.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -3761,7 +3761,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.west.canary.test-env.test-identity.global": {
+				"west.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -3771,7 +3771,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.test-failover.test-env.test-identity.global": {
+				"test-failover.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -3781,7 +3781,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.test-failover.canary.test-env.test-identity.global": {
+				"test-failover.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",
@@ -3791,7 +3791,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						},
 					},
 				},
-				"outbound_.80_._.test-traffic-split.test-env.test-identity.global": {
+				"test-traffic-split.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
@@ -3811,7 +3811,7 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 						Weight: 90,
 					},
 				},
-				"outbound_.80_._.test-traffic-split.canary.test-env.test-identity.global": {
+				"test-traffic-split.canary.test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "desired-svc.test-ns.svc.cluster.local",

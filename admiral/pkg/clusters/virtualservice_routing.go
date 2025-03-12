@@ -73,11 +73,11 @@ func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 	}, nil
 }
 
-// getDefaultSNIHostFromDeployment generates the SNI host from the identity and env
+// getDefaultFQDNFromDeployment generates default FQDN from the identity and env
 // derived from the deployment
 //
-// Example: outbound_.80_._.stage.greeting.global
-func getDefaultSNIHostFromDeployment(deployment *k8sAppsV1.Deployment) (string, error) {
+// Example: stage.greeting.global
+func getDefaultFQDNFromDeployment(deployment *k8sAppsV1.Deployment) (string, error) {
 
 	if deployment == nil {
 		return "", fmt.Errorf("deployment is nil")
@@ -87,18 +87,14 @@ func getDefaultSNIHostFromDeployment(deployment *k8sAppsV1.Deployment) (string, 
 	if cname == "" {
 		return "", fmt.Errorf("cname is empty")
 	}
-	sniHost, err := generateSNIHost(cname)
-	if err != nil {
-		return "", err
-	}
-	return sniHost, nil
+	return cname, nil
 }
 
-// getDefaultSNIHostFromRollout generates the default SNI host from the identity and env
+// getDefaultFQDNFromRollout generates the default FQDN from the identity and env
 // derived from the rollout
 //
-// Example: outbound_.80_._.stage.greeting.global
-func getDefaultSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
+// Example: stage.greeting.global
+func getDefaultFQDNFromRollout(rollout *argo.Rollout) (string, error) {
 
 	if rollout == nil {
 		return "", fmt.Errorf("rollout is nil")
@@ -109,18 +105,14 @@ func getDefaultSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
 	if cname == "" {
 		return "", fmt.Errorf("cname is empty")
 	}
-	sniHost, err := generateSNIHost(cname)
-	if err != nil {
-		return "", err
-	}
-	return sniHost, nil
+	return cname, nil
 }
 
-// getCanarySNIHostFromRollout generates the canary SNI host from the identity and env
+// getCanaryFQDNFromRollout generates the canary FQDN from the identity and env
 // derived from the rollout
 //
-// Example: outbound_.80_._.canary.stage.greeting.canary.global
-func getCanarySNIHostFromRollout(rollout *argo.Rollout) (string, error) {
+// Example: canary.stage.greeting.canary.global
+func getCanaryFQDNFromRollout(rollout *argo.Rollout) (string, error) {
 
 	if rollout == nil {
 		return "", fmt.Errorf("rollout is nil")
@@ -132,19 +124,14 @@ func getCanarySNIHostFromRollout(rollout *argo.Rollout) (string, error) {
 	}
 	canaryCname := common.CanaryRolloutCanaryPrefix + common.Sep + cName
 
-	sniHost, err := generateSNIHost(canaryCname)
-	if err != nil {
-		return "", err
-	}
-
-	return sniHost, nil
+	return canaryCname, nil
 }
 
-// getPreviewSNIHostFromRollout generates the preview SNI host from the identity and env
+// getPreviewFQDNFromRollout generates the preview FQDN from the identity and env
 // derived from the rollout
 //
-// Example: outbound_.80_._.preview.stage.greeting.canary.global
-func getPreviewSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
+// Example: preview.stage.greeting.canary.global
+func getPreviewFQDNFromRollout(rollout *argo.Rollout) (string, error) {
 
 	if rollout == nil {
 		return "", fmt.Errorf("rollout is nil")
@@ -157,12 +144,7 @@ func getPreviewSNIHostFromRollout(rollout *argo.Rollout) (string, error) {
 
 	previewCname := common.BlueGreenRolloutPreviewPrefix + common.Sep + cName
 
-	sniHost, err := generateSNIHost(previewCname)
-	if err != nil {
-		return "", err
-	}
-
-	return sniHost, nil
+	return previewCname, nil
 }
 
 // generateSNIHost generates the SNI host for the virtual service in the format outbound_.80_._.<fqdn>
@@ -231,7 +213,7 @@ func populateVSRouteDestinationForDeployment(
 		return fmt.Errorf("destinations map is nil")
 	}
 
-	globalFQDN, err := getDefaultSNIHostFromDeployment(deployment)
+	globalFQDN, err := getDefaultFQDNFromDeployment(deployment)
 	if err != nil {
 		return err
 	}
@@ -335,7 +317,7 @@ func populateVSRouteDestinationForRollout(
 	// bluegreen or istio canary strategy
 	// In this case we pick whatever service we got during the discovery
 	// phase and add it as a defaultFQDN
-	defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+	defaultFQDN, err := getDefaultFQDNFromRollout(rollout)
 	if err != nil {
 		return err
 	}
@@ -376,7 +358,7 @@ func populateDestinationsForBlueGreenStrategy(
 
 	previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
 	if weightedPreviewService, ok := weightedServices[previewServiceName]; ok {
-		previewFQDN, err := getPreviewSNIHostFromRollout(rollout)
+		previewFQDN, err := getPreviewFQDNFromRollout(rollout)
 		if err != nil {
 			return err
 		}
@@ -390,7 +372,7 @@ func populateDestinationsForBlueGreenStrategy(
 	}
 	activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
 	if activeService, ok := weightedServices[activeServiceName]; ok {
-		defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+		defaultFQDN, err := getDefaultFQDNFromRollout(rollout)
 		if err != nil {
 			return err
 		}
@@ -430,11 +412,11 @@ func populateDestinationsForCanaryStrategy(
 
 	}
 
-	defaultFQDN, err := getDefaultSNIHostFromRollout(rollout)
+	defaultFQDN, err := getDefaultFQDNFromRollout(rollout)
 	if err != nil {
 		return err
 	}
-	canaryFQDN, err := getCanarySNIHostFromRollout(rollout)
+	canaryFQDN, err := getCanaryFQDNFromRollout(rollout)
 	if err != nil {
 		return err
 	}
@@ -493,16 +475,12 @@ func generateVirtualServiceForIncluster(
 		if routeDestinations == nil || len(routeDestinations) == 0 {
 			continue
 		}
-		fqdn, err := getFQDNFromSNIHost(globalFQDN)
-		if err != nil {
-			continue
-		}
 		httpRoute := networkingV1Alpha3.HTTPRoute{
 			Match: []*networkingV1Alpha3.HTTPMatchRequest{
 				{
 					Authority: &networkingV1Alpha3.StringMatch{
 						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-							Prefix: fqdn,
+							Prefix: globalFQDN,
 						},
 					},
 				},
@@ -514,7 +492,7 @@ func generateVirtualServiceForIncluster(
 		}
 		httpRoute.Route = httpRouteDestinations
 		httpRoutes = append(httpRoutes, &httpRoute)
-		vsHosts = append(vsHosts, fqdn)
+		vsHosts = append(vsHosts, globalFQDN)
 	}
 
 	if len(vsHosts) == 0 {
@@ -562,11 +540,15 @@ func generateVirtualServiceForIngress(
 		if routeDestinations == nil || len(routeDestinations) == 0 {
 			continue
 		}
+		hostWithSNIPrefix, err := generateSNIHost(globalFQDN)
+		if err != nil {
+			continue
+		}
 		tlsRoute := networkingV1Alpha3.TLSRoute{
 			Match: []*networkingV1Alpha3.TLSMatchAttributes{
 				{
 					Port:     common.DefaultMtlsPort,
-					SniHosts: []string{globalFQDN},
+					SniHosts: []string{hostWithSNIPrefix},
 				},
 			},
 		}
@@ -576,7 +558,7 @@ func generateVirtualServiceForIngress(
 		}
 		tlsRoute.Route = tlsRouteDestinations
 		tlsRoutes = append(tlsRoutes, &tlsRoute)
-		vsHosts = append(vsHosts, globalFQDN)
+		vsHosts = append(vsHosts, hostWithSNIPrefix)
 	}
 
 	if len(vsHosts) == 0 {
@@ -769,7 +751,7 @@ func addUpdateVirtualServicesForIngress(
 // getAllVSRouteDestinationsByCluster generates the route destinations for each source cluster
 // This is during the discovery phase where the route destinations are created for each source cluster
 // For a given identity and env, we are going to build a map of all possible services across deployments
-// and rollouts. IN addition, it also adds additional endpoints created using GTP DNS Prefix.
+// and rollouts.
 // This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
 	ctxLogger *log.Entry,
@@ -924,17 +906,11 @@ func getDestinationsForGTPDNSPrefixes(
 			continue
 		}
 
-		hostWithoutSNIPrefix, err := getFQDNFromSNIHost(globalFQDN)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if strings.HasPrefix(hostWithoutSNIPrefix, common.BlueGreenRolloutPreviewPrefix) {
+		if strings.HasPrefix(globalFQDN, common.BlueGreenRolloutPreviewPrefix) {
 			continue
 		}
 
-		var newDNSPrefixedSNIHost, routeHost string
+		var routeHost string
 
 		for _, policy := range globalTrafficPolicy.Spec.Policy {
 			weights := make(map[string]int32)
@@ -948,14 +924,9 @@ func getDestinationsForGTPDNSPrefixes(
 			if !updateWeights && len(weights) == 0 && (policy.DnsPrefix == common.Default || policy.DnsPrefix == env) {
 				continue
 			} else if policy.DnsPrefix == common.Default || policy.DnsPrefix == env {
-				routeHost = hostWithoutSNIPrefix
+				routeHost = globalFQDN
 			} else {
-				routeHost = policy.DnsPrefix + common.Sep + hostWithoutSNIPrefix
-			}
-
-			newDNSPrefixedSNIHost, err = generateSNIHost(routeHost)
-			if err != nil {
-				return nil, err
+				routeHost = policy.DnsPrefix + common.Sep + globalFQDN
 			}
 
 			newRD, err := copyRouteDestinations(routeDestinations)
@@ -964,7 +935,7 @@ func getDestinationsForGTPDNSPrefixes(
 			}
 
 			if policy.LbType == model.TrafficPolicy_TOPOLOGY || !updateWeights || len(weights) == 0 {
-				gtpDestinations[newDNSPrefixedSNIHost] = newRD
+				gtpDestinations[routeHost] = newRD
 				continue
 			}
 
@@ -995,7 +966,7 @@ func getDestinationsForGTPDNSPrefixes(
 			if remoteRD != nil {
 				newRD = append(newRD, remoteRD)
 			}
-			gtpDestinations[newDNSPrefixedSNIHost] = newRD
+			gtpDestinations[routeHost] = newRD
 		}
 	}
 
