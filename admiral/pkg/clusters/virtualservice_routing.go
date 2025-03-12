@@ -485,6 +485,7 @@ func generateVirtualServiceForIncluster(
 					},
 				},
 			},
+			Name: globalFQDN,
 		}
 		httpRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
 		for _, routeDestination := range routeDestinations {

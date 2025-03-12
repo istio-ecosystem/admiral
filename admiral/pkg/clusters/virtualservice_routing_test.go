@@ -238,6 +238,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 					ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 					Http: []*networkingV1Alpha3.HTTPRoute{
 						{
+							Name: "test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -283,6 +284,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 					ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 					Http: []*networkingV1Alpha3.HTTPRoute{
 						{
+							Name: "test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -331,6 +333,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 					ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 					Http: []*networkingV1Alpha3.HTTPRoute{
 						{
+							Name: "preview.test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -352,6 +355,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 							},
 						},
 						{
+							Name: "test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -400,6 +404,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 					ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 					Http: []*networkingV1Alpha3.HTTPRoute{
 						{
+							Name: "canary.test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -421,6 +426,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 							},
 						},
 						{
+							Name: "test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
@@ -476,6 +482,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 					ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 					Http: []*networkingV1Alpha3.HTTPRoute{
 						{
+							Name: "test-env.test-identity.global",
 							Match: []*networkingV1Alpha3.HTTPMatchRequest{
 								{
 									Authority: &networkingV1Alpha3.StringMatch{
