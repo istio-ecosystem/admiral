@@ -1476,6 +1476,74 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 			},
 		},
 		{
+			name: "Given an empty route destinations map and a rollout with canary strategy and only one service as prt of weighted service " +
+				"When populateVSRouteDestinationForRollout is invoked, " +
+				"Then it should populate the destinations with the stable",
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Namespace: "test-ns",
+					},
+				},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						Canary: &v1alpha1.CanaryStrategy{
+							StableService: "stable-svc",
+							CanaryService: "canary-svc",
+							TrafficRouting: &v1alpha1.RolloutTrafficRouting{
+								Istio: &v1alpha1.IstioTrafficRouting{VirtualService: &v1alpha1.IstioVirtualService{Name: "test"}},
+							},
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"stable-svc": {
+					Weight: 1,
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "stable-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			destinations:  make(map[string][]*vsrouting.RouteDestination),
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "stable-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "canary-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Given an empty route destinations map and a rollout with non-istio canary strategy " +
 				"When populateVSRouteDestinationForRollout is invoked, " +
 				"Then it should populate the destinations with whatever service it got during discovery",

@@ -433,7 +433,7 @@ func populateDestinationsForCanaryStrategy(
 		if destinations[defaultFQDN] == nil {
 			destinations[defaultFQDN] = make([]*vsrouting.RouteDestination, 0)
 		}
-		if service.Weight > 0 {
+		if service.Weight > 0 && len(weightedServices) > 1 {
 			weight = service.Weight
 		}
 		destinations[defaultFQDN] = append(destinations[defaultFQDN], getRouteDestination(host, meshPort, weight))
