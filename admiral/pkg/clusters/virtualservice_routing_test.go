@@ -79,8 +79,10 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
 	rc := &RemoteController{
-		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			VirtualServiceCache: istio.NewVirtualServiceCache(),
+		},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
@@ -544,7 +546,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
+		common.VSRoutingLabel: "enabled",
 	}
 
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
@@ -596,8 +598,10 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
 	rc := &RemoteController{
-		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			VirtualServiceCache: istio.NewVirtualServiceCache(),
+		},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
@@ -1922,7 +1926,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 	}
 
 	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
+		common.VSRoutingLabel: "enabled",
 	}
 
 	validVS := &apiNetworkingV1Alpha3.VirtualService{
@@ -4187,7 +4191,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity1.global-incluster-vs",
 			Namespace: util.IstioSystemNamespace,
-			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+			Labels:    map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 		},
 		Spec: networkingV1Alpha3.VirtualService{
 			Hosts:    []string{"test-env.test-identity1.global"},
@@ -4222,7 +4226,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity2.global-incluster-vs",
 			Namespace: util.IstioSystemNamespace,
-			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+			Labels:    map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 		},
 		Spec: networkingV1Alpha3.VirtualService{
 			Hosts:    []string{"test-env.test-identity2.global"},

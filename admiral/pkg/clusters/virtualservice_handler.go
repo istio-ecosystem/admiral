@@ -565,7 +565,7 @@ func addUpdateVirtualService(
 	//Check if VS has the admiral.io/vs-routing label
 	// If it does, skip adding ExportTo since it is already set to "istio-system" only
 	// The VS created for routing cross cluster traffic should only be exported to istio-system
-	if newCopy.Labels != nil && newCopy.Labels[vsRoutingLabel] == "enabled" {
+	if newCopy.Labels != nil && newCopy.Labels[common.VSRoutingLabel] == "enabled" {
 		skipAddingExportTo = true
 	}
 
