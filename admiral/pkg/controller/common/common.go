@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	v1alpha4 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 
 	"github.com/google/uuid"
@@ -131,6 +133,12 @@ const (
 	LBUpdateProcessor   = "LBUpdateProcessor"
 
 	DummyAdmiralGlobal = "dummy.admiral.global"
+
+	VSRoutingLabel = "admiral.io/vs-routing"
+	// VSRoutingType This label has been added in order to make the API call efficient
+	VSRoutingType          = "admiral.io/vs-routing-type"
+	InclusterVSNameSuffix  = "incluster-vs"
+	VSRoutingTypeInCluster = "incluster"
 )
 
 type Event string
@@ -862,4 +870,17 @@ func GetPartitionAndOriginalIdentifierFromPartitionedIdentifier(partitionedIdent
 		}
 	}
 	return "", partitionedIdentifier
+}
+
+func IsVSRoutingEnabledVirtualService(vs *v1alpha4.VirtualService) bool {
+	if vs == nil {
+		return false
+	}
+	if vs.Annotations == nil {
+		return false
+	}
+	if _, ok := vs.Annotations[VSRoutingLabel]; !ok {
+		return false
+	}
+	return true
 }
