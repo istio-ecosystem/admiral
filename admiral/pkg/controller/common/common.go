@@ -884,3 +884,20 @@ func IsVSRoutingEnabledVirtualService(vs *v1alpha4.VirtualService) bool {
 	}
 	return true
 }
+
+func IsVSRoutingInClusterVirtualService(vs *v1alpha4.VirtualService) bool {
+	if vs == nil {
+		return false
+	}
+	if vs.Annotations == nil {
+		return false
+	}
+	val, ok := vs.Annotations[VSRoutingType]
+	if !ok {
+		return false
+	}
+	if val != VSRoutingTypeInCluster {
+		return false
+	}
+	return true
+}

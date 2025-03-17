@@ -28,14 +28,23 @@ type VirtualServiceHandler interface {
 	Deleted(ctx context.Context, obj *networking.VirtualService) error
 }
 
+type IVirtualServiceCache interface {
+	Put(vs *networking.VirtualService) error
+	Get(vsName string) *networking.VirtualService
+	Delete(vs *networking.VirtualService)
+	GetVSProcessStatus(vs *networking.VirtualService) string
+	UpdateVSProcessStatus(vs *networking.VirtualService, status string) error
+}
+
 type VirtualServiceController struct {
 	IstioClient                 versioned.Interface
 	VirtualServiceHandler       VirtualServiceHandler
-	VirtualServiceCache         *VirtualServiceCache
+	VirtualServiceCache         IVirtualServiceCache
 	HostToRouteDestinationCache *HostToRouteDestinationCache
 	informer                    cache.SharedIndexInformer
 }
 
+// HostToRouteDestinationCache holds only in-cluster VS's FQDN -> []HttpRouteDestinations cache
 type HostToRouteDestinationCache struct {
 	cache map[string][]*networkingv1alpha3.HTTPRouteDestination
 	mutex *sync.RWMutex
@@ -46,6 +55,7 @@ type VirtualServiceItem struct {
 	Status         string
 }
 
+// VirtualServiceCache holds only VSRouting enabled virtualServices
 type VirtualServiceCache struct {
 	cache map[string]*VirtualServiceItem
 	mutex *sync.RWMutex
@@ -100,6 +110,13 @@ func (v *VirtualServiceCache) Get(vsName string) *networking.VirtualService {
 }
 
 func (v *VirtualServiceCache) Delete(vs *networking.VirtualService) {
+	if vs == nil {
+		return
+	}
+
+	if !common.IsVSRoutingEnabledVirtualService(vs) {
+		return
+	}
 	defer v.mutex.Unlock()
 	v.mutex.Lock()
 	key := vs.Name
@@ -143,59 +160,59 @@ func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceH
 	return &vsController, nil
 }
 
-func (sec *VirtualServiceController) Added(ctx context.Context, obj interface{}) error {
+func (v *VirtualServiceController) Added(ctx context.Context, obj interface{}) error {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
-	err := sec.VirtualServiceCache.Put(vs)
+	err := v.VirtualServiceCache.Put(vs)
 	if err != nil {
 		return err
 	}
-	err = sec.HostToRouteDestinationCache.Put(vs)
+	err = v.HostToRouteDestinationCache.Put(vs)
 	if err != nil {
 		return err
 	}
-	return sec.VirtualServiceHandler.Added(ctx, vs)
+	return v.VirtualServiceHandler.Added(ctx, vs)
 }
 
-func (sec *VirtualServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
+func (v *VirtualServiceController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
-	sec.VirtualServiceCache.Put(vs)
-	sec.HostToRouteDestinationCache.Put(vs)
-	return sec.VirtualServiceHandler.Updated(ctx, vs)
+	v.VirtualServiceCache.Put(vs)
+	v.HostToRouteDestinationCache.Put(vs)
+	return v.VirtualServiceHandler.Updated(ctx, vs)
 }
 
-func (sec *VirtualServiceController) Deleted(ctx context.Context, obj interface{}) error {
+func (v *VirtualServiceController) Deleted(ctx context.Context, obj interface{}) error {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
-	sec.VirtualServiceCache.Delete(vs)
-	sec.HostToRouteDestinationCache.Delete(vs)
-	return sec.VirtualServiceHandler.Deleted(ctx, vs)
+	v.VirtualServiceCache.Delete(vs)
+	v.HostToRouteDestinationCache.Delete(vs)
+	return v.VirtualServiceHandler.Deleted(ctx, vs)
 }
 
-func (sec *VirtualServiceController) GetProcessItemStatus(obj interface{}) (string, error) {
+func (v *VirtualServiceController) GetProcessItemStatus(obj interface{}) (string, error) {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
-	return sec.VirtualServiceCache.GetVSProcessStatus(vs), nil
+	return v.VirtualServiceCache.GetVSProcessStatus(vs), nil
 }
 
-func (sec *VirtualServiceController) UpdateProcessItemStatus(obj interface{}, status string) error {
+func (v *VirtualServiceController) UpdateProcessItemStatus(obj interface{}, status string) error {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
-	return sec.VirtualServiceCache.UpdateVSProcessStatus(vs, status)
+	return v.VirtualServiceCache.UpdateVSProcessStatus(vs, status)
 }
 
-func (sec *VirtualServiceController) LogValueOfAdmiralIoIgnore(obj interface{}) {
+func (v *VirtualServiceController) LogValueOfAdmiralIoIgnore(obj interface{}) {
 	vs, ok := obj.(*networking.VirtualService)
 	if !ok {
 		return
@@ -214,6 +231,9 @@ func (sec *VirtualServiceController) Get(ctx context.Context, isRetry bool, obj 
 }
 
 func (v *VirtualServiceCache) GetVSProcessStatus(vs *networking.VirtualService) string {
+	if vs == nil {
+		return common.NotProcessed
+	}
 	defer v.mutex.RUnlock()
 	v.mutex.RLock()
 
@@ -227,6 +247,9 @@ func (v *VirtualServiceCache) GetVSProcessStatus(vs *networking.VirtualService) 
 }
 
 func (v *VirtualServiceCache) UpdateVSProcessStatus(vs *networking.VirtualService, status string) error {
+	if vs == nil {
+		return fmt.Errorf("vs is nil")
+	}
 	defer v.mutex.Unlock()
 	v.mutex.Lock()
 
@@ -239,8 +262,9 @@ func (v *VirtualServiceCache) UpdateVSProcessStatus(vs *networking.VirtualServic
 		return nil
 	}
 
-	return fmt.Errorf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Update", "VirtualService",
+	log.Debugf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s", "Update", "VirtualService",
 		vs.Name, vs.Namespace, "", "nothing to update, virtualService not found in cache")
+	return nil
 }
 
 func (h *HostToRouteDestinationCache) Put(vs *networking.VirtualService) error {
@@ -248,7 +272,7 @@ func (h *HostToRouteDestinationCache) Put(vs *networking.VirtualService) error {
 	if vs == nil {
 		return fmt.Errorf("failed HostToRouteDestinationCache.Put as virtualService is nil")
 	}
-	if !common.IsVSRoutingEnabledVirtualService(vs) {
+	if !common.IsVSRoutingInClusterVirtualService(vs) {
 		return nil
 	}
 	if vs.Spec.Http == nil {
@@ -272,15 +296,17 @@ func (h *HostToRouteDestinationCache) Get(routeName string) []*networkingv1alpha
 }
 
 func (h *HostToRouteDestinationCache) Delete(vs *networking.VirtualService) error {
+	if vs == nil {
+		return fmt.Errorf("failed HostToRouteDestinationCache.Delete as virtualService is nil")
+	}
+	if !common.IsVSRoutingInClusterVirtualService(vs) {
+		return nil
+	}
 	defer h.mutex.Unlock()
 	h.mutex.Lock()
-	if vs == nil {
-		return fmt.Errorf("failed HostToRouteDestinationCache.Put as virtualService is nil")
-	}
 	if vs.Spec.Http == nil {
-		return fmt.Errorf("failed HostToRouteDestinationCache.Put as virtualService.Spec.Http is nil")
+		return fmt.Errorf("failed HostToRouteDestinationCache.Delete as virtualService.Spec.Http is nil")
 	}
-
 	for _, httpRoute := range vs.Spec.Http {
 		_, ok := h.cache[httpRoute.Name]
 		if ok {
