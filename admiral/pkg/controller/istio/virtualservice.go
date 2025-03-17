@@ -103,6 +103,9 @@ func (v *VirtualServiceCache) Delete(vs *networking.VirtualService) {
 	defer v.mutex.Unlock()
 	v.mutex.Lock()
 	key := vs.Name
+	if v.cache[key] == nil {
+		return
+	}
 	_, ok := v.cache[key]
 	if ok {
 		delete(v.cache, key)
@@ -260,8 +263,8 @@ func (h *HostToRouteDestinationCache) Put(vs *networking.VirtualService) error {
 }
 
 func (h *HostToRouteDestinationCache) Get(routeName string) []*networkingv1alpha3.HTTPRouteDestination {
-	defer h.mutex.RLock()
-	h.mutex.RUnlock()
+	defer h.mutex.RUnlock()
+	h.mutex.RLock()
 	if routes, ok := h.cache[routeName]; ok {
 		return routes
 	}

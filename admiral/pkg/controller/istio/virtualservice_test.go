@@ -133,7 +133,9 @@ func TestDeleted(t *testing.T) {
 	mockVirtualServiceHandler := &test.MockVirtualServiceHandler{}
 	ctx := context.Background()
 	virtualServiceController := VirtualServiceController{
-		VirtualServiceHandler: mockVirtualServiceHandler,
+		VirtualServiceHandler:       mockVirtualServiceHandler,
+		VirtualServiceCache:         NewVirtualServiceCache(),
+		HostToRouteDestinationCache: NewHostToRouteDestinationCache(),
 	}
 
 	testCases := []struct {
@@ -397,6 +399,49 @@ func TestHostToRouteDestinationCachePut(t *testing.T) {
 				assert.Nil(t, err)
 				assert.True(t, reflect.DeepEqual(tc.expectedCache, h.cache))
 			}
+		})
+	}
+
+}
+
+func TestHostToRouteDestinationCacheGet(t *testing.T) {
+
+	h := NewHostToRouteDestinationCache()
+	h.cache["stage.host.global"] = []*networkingv1alpha3.HTTPRouteDestination{{
+		Destination: &networkingv1alpha3.Destination{
+			Host: "stage.host.svc.cluster.local",
+		},
+	}}
+
+	testCases := []struct {
+		name          string
+		routeName     string
+		expectedCache []*networkingv1alpha3.HTTPRouteDestination
+	}{
+		{
+			name: "Given a route name that doesn't exist" +
+				"When HostToRouteDestinationCache.Get func is called" +
+				"Then the cache should return nil",
+			routeName:     "test.host.global",
+			expectedCache: nil,
+		},
+		{
+			name: "Given a route name that does exist" +
+				"When HostToRouteDestinationCache.Get func is called" +
+				"Then the cache should return the cached value",
+			routeName: "stage.host.global",
+			expectedCache: []*networkingv1alpha3.HTTPRouteDestination{{
+				Destination: &networkingv1alpha3.Destination{
+					Host: "stage.host.svc.cluster.local",
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := h.Get(tc.routeName)
+			assert.Equal(t, tc.expectedCache, actual)
 		})
 	}
 
