@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-
 	"github.com/stretchr/testify/assert"
+	v1alpha4 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1954,4 +1954,112 @@ func TestIsIstioIngressGatewayService(t *testing.T) {
 			assert.Equalf(t, tt.want, IsIstioIngressGatewayService(tt.args.svc, tt.args.key), "IsIstioIngressGatewayService(%v, %v)", tt.args.svc, tt.args.key)
 		})
 	}
+}
+
+func TestIsVSRoutingEnabledVirtualService(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		vs             *v1alpha4.VirtualService
+		expectedResult bool
+	}{
+		{
+			name: "Given vs is nil" +
+				"When IsVSRoutingEnabledVirtualService is called" +
+				"Then func should return false ",
+			vs:             nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given vs annotations is nil" +
+				"When IsVSRoutingEnabledVirtualService is called" +
+				"Then func should return false ",
+			vs:             &v1alpha4.VirtualService{},
+			expectedResult: false,
+		},
+		{
+			name: "Given vs which is not vs routing enabled" +
+				"When IsVSRoutingEnabledVirtualService is called" +
+				"Then func should return false ",
+			vs: &v1alpha4.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{"other-annotation": "true"},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given vs which is vs routing enabled" +
+				"When IsVSRoutingEnabledVirtualService is called" +
+				"Then func should return true ",
+			vs: &v1alpha4.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{VSRoutingLabel: "enabled"},
+				},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := IsVSRoutingEnabledVirtualService(tc.vs)
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
+}
+
+func TestIsVSRoutingInClusterVirtualService(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		vs             *v1alpha4.VirtualService
+		expectedResult bool
+	}{
+		{
+			name: "Given vs is nil" +
+				"When IsVSRoutingInClusterVirtualService is called" +
+				"Then func should return false ",
+			vs:             nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given vs annotations is nil" +
+				"When IsVSRoutingInClusterVirtualService is called" +
+				"Then func should return false ",
+			vs:             &v1alpha4.VirtualService{},
+			expectedResult: false,
+		},
+		{
+			name: "Given vs which is not vs routing enabled" +
+				"When IsVSRoutingInClusterVirtualService is called" +
+				"Then func should return false ",
+			vs: &v1alpha4.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{"other-annotation": "true"},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given vs which is vs routing enabled" +
+				"When IsVSRoutingInClusterVirtualService is called" +
+				"Then func should return true ",
+			vs: &v1alpha4.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{VSRoutingType: VSRoutingTypeInCluster},
+				},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := IsVSRoutingInClusterVirtualService(tc.vs)
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
 }

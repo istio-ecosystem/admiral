@@ -488,7 +488,7 @@ func addUpdateDestinationRule(
 	// If it does, skip adding ExportTo since it is already set to "istio-system" only
 	// The DR created for routing cross cluster traffic should only be exported to istio-system
 	skipAddingExportTo := false
-	if obj.Labels != nil && obj.Labels[vsRoutingLabel] == "enabled" {
+	if obj.Labels != nil && obj.Labels[common.VSRoutingLabel] == "enabled" {
 		skipAddingExportTo = true
 	}
 

@@ -3,10 +3,13 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
-	"k8s.io/apimachinery/pkg/labels"
+	"reflect"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
+	"k8s.io/apimachinery/pkg/labels"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
@@ -23,13 +26,20 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	vsRoutingLabel = "admiral.io/vs-routing"
-	// This label has been added in order to make the API call efficient
-	vsRoutingType          = "admiral.io/vs-routing-type"
-	inclusterVSNameSuffix  = "incluster-vs"
-	vsRoutingTypeInCluster = "incluster"
-)
+type VSRouteComparator func(*networkingV1Alpha3.VirtualService, *networkingV1Alpha3.VirtualService) (bool, error)
+type HTTPRouteSorted []*networkingV1Alpha3.HTTPRoute
+
+func (r HTTPRouteSorted) Len() int {
+	return len(r)
+}
+
+func (r HTTPRouteSorted) Less(i, j int) bool {
+	return r[i].Name < r[j].Name
+}
+
+func (r HTTPRouteSorted) Swap(i, j int) {
+	r[i], r[j] = r[j], r[i]
+}
 
 // getBaseInClusterVirtualService generates the base in-cluster virtual service
 func getBaseInClusterVirtualService() (*v1alpha3.VirtualService, error) {
@@ -37,8 +47,8 @@ func getBaseInClusterVirtualService() (*v1alpha3.VirtualService, error) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Namespace: util.IstioSystemNamespace,
 			Labels: map[string]string{
-				vsRoutingLabel: "enabled",
-				vsRoutingType:  vsRoutingTypeInCluster,
+				common.VSRoutingLabel: "enabled",
+				common.VSRoutingType:  common.VSRoutingTypeInCluster,
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
@@ -61,7 +71,7 @@ func getBaseVirtualServiceForIngress() (*v1alpha3.VirtualService, error) {
 
 	// Explicitly labeling the VS for routing
 	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
+		common.VSRoutingLabel: "enabled",
 	}
 
 	return &v1alpha3.VirtualService{
@@ -511,7 +521,7 @@ func generateVirtualServiceForIncluster(
 	})
 	virtualService.Spec.Http = httpRoutes
 
-	virtualService.Name = fmt.Sprintf("%s-%s", vsName, inclusterVSNameSuffix)
+	virtualService.Name = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
 
 	// Add the exportTo namespaces to the virtual service
 	if common.EnableExportTo(vsName) {
@@ -580,6 +590,67 @@ func generateVirtualServiceForIngress(
 	virtualService.Name = vsName + "-routing-vs"
 
 	return virtualService, nil
+}
+
+// doReconcileVirtualService checks if desired virtualservice state has changed from the one that is cached
+// returns true if it has, else returns false
+func doReconcileVirtualService(
+	rc *RemoteController,
+	desiredVirtualService *v1alpha3.VirtualService,
+	doRoutesMatch VSRouteComparator,
+) (bool, error) {
+	if rc == nil {
+		return true, fmt.Errorf("remoteController is nil")
+	}
+	if desiredVirtualService == nil {
+		return true, fmt.Errorf("virtualService is nil")
+	}
+	if rc.VirtualServiceController == nil {
+		return true, fmt.Errorf("virtualService controller is nil")
+	}
+	if rc.VirtualServiceController.VirtualServiceCache == nil {
+		return true, fmt.Errorf("virtualServiceCache is nil")
+	}
+	vsName := desiredVirtualService.Name
+	cachedVS := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
+	if cachedVS == nil {
+		return true, nil
+	}
+	cachedVSSpec := cachedVS.Spec.DeepCopy()
+	desiredVirtualServiceSpec := desiredVirtualService.Spec.DeepCopy()
+	// Check if exportTo has a diff
+	slices.Sort(cachedVSSpec.ExportTo)
+	slices.Sort(desiredVirtualServiceSpec.ExportTo)
+	if !reflect.DeepEqual(cachedVSSpec.ExportTo, desiredVirtualServiceSpec.ExportTo) {
+		return true, nil
+	}
+
+	// Check if hosts have a diff
+	slices.Sort(cachedVSSpec.Hosts)
+	slices.Sort(desiredVirtualServiceSpec.Hosts)
+	if !reflect.DeepEqual(cachedVSSpec.Hosts, desiredVirtualServiceSpec.Hosts) {
+		return true, nil
+	}
+
+	// Check if routes have a diff
+	routeMatched, err := doRoutesMatch(cachedVSSpec, desiredVirtualServiceSpec)
+	if err != nil {
+		return true, err
+	}
+	if !routeMatched {
+		return true, err
+	}
+
+	if desiredVirtualServiceSpec.Gateways != nil {
+		// Check is gateways have a diff
+		slices.Sort(cachedVSSpec.Gateways)
+		slices.Sort(desiredVirtualServiceSpec.Gateways)
+		if !reflect.DeepEqual(cachedVSSpec.Gateways, desiredVirtualServiceSpec.Gateways) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // addUpdateInClusterVirtualServices adds or updates the in-cluster routing VirtualServices
@@ -659,6 +730,26 @@ func addUpdateInClusterVirtualServices(
 			return err
 		}
 
+		ctxLogger.Infof(
+			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+			"checking if incluster routing virtualService requires reconciliation")
+		reconcileRequired, err :=
+			doReconcileVirtualService(rc, virtualService, httpRoutesComparator)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				virtualService.Name, virtualService.Namespace, sourceCluster,
+				fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
+		}
+		if !reconcileRequired {
+			ctxLogger.Infof(
+				common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+				"reconcile=false")
+			continue
+		}
+		ctxLogger.Infof(
+			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+			"reconcile=true")
+
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
 			ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
@@ -667,6 +758,7 @@ func addUpdateInClusterVirtualServices(
 
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
+
 		err = addUpdateVirtualService(
 			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
@@ -679,6 +771,74 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	return nil
+}
+
+// httpRoutesComparator comparator that matches the routes between two virtualservice spec
+// This will be used to check if reconciliation is required
+func httpRoutesComparator(
+	vs1Spec *networkingV1Alpha3.VirtualService,
+	vs2Spec *networkingV1Alpha3.VirtualService) (bool, error) {
+	if vs1Spec == nil {
+		return false, fmt.Errorf("vs1Spec is nil")
+	}
+	if vs2Spec == nil {
+		return false, fmt.Errorf("vs2Spec is nil")
+	}
+	if vs1Spec.Http == nil {
+		return false, fmt.Errorf("vs1.Spec.Http is nil")
+	}
+	if vs2Spec.Http == nil {
+		return false, fmt.Errorf("vs2.Spec.Http is nil")
+	}
+	sort.Sort(HTTPRouteSorted(vs1Spec.Http))
+	sort.Sort(HTTPRouteSorted(vs2Spec.Http))
+	for _, route := range vs1Spec.Http {
+		sort.Slice(route.Route, func(i, j int) bool {
+			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
+		})
+	}
+	for _, route := range vs2Spec.Http {
+		sort.Slice(route.Route, func(i, j int) bool {
+			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
+		})
+	}
+	if reflect.DeepEqual(vs1Spec.Http, vs2Spec.Http) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// tlsRoutesComparator comparator that matches the routes between two virtualservice spec
+// This will be used to check if reconciliation is required
+func tlsRoutesComparator(
+	vs1Spec *networkingV1Alpha3.VirtualService,
+	vs2Spec *networkingV1Alpha3.VirtualService) (bool, error) {
+	if vs1Spec == nil {
+		return false, fmt.Errorf("vs1Spec is nil")
+	}
+	if vs2Spec == nil {
+		return false, fmt.Errorf("vs2Spec is nil")
+	}
+	if vs1Spec.Tls == nil {
+		return false, fmt.Errorf("vs1.Spec.Tls is nil")
+	}
+	if vs2Spec.Tls == nil {
+		return false, fmt.Errorf("vs2.Spec.Tls is nil")
+	}
+	for _, route := range vs1Spec.Tls {
+		sort.Slice(route.Route, func(i, j int) bool {
+			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
+		})
+	}
+	for _, route := range vs2Spec.Tls {
+		sort.Slice(route.Route, func(i, j int) bool {
+			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
+		})
+	}
+	if reflect.DeepEqual(vs1Spec.Tls, vs2Spec.Tls) {
+		return true, nil
+	}
+	return false, nil
 }
 
 // addUpdateVirtualServicesForSourceIngress adds or updates the cross-cluster routing VirtualServices
@@ -726,6 +886,26 @@ func addUpdateVirtualServicesForIngress(
 				"", "", sourceCluster, err.Error())
 			return err
 		}
+
+		ctxLogger.Infof(
+			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+			"checking if ingress routing virtualService requires reconciliation")
+		reconcileRequired, err :=
+			doReconcileVirtualService(rc, virtualService, tlsRoutesComparator)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
+				virtualService.Name, virtualService.Namespace, sourceCluster,
+				fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
+		}
+		if !reconcileRequired {
+			ctxLogger.Infof(
+				common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+				"reconcile=false")
+			continue
+		}
+		ctxLogger.Infof(
+			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
+			"reconcile=true")
 
 		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
 		if err != nil {
@@ -1181,7 +1361,7 @@ func addUpdateRoutingDestinationRule(
 		newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
 
 		newDR.Labels = map[string]string{
-			vsRoutingLabel: "enabled",
+			common.VSRoutingLabel: "enabled",
 		}
 
 		newDR.Spec.ExportTo = exportToNamespaces
@@ -1259,7 +1439,9 @@ func performInVSRoutingRollback(
 		return fmt.Errorf("vsname is empty")
 	}
 
-	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{vsRoutingType: vsRoutingTypeInCluster}}
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
+		common.VSRoutingType: common.VSRoutingTypeInCluster,
+	}}
 
 	errs := make([]error, 0)
 	for clusterID := range sourceClusterToEventNsCache {
@@ -1302,7 +1484,7 @@ func performInVSRoutingRollback(
 		if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
 			// If we enter this block that means the entire cluster is not disabled
 			// just a single identity's VS need to be rolled back.
-			virtualServiceName := fmt.Sprintf("%s-%s", vsname, inclusterVSNameSuffix)
+			virtualServiceName := fmt.Sprintf("%s-%s", vsname, common.InclusterVSNameSuffix)
 			existingVS, err := getExistingVS(
 				ctxLogger, ctx, rc, virtualServiceName, util.IstioSystemNamespace)
 			if err != nil {

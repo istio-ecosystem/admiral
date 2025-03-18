@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	"github.com/stretchr/testify/require"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
@@ -1959,7 +1960,7 @@ func TestUpdateVirtualService(t *testing.T) {
 			ObjectMeta: metaV1.ObjectMeta{
 				Name: "stage.test00.foo.incluster-vs",
 				Labels: map[string]string{
-					vsRoutingType: vsRoutingTypeInCluster,
+					common.VSRoutingType: common.VSRoutingTypeInCluster,
 				},
 			},
 			Spec: networkingV1Alpha3.VirtualService{
@@ -2007,7 +2008,7 @@ func TestUpdateVirtualService(t *testing.T) {
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: "stage.test00.foo.incluster-vs",
 					Labels: map[string]string{
-						vsRoutingType: vsRoutingTypeInCluster,
+						common.VSRoutingType: common.VSRoutingTypeInCluster,
 					},
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -2025,7 +2026,7 @@ func TestUpdateVirtualService(t *testing.T) {
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: "stage.test00.foo.incluster-vs",
 					Labels: map[string]string{
-						vsRoutingType: vsRoutingTypeInCluster,
+						common.VSRoutingType: common.VSRoutingTypeInCluster,
 					},
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -2044,7 +2045,7 @@ func TestUpdateVirtualService(t *testing.T) {
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: "stage.test00.foo.incluster-vs",
 					Labels: map[string]string{
-						vsRoutingType: vsRoutingTypeInCluster,
+						common.VSRoutingType: common.VSRoutingTypeInCluster,
 					},
 				},
 				Spec: networkingV1Alpha3.VirtualService{
@@ -2058,7 +2059,7 @@ func TestUpdateVirtualService(t *testing.T) {
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: "stage.test00.foo.incluster-vs",
 					Labels: map[string]string{
-						vsRoutingType: vsRoutingTypeInCluster,
+						common.VSRoutingType: common.VSRoutingTypeInCluster,
 					},
 				},
 				Spec: networkingV1Alpha3.VirtualService{

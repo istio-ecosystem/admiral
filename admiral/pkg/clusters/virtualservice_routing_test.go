@@ -16,6 +16,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	apiNetworkingV1Alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -79,8 +80,10 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
 	rc := &RemoteController{
-		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			VirtualServiceCache: istio.NewVirtualServiceCache(),
+		},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
@@ -544,7 +547,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
+		common.VSRoutingLabel: "enabled",
 	}
 
 	existingVS := &apiNetworkingV1Alpha3.VirtualService{
@@ -596,8 +599,10 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 
 	istioClientWithNoExistingVS := istioFake.NewSimpleClientset()
 	rc := &RemoteController{
-		ClusterID:                "cluster-1",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			VirtualServiceCache: istio.NewVirtualServiceCache(),
+		},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
@@ -1922,7 +1927,7 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 	}
 
 	vsLabels := map[string]string{
-		vsRoutingLabel: "enabled",
+		common.VSRoutingLabel: "enabled",
 	}
 
 	validVS := &apiNetworkingV1Alpha3.VirtualService{
@@ -4187,7 +4192,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity1.global-incluster-vs",
 			Namespace: util.IstioSystemNamespace,
-			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+			Labels:    map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 		},
 		Spec: networkingV1Alpha3.VirtualService{
 			Hosts:    []string{"test-env.test-identity1.global"},
@@ -4222,7 +4227,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "test-env.test-identity2.global-incluster-vs",
 			Namespace: util.IstioSystemNamespace,
-			Labels:    map[string]string{vsRoutingType: vsRoutingTypeInCluster},
+			Labels:    map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 		},
 		Spec: networkingV1Alpha3.VirtualService{
 			Hosts:    []string{"test-env.test-identity2.global"},
@@ -4423,6 +4428,712 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 					require.Nil(t, err)
 					require.Equal(t, tc.expectedVSExportTo, actualVS.Spec.ExportTo)
 				}
+			}
+		})
+	}
+
+}
+
+func TestDoReconcileVirtualService(t *testing.T) {
+
+	cachedInClusterVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "host1.test.global-incluster-vs",
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"ns1"},
+			Hosts:    []string{"host1.test.global"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "host1.test.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "host1.svc.cluster.local",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	cachedIngressVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "host1.test.global-routing-vs",
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"ns1"},
+			Hosts:    []string{"host1.test.global"},
+			Gateways: []string{"test-gateway"},
+			Tls: []*networkingV1Alpha3.TLSRoute{
+				{
+					Match: []*networkingV1Alpha3.TLSMatchAttributes{
+						{
+							SniHosts: []string{"host1.test.global"},
+						},
+					},
+					Route: []*networkingV1Alpha3.RouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "host1.svc.cluster.local",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	vsCache := istio.NewVirtualServiceCache()
+	vsCache.Put(cachedIngressVS)
+	vsCache.Put(cachedInClusterVS)
+
+	testCases := []struct {
+		name           string
+		rc             *RemoteController
+		desiredVS      *apiNetworkingV1Alpha3.VirtualService
+		comparator     VSRouteComparator
+		expectedResult bool
+		expectedError  error
+	}{
+		{
+			name: "Given nil remoteController" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return an error",
+			rc:            nil,
+			expectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given nil vs" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return an error",
+			rc:            &RemoteController{},
+			expectedError: fmt.Errorf("virtualService is nil"),
+		},
+		{
+			name: "Given nil vs controller" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return an error",
+			rc:            &RemoteController{},
+			desiredVS:     cachedInClusterVS,
+			expectedError: fmt.Errorf("virtualService controller is nil"),
+		},
+		{
+			name: "Given nil vs controller cache" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return an error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{},
+			},
+			desiredVS:     cachedInClusterVS,
+			expectedError: fmt.Errorf("virtualServiceCache is nil"),
+		},
+		{
+			name: "Given valid params" +
+				"And there is no VS in cache" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: istio.NewVirtualServiceCache(),
+				},
+			},
+			desiredVS:      cachedInClusterVS,
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params" +
+				"And the exportTo doesn't match" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: vsCache,
+				},
+			},
+			desiredVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"ns1, ns2"},
+				},
+			},
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params" +
+				"And the hosts doesn't match" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: vsCache,
+				},
+			},
+			desiredVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"ns1"},
+					Hosts:    []string{"host1.test.global", "host2.test.global"},
+				},
+			},
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params" +
+				"And the http routes doesn't match" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: vsCache,
+				},
+			},
+			desiredVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"ns1"},
+					Hosts:    []string{"host1.test.global"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Name: "host1.test.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "host1.svc.cluster.local",
+									},
+								},
+							},
+						},
+						{
+							Name: "stage.host1.test.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "stage.host1.svc.cluster.local",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			comparator:     httpRoutesComparator,
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params" +
+				"And the tls routes doesn't match" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: vsCache,
+				},
+			},
+			desiredVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"ns1"},
+					Hosts:    []string{"host1.test.global"},
+					Tls: []*networkingV1Alpha3.TLSRoute{
+						{
+							Match: []*networkingV1Alpha3.TLSMatchAttributes{
+								{
+									SniHosts: []string{"host1.test.global"},
+								},
+							},
+							Route: []*networkingV1Alpha3.RouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "host1.svc.cluster.local",
+									},
+								},
+							},
+						},
+						{
+							Match: []*networkingV1Alpha3.TLSMatchAttributes{
+								{
+									SniHosts: []string{"stage.host1.test.global"},
+								},
+							},
+							Route: []*networkingV1Alpha3.RouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "stage.host1.svc.cluster.local",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			comparator:     tlsRoutesComparator,
+			expectedResult: true,
+			expectedError:  nil,
+		},
+		{
+			name: "Given valid params" +
+				"And the gateways doesn't match" +
+				"When doReconcileVirtualService func is called" +
+				"Then it should return true and no error",
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: vsCache,
+				},
+			},
+			desiredVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"ns1"},
+					Hosts:    []string{"host1.test.global"},
+					Gateways: []string{"new-gateway"},
+					Tls: []*networkingV1Alpha3.TLSRoute{
+						{
+							Match: []*networkingV1Alpha3.TLSMatchAttributes{
+								{
+									SniHosts: []string{"host1.test.global"},
+								},
+							},
+							Route: []*networkingV1Alpha3.RouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "host1.svc.cluster.local",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			comparator:     tlsRoutesComparator,
+			expectedResult: true,
+			expectedError:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := doReconcileVirtualService(
+				tc.rc,
+				tc.desiredVS,
+				tc.comparator)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
+func TestHttpRoutesComparator(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		vs1            *networkingV1Alpha3.VirtualService
+		vs2            *networkingV1Alpha3.VirtualService
+		expectedResult bool
+		expectedError  error
+	}{
+		{
+			name: "Given nil vs1" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           nil,
+			expectedError: fmt.Errorf("vs1Spec is nil"),
+		},
+		{
+			name: "Given nil vs2" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           nil,
+			expectedError: fmt.Errorf("vs2Spec is nil"),
+		},
+		{
+			name: "Given nil vs1.Spec.http" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("vs1.Spec.Http is nil"),
+		},
+		{
+			name: "Given nil vs2.Spec.http" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{},
+			},
+			vs2:           &networkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("vs2.Spec.Http is nil"),
+		},
+		{
+			name: "Given equal virtualservices http routes" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return true and no error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Name: "stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Name: "preview.stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Name: "preview.stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Name: "stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedError:  nil,
+			expectedResult: true,
+		},
+		{
+			name: "Given un-equal virtualservices http routes" +
+				"When httpRoutesComparator func is called" +
+				"Then it should return true and no error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedError:  nil,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := httpRoutesComparator(tc.vs1, tc.vs2)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
+func TestTlsRoutesComparator(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		vs1            *networkingV1Alpha3.VirtualService
+		vs2            *networkingV1Alpha3.VirtualService
+		expectedResult bool
+		expectedError  error
+	}{
+		{
+			name: "Given nil vs1" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           nil,
+			expectedError: fmt.Errorf("vs1Spec is nil"),
+		},
+		{
+			name: "Given nil vs2" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           nil,
+			expectedError: fmt.Errorf("vs2Spec is nil"),
+		},
+		{
+			name: "Given nil vs1.Spec.Tls" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("vs1.Spec.Tls is nil"),
+		},
+		{
+			name: "Given nil vs2.Spec.Tls" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return an error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{},
+			},
+			vs2:           &networkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("vs2.Spec.Tls is nil"),
+		},
+		{
+			name: "Given equal virtualservices http routes" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return true and no error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedError:  nil,
+			expectedResult: true,
+		},
+		{
+			name: "Given un-equal virtualservices http routes" +
+				"When tlsRoutesComparator func is called" +
+				"Then it should return true and no error",
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
+								},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary1.host1.svc.cluster.local",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedError:  nil,
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := tlsRoutesComparator(tc.vs1, tc.vs2)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
 			}
 		})
 	}
