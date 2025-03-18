@@ -63,6 +63,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
+		SyncNamespace:                       "admiral-sync",
 		LabelSet:                            &common.LabelSet{},
 		ExportToIdentityList:                []string{"*"},
 		ExportToMaxNamespaces:               100,
@@ -86,8 +87,14 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		},
 	}
 
+	rc1 := &RemoteController{
+		ClusterID:                "cluster-2",
+		VirtualServiceController: &istio.VirtualServiceController{},
+	}
+
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
 	rr.PutRemoteController("cluster-1", rc)
+	rr.PutRemoteController("cluster-2", rc1)
 
 	rr.AdmiralCache.CnameIdentityCache = &sync.Map{}
 	rr.AdmiralCache.CnameIdentityCache.Store("test-env.test-identity.global", "test-identity")
@@ -105,6 +112,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	rr.AdmiralCache.CnameDependentClusterNamespaceCache.Put(
 		"test-env.test-identity.global", "cluster-1", "test-dependent-ns1", "test-dependent-ns1")
 
+	defaultFQDNFoIdentity1 := "test-env.test-identity1.global"
 	defaultFQDN := "test-env.test-identity.global"
 	previewFQDN := "preview.test-env.test-identity.global"
 	canaryFQDN := "canary.test-env.test-identity.global"
@@ -112,6 +120,20 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	sourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
 		"cluster-1": {
 			defaultFQDN: {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-deployment-svc.test-ns.svc.cluster.local",
+						Port: &networkingV1Alpha3.PortSelector{
+							Number: 8080,
+						},
+					},
+				},
+			},
+		},
+	}
+	cluster2SourceDestinationsWithSingleDestinationSvc := map[string]map[string][]*vsrouting.RouteDestination{
+		"cluster-2": {
+			defaultFQDNFoIdentity1: {
 				{
 					Destination: &networkingV1Alpha3.Destination{
 						Host: "test-deployment-svc.test-ns.svc.cluster.local",
@@ -247,6 +269,53 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 									Authority: &networkingV1Alpha3.StringMatch{
 										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+							},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "test-deployment-svc.test-ns.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8080,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a valid sourceClusterToDestinations " +
+				"And the VS is a new VS" +
+				"And vs routing is not enabled for the cluster" +
+				"When addUpdateInClusterVirtualServices is invoked, " +
+				"Then it should successfully create the VS",
+			sourceIdentity:              "test-identity1",
+			remoteRegistry:              rr,
+			vsName:                      "test-env.test-identity1.global",
+			istioClient:                 istioClientWithNoExistingVS,
+			sourceClusterToDestinations: cluster2SourceDestinationsWithSingleDestinationSvc,
+			expectedError:               nil,
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-env.test-identity1.global-incluster-vs",
+					Namespace: util.IstioSystemNamespace,
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts:    []string{"test-env.test-identity1.global"},
+					ExportTo: []string{"admiral-sync"},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Name: "test-env.test-identity1.global",
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.test-identity1.global",
 										},
 									},
 								},
@@ -516,6 +585,8 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rc := rr.GetRemoteController("cluster-1")
 			rc.VirtualServiceController.IstioClient = tc.istioClient
+			rc1 := rr.GetRemoteController("cluster-2")
+			rc1.VirtualServiceController.IstioClient = tc.istioClient
 			rr.PutRemoteController("cluster-1", rc)
 			err := addUpdateInClusterVirtualServices(
 				context.Background(),
@@ -532,7 +603,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 				actualVS, err := tc.istioClient.
 					NetworkingV1alpha3().
 					VirtualServices(util.IstioSystemNamespace).
-					Get(context.Background(), "test-env.test-identity.global-incluster-vs", metaV1.GetOptions{})
+					Get(context.Background(), tc.vsName+"-incluster-vs", metaV1.GetOptions{})
 				require.Nil(t, err)
 				require.Equal(t, tc.expectedVS.ObjectMeta.Name, actualVS.ObjectMeta.Name)
 				require.Equal(t, tc.expectedVS.Spec.Http, actualVS.Spec.Http)

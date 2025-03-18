@@ -471,7 +471,8 @@ func generateVirtualServiceForIncluster(
 	destination map[string][]*vsrouting.RouteDestination,
 	vsName string,
 	remoteRegistry *RemoteRegistry,
-	sourceCluster string) (*v1alpha3.VirtualService, error) {
+	sourceCluster string,
+	sourceIdentity string) (*v1alpha3.VirtualService, error) {
 
 	virtualService, err := getBaseInClusterVirtualService()
 	if err != nil {
@@ -524,10 +525,10 @@ func generateVirtualServiceForIncluster(
 	virtualService.Name = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
 
 	// Add the exportTo namespaces to the virtual service
-	if common.EnableExportTo(vsName) {
-		exportToNamespaces := getSortedDependentNamespaces(
+	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
+	if common.EnableExportTo(vsName) && common.DoVSRoutingInClusterForCluster(sourceCluster) && common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
+		virtualService.Spec.ExportTo = getSortedDependentNamespaces(
 			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
-		virtualService.Spec.ExportTo = exportToNamespaces
 	}
 
 	return virtualService, nil
@@ -677,15 +678,6 @@ func addUpdateInClusterVirtualServices(
 		return nil
 	}
 
-	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
-		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-			"", "", "",
-			fmt.Sprintf(
-				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for identity %s",
-				sourceIdentity))
-		return nil
-	}
-
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
 	}
@@ -697,13 +689,6 @@ func addUpdateInClusterVirtualServices(
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
 		if common.IsVSRoutingInClusterDisabledForCluster(sourceCluster) {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
-			continue
-		}
-
-		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 				"", "", sourceCluster,
 				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
@@ -723,7 +708,7 @@ func addUpdateInClusterVirtualServices(
 		}
 
 		virtualService, err := generateVirtualServiceForIncluster(
-			ctxLogger, destination, vsName, remoteRegistry, sourceCluster)
+			ctxLogger, destination, vsName, remoteRegistry, sourceCluster, sourceIdentity)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
