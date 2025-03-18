@@ -370,7 +370,7 @@ func TestHostToRouteDestinationCacheDelete(t *testing.T) {
 				"Then the VS should be cached",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+					Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 				},
 				Spec: networkingv1alpha3.VirtualService{
 					Hosts: []string{"stage.host.global"},
@@ -476,7 +476,7 @@ func TestHostToRouteDestinationCachePut(t *testing.T) {
 				"Then the VS should be cached",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+					Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
 				},
 				Spec: networkingv1alpha3.VirtualService{
 					Hosts: []string{"test-env.test-identity.global"},
@@ -569,8 +569,8 @@ func TestVirtualServiceCachePut(t *testing.T) {
 
 	validVS := &v1alpha3.VirtualService{
 		ObjectMeta: v1.ObjectMeta{
-			Name:        "stage.host.global-incluster-vs",
-			Annotations: map[string]string{common.VSRoutingLabel: "enabled"},
+			Name:   "stage.host.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "enabled"},
 		},
 	}
 
@@ -730,8 +730,8 @@ func TestVirtualServiceCacheDelete(t *testing.T) {
 				"Then the func delete the VS from the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Name:        "stage.host.global-incluster-vs",
-					Annotations: map[string]string{common.VSRoutingLabel: "enabled"},
+					Name:   "stage.host.global-incluster-vs",
+					Labels: map[string]string{common.VSRoutingLabel: "enabled"},
 				},
 			},
 			expectedCache: map[string]*VirtualServiceItem{

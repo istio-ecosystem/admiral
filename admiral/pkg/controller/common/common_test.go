@@ -1983,7 +1983,7 @@ func TestIsVSRoutingEnabledVirtualService(t *testing.T) {
 				"Then func should return false ",
 			vs: &v1alpha4.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{"other-annotation": "true"},
+					Labels: map[string]string{"other-annotation": "true"},
 				},
 			},
 			expectedResult: false,
@@ -1994,7 +1994,7 @@ func TestIsVSRoutingEnabledVirtualService(t *testing.T) {
 				"Then func should return true ",
 			vs: &v1alpha4.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{VSRoutingLabel: "enabled"},
+					Labels: map[string]string{VSRoutingLabel: "enabled"},
 				},
 			},
 			expectedResult: true,
@@ -2037,7 +2037,7 @@ func TestIsVSRoutingInClusterVirtualService(t *testing.T) {
 				"Then func should return false ",
 			vs: &v1alpha4.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{"other-annotation": "true"},
+					Labels: map[string]string{"other-annotation": "true"},
 				},
 			},
 			expectedResult: false,
@@ -2048,7 +2048,7 @@ func TestIsVSRoutingInClusterVirtualService(t *testing.T) {
 				"Then func should return true ",
 			vs: &v1alpha4.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
-					Annotations: map[string]string{VSRoutingLabel: VSRoutingTypeInCluster},
+					Labels: map[string]string{VSRoutingType: VSRoutingTypeInCluster},
 				},
 			},
 			expectedResult: true,
@@ -2057,7 +2057,7 @@ func TestIsVSRoutingInClusterVirtualService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := IsVSRoutingEnabledVirtualService(tc.vs)
+			actual := IsVSRoutingInClusterVirtualService(tc.vs)
 			assert.Equal(t, tc.expectedResult, actual)
 		})
 	}

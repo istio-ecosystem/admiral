@@ -876,10 +876,10 @@ func IsVSRoutingEnabledVirtualService(vs *v1alpha4.VirtualService) bool {
 	if vs == nil {
 		return false
 	}
-	if vs.Annotations == nil {
+	if vs.Labels == nil {
 		return false
 	}
-	if _, ok := vs.Annotations[VSRoutingLabel]; !ok {
+	if _, ok := vs.Labels[VSRoutingLabel]; !ok {
 		return false
 	}
 	return true
@@ -889,10 +889,10 @@ func IsVSRoutingInClusterVirtualService(vs *v1alpha4.VirtualService) bool {
 	if vs == nil {
 		return false
 	}
-	if vs.Annotations == nil {
+	if vs.Labels == nil {
 		return false
 	}
-	val, ok := vs.Annotations[VSRoutingType]
+	val, ok := vs.Labels[VSRoutingType]
 	if !ok {
 		return false
 	}

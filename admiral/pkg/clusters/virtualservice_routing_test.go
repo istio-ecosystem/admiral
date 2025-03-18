@@ -4664,8 +4664,8 @@ func TestHttpRoutesComparator(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		vs1            *apiNetworkingV1Alpha3.VirtualService
-		vs2            *apiNetworkingV1Alpha3.VirtualService
+		vs1            *networkingV1Alpha3.VirtualService
+		vs2            *networkingV1Alpha3.VirtualService
 		expectedResult bool
 		expectedError  error
 	}{
@@ -4674,106 +4674,100 @@ func TestHttpRoutesComparator(t *testing.T) {
 				"When httpRoutesComparator func is called" +
 				"Then it should return an error",
 			vs1:           nil,
-			expectedError: fmt.Errorf("vs1 is nil"),
+			expectedError: fmt.Errorf("vs1Spec is nil"),
 		},
 		{
 			name: "Given nil vs2" +
 				"When httpRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs1:           &networkingV1Alpha3.VirtualService{},
 			vs2:           nil,
-			expectedError: fmt.Errorf("vs2 is nil"),
+			expectedError: fmt.Errorf("vs2Spec is nil"),
 		},
 		{
 			name: "Given nil vs1.Spec.http" +
 				"When httpRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1:           &apiNetworkingV1Alpha3.VirtualService{},
-			vs2:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
 			expectedError: fmt.Errorf("vs1.Spec.Http is nil"),
 		},
 		{
 			name: "Given nil vs2.Spec.http" +
 				"When httpRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Http: []*networkingV1Alpha3.HTTPRoute{},
-				},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{},
 			},
-			vs2:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
 			expectedError: fmt.Errorf("vs2.Spec.Http is nil"),
 		},
 		{
 			name: "Given equal virtualservices http routes" +
 				"When httpRoutesComparator func is called" +
 				"Then it should return true and no error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Http: []*networkingV1Alpha3.HTTPRoute{
-						{
-							Name: "stage.host1.test.global",
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Name: "stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Name: "preview.stage.host1.test.global",
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "preview.host2.svc.cluster.local",
-									},
+					},
+					{
+						Name: "preview.stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host2.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
 								},
 							},
 						},
 					},
 				},
 			},
-			vs2: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Http: []*networkingV1Alpha3.HTTPRoute{
-						{
-							Name: "preview.stage.host1.test.global",
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host2.svc.cluster.local",
-									},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Name: "preview.stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "preview.host2.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Name: "stage.host1.test.global",
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
+					},
+					{
+						Name: "stage.host1.test.global",
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
@@ -4787,54 +4781,50 @@ func TestHttpRoutesComparator(t *testing.T) {
 			name: "Given un-equal virtualservices http routes" +
 				"When httpRoutesComparator func is called" +
 				"Then it should return true and no error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Http: []*networkingV1Alpha3.HTTPRoute{
-						{
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host2.svc.cluster.local",
-									},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "preview.host2.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
 								},
 							},
 						},
 					},
 				},
 			},
-			vs2: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Http: []*networkingV1Alpha3.HTTPRoute{
-						{
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Http: []*networkingV1Alpha3.HTTPRoute{
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Route: []*networkingV1Alpha3.HTTPRouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host2.svc.cluster.local",
-									},
+					},
+					{
+						Route: []*networkingV1Alpha3.HTTPRouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host2.svc.cluster.local",
 								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "preview.host2.svc.cluster.local",
-									},
+							},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "preview.host2.svc.cluster.local",
 								},
 							},
 						},
@@ -4865,8 +4855,8 @@ func TestTlsRoutesComparator(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		vs1            *apiNetworkingV1Alpha3.VirtualService
-		vs2            *apiNetworkingV1Alpha3.VirtualService
+		vs1            *networkingV1Alpha3.VirtualService
+		vs2            *networkingV1Alpha3.VirtualService
 		expectedResult bool
 		expectedError  error
 	}{
@@ -4875,112 +4865,106 @@ func TestTlsRoutesComparator(t *testing.T) {
 				"When tlsRoutesComparator func is called" +
 				"Then it should return an error",
 			vs1:           nil,
-			expectedError: fmt.Errorf("vs1 is nil"),
+			expectedError: fmt.Errorf("vs1Spec is nil"),
 		},
 		{
 			name: "Given nil vs2" +
 				"When tlsRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs1:           &networkingV1Alpha3.VirtualService{},
 			vs2:           nil,
-			expectedError: fmt.Errorf("vs2 is nil"),
+			expectedError: fmt.Errorf("vs2Spec is nil"),
 		},
 		{
 			name: "Given nil vs1.Spec.Tls" +
 				"When tlsRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1:           &apiNetworkingV1Alpha3.VirtualService{},
-			vs2:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs1:           &networkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
 			expectedError: fmt.Errorf("vs1.Spec.Tls is nil"),
 		},
 		{
 			name: "Given nil vs2.Spec.Tls" +
 				"When tlsRoutesComparator func is called" +
 				"Then it should return an error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Tls: []*networkingV1Alpha3.TLSRoute{},
-				},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{},
 			},
-			vs2:           &apiNetworkingV1Alpha3.VirtualService{},
+			vs2:           &networkingV1Alpha3.VirtualService{},
 			expectedError: fmt.Errorf("vs2.Spec.Tls is nil"),
 		},
 		{
 			name: "Given equal virtualservices http routes" +
 				"When tlsRoutesComparator func is called" +
 				"Then it should return true and no error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Tls: []*networkingV1Alpha3.TLSRoute{
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"stage.host1.global"},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
-								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"canary.stage.host1.global"},
-								},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
 					},
 				},
 			},
-			vs2: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Tls: []*networkingV1Alpha3.TLSRoute{
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"stage.host1.global"},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
-								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"canary.stage.host1.global"},
-								},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
@@ -4994,78 +4978,74 @@ func TestTlsRoutesComparator(t *testing.T) {
 			name: "Given un-equal virtualservices http routes" +
 				"When tlsRoutesComparator func is called" +
 				"Then it should return true and no error",
-			vs1: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Tls: []*networkingV1Alpha3.TLSRoute{
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"stage.host1.global"},
+			vs1: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
-								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"canary.stage.host1.global"},
-								},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
 						},
 					},
 				},
 			},
-			vs2: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Tls: []*networkingV1Alpha3.TLSRoute{
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"stage.host1.global"},
+			vs2: &networkingV1Alpha3.VirtualService{
+				Tls: []*networkingV1Alpha3.TLSRoute{
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"stage.host1.global"},
+							},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary.host1.svc.cluster.local",
 								},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary.host1.svc.cluster.local",
-									},
-								},
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "stage.host1.svc.cluster.local",
-									},
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "stage.host1.svc.cluster.local",
 								},
 							},
 						},
-						{
-							Match: []*networkingV1Alpha3.TLSMatchAttributes{
-								{
-									SniHosts: []string{"canary.stage.host1.global"},
-								},
+					},
+					{
+						Match: []*networkingV1Alpha3.TLSMatchAttributes{
+							{
+								SniHosts: []string{"canary.stage.host1.global"},
 							},
-							Route: []*networkingV1Alpha3.RouteDestination{
-								{
-									Destination: &networkingV1Alpha3.Destination{
-										Host: "canary1.host1.svc.cluster.local",
-									},
+						},
+						Route: []*networkingV1Alpha3.RouteDestination{
+							{
+								Destination: &networkingV1Alpha3.Destination{
+									Host: "canary1.host1.svc.cluster.local",
 								},
 							},
 						},

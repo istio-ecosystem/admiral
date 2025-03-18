@@ -26,7 +26,7 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type VSRouteComparator func(*v1alpha3.VirtualService, *v1alpha3.VirtualService) (bool, error)
+type VSRouteComparator func(*networkingV1Alpha3.VirtualService, *networkingV1Alpha3.VirtualService) (bool, error)
 type HTTPRouteSorted []*networkingV1Alpha3.HTTPRoute
 
 func (r HTTPRouteSorted) Len() int {
@@ -616,22 +616,24 @@ func doReconcileVirtualService(
 	if cachedVS == nil {
 		return true, nil
 	}
+	cachedVSSpec := cachedVS.Spec.DeepCopy()
+	desiredVirtualServiceSpec := desiredVirtualService.Spec.DeepCopy()
 	// Check if exportTo has a diff
-	slices.Sort(cachedVS.Spec.ExportTo)
-	slices.Sort(desiredVirtualService.Spec.ExportTo)
-	if !reflect.DeepEqual(cachedVS.Spec.ExportTo, desiredVirtualService.Spec.ExportTo) {
+	slices.Sort(cachedVSSpec.ExportTo)
+	slices.Sort(desiredVirtualServiceSpec.ExportTo)
+	if !reflect.DeepEqual(cachedVSSpec.ExportTo, desiredVirtualServiceSpec.ExportTo) {
 		return true, nil
 	}
 
 	// Check if hosts have a diff
-	slices.Sort(cachedVS.Spec.Hosts)
-	slices.Sort(desiredVirtualService.Spec.Hosts)
-	if !reflect.DeepEqual(cachedVS.Spec.Hosts, desiredVirtualService.Spec.Hosts) {
+	slices.Sort(cachedVSSpec.Hosts)
+	slices.Sort(desiredVirtualServiceSpec.Hosts)
+	if !reflect.DeepEqual(cachedVSSpec.Hosts, desiredVirtualServiceSpec.Hosts) {
 		return true, nil
 	}
 
 	// Check if routes have a diff
-	routeMatched, err := doRoutesMatch(cachedVS, desiredVirtualService)
+	routeMatched, err := doRoutesMatch(cachedVSSpec, desiredVirtualServiceSpec)
 	if err != nil {
 		return true, err
 	}
@@ -639,11 +641,11 @@ func doReconcileVirtualService(
 		return true, err
 	}
 
-	if desiredVirtualService.Spec.Gateways != nil {
+	if desiredVirtualServiceSpec.Gateways != nil {
 		// Check is gateways have a diff
-		slices.Sort(cachedVS.Spec.Gateways)
-		slices.Sort(desiredVirtualService.Spec.Gateways)
-		if !reflect.DeepEqual(cachedVS.Spec.Gateways, desiredVirtualService.Spec.Gateways) {
+		slices.Sort(cachedVSSpec.Gateways)
+		slices.Sort(desiredVirtualServiceSpec.Gateways)
+		if !reflect.DeepEqual(cachedVSSpec.Gateways, desiredVirtualServiceSpec.Gateways) {
 			return true, nil
 		}
 	}
@@ -771,65 +773,69 @@ func addUpdateInClusterVirtualServices(
 	return nil
 }
 
-// httpRoutesComparator comparator that matches the routes between two virtualservices
+// httpRoutesComparator comparator that matches the routes between two virtualservice spec
 // This will be used to check if reconciliation is required
-func httpRoutesComparator(vs1 *v1alpha3.VirtualService, vs2 *v1alpha3.VirtualService) (bool, error) {
-	if vs1 == nil {
-		return false, fmt.Errorf("vs1 is nil")
+func httpRoutesComparator(
+	vs1Spec *networkingV1Alpha3.VirtualService,
+	vs2Spec *networkingV1Alpha3.VirtualService) (bool, error) {
+	if vs1Spec == nil {
+		return false, fmt.Errorf("vs1Spec is nil")
 	}
-	if vs2 == nil {
-		return false, fmt.Errorf("vs2 is nil")
+	if vs2Spec == nil {
+		return false, fmt.Errorf("vs2Spec is nil")
 	}
-	if vs1.Spec.Http == nil {
+	if vs1Spec.Http == nil {
 		return false, fmt.Errorf("vs1.Spec.Http is nil")
 	}
-	if vs2.Spec.Http == nil {
+	if vs2Spec.Http == nil {
 		return false, fmt.Errorf("vs2.Spec.Http is nil")
 	}
-	sort.Sort(HTTPRouteSorted(vs1.Spec.Http))
-	for _, route := range vs1.Spec.Http {
+	sort.Sort(HTTPRouteSorted(vs1Spec.Http))
+	sort.Sort(HTTPRouteSorted(vs2Spec.Http))
+	for _, route := range vs1Spec.Http {
 		sort.Slice(route.Route, func(i, j int) bool {
 			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
 		})
 	}
-	sort.Sort(HTTPRouteSorted(vs2.Spec.Http))
-	for _, route := range vs2.Spec.Http {
+	for _, route := range vs2Spec.Http {
 		sort.Slice(route.Route, func(i, j int) bool {
 			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
 		})
 	}
-	if reflect.DeepEqual(vs1.Spec.Http, vs2.Spec.Http) {
+	if reflect.DeepEqual(vs1Spec.Http, vs2Spec.Http) {
 		return true, nil
 	}
 	return false, nil
 }
 
-// tlsRoutesComparator comparator that matches the routes between two virtualservices
+// tlsRoutesComparator comparator that matches the routes between two virtualservice spec
 // This will be used to check if reconciliation is required
-func tlsRoutesComparator(vs1 *v1alpha3.VirtualService, vs2 *v1alpha3.VirtualService) (bool, error) {
-	if vs1 == nil {
-		return false, fmt.Errorf("vs1 is nil")
+func tlsRoutesComparator(
+	vs1Spec *networkingV1Alpha3.VirtualService,
+	vs2Spec *networkingV1Alpha3.VirtualService) (bool, error) {
+	if vs1Spec == nil {
+		return false, fmt.Errorf("vs1Spec is nil")
 	}
-	if vs2 == nil {
-		return false, fmt.Errorf("vs2 is nil")
+	if vs2Spec == nil {
+		return false, fmt.Errorf("vs2Spec is nil")
 	}
-	if vs1.Spec.Tls == nil {
+	if vs1Spec.Tls == nil {
 		return false, fmt.Errorf("vs1.Spec.Tls is nil")
 	}
-	if vs2.Spec.Tls == nil {
+	if vs2Spec.Tls == nil {
 		return false, fmt.Errorf("vs2.Spec.Tls is nil")
 	}
-	for _, route := range vs1.Spec.Tls {
+	for _, route := range vs1Spec.Tls {
 		sort.Slice(route.Route, func(i, j int) bool {
 			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
 		})
 	}
-	for _, route := range vs2.Spec.Tls {
+	for _, route := range vs2Spec.Tls {
 		sort.Slice(route.Route, func(i, j int) bool {
 			return route.Route[i].Destination.Host < route.Route[j].Destination.Host
 		})
 	}
-	if reflect.DeepEqual(vs1.Spec.Tls, vs2.Spec.Tls) {
+	if reflect.DeepEqual(vs1Spec.Tls, vs2Spec.Tls) {
 		return true, nil
 	}
 	return false, nil
