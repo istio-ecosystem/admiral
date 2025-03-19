@@ -43,7 +43,7 @@ const (
 	NamespaceKubeSystem              = "kube-system"
 	NamespaceIstioSystem             = "istio-system"
 	IstioIngressGatewayLabelValue    = "istio-ingressgateway"
-	NLBIstioIngressGatewayLabelValue = "nlb-istio-ingressgateway"
+	NLBIstioIngressGatewayLabelValue = "istio-ingressgateway-nlb"
 	Env                              = "env"
 	DefaultMtlsPort                  = 15443
 	DefaultServiceEntryPort          = 80

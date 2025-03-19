@@ -99,7 +99,7 @@ func handleServiceEventForDeployment(
 		return fmt.Errorf(AlertLogMsg, ctx.Value(common.EventType))
 	}
 
-	if common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().LabelSet.GatewayApp) {
+	if common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().LabelSet.GatewayApp) || common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().NLBIngressLabel) {
 		// The eventType is overridden to admiral.Update. This is mainly
 		// for admiral.Delete events sent for the ingress in the cluster
 		// else it would delete all the SEs in the source and dependent clusters
@@ -164,7 +164,7 @@ func handleServiceEventForRollout(
 		return fmt.Errorf(AlertLogMsg, ctx.Value(common.EventType))
 	}
 
-	if common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().LabelSet.GatewayApp) {
+	if common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().LabelSet.GatewayApp) || common.IsIstioIngressGatewayService(svc, common.GetAdmiralParams().NLBIngressLabel) {
 		// The eventType is overridden to admiral.Update. This is mainly
 		// for admiral.Delete events sent for the ingress in the cluster
 		// else it would delete all the SEs in the source and dependent clusters
