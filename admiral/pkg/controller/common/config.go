@@ -547,12 +547,12 @@ func DoVSRoutingInClusterForClusterAndIdentity(cluster, identity string) bool {
 
 // Verify the specific identity is part of the configured identities
 func checkClusterIdentity(identities string, identity string) bool {
-	if identities == "*" {
+	if strings.TrimSpace(identities) == "*" {
 		return true
 	}
 
 	for _, id := range strings.Split(identities, ",") {
-		if id == identity {
+		if strings.TrimSpace(id) == strings.TrimSpace(identity) {
 			return true
 		}
 	}
