@@ -491,78 +491,68 @@ func IsSlowStartEnabledForCluster(cluster string) bool {
 // DoDRUpdateForInClusterVSRouting determines whether admiral-sync namespace DestinationRule should be updated
 // for in-cluster virtual service routing for the given cluster and identity.
 func DoDRUpdateForInClusterVSRouting(cluster string, identity string, isSourceCluster bool) bool {
-	if isSourceCluster && DoVSRoutingInClusterForCluster(cluster) && DoVSRoutingInClusterForIdentity(identity) {
+	if isSourceCluster && DoVSRoutingInClusterForClusterAndIdentity(cluster, identity) {
 		return true
 	}
 	return false
 }
 
+// ShouldInClusterVSRoutingPerformRollback checks whether in-cluster vs based routing resources are configured for rollback
 func ShouldInClusterVSRoutingPerformRollback() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	if len(wrapper.params.VSRoutingInClusterDisabledClusters) > 0 ||
-		len(wrapper.params.VSRoutingInClusterDisabledIdentities) > 0 {
+	if len(wrapper.params.VSRoutingInClusterDisabledResources) > 0 {
 		return true
 	}
 	return false
 }
 
+// IsVSRoutingInClusterDisabledForCluster checks whether in-cluster vs routing is disabled globally or for specific cluster resources
 func IsVSRoutingInClusterDisabledForCluster(cluster string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	for _, c := range wrapper.params.VSRoutingInClusterDisabledClusters {
-		if c == "*" {
-			return true
-		}
-		if c == cluster {
-			return true
-		}
-	}
-	return false
+	return wrapper.params.VSRoutingInClusterDisabledResources["*"] == "*" || wrapper.params.VSRoutingInClusterDisabledResources[cluster] == "*"
 }
 
-func IsVSRoutingInClusterDisabledForIdentity(identity string) bool {
+// IsVSRoutingInClusterDisabledForIdentity checks whether in-cluster vs routing is disabled
+// for a specific identity, either globally across all clusters or for a specific cluster.
+func IsVSRoutingInClusterDisabledForIdentity(cluster, identity string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	for _, c := range wrapper.params.VSRoutingInClusterDisabledIdentities {
-		if c == "*" {
-			return true
-		}
-		if c == identity {
-			return true
-		}
+	if checkClusterIdentity(wrapper.params.VSRoutingInClusterDisabledResources["*"], identity) || checkClusterIdentity(wrapper.params.VSRoutingInClusterDisabledResources[cluster], identity) {
+		return true
 	}
 	return false
 }
 
-func DoVSRoutingInClusterForCluster(cluster string) bool {
+// DoVSRoutingInClusterForClusterAndIdentity determines if Virtual Service (VS) routing is enabled
+// for a given cluster and identity for the in-cluster vs based routing.
+func DoVSRoutingInClusterForClusterAndIdentity(cluster, identity string) bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	if !wrapper.params.EnableVSRoutingInCluster {
 		return false
 	}
-	for _, c := range wrapper.params.VSRoutingInClusterEnabledClusters {
-		if c == "*" {
-			return true
-		}
-		if c == cluster {
-			return true
-		}
+
+	enabledResources := wrapper.params.VSRoutingInClusterEnabledResources
+
+	//check if vs routing is enabled for everything or for all identities on a specific cluster
+	if enabledResources["*"] == "*" || enabledResources[cluster] == "*" {
+		return true
 	}
-	return false
+
+	//check if vs routing is enabled for an identity on all source clusters or for an identity on a specific cluster
+	return checkClusterIdentity(enabledResources["*"], identity) || checkClusterIdentity(enabledResources[cluster], identity)
 }
 
-func DoVSRoutingInClusterForIdentity(identity string) bool {
-	wrapper.RLock()
-	defer wrapper.RUnlock()
-	if !wrapper.params.EnableVSRoutingInCluster {
-		return false
+// Verify the specific identity is part of the configured identities
+func checkClusterIdentity(identities string, identity string) bool {
+	if identities == "*" {
+		return true
 	}
-	for _, c := range wrapper.params.VSRoutingInClusterEnabledIdentities {
-		if c == "*" {
-			return true
-		}
-		if c == identity {
+
+	for _, id := range strings.Split(identities, ",") {
+		if id == identity {
 			return true
 		}
 	}

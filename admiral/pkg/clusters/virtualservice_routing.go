@@ -526,7 +526,7 @@ func generateVirtualServiceForIncluster(
 
 	// Add the exportTo namespaces to the virtual service
 	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
-	if common.EnableExportTo(vsName) && common.DoVSRoutingInClusterForCluster(sourceCluster) && common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
+	if common.EnableExportTo(vsName) && common.DoVSRoutingInClusterForClusterAndIdentity(sourceCluster, sourceIdentity) {
 		virtualService.Spec.ExportTo = getSortedDependentNamespaces(
 			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
 	}
@@ -669,15 +669,6 @@ func addUpdateInClusterVirtualServices(
 		return fmt.Errorf("identity is empty")
 	}
 
-	if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
-		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-			"", "", "",
-			fmt.Sprintf(
-				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for identity %s",
-				sourceIdentity))
-		return nil
-	}
-
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
 	}
@@ -688,10 +679,10 @@ func addUpdateInClusterVirtualServices(
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
-		if common.IsVSRoutingInClusterDisabledForCluster(sourceCluster) {
+		if common.IsVSRoutingInClusterDisabledForIdentity(sourceCluster, sourceIdentity) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 				"", "", sourceCluster,
-				"Writing phase: addUpdateInClusterVirtualServices VS based routing disabled for cluster")
+				fmt.Sprintf("Writing phase: addUpdateInClusterVirtualServices: VS based routing disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
 			continue
 		}
 
@@ -1204,27 +1195,17 @@ func addUpdateInClusterDestinationRule(
 		return fmt.Errorf("cname is empty")
 	}
 
-	if !common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
-		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-			"", "", "",
-			fmt.Sprintf(
-				"Writing phase: addUpdateInClusterDestinationRule VS based routing disabled for identity %s",
-				sourceIdentity))
-		return nil
-	}
-
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
-
-		if !common.DoVSRoutingInClusterForCluster(sourceCluster) {
+		if !common.DoVSRoutingInClusterForClusterAndIdentity(sourceCluster, sourceIdentity) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 				"", "", sourceCluster,
-				"Writing phase: addUpdateInClusterDestinationRule VS based routing in-cluster disabled for cluster")
+				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
 			continue
 		}
 
 		ctxLogger.Info(common.CtxLogFormat, "VSBasedRoutingInCluster",
 			"", "", sourceCluster,
-			"Writing phase: addUpdateInClusterDestinationRule VS based routing in-cluster enabled for cluster")
+			fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster enabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
 
 		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
 
@@ -1466,7 +1447,7 @@ func performInVSRoutingRollback(
 			}
 			continue
 		}
-		if common.IsVSRoutingInClusterDisabledForIdentity(sourceIdentity) {
+		if common.IsVSRoutingInClusterDisabledForIdentity(clusterID, sourceIdentity) {
 			// If we enter this block that means the entire cluster is not disabled
 			// just a single identity's VS need to be rolled back.
 			virtualServiceName := fmt.Sprintf("%s-%s", vsname, common.InclusterVSNameSuffix)

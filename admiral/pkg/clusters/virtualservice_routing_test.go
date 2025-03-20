@@ -63,14 +63,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		SyncNamespace:                       "admiral-sync",
-		LabelSet:                            &common.LabelSet{},
-		ExportToIdentityList:                []string{"*"},
-		ExportToMaxNamespaces:               100,
-		EnableSWAwareNSCaches:               true,
-		EnableVSRoutingInCluster:            true,
-		VSRoutingInClusterEnabledIdentities: []string{"test-identity"},
-		VSRoutingInClusterEnabledClusters:   []string{"cluster-1"},
+		SyncNamespace:                      "admiral-sync",
+		LabelSet:                           &common.LabelSet{},
+		ExportToIdentityList:               []string{"*"},
+		ExportToMaxNamespaces:              100,
+		EnableSWAwareNSCaches:              true,
+		EnableVSRoutingInCluster:           true,
+		VSRoutingInClusterEnabledResources: map[string]string{"cluster-1": "test-identity"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
@@ -3266,14 +3265,13 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		SANPrefix:                           "test-san-prefix",
-		EnableVSRoutingInCluster:            true,
-		VSRoutingInClusterEnabledClusters:   []string{"cluster-1", "cluster-2"},
-		VSRoutingInClusterEnabledIdentities: []string{"test-identity"},
-		VSRoutingSlowStartEnabledClusters:   []string{"cluster-1"},
-		ExportToIdentityList:                []string{"*"},
-		ExportToMaxNamespaces:               100,
-		EnableSWAwareNSCaches:               true,
+		SANPrefix:                          "test-san-prefix",
+		EnableVSRoutingInCluster:           true,
+		VSRoutingInClusterEnabledResources: map[string]string{"cluster-1": "test-identity", "cluster-2": "*"},
+		VSRoutingSlowStartEnabledClusters:  []string{"cluster-1"},
+		ExportToIdentityList:               []string{"*"},
+		ExportToMaxNamespaces:              100,
+		EnableSWAwareNSCaches:              true,
 	}
 
 	common.ResetSync()
@@ -4363,14 +4361,13 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 	}
 
 	admiralParams := common.AdmiralParams{
-		LabelSet:                             &common.LabelSet{},
-		SyncNamespace:                        "test-sync-ns",
-		ExportToIdentityList:                 []string{"*"},
-		ExportToMaxNamespaces:                100,
-		EnableSWAwareNSCaches:                true,
-		EnableVSRoutingInCluster:             true,
-		VSRoutingInClusterDisabledIdentities: []string{"test-identity"},
-		VSRoutingInClusterDisabledClusters:   []string{"cluster-2"},
+		LabelSet:                            &common.LabelSet{},
+		SyncNamespace:                       "test-sync-ns",
+		ExportToIdentityList:                []string{"*"},
+		ExportToMaxNamespaces:               100,
+		EnableSWAwareNSCaches:               true,
+		EnableVSRoutingInCluster:            true,
+		VSRoutingInClusterDisabledResources: map[string]string{"cluster-2": "*", "cluster-1": "test-identity"},
 	}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
