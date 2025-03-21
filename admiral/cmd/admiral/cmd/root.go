@@ -278,7 +278,9 @@ func GetRootCmd(args []string) *cobra.Command {
 
 	// Flags pertaining to VS based routing in-cluster
 	rootCmd.PersistentFlags().BoolVar(&params.EnableVSRoutingInCluster, "enable_vs_routing_in_cluster", false, "Enable/Disable VS Based Routing in cluster")
+	// Usage:  --vs_routing_in_cluster_enabled_resources *=identity1,cluster2=*,cluster3="identity3, identity4" OR --vs_routing_in_cluster_enabled_resources *=* (enable for everything)
 	rootCmd.PersistentFlags().StringToStringVarP(&params.VSRoutingInClusterEnabledResources, "vs_routing_in_cluster_enabled_resources", "e", map[string]string{}, "The source clusters and corresponding source identities to enable VS based routing in-cluster on")
+	// Usage:  --vs_routing_in_cluster_disabled_resources *=identity1,cluster2=*,cluster3="identity3, identity4" OR --vs_routing_in_cluster_disabled_resources *=* (disable for everything)
 	rootCmd.PersistentFlags().StringToStringVarP(&params.VSRoutingInClusterDisabledResources, "vs_routing_in_cluster_disabled_resources", "d", map[string]string{}, "The source clusters and corresponding source identities to disable VS based routing in-cluster on")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")

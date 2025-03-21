@@ -526,13 +526,17 @@ func generateVirtualServiceForIncluster(
 
 	// Add the exportTo namespaces to the virtual service
 	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
+	vsRoutingInclusterEnabledForClusterAndIdentity := false
 	if common.EnableExportTo(vsName) && common.DoVSRoutingInClusterForClusterAndIdentity(sourceCluster, sourceIdentity) {
+		vsRoutingInclusterEnabledForClusterAndIdentity = true
 		virtualService.Spec.ExportTo = getSortedDependentNamespaces(
 			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
 	}
+	ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+		virtualService.Name, virtualService.Namespace, sourceCluster,
+		fmt.Sprintf("Writing phase: generateVirtualServiceForIncluster: VSRoutingInClusterEnabled: %v", vsRoutingInclusterEnabledForClusterAndIdentity))
 
 	return virtualService, nil
-
 }
 
 // generateVirtualServiceForIngress generates the VirtualService for the cross-cluster routing

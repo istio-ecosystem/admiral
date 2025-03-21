@@ -1545,6 +1545,7 @@ func AddServiceEntriesWithDrWorker(
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
 		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
