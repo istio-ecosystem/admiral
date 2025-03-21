@@ -783,91 +783,73 @@ func modifyServiceEntryForNewServiceOrPod(
 		// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 		// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 		// endpoints.
-		if common.DoVSRoutingForCluster(sourceCluster) || common.DoVSRoutingInClusterForCluster(sourceCluster) {
-			eventNamespace := sourceClusterToEventNsCache[sourceCluster]
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+		eventNamespace = sourceClusterToEventNsCache[sourceCluster]
+		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
+			deploymentOrRolloutName, eventNamespace, sourceCluster,
+			"Discovery phase: VS based routing enabled for cluster")
+
+		sourceClusterLocality, err = getClusterRegion(remoteRegistry, sourceCluster, rc)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+		}
+
+		ingressDestinations, err = getAllVSRouteDestinationsByCluster(
+			ctxLogger,
+			serviceInstance,
+			meshDeployAndRolloutPorts,
+			sourceWeightedServices[sourceCluster],
+			sourceRollouts[sourceCluster],
+			sourceDeployments[sourceCluster])
+
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+			modifySEerr = common.AppendError(modifySEerr, err)
+		} else if len(ingressDestinations) == 0 {
+			ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
-				"Discovery phase: VS based routing enabled for cluster")
-
-			sourceClusterLocality, err = getClusterRegion(remoteRegistry, sourceCluster, rc)
-			if err != nil {
-				ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
-					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-			}
-
-			ingressDestinations, err = getAllVSRouteDestinationsByCluster(
-				ctxLogger,
-				serviceInstance,
-				meshDeployAndRolloutPorts,
-				sourceWeightedServices[sourceCluster],
-				sourceRollouts[sourceCluster],
-				sourceDeployments[sourceCluster])
-
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-				modifySEerr = common.AppendError(modifySEerr, err)
-			} else if len(ingressDestinations) == 0 {
-				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
-					deploymentOrRolloutName, eventNamespace, sourceCluster,
-					"No RouteDestinations generated for VS based routing ")
-			} else {
-				for key, value := range ingressDestinations {
-					inClusterDestinations[key] = value
-				}
-			}
-
-			drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
-			sourceClusterToDRHosts[sourceCluster] = map[string]string{
-				eventNamespace + common.DotLocalDomainSuffix: drHost,
-			}
+				"No RouteDestinations generated for VS based routing ")
 		} else {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
-				"", "", sourceCluster,
-				"Discovery phase: VS based routing disabled for cluster")
+			for key, value := range ingressDestinations {
+				inClusterDestinations[key] = value
+			}
+		}
+
+		drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
+		sourceClusterToDRHosts[sourceCluster] = map[string]string{
+			eventNamespace + common.DotLocalDomainSuffix: drHost,
 		}
 
 		//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
-		if common.DoVSRoutingForCluster(sourceCluster) {
-			err = processGTPAndAddWeightsByCluster(ctxLogger,
-				remoteRegistry,
-				sourceIdentity,
-				env,
-				sourceClusterLocality,
-				ingressDestinations,
-				false)
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-				modifySEerr = common.AppendError(modifySEerr, err)
-			}
-			sourceClusterToDestinations[sourceCluster] = ingressDestinations
-		} else {
-			ctxLogger.Infof(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				"", "", sourceCluster,
-				"Discovery phase: Skipped GTP processing as VS based routing disabled for cluster")
+		err = processGTPAndAddWeightsByCluster(ctxLogger,
+			remoteRegistry,
+			sourceIdentity,
+			env,
+			sourceClusterLocality,
+			ingressDestinations,
+			false)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+			modifySEerr = common.AppendError(modifySEerr, err)
 		}
+		sourceClusterToDestinations[sourceCluster] = ingressDestinations
 
 		//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
-		if common.DoVSRoutingInClusterForCluster(sourceCluster) && common.DoVSRoutingInClusterForIdentity(sourceIdentity) {
-			err = processGTPAndAddWeightsByCluster(ctxLogger,
-				remoteRegistry,
-				sourceIdentity,
-				env,
-				sourceClusterLocality,
-				inClusterDestinations,
-				true)
-			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-				modifySEerr = common.AppendError(modifySEerr, err)
-			}
-			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
-		} else {
-			ctxLogger.Infof(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				sourceIdentity, "", sourceCluster,
-				"Discovery phase: Skipped GTP processing as in-cluster VS based routing disabled for cluster")
+		err = processGTPAndAddWeightsByCluster(ctxLogger,
+			remoteRegistry,
+			sourceIdentity,
+			env,
+			sourceClusterLocality,
+			inClusterDestinations,
+			true)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+			modifySEerr = common.AppendError(modifySEerr, err)
 		}
+		sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 	}
 
 	ctxLogger.Infof(common.CtxLogFormat, "ClientAssets",
@@ -1563,6 +1545,7 @@ func AddServiceEntriesWithDrWorker(
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
 		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)

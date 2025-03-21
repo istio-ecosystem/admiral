@@ -1860,8 +1860,7 @@ func TestGetDestinationRuleVSRoutingInCluster(t *testing.T) {
 	}
 	admiralParams.EnableActivePassive = false
 	admiralParams.EnableVSRoutingInCluster = true
-	admiralParams.VSRoutingInClusterEnabledClusters = []string{"*"}
-	admiralParams.VSRoutingInClusterEnabledIdentities = []string{"*"}
+	admiralParams.VSRoutingInClusterEnabledResources = map[string]string{"*": "*"}
 	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 

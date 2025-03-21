@@ -314,82 +314,75 @@ func TestDoDRUpdateForInClusterVSRouting(t *testing.T) {
 	p := AdmiralParams{}
 
 	testCases := []struct {
-		name                                   string
-		cluster                                string
-		identity                               string
-		isSourceCluster                        bool
-		enableVSRoutingInCluster               bool
-		enabledVSRoutingInClusterForCluster    []string
-		enabledVSRoutingInClusterForIdentities []string
-		expected                               bool
+		name                               string
+		cluster                            string
+		identity                           string
+		isSourceCluster                    bool
+		enableVSRoutingInCluster           bool
+		enabledVSRoutingInClusterResources map[string]string
+		expected                           bool
 	}{
 		{
 			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is source cluster" +
 				"When DoDRUpdateForInClusterVSRouting is called" +
 				"Then it should return true",
-			cluster:                                "cluster1",
-			identity:                               "identity1",
-			isSourceCluster:                        true,
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
-			enabledVSRoutingInClusterForIdentities: []string{"identity1"},
-			expected:                               true,
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			expected:                           true,
 		},
 		{
 			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is remote cluster" +
 				"When DoDRUpdateForInClusterVSRouting is called" +
 				"Then it should return true",
-			cluster:                                "cluster1",
-			identity:                               "identity1",
-			isSourceCluster:                        false,
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
-			enabledVSRoutingInClusterForIdentities: []string{"identity1"},
-			expected:                               false,
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			isSourceCluster:                    false,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			expected:                           false,
 		},
 		{
 			name: "Given VSRoutingInCluster is not enabled for cluster1, cluster is source cluster" +
 				"When DoDRUpdateForInClusterVSRouting is called" +
 				"Then it should return true",
-			cluster:                                "cluster1",
-			identity:                               "identity1",
-			isSourceCluster:                        true,
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForCluster:    []string{"cluster2"},
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster2": ""},
+			expected:                           false,
 		},
 		{
 			name: "Given VSRoutingInCluster is not enabled, cluster is source cluster" +
 				"When DoDRUpdateForInClusterVSRouting is called" +
 				"Then it should return true",
-			cluster:                                "cluster1",
-			identity:                               "identity1",
-			isSourceCluster:                        true,
-			enableVSRoutingInCluster:               false,
-			enabledVSRoutingInClusterForCluster:    []string{},
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           false,
+			enabledVSRoutingInClusterResources: map[string]string{"": ""},
+			expected:                           false,
 		},
 		{
 			name: "Given VSRoutingInCluster is enabled for cluster1,  VSRoutingInCluster not enabled for identity1, cluster is source cluster" +
 				"When DoDRUpdateForInClusterVSRouting is called" +
 				"Then it should return true",
-			cluster:                                "cluster1",
-			identity:                               "identity1",
-			isSourceCluster:                        true,
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForCluster:    []string{"cluster1"},
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": ""},
+			expected:                           false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
-			p.VSRoutingInClusterEnabledClusters = tc.enabledVSRoutingInClusterForCluster
-			p.VSRoutingInClusterEnabledIdentities = tc.enabledVSRoutingInClusterForIdentities
+			p.VSRoutingInClusterEnabledResources = tc.enabledVSRoutingInClusterResources
 			ResetSync()
 			InitializeConfig(p)
 
@@ -399,251 +392,171 @@ func TestDoDRUpdateForInClusterVSRouting(t *testing.T) {
 
 }
 
-func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
-	p := AdmiralParams{}
-
-	testCases := []struct {
-		name                                 string
-		cluster                              string
-		disabledVSRoutingInClusterForCluster []string
-		expected                             bool
-	}{
-		{
-			name: "Given disabledVSRoutingInClusterForCluster is empty" +
-				"When IsVSRoutingInClusterDisabledForCluster is called" +
-				"Then it should return false",
-			cluster:                              "cluster1",
-			disabledVSRoutingInClusterForCluster: []string{},
-			expected:                             false,
-		},
-		{
-			name: "Given cluster doesn't exists in the list" +
-				"When IsVSRoutingInClusterDisabledForCluster is called" +
-				"Then it should return false",
-			cluster:                              "cluster2",
-			disabledVSRoutingInClusterForCluster: []string{"cluster1"},
-			expected:                             false,
-		},
-		{
-			name: "Given cluster does exists in the list" +
-				"When IsVSRoutingInClusterDisabledForCluster is called" +
-				"Then it should return true",
-			cluster:                              "cluster1",
-			disabledVSRoutingInClusterForCluster: []string{"cluster1"},
-			expected:                             true,
-		},
-		{
-			name: "Given VS routing is disabled in all clusters using '*'" +
-				"When IsVSRoutingInClusterDisabledForCluster is called" +
-				"Then it should return true",
-			cluster:                              "cluster1",
-			disabledVSRoutingInClusterForCluster: []string{"*"},
-			expected:                             true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			p.VSRoutingInClusterDisabledClusters = tc.disabledVSRoutingInClusterForCluster
-			ResetSync()
-			InitializeConfig(p)
-
-			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForCluster(tc.cluster))
-		})
-	}
-
-}
-
-func TestIsVSRoutingInClusterDisabledForIdentity(t *testing.T) {
-	p := AdmiralParams{}
-
-	testCases := []struct {
-		name                                    string
-		identity                                string
-		disabledVSRoutingInClusterForIdentities []string
-		expected                                bool
-	}{
-		{
-			name: "Given disabledVSRoutingInClusterForIdentities is empty" +
-				"When IsVSRoutingInClusterDisabledForIdentity is called" +
-				"Then it should return false",
-			identity:                                "testIdentity1",
-			disabledVSRoutingInClusterForIdentities: []string{},
-			expected:                                false,
-		},
-		{
-			name: "Given identity doesn't exists in the list" +
-				"When IsVSRoutingInClusterDisabledForIdentity is called" +
-				"Then it should return false",
-			identity:                                "testIdentity2",
-			disabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                                false,
-		},
-		{
-			name: "Given identity does exists in the list" +
-				"When IsVSRoutingInClusterDisabledForIdentity is called" +
-				"Then it should return true",
-			identity:                                "testIdentity1",
-			disabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                                true,
-		},
-		{
-			name: "Given  VS routing is disabled for all identities using '*'" +
-				"When IsVSRoutingInClusterDisabledForIdentity is called" +
-				"Then it should return true",
-			identity:                                "testIdentity1",
-			disabledVSRoutingInClusterForIdentities: []string{"*"},
-			expected:                                true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			p.VSRoutingInClusterDisabledIdentities = tc.disabledVSRoutingInClusterForIdentities
-			ResetSync()
-			InitializeConfig(p)
-
-			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForIdentity(tc.identity))
-		})
-	}
-
-}
-
-func TestDoVSRoutingInClusterForCluster(t *testing.T) {
+func TestIsVSRoutingInClusterDisabledForClusterAndIdentity(t *testing.T) {
 	p := AdmiralParams{}
 
 	testCases := []struct {
 		name                                string
 		cluster                             string
-		enableVSRoutingInCluster            bool
-		enabledVSRoutingInClusterForCluster []string
+		identity                            string
+		disabledVSRoutingInClusterResources map[string]string
 		expected                            bool
 	}{
 		{
-			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForCluster is empty" +
-				"When DoVSRoutingInClusterForCluster is called" +
+			name: "Given disabledVSRoutingInClusterResources is empty" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
 				"Then it should return false",
 			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            false,
-			enabledVSRoutingInClusterForCluster: []string{},
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{},
 			expected:                            false,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForCluster is empty" +
-				"When DoVSRoutingInClusterForCluster is called" +
-				"Then it should return false",
-			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{},
-			expected:                            false,
-		},
-		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
-				"When DoVSRoutingInClusterForCluster is called" +
+			name: "Given cluster doesn't exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
 				"Then it should return false",
 			cluster:                             "cluster2",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{},
 			expected:                            false,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
-				"When DoVSRoutingInClusterForCluster is called" +
+			name: "Given cluster does exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
 				"Then it should return true",
 			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"cluster1"},
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": "*"},
 			expected:                            true,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
-				"When DoVSRoutingInClusterForCluster is called" +
+			name: "Given VS routing is disabled in all clusters using '*'" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
 				"Then it should return true",
 			cluster:                             "cluster1",
-			enableVSRoutingInCluster:            true,
-			enabledVSRoutingInClusterForCluster: []string{"*"},
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{"*": "*"},
+			expected:                            true,
+		},
+		{
+			name: "Given cluster does exists in the disabledVSRoutingInClusterResources and given identity does not exists" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster1",
+			identity:                            "identity1",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": ""},
+			expected:                            false,
+		},
+		{
+			name: "Given cluster and identity does exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			identity:                            "identity1",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
 			expected:                            true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
-			p.VSRoutingInClusterEnabledClusters = tc.enabledVSRoutingInClusterForCluster
+			p.VSRoutingInClusterDisabledResources = tc.disabledVSRoutingInClusterResources
 			ResetSync()
 			InitializeConfig(p)
 
-			assert.Equal(t, tc.expected, DoVSRoutingInClusterForCluster(tc.cluster))
+			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForIdentity(tc.cluster, tc.identity))
 		})
 	}
-
 }
 
-func TestDoVSRoutingInClusterForIdentity(t *testing.T) {
+func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 	p := AdmiralParams{}
 
 	testCases := []struct {
-		name                                   string
-		identity                               string
-		enableVSRoutingInCluster               bool
-		enabledVSRoutingInClusterForIdentities []string
-		expected                               bool
+		name                                  string
+		cluster                               string
+		identity                              string
+		enableVSRoutingInCluster              bool
+		enabledVSRoutingInClusterForResources map[string]string
+		expected                              bool
 	}{
 		{
-			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForIdentities is empty" +
-				"When DoVSRoutingInClusterForIdentity is called" +
+			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForResources is empty" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
 				"Then it should return false",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               false,
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
+			cluster:                               "cluster1",
+			enableVSRoutingInCluster:              false,
+			enabledVSRoutingInClusterForResources: map[string]string{},
+			expected:                              false,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForIdentities is empty" +
-				"When DoVSRoutingInClusterForIdentity is called" +
+			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForResources is empty" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
 				"Then it should return false",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{},
-			expected:                               false,
+			cluster:                               "cluster1",
+			identity:                              "identity1",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{},
+			expected:                              false,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the list" +
-				"When DoVSRoutingInClusterForIdentity is called" +
+			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the enabledVSRoutingInClusterForResources" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
 				"Then it should return false",
-			identity:                               "testIdentity2",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                               false,
+			cluster:                               "cluster2",
+			identity:                              "identity1",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "test1"},
+			expected:                              false,
 		},
 		{
-			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the list" +
-				"When DoVSRoutingInClusterForIdentity is called" +
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
 				"Then it should return true",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"testIdentity1"},
-			expected:                               true,
+			cluster:                               "cluster1",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "*"},
+			expected:                              true,
 		},
 		{
 			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
-				"When DoVSRoutingInClusterForIdentity is called" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
 				"Then it should return true",
-			identity:                               "testIdentity1",
-			enableVSRoutingInCluster:               true,
-			enabledVSRoutingInClusterForIdentities: []string{"*"},
-			expected:                               true,
+			cluster:                               "cluster1",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"*": "*"},
+			expected:                              true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster and identity does exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return true",
+			cluster:                               "cluster1",
+			identity:                              "identity1",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "identity1, identity2"},
+			expected:                              true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map, and given identity does not exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster1",
+			identity:                              "identity3",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "identity1, identity2"},
+			expected:                              false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
-			p.VSRoutingInClusterEnabledIdentities = tc.enabledVSRoutingInClusterForIdentities
+			p.VSRoutingInClusterEnabledResources = tc.enabledVSRoutingInClusterForResources
 			ResetSync()
 			InitializeConfig(p)
 
-			assert.Equal(t, tc.expected, DoVSRoutingInClusterForIdentity(tc.identity))
+			assert.Equal(t, tc.expected, DoVSRoutingInClusterForClusterAndIdentity(tc.cluster, tc.identity))
 		})
 	}
 
@@ -971,58 +884,118 @@ func TestGetResyncIntervals(t *testing.T) {
 	assert.Equal(t, time.Minute, actual.UniversalReconcileInterval)
 }
 
-func TestShouldPerformRollback(t *testing.T) {
+func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
 	p := AdmiralParams{}
 	testCases := []struct {
-		name                        string
-		vsRoutingDisabledClusters   []string
-		vsRoutingDisabledIdentities []string
-		expectedResult              bool
+		name                                string
+		vsRoutingInClusterDisabledResources map[string]string
+		cluster                             string
+		expectedResult                      bool
 	}{
 		{
-			name: "Given empty vs routing disabled cluster and disabled identities" +
-				"When func shouldPerformRollback is called" +
+			name: "Given nil vs routing disabled resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
 				"Then the func should return false",
-			expectedResult: false,
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: nil,
 		},
 		{
-			name: "Given empty vs routing disabled cluster" +
-				"And non-empty vs routing disabled identities" +
-				"When func shouldPerformRollback is called" +
-				"Then the func should return true",
-			expectedResult:              true,
-			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
+			name: "Given empty vs routing disabled resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: map[string]string{},
 		},
 		{
-			name: "Given non-empty vs routing disabled cluster" +
-				"And empty vs routing disabled identities" +
-				"When func shouldPerformRollback is called" +
-				"Then the func should return true",
-			expectedResult:            true,
-			vsRoutingDisabledClusters: []string{"cluster1", "cluster2"},
+			name: "Given non-empty vs routing disabled resources but for unique identity" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "identity1"},
+			cluster:                             "cluster1",
 		},
 		{
-			name: "Given non-empty vs routing disabled cluster" +
-				"And non-empty vs routing disabled identities" +
-				"When func shouldPerformRollback is called" +
+			name: "Given non-empty vs routing disabled resources for all the cluster identities" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
 				"Then the func should return true",
-			expectedResult:              true,
-			vsRoutingDisabledIdentities: []string{"identity1", "identity2"},
-			vsRoutingDisabledClusters:   []string{"cluster1", "cluster2"},
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "*"},
+			cluster:                             "cluster1",
+		},
+		{
+			name: "Given non-empty vs routing disabled resources for all the resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"*": "*"},
+			cluster:                             "cluster1",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			p.VSRoutingInClusterDisabledClusters = tc.vsRoutingDisabledClusters
-			p.VSRoutingInClusterDisabledIdentities = tc.vsRoutingDisabledIdentities
+			p.VSRoutingInClusterDisabledResources = tc.vsRoutingInClusterDisabledResources
+			ResetSync()
+			InitializeConfig(p)
+			actual := IsVSRoutingInClusterDisabledForCluster(tc.cluster)
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+}
+
+func TestShouldPerformRollback(t *testing.T) {
+	p := AdmiralParams{}
+	testCases := []struct {
+		name                                string
+		vsRoutingInClusterDisabledResources map[string]string
+		expectedResult                      bool
+	}{
+		{
+			name: "Given nil vs routing disabled cluster resources" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: nil,
+		},
+		{
+			name: "Given empty vs routing disabled resources" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: map[string]string{},
+		},
+		{
+			name: "Given non-empty vs routing disabled resources" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "identity1", "cluster2": "identity2"},
+		},
+		{
+			name: "Given non-empty vs routing disabled resources, with * as value" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "*"},
+		},
+		{
+			name: "Given non-empty vs routing disabled resources, and disabled for all the resources" +
+				"When func shouldPerformRollback is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"*": "*"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.VSRoutingInClusterDisabledResources = tc.vsRoutingInClusterDisabledResources
 			ResetSync()
 			InitializeConfig(p)
 			actual := ShouldInClusterVSRoutingPerformRollback()
 			assert.Equal(t, tc.expectedResult, actual)
 		})
 	}
-
 }
 
 //func TestGetCRDIdentityLabelWithLabel(t *testing.T) {
