@@ -795,13 +795,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
 			}
 
-			ingressDestinations, err = getAllVSRouteDestinationsByCluster(
-				ctxLogger,
-				serviceInstance,
-				meshDeployAndRolloutPorts,
-				sourceWeightedServices[sourceCluster],
-				sourceRollouts[sourceCluster],
-				sourceDeployments[sourceCluster])
+			ingressDestinations, err = getAllVSRouteDestinationsByCluster(serviceInstance, meshDeployAndRolloutPorts, sourceWeightedServices[sourceCluster], sourceRollouts[sourceCluster], sourceDeployments[sourceCluster])
 
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",

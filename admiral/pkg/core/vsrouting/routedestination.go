@@ -14,6 +14,7 @@ type RouteDestination struct {
 	Destination *networkingV1Alpha3.Destination
 	Weight      int32
 	Headers     *networkingV1Alpha3.Headers
+	Type        string
 }
 
 type RouteDestinationSorted []*RouteDestination
