@@ -795,7 +795,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		ingressDestinations, err = getAllVSRouteDestinationsByCluster(
-			ctxLogger,
 			serviceInstance,
 			meshDeployAndRolloutPorts,
 			sourceWeightedServices[sourceCluster],
@@ -810,6 +809,33 @@ func modifyServiceEntryForNewServiceOrPod(
 			ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
 				deploymentOrRolloutName, eventNamespace, sourceCluster,
 				"No RouteDestinations generated for VS based routing ")
+
+			sourceClusterLocality, err = getClusterRegion(remoteRegistry, sourceCluster, rc)
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "VSBasedRouting",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+			}
+
+			ingressDestinations, err = getAllVSRouteDestinationsByCluster(serviceInstance, meshDeployAndRolloutPorts, sourceWeightedServices[sourceCluster], sourceRollouts[sourceCluster], sourceDeployments[sourceCluster])
+
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			} else if len(ingressDestinations) == 0 {
+				ctxLogger.Warnf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster,
+					"No RouteDestinations generated for VS based routing ")
+			} else {
+				for key, value := range ingressDestinations {
+					inClusterDestinations[key] = value
+				}
+			}
+
+			drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
+			sourceClusterToDRHosts[sourceCluster] = map[string]string{
+				eventNamespace + common.DotLocalDomainSuffix: drHost,
+			}
 		} else {
 			for key, value := range ingressDestinations {
 				inClusterDestinations[key] = value

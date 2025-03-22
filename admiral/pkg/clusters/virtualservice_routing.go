@@ -915,7 +915,6 @@ func addUpdateVirtualServicesForIngress(
 // and rollouts.
 // This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
-	ctxLogger *log.Entry,
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
@@ -1492,4 +1491,200 @@ func performInVSRoutingRollback(
 		return fmt.Errorf("%v", errs)
 	}
 	return nil
+}
+
+func mergeVS(
+	customVS *v1alpha3.VirtualService,
+	inclusterVS *v1alpha3.VirtualService,
+	rc *RemoteController,
+	env string) (*v1alpha3.VirtualService, error) {
+
+	if customVS == nil {
+		return nil, fmt.Errorf("custom VS is nil")
+	}
+	if inclusterVS == nil {
+		return nil, fmt.Errorf("incluster VS is nil")
+	}
+
+	newVS := inclusterVS.DeepCopy()
+
+	// Merge the hosts of both VS and then de-dup it
+	mergedVSHosts := mergeHosts(customVS.Spec.Hosts, inclusterVS.Spec.Hosts)
+
+	// This is where all the .mesh destination host will be
+	// replaced by .local. The .mesh destination will be looked up
+	// from the HostRouteDestination cache.
+	modifiedCustomVSRouteDestinations, err := modifyCustomVSHTTPRoutes(customVS.Spec.Http, inclusterVS.Spec.Http, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Time to sort the routes
+	// The non-default fqdn will be added first
+	// Then the fdqn that were in the custom VS will be added next
+	// then comes the remaining
+	sortedRoutes := sortVSRoutes(modifiedCustomVSRouteDestinations, inclusterVS.Spec.Http, env)
+
+	newVS.Spec.Http = sortedRoutes
+	newVS.Spec.Hosts = mergedVSHosts
+
+	return newVS, nil
+
+}
+
+func sortVSRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	env string) []*networkingV1Alpha3.HTTPRoute {
+
+	nonDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	defaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+
+	for _, route := range inclusterVSRoutes {
+		if isDefaultFQDN(route.Name, env) {
+			defaultRoutes = append(defaultRoutes, route)
+			continue
+		}
+		nonDefaultRoutes = append(nonDefaultRoutes, route)
+	}
+
+	finalMergedRoutes = append(finalMergedRoutes, nonDefaultRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, customVSRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, defaultRoutes...)
+
+	return finalMergedRoutes
+}
+
+// mergeHTTPRoutes merges the httpRoutes
+func mergeHTTPRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute) ([]*networkingV1Alpha3.HTTPRoute, error) {
+	mergedVSHTTPRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	if customVSRoutes == nil {
+		return nil, fmt.Errorf("custom VS HTTPRoutes is nil")
+	}
+	if inclusterVSRoutes == nil {
+		return nil, fmt.Errorf("incluster VS HTTPRoutes is nil")
+	}
+
+	// Create a lookup map FQDN -> []*RouteDestinations
+	inClusterRouteLookup := make(map[string][]*networkingV1Alpha3.HTTPRouteDestination)
+	for _, route := range inclusterVSRoutes {
+		inClusterRouteLookup[route.Name] = route.Route
+	}
+
+	mergedVSHTTPRoutes = append(mergedVSHTTPRoutes, customVSRoutes...)
+	mergedVSHTTPRoutes = append(mergedVSHTTPRoutes, inclusterVSRoutes...)
+	return mergedVSHTTPRoutes, nil
+}
+
+// modifyCustomVSHTTPRoutes modifies the HTTP Route destination by switching the .global/.mesh FQDN with
+// .svc.cluster.local destinations. This is needed if a custom VS exists in the sync namespace
+// for an identity.
+func modifyCustomVSHTTPRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	remoteController *RemoteController) ([]*networkingV1Alpha3.HTTPRoute, error) {
+	if customVSRoutes == nil {
+		return nil, fmt.Errorf("custom VS HTTPRoutes is nil")
+	}
+	if inclusterVSRoutes == nil {
+		return nil, fmt.Errorf("incluster VS HTTPRoutes is nil")
+	}
+	if remoteController == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+
+	// Create a lookup map FQDN -> []*RouteDestinations
+	inClusterRouteLookup := make(map[string][]*networkingV1Alpha3.HTTPRouteDestination)
+	for _, route := range inclusterVSRoutes {
+		inClusterRouteLookup[route.Name] = route.Route
+	}
+
+	newCustomVSHTTPRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	for _, httpRoute := range customVSRoutes {
+		copyHTTPRoute := httpRoute.DeepCopy()
+		newRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+		for _, routeDestination := range httpRoute.Route {
+			host := routeDestination.Destination.Host
+			// Check for this fqdn in the current incluster VS routes first
+			rd, ok := inClusterRouteLookup[host]
+			if !ok {
+				// If it is not in the current in-cluster VS then check in the cluster's
+				// HostToRouteDestinationCache cache
+				rd = remoteController.VirtualServiceController.HostToRouteDestinationCache.Get(host)
+			}
+			if rd == nil {
+				// If we are unable to find it in both maps then we add the routedestination as is
+				newRouteDestinations = append(newRouteDestinations, routeDestination)
+				continue
+			}
+			// Adjust the weights only if the customVS's routedestination
+			// has a weight associated with it.
+			if routeDestination.Weight == 0 {
+				newRouteDestinations = append(newRouteDestinations, rd...)
+				continue
+			}
+			adjustedRD, err := adjustWeights(rd, routeDestination.Weight)
+			if err != nil {
+				return nil, err
+			}
+			newRouteDestinations = append(newRouteDestinations, adjustedRD...)
+		}
+		copyHTTPRoute.Route = newRouteDestinations
+		newCustomVSHTTPRoutes = append(newCustomVSHTTPRoutes, copyHTTPRoute)
+	}
+
+	return newCustomVSHTTPRoutes, nil
+}
+
+// adjustWeights splits the percentage on each routeDestination based on the weight
+// passed
+func adjustWeights(
+	routeDestinations []*networkingV1Alpha3.HTTPRouteDestination,
+	weight int32) ([]*networkingV1Alpha3.HTTPRouteDestination, error) {
+
+	if routeDestinations == nil {
+		return nil, fmt.Errorf("slice of HTTPRouteDestination is nil")
+	}
+	adjustedRDs := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+	for _, rd := range routeDestinations {
+		newRD := rd.DeepCopy()
+		if rd.Weight != 0 {
+			newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
+			adjustedRDs = append(adjustedRDs, newRD)
+			continue
+		}
+		newRD.Weight = weight
+		adjustedRDs = append(adjustedRDs, newRD)
+	}
+	return adjustedRDs, nil
+}
+
+// mergeHosts merges the hosts and dedups it
+func mergeHosts(hosts1 []string, hosts2 []string) []string {
+	lookup := make(map[string]bool)
+	mergedHosts := make([]string, 0)
+	for _, host := range hosts1 {
+		lookup[host] = true
+		mergedHosts = append(mergedHosts, host)
+	}
+
+	for _, host := range hosts2 {
+		if !lookup[host] {
+			lookup[host] = true
+			mergedHosts = append(mergedHosts, host)
+		}
+	}
+
+	return mergedHosts
+}
+
+// isDefaultFQDN return true if the passed fqdn starts with the env
+func isDefaultFQDN(fqdn, env string) bool {
+	if strings.HasPrefix(fqdn, env) {
+		return true
+	}
+	return false
 }

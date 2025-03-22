@@ -2447,17 +2447,9 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		},
 	}
 
-	ctxLogger := log.WithFields(log.Fields{})
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getAllVSRouteDestinationsByCluster(
-				ctxLogger,
-				tc.serviceInstance,
-				tc.meshDeployAndRolloutPorts,
-				tc.weightedServices,
-				tc.rollout,
-				tc.deployment)
+			actual, err := getAllVSRouteDestinationsByCluster(tc.serviceInstance, tc.meshDeployAndRolloutPorts, tc.weightedServices, tc.rollout, tc.deployment)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -5202,6 +5194,1384 @@ func TestTlsRoutesComparator(t *testing.T) {
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
+func TestMergeHosts(t *testing.T) {
+
+	testCases := []struct {
+		name                string
+		hosts1              []string
+		hosts2              []string
+		expectedMergedHosts []string
+	}{
+		{
+			name: "Given empty hosts params" +
+				"And mergeHosts func is called" +
+				"Then the fund should return empty merged hosts",
+			hosts1:              []string{},
+			hosts2:              []string{},
+			expectedMergedHosts: []string{},
+		},
+		{
+			name: "Given empty hosts1 param" +
+				"And mergeHosts func is called" +
+				"Then the fund should return  merged hosts containing only hosts2",
+			hosts1:              []string{},
+			hosts2:              []string{"stage1.host1.global", "stage2.host2.global"},
+			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
+		},
+		{
+			name: "Given empty hosts1 param" +
+				"And mergeHosts func is called" +
+				"Then the fund should return  merged hosts containing only hosts2",
+			hosts1:              []string{},
+			hosts2:              []string{"stage1.host1.global", "stage2.host2.global"},
+			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
+		},
+		{
+			name: "Given empty hosts2 param" +
+				"And mergeHosts func is called" +
+				"Then the fund should return  merged hosts containing only hosts2",
+			hosts1:              []string{"stage1.host1.global", "stage2.host2.global"},
+			hosts2:              []string{},
+			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
+		},
+		{
+			name: "Given valid hosts1 hosts2 param" +
+				"And mergeHosts func is called" +
+				"Then the fund should return merged hosts",
+			hosts1:              []string{"stage1.host1.global", "stage2.host2.global"},
+			hosts2:              []string{"stage3.host3.global"},
+			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global", "stage3.host3.global"},
+		},
+		{
+			name: "Given valid hosts1 hosts2 param with duplicate hosts" +
+				"And mergeHosts func is called" +
+				"Then the func should return dedup merged hosts",
+			hosts1:              []string{"stage1.host1.global", "stage2.host2.global"},
+			hosts2:              []string{"stage1.host1.global"},
+			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := mergeHosts(tc.hosts1, tc.hosts2)
+			assert.Equal(t, tc.expectedMergedHosts, actual)
+		})
+	}
+
+}
+
+func TestMergeHTTPRoutes(t *testing.T) {
+
+	testCases := []struct {
+		name                 string
+		vsroutes1            []*networkingV1Alpha3.HTTPRoute
+		vsroutes2            []*networkingV1Alpha3.HTTPRoute
+		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
+		expectedError        error
+	}{
+		{
+			name: "Given nil vsroutes1 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1:            nil,
+			vsroutes2:            []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			expectedError:        fmt.Errorf("custom VS HTTPRoutes is nil"),
+		},
+		{
+			name: "Given nil vsroutes2 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1:            []*networkingV1Alpha3.HTTPRoute{},
+			vsroutes2:            nil,
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			expectedError:        fmt.Errorf("incluster VS HTTPRoutes is nil"),
+		},
+		{
+			name: "Given empty vsroutes params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1:            []*networkingV1Alpha3.HTTPRoute{},
+			vsroutes2:            []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
+		},
+		{
+			name: "Given empty vsroutes1 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1: []*networkingV1Alpha3.HTTPRoute{},
+			vsroutes2: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given empty vsroutes2 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			vsroutes2: []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given empty vsroutes2 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			vsroutes1: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			vsroutes2: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := mergeHTTPRoutes(tc.vsroutes1, tc.vsroutes2)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedMergedRoutes, actual)
+			}
+		})
+	}
+
+}
+
+func TestSortVSRoutes(t *testing.T) {
+
+	testCases := []struct {
+		name                 string
+		customVSRoutes       []*networkingV1Alpha3.HTTPRoute
+		inclusterVSRoutes    []*networkingV1Alpha3.HTTPRoute
+		env                  string
+		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
+		expectedError        error
+	}{
+		{
+			name: "Given empty customVSRoutes and inclusterVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return empty merged routes",
+			customVSRoutes:       []*networkingV1Alpha3.HTTPRoute{},
+			inclusterVSRoutes:    []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
+		},
+		{
+			name: "Given empty customVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return merged routes only from inclusterVSRoutes",
+			env:            "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given empty vsroutes2 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given valid params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return sorted routes",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := sortVSRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, tc.env)
+			assert.Equal(t, tc.expectedMergedRoutes, actual)
+		})
+	}
+
+}
+
+func TestModifyCustomVSHTTPRoutes(t *testing.T) {
+
+	vs := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:   "qal-air.stage1.host1.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"ns1"},
+			Hosts:    []string{"qal-air.stage1.host1.global"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	hostToRouteDestinationCache := istio.NewHostToRouteDestinationCache()
+	hostToRouteDestinationCache.Put(vs)
+
+	rc := &RemoteController{
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			HostToRouteDestinationCache: hostToRouteDestinationCache,
+		},
+	}
+
+	testCases := []struct {
+		name                 string
+		customVSRoutes       []*networkingV1Alpha3.HTTPRoute
+		inclusterVSRoutes    []*networkingV1Alpha3.HTTPRoute
+		env                  string
+		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
+		expectedError        error
+	}{
+		{
+			name: "Given empty customVSRoutes and inclusterVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return empty merged routes",
+			customVSRoutes:       []*networkingV1Alpha3.HTTPRoute{},
+			inclusterVSRoutes:    []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
+		},
+		{
+			name: "Given empty customVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return merged routes only from inclusterVSRoutes",
+			env:            "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given empty vsroutes2 params" +
+				"And mergeHTTPRoutes func is called" +
+				"Then the fund should return empty merged routes",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache" +
+				"And also contains a route to a different fqdn that is in the hostToRouteDestinationCache cache" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache" +
+				"And also contains a route to a different fqdn that is in the hostToRouteDestinationCache cache" +
+				"And the route in custom vs has a traffic split" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 90,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 10,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 90,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 81,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 9,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			actual, err := modifyCustomVSHTTPRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, rc)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				for i := 0; i < len(tc.expectedMergedRoutes); i++ {
+					for j := 0; j < len(tc.expectedMergedRoutes[i].Route); j++ {
+						assert.Equal(t, tc.expectedMergedRoutes[i].Route[j].Destination, actual[i].Route[j].Destination)
+						assert.Equal(t, tc.expectedMergedRoutes[i].Route[j].Weight, actual[i].Route[j].Weight)
+					}
+					assert.Equal(t, tc.expectedMergedRoutes[i].Timeout, actual[i].Timeout)
+					assert.Equal(t, tc.expectedMergedRoutes[i].Match, actual[i].Match)
+				}
 			}
 		})
 	}
