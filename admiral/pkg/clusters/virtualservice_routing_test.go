@@ -5939,13 +5939,12 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 		name                 string
 		customVSRoutes       []*networkingV1Alpha3.HTTPRoute
 		inclusterVSRoutes    []*networkingV1Alpha3.HTTPRoute
-		env                  string
 		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
 		expectedError        error
 	}{
 		{
 			name: "Given empty customVSRoutes and inclusterVSRoutes params" +
-				"And sortVSRoutes func is called" +
+				"And modifyCustomVSHTTPRoutes func is called" +
 				"Then the func should return empty merged routes",
 			customVSRoutes:       []*networkingV1Alpha3.HTTPRoute{},
 			inclusterVSRoutes:    []*networkingV1Alpha3.HTTPRoute{},
@@ -5953,9 +5952,8 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 		},
 		{
 			name: "Given empty customVSRoutes params" +
-				"And sortVSRoutes func is called" +
-				"Then the func should return merged routes only from inclusterVSRoutes",
-			env:            "qal",
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should return empty merged custom vs routes",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
 			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
@@ -6014,69 +6012,12 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 					},
 				},
 			},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Name: "canary.qal.stage1.host1.global",
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "canary.qal.stage1.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "canary.qal.stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-				{
-					Name: "qal.stage1.host1.global",
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "qal.stage1.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 50,
-						},
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "canary.qal.stage1.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 50,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "qal.stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
 		},
 		{
-			name: "Given empty vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			env: "qal",
+			name: "Given empty inclusterVSRoutes params" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should return the custom vs routes as is",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Route: []*networkingV1Alpha3.HTTPRouteDestination{
@@ -6131,7 +6072,6 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 			name: "Given a custom vs with fqdn that exists in the incluster cache" +
 				"And modifyCustomVSHTTPRoutes func is called" +
 				"Then the func should successfully modify the customVS",
-			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Timeout: &duration.Duration{Seconds: 10},
@@ -6235,7 +6175,6 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 				"And also contains a route to a different fqdn that is in the hostToRouteDestinationCache cache" +
 				"And modifyCustomVSHTTPRoutes func is called" +
 				"Then the func should successfully modify the customVS",
-			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Timeout: &duration.Duration{Seconds: 10},
@@ -6388,7 +6327,6 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 				"And the route in custom vs has a traffic split" +
 				"And modifyCustomVSHTTPRoutes func is called" +
 				"Then the func should successfully modify the customVS",
-			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Timeout: &duration.Duration{Seconds: 10},
@@ -6560,7 +6498,6 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 				"And modifyCustomVSHTTPRoutes func is called" +
 				"Then the func should successfully modify the customVS as leave the route with no" +
 				"FQDN mapping, as is",
-			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Timeout: &duration.Duration{Seconds: 10},
