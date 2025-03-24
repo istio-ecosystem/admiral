@@ -1603,7 +1603,7 @@ func sortVSRoutes(
 	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 
 	for _, route := range inclusterVSRoutes {
-		if isDefaultFQDN(route.Name, env) {
+		if common.IsDefaultFQDN(route.Name, env) {
 			defaultRoutes = append(defaultRoutes, route)
 			continue
 		}
@@ -1615,29 +1615,6 @@ func sortVSRoutes(
 	finalMergedRoutes = append(finalMergedRoutes, defaultRoutes...)
 
 	return finalMergedRoutes
-}
-
-// mergeHTTPRoutes merges the httpRoutes
-func mergeHTTPRoutes(
-	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
-	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute) ([]*networkingV1Alpha3.HTTPRoute, error) {
-	mergedVSHTTPRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
-	if customVSRoutes == nil {
-		return nil, fmt.Errorf("custom VS HTTPRoutes is nil")
-	}
-	if inclusterVSRoutes == nil {
-		return nil, fmt.Errorf("incluster VS HTTPRoutes is nil")
-	}
-
-	// Create a lookup map FQDN -> []*RouteDestinations
-	inClusterRouteLookup := make(map[string][]*networkingV1Alpha3.HTTPRouteDestination)
-	for _, route := range inclusterVSRoutes {
-		inClusterRouteLookup[route.Name] = route.Route
-	}
-
-	mergedVSHTTPRoutes = append(mergedVSHTTPRoutes, customVSRoutes...)
-	mergedVSHTTPRoutes = append(mergedVSHTTPRoutes, inclusterVSRoutes...)
-	return mergedVSHTTPRoutes, nil
 }
 
 // modifyCustomVSHTTPRoutes modifies the HTTP Route destination by switching the .global/.mesh FQDN with
@@ -1744,12 +1721,4 @@ func mergeHosts(hosts1 []string, hosts2 []string) []string {
 	}
 
 	return mergedHosts
-}
-
-// isDefaultFQDN return true if the passed fqdn starts with the env
-func isDefaultFQDN(fqdn, env string) bool {
-	if strings.HasPrefix(fqdn, env) {
-		return true
-	}
-	return false
 }

@@ -5211,7 +5211,7 @@ func TestMergeHosts(t *testing.T) {
 		{
 			name: "Given empty hosts params" +
 				"And mergeHosts func is called" +
-				"Then the fund should return empty merged hosts",
+				"Then the func should return empty merged hosts",
 			hosts1:              []string{},
 			hosts2:              []string{},
 			expectedMergedHosts: []string{},
@@ -5219,15 +5219,7 @@ func TestMergeHosts(t *testing.T) {
 		{
 			name: "Given empty hosts1 param" +
 				"And mergeHosts func is called" +
-				"Then the fund should return  merged hosts containing only hosts2",
-			hosts1:              []string{},
-			hosts2:              []string{"stage1.host1.global", "stage2.host2.global"},
-			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
-		},
-		{
-			name: "Given empty hosts1 param" +
-				"And mergeHosts func is called" +
-				"Then the fund should return  merged hosts containing only hosts2",
+				"Then the func should return  merged hosts containing only hosts2",
 			hosts1:              []string{},
 			hosts2:              []string{"stage1.host1.global", "stage2.host2.global"},
 			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
@@ -5235,7 +5227,7 @@ func TestMergeHosts(t *testing.T) {
 		{
 			name: "Given empty hosts2 param" +
 				"And mergeHosts func is called" +
-				"Then the fund should return  merged hosts containing only hosts2",
+				"Then the func should return  merged hosts containing only hosts2",
 			hosts1:              []string{"stage1.host1.global", "stage2.host2.global"},
 			hosts2:              []string{},
 			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global"},
@@ -5243,7 +5235,7 @@ func TestMergeHosts(t *testing.T) {
 		{
 			name: "Given valid hosts1 hosts2 param" +
 				"And mergeHosts func is called" +
-				"Then the fund should return merged hosts",
+				"Then the func should return merged hosts",
 			hosts1:              []string{"stage1.host1.global", "stage2.host2.global"},
 			hosts2:              []string{"stage3.host3.global"},
 			expectedMergedHosts: []string{"stage1.host1.global", "stage2.host2.global", "stage3.host3.global"},
@@ -5262,265 +5254,6 @@ func TestMergeHosts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := mergeHosts(tc.hosts1, tc.hosts2)
 			assert.Equal(t, tc.expectedMergedHosts, actual)
-		})
-	}
-
-}
-
-func TestMergeHTTPRoutes(t *testing.T) {
-
-	testCases := []struct {
-		name                 string
-		vsroutes1            []*networkingV1Alpha3.HTTPRoute
-		vsroutes2            []*networkingV1Alpha3.HTTPRoute
-		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
-		expectedError        error
-	}{
-		{
-			name: "Given nil vsroutes1 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1:            nil,
-			vsroutes2:            []*networkingV1Alpha3.HTTPRoute{},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
-			expectedError:        fmt.Errorf("custom VS HTTPRoutes is nil"),
-		},
-		{
-			name: "Given nil vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1:            []*networkingV1Alpha3.HTTPRoute{},
-			vsroutes2:            nil,
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
-			expectedError:        fmt.Errorf("incluster VS HTTPRoutes is nil"),
-		},
-		{
-			name: "Given empty vsroutes params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1:            []*networkingV1Alpha3.HTTPRoute{},
-			vsroutes2:            []*networkingV1Alpha3.HTTPRoute{},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{},
-		},
-		{
-			name: "Given empty vsroutes1 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1: []*networkingV1Alpha3.HTTPRoute{},
-			vsroutes2: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Given empty vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-			vsroutes2: []*networkingV1Alpha3.HTTPRoute{},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Given empty vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
-			vsroutes1: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-			vsroutes2: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.host1.global",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-				{
-					Route: []*networkingV1Alpha3.HTTPRouteDestination{
-						{
-							Destination: &networkingV1Alpha3.Destination{
-								Host: "stage1.svc.cluster.local",
-								Port: &networkingV1Alpha3.PortSelector{
-									Number: 80,
-								},
-							},
-							Weight: 100,
-						},
-					},
-					Match: []*networkingV1Alpha3.HTTPMatchRequest{
-						{
-							Authority: &networkingV1Alpha3.StringMatch{
-								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-									Prefix: "stage1.host1.global",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			actual, err := mergeHTTPRoutes(tc.vsroutes1, tc.vsroutes2)
-			if tc.expectedError != nil {
-				assert.NotNil(t, err)
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-			} else {
-				assert.Nil(t, err)
-				assert.Equal(t, tc.expectedMergedRoutes, actual)
-			}
 		})
 	}
 
@@ -5668,7 +5401,7 @@ func TestSortVSRoutes(t *testing.T) {
 		{
 			name: "Given empty vsroutes2 params" +
 				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return empty merged routes",
+				"Then the func should return empty merged routes",
 			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
@@ -5723,7 +5456,7 @@ func TestSortVSRoutes(t *testing.T) {
 		{
 			name: "Given valid params" +
 				"And mergeHTTPRoutes func is called" +
-				"Then the fund should return sorted routes",
+				"Then the func should return sorted routes",
 			env: "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
