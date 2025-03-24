@@ -667,7 +667,8 @@ func addUpdateInClusterVirtualServices(
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
 	vsName string,
-	sourceIdentity string) error {
+	sourceIdentity string,
+	env string) error {
 
 	if sourceIdentity == "" {
 		return fmt.Errorf("identity is empty")
@@ -708,6 +709,23 @@ func addUpdateInClusterVirtualServices(
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
 			return err
+		}
+
+		// Merge the incluster vs with the custom VS, if enabled
+		if common.IsCustomVSMergeEnabled() {
+			customVS, err := getCustomVirtualService(ctx, ctxLogger, rc, env, sourceIdentity)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf("getCustomVirtualService failed due to %v", err.Error()))
+			}
+			if customVS == nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					"no custom virtual service found")
+			} else {
+				virtualService, err = mergeVS(customVS, virtualService, rc, env)
+			}
 		}
 
 		ctxLogger.Infof(
@@ -751,6 +769,50 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	return nil
+}
+
+// getCustomVirtualService returns a custom virtualservice in the sync namespace
+func getCustomVirtualService(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	env string,
+	identity string) (*v1alpha3.VirtualService, error) {
+
+	if rc == nil {
+		return nil, fmt.Errorf("remoteController is nil")
+	}
+	if env == "" {
+		return nil, fmt.Errorf("env is empty")
+	}
+	if identity == "" {
+		return nil, fmt.Errorf("identity is empty")
+	}
+
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
+		common.CreatedFor:    identity,
+		common.CreatedBy:     "cartographer", //TODO: need to parameterize this
+		common.CreatedForEnv: env,
+	}}
+
+	virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, common.GetSyncNamespace(),
+		metaV1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		})
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to fetch custom vs with env %s and identity %s due to error %w", env, identity, err)
+	}
+	if len(virtualServiceList.Items) == 0 {
+		return nil, nil
+	}
+	if len(virtualServiceList.Items) > 1 {
+		return nil, fmt.Errorf(
+			"multiple custom virtual services found with env %s and identity %s", env, identity)
+	}
+
+	return virtualServiceList.Items[0], nil
 }
 
 // httpRoutesComparator comparator that matches the routes between two virtualservice spec
@@ -1511,18 +1573,17 @@ func mergeVS(
 	// Merge the hosts of both VS and then de-dup it
 	mergedVSHosts := mergeHosts(customVS.Spec.Hosts, inclusterVS.Spec.Hosts)
 
-	// This is where all the .mesh destination host will be
-	// replaced by .local. The .mesh destination will be looked up
-	// from the HostRouteDestination cache.
+	// This is where all the .mesh destination host in the custom VS will be
+	// replaced by .local
 	modifiedCustomVSRouteDestinations, err := modifyCustomVSHTTPRoutes(customVS.Spec.Http, inclusterVS.Spec.Http, rc)
 	if err != nil {
 		return nil, err
 	}
 
 	// Time to sort the routes
-	// The non-default fqdn will be added first
+	// The non-default fqdn from the in-cluster VS will be added first
 	// Then the fdqn that were in the custom VS will be added next
-	// then comes the remaining
+	// then the remaining
 	sortedRoutes := sortVSRoutes(modifiedCustomVSRouteDestinations, inclusterVS.Spec.Http, env)
 
 	newVS.Spec.Http = sortedRoutes
@@ -1580,7 +1641,11 @@ func mergeHTTPRoutes(
 }
 
 // modifyCustomVSHTTPRoutes modifies the HTTP Route destination by switching the .global/.mesh FQDN with
-// .svc.cluster.local destinations. This is needed if a custom VS exists in the sync namespace
+// .svc.cluster.local destinations. The .global/.mesh destination will be looked up
+// in the passed in-cluster VS routes first and if not found, lookup will be performed
+// on the HostRouteDestination cache for a fqdn that might be on another NS or with a separate admiral.io/env.
+// If a FQDN in custom VS is not found in any, then we'll keep it as-is.
+// This is needed if a custom VS thats exists in the sync namespace
 // for an identity.
 func modifyCustomVSHTTPRoutes(
 	customVSRoutes []*networkingV1Alpha3.HTTPRoute,

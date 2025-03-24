@@ -593,7 +593,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 				tc.remoteRegistry,
 				tc.sourceClusterToDestinations,
 				tc.vsName,
-				tc.sourceIdentity)
+				tc.sourceIdentity, "")
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -6545,6 +6545,208 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 								"x-intuit-route-name": {
 									MatchType: &networkingV1Alpha3.StringMatch_Exact{
 										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache" +
+				"And contains a route to a different fqdn that is in the hostToRouteDestinationCache cache" +
+				"And contains a route that is not present in either" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS as leave the route with no" +
+				"FQDN mapping, as is",
+			env: "qal",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 30},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.greeting.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-greeting",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 90,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 90,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 50},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-air",
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Timeout: &duration.Duration{Seconds: 30},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.greeting.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "qal-greeting",
 									},
 								},
 							},

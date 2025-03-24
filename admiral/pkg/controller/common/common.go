@@ -139,6 +139,9 @@ const (
 	VSRoutingType          = "admiral.io/vs-routing-type"
 	InclusterVSNameSuffix  = "incluster-vs"
 	VSRoutingTypeInCluster = "incluster"
+	createdForEnvLabel     = "createdForEnv"
+	createdByLabel         = "createdBy"
+	createdForLabel        = "createdFor"
 )
 
 type Event string

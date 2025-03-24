@@ -148,6 +148,7 @@ type AdmiralParams struct {
 	EnableVSRoutingInCluster            bool
 	VSRoutingInClusterEnabledResources  map[string]string
 	VSRoutingInClusterDisabledResources map[string]string
+	EnableCustomVSMerge                 bool
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool

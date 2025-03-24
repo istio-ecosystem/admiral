@@ -922,7 +922,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateInClusterVirtualServices(
-		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity)
+		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity, env)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			deploymentOrRolloutName, namespace, "", err)
