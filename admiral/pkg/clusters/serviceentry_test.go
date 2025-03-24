@@ -426,7 +426,6 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 }
 
 func TestModifyServiceEntryForRolloutsMultipleEndpointsUseCase(t *testing.T) {
-	setupForServiceEntryTests()
 	var (
 		env                     = "test"
 		stop                    = make(chan struct{})
@@ -780,6 +779,7 @@ func TestModifyServiceEntryForRolloutsMultipleEndpointsUseCase(t *testing.T) {
 		},
 	}
 	for _, c := range testCases {
+		setupForServiceEntryTests()
 		commonUtil.CurrentAdmiralState.ReadOnly = ReadWriteEnabled
 		t.Run(c.name, func(t *testing.T) {
 			serviceEntries, _ := modifyServiceEntryForNewServiceOrPod(
