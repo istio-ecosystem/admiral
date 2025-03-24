@@ -1567,6 +1567,12 @@ func mergeVS(
 	if inclusterVS == nil {
 		return nil, fmt.Errorf("incluster VS is nil")
 	}
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+	if env == "" {
+		return nil, fmt.Errorf("env is empty")
+	}
 
 	newVS := inclusterVS.DeepCopy()
 

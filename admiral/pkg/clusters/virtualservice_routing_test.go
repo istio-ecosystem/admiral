@@ -6449,3 +6449,460 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 	}
 
 }
+
+func TestMergeVS(t *testing.T) {
+
+	vs := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:   "qal-air.stage1.host1.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"ns1"},
+			Hosts:    []string{"qal-air.stage1.host1.global"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	hostToRouteDestinationCache := istio.NewHostToRouteDestinationCache()
+	hostToRouteDestinationCache.Put(vs)
+
+	rc := &RemoteController{
+		ClusterID: "cluster-1",
+		VirtualServiceController: &istio.VirtualServiceController{
+			HostToRouteDestinationCache: hostToRouteDestinationCache,
+		},
+	}
+
+	testCases := []struct {
+		name             string
+		customVS         *apiNetworkingV1Alpha3.VirtualService
+		inclusterVS      *apiNetworkingV1Alpha3.VirtualService
+		remoteController *RemoteController
+		env              string
+		expectedVS       *apiNetworkingV1Alpha3.VirtualService
+		expectedError    error
+	}{
+		{
+			name: "Given nil customVS" +
+				"When mergeVS func is called" +
+				"Then func should return an error",
+			expectedError: fmt.Errorf("custom VS is nil"),
+		},
+		{
+			name: "Given nil inclusterVS" +
+				"When mergeVS func is called" +
+				"Then func should return an error",
+			customVS:      &apiNetworkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("incluster VS is nil"),
+		},
+		{
+			name: "Given nil remoteController" +
+				"When mergeVS func is called" +
+				"Then func should return an error",
+			customVS:      &apiNetworkingV1Alpha3.VirtualService{},
+			inclusterVS:   &apiNetworkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("remote controller is nil"),
+		},
+		{
+			name: "Given env is empty" +
+				"When mergeVS func is called" +
+				"Then func should return an error",
+			customVS:         &apiNetworkingV1Alpha3.VirtualService{},
+			inclusterVS:      &apiNetworkingV1Alpha3.VirtualService{},
+			remoteController: rc,
+			expectedError:    fmt.Errorf("env is empty"),
+		},
+		{
+			name: "Given valid params" +
+				"When mergeVS func is called" +
+				"Then func should return a valid merged vs",
+			env: "qal",
+			customVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{
+						"qal.stage1.host1.global",
+						"qal-air.stage1.host1.global",
+					},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Timeout: &duration.Duration{Seconds: 10},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal.stage1.host1.global",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 80,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Headers: map[string]*networkingV1Alpha3.StringMatch{
+										"x-intuit-route-name": {
+											MatchType: &networkingV1Alpha3.StringMatch_Exact{
+												Exact: "Health Check",
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Timeout: &duration.Duration{Seconds: 10},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal-air.stage1.host1.global",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 80,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Headers: map[string]*networkingV1Alpha3.StringMatch{
+										"x-intuit-route-name": {
+											MatchType: &networkingV1Alpha3.StringMatch_Exact{
+												Exact: "qal-air",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{
+						"qal.stage1.host1.global",
+						"canary.stage1.host1.global",
+						"east.qal.stage1.host1.global",
+						"west.qal.stage1.host1.global",
+					},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Name: "qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "canary.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "canary.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "canary.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "canary.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "east.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "east.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "east.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "west.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "west.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "west.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{
+						"qal.stage1.host1.global",
+						"qal-air.stage1.host1.global",
+						"canary.stage1.host1.global",
+						"east.qal.stage1.host1.global",
+						"west.qal.stage1.host1.global",
+					},
+					Http: []*networkingV1Alpha3.HTTPRoute{
+						{
+							Name: "canary.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "canary.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "canary.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "east.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "east.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "east.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "west.qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "west.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "west.qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+						{
+							Timeout: &duration.Duration{Seconds: 10},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "canary.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Headers: map[string]*networkingV1Alpha3.StringMatch{
+										"x-intuit-route-name": {
+											MatchType: &networkingV1Alpha3.StringMatch_Exact{
+												Exact: "Health Check",
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Timeout: &duration.Duration{Seconds: 10},
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal-air.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 100,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Headers: map[string]*networkingV1Alpha3.StringMatch{
+										"x-intuit-route-name": {
+											MatchType: &networkingV1Alpha3.StringMatch_Exact{
+												Exact: "qal-air",
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "qal.stage1.host1.global",
+							Route: []*networkingV1Alpha3.HTTPRouteDestination{
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+								{
+									Destination: &networkingV1Alpha3.Destination{
+										Host: "canary.qal.stage1.svc.cluster.local",
+										Port: &networkingV1Alpha3.PortSelector{
+											Number: 8090,
+										},
+									},
+									Weight: 50,
+								},
+							},
+							Match: []*networkingV1Alpha3.HTTPMatchRequest{
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "qal.stage1.host1.global",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			remoteController: rc,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := mergeVS(tc.customVS, tc.inclusterVS, tc.remoteController, tc.env)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedVS.Spec.Hosts, actual.Spec.Hosts)
+				for i := 0; i < len(tc.expectedVS.Spec.Http); i++ {
+					for j := 0; j < len(tc.expectedVS.Spec.Http[i].Route); j++ {
+						assert.Equal(
+							t, tc.expectedVS.Spec.Http[i].Route[j].Destination.Host, actual.Spec.Http[i].Route[j].Destination.Host)
+						assert.Equal(
+							t, tc.expectedVS.Spec.Http[i].Route[j].Weight, actual.Spec.Http[i].Route[j].Weight)
+					}
+					assert.Equal(t, tc.expectedVS.Spec.Http[i].Timeout, actual.Spec.Http[i].Timeout)
+					assert.Equal(t, tc.expectedVS.Spec.Http[i].Match, actual.Spec.Http[i].Match)
+				}
+			}
+		})
+	}
+
+}
