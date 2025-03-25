@@ -3,6 +3,7 @@ package istio
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -281,7 +282,9 @@ func (h *HostToRouteDestinationCache) Put(vs *networking.VirtualService) error {
 	defer h.mutex.Unlock()
 	h.mutex.Lock()
 	for _, httpRoute := range vs.Spec.Http {
-		h.cache[httpRoute.Name] = httpRoute.Route
+		if strings.HasSuffix(httpRoute.Name, common.GetHostnameSuffix()) {
+			h.cache[httpRoute.Name] = httpRoute.Route
+		}
 	}
 	return nil
 }

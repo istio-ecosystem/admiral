@@ -504,7 +504,66 @@ func TestHostToRouteDestinationCachePut(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
+		{
+			name: "Given a routing virtual service with valid http routes" +
+				"And if the VS contains names that are not FQDNs" +
+				"When HostToRouteDestinationCache.Put func is called" +
+				"Then the VS should should only cache the names with FQDNs",
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+				},
+				Spec: networkingv1alpha3.VirtualService{
+					Hosts: []string{"test-env.test-identity.global"},
+					Http: []*networkingv1alpha3.HTTPRoute{
+						{
+							Name: "test-env.test-identity.global",
+							Route: []*networkingv1alpha3.HTTPRouteDestination{{
+								Destination: &networkingv1alpha3.Destination{
+									Host: "test-env.test-identity.svc.cluster.local",
+								},
+							},
+							},
+						},
+						{
+							Name: "all",
+							Route: []*networkingv1alpha3.HTTPRouteDestination{{
+								Destination: &networkingv1alpha3.Destination{
+									Host: "test-all.test-identity.svc.cluster.local",
+								},
+							},
+							},
+						},
+						{
+							Name: "health check",
+							Route: []*networkingv1alpha3.HTTPRouteDestination{{
+								Destination: &networkingv1alpha3.Destination{
+									Host: "test-health-check.test-identity.svc.cluster.local",
+								},
+							},
+							},
+						},
+					},
+				},
+			},
+			expectedCache: map[string][]*networkingv1alpha3.HTTPRouteDestination{
+				"test-env.test-identity.global": {
+					&networkingv1alpha3.HTTPRouteDestination{
+						Destination: &networkingv1alpha3.Destination{
+							Host: "test-env.test-identity.svc.cluster.local",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
 	}
+
+	admiralParams := common.AdmiralParams{
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
