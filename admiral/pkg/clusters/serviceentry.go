@@ -814,42 +814,41 @@ func modifyServiceEntryForNewServiceOrPod(
 			for key, value := range ingressDestinations {
 				inClusterDestinations[key] = value
 			}
-		}
+			drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
+			sourceClusterToDRHosts[sourceCluster] = map[string]string{
+				eventNamespace + common.DotLocalDomainSuffix: drHost,
+			}
 
-		drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
-		sourceClusterToDRHosts[sourceCluster] = map[string]string{
-			eventNamespace + common.DotLocalDomainSuffix: drHost,
-		}
+			//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				ingressDestinations,
+				false)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToDestinations[sourceCluster] = ingressDestinations
 
-		//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
-		err = processGTPAndAddWeightsByCluster(ctxLogger,
-			remoteRegistry,
-			sourceIdentity,
-			env,
-			sourceClusterLocality,
-			ingressDestinations,
-			false)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-			modifySEerr = common.AppendError(modifySEerr, err)
+			//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				inClusterDestinations,
+				true)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 		}
-		sourceClusterToDestinations[sourceCluster] = ingressDestinations
-
-		//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
-		err = processGTPAndAddWeightsByCluster(ctxLogger,
-			remoteRegistry,
-			sourceIdentity,
-			env,
-			sourceClusterLocality,
-			inClusterDestinations,
-			true)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-			modifySEerr = common.AppendError(modifySEerr, err)
-		}
-		sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 	}
 
 	ctxLogger.Infof(common.CtxLogFormat, "ClientAssets",
