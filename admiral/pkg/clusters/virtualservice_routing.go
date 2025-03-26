@@ -771,7 +771,6 @@ func addUpdateInClusterVirtualServices(
 	return nil
 }
 
-// TODO: Add unit tests
 // getCustomVirtualService returns a custom virtualservice in the sync namespace
 func getCustomVirtualService(
 	ctx context.Context,

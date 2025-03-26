@@ -525,7 +525,6 @@ func IsVSRoutingInClusterDisabledForIdentity(cluster, identity string) bool {
 	return false
 }
 
-// TODO: Add unit tests
 func IsCustomVSMergeEnabled() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

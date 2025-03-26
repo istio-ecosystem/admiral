@@ -47,7 +47,6 @@ func getIstioResourceName(host string, suffix string) string {
 
 // ShouldProcessVSCreatedBy will return true if the VS contains createdBy label
 // and the label value matches params.ProcessVSCreatedBy
-// TODO: Add unit tests
 func ShouldProcessVSCreatedBy(vs *v1alpha3.VirtualService) bool {
 	if vs == nil {
 		return false

@@ -6906,3 +6906,121 @@ func TestMergeVS(t *testing.T) {
 	}
 
 }
+
+func TestGetCustomVirtualService(t *testing.T) {
+
+	syncNS := "test-ns"
+	nonCustomVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "noncustom-vs",
+			Namespace: syncNS,
+		},
+		Spec: networkingV1Alpha3.VirtualService{},
+	}
+	customVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "custom-vs",
+			Namespace: syncNS,
+			Labels: map[string]string{
+				common.CreatedBy:     "testCreatedBy",
+				common.CreatedFor:    "testIdentity",
+				common.CreatedForEnv: "stage",
+			},
+		},
+		Spec: networkingV1Alpha3.VirtualService{},
+	}
+
+	istioClientClusterWithNoVS := istioFake.NewSimpleClientset()
+	istioClientCluster := istioFake.NewSimpleClientset()
+	istioClientCluster.NetworkingV1alpha3().VirtualServices(syncNS).
+		Create(context.Background(), nonCustomVS, metaV1.CreateOptions{})
+	istioClientCluster.NetworkingV1alpha3().VirtualServices(syncNS).
+		Create(context.Background(), customVS, metaV1.CreateOptions{})
+
+	remoteControllerWithNoVS := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: istioClientClusterWithNoVS,
+		},
+	}
+	remoteController := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: istioClientCluster,
+		},
+	}
+
+	testCases := []struct {
+		name             string
+		remoteController *RemoteController
+		env              string
+		identity         string
+		expectedVS       *apiNetworkingV1Alpha3.VirtualService
+		expectedError    error
+	}{
+		{
+			name: "Given nil remote controller" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return an error",
+			remoteController: nil,
+			expectedError:    fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given empty env" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return an error",
+			remoteController: &RemoteController{},
+			expectedError:    fmt.Errorf("env is empty"),
+		},
+		{
+			name: "Given empty identity" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return an error",
+			remoteController: &RemoteController{},
+			env:              "stage",
+			expectedError:    fmt.Errorf("identity is empty"),
+		},
+		{
+			name: "Given a cluster where there are no customVS" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return nil VS",
+			remoteController: remoteControllerWithNoVS,
+			env:              "stage",
+			identity:         "testIdentity",
+			expectedVS:       nil,
+		},
+		{
+			name: "Given a cluster where there is customVS" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return the correct VS",
+			remoteController: remoteController,
+			env:              "stage",
+			identity:         "testIdentity",
+			expectedVS:       customVS,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	admiralParams := common.AdmiralParams{
+		SyncNamespace:      syncNS,
+		ProcessVSCreatedBy: "testCreatedBy",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := getCustomVirtualService(
+				context.Background(), ctxLogger, tc.remoteController, tc.env, tc.identity)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedVS, actual)
+			}
+		})
+	}
+
+}

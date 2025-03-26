@@ -1024,3 +1024,70 @@ func TestShouldPerformRollback(t *testing.T) {
 //	admiralParams.LabelSet.CRDIdentityLabel = backOldIdentity
 //	admiralParams.LabelSet.GlobalTrafficDeploymentLabel = backOldGTPLabel
 //}
+
+func TestIsCustomVSMergeEnabled(t *testing.T) {
+
+	testCases := []struct {
+		name                string
+		enableCustomVSMerge bool
+		expectedResult      bool
+	}{
+		{
+			name: "Given custom vs merge enabled resources" +
+				"When func IsCustomVSMergeEnabled is called" +
+				"Then the func should return true",
+			enableCustomVSMerge: true,
+			expectedResult:      true,
+		},
+		{
+			name: "Given custom vs merge disabled resources" +
+				"When func IsCustomVSMergeEnabled is called" +
+				"Then the func should return false",
+			enableCustomVSMerge: false,
+			expectedResult:      false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams := AdmiralParams{
+				EnableCustomVSMerge: tc.enableCustomVSMerge,
+			}
+			ResetSync()
+			InitializeConfig(admiralParams)
+			actual := IsCustomVSMergeEnabled()
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
+}
+
+func TestGetProcessVSCreatedBy(t *testing.T) {
+
+	testCases := []struct {
+		name               string
+		processVSCreatedBy string
+		expectedResult     string
+	}{
+		{
+			name: "Given vs created by param" +
+				"When func GetProcessVSCreatedBy is called" +
+				"Then the func should return the created by",
+			processVSCreatedBy: "testCreatedBy",
+			expectedResult:     "testCreatedBy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			admiralParams := AdmiralParams{
+				ProcessVSCreatedBy: tc.processVSCreatedBy,
+			}
+			ResetSync()
+			InitializeConfig(admiralParams)
+			actual := GetProcessVSCreatedBy()
+			assert.Equal(t, tc.expectedResult, actual)
+		})
+	}
+
+}
