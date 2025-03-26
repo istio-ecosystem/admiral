@@ -525,10 +525,18 @@ func IsVSRoutingInClusterDisabledForIdentity(cluster, identity string) bool {
 	return false
 }
 
+// TODO: Add unit tests
 func IsCustomVSMergeEnabled() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
 	return wrapper.params.EnableCustomVSMerge
+}
+
+// TODO: Add unit tests
+func GetProcessVSCreatedBy() string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ProcessVSCreatedBy
 }
 
 // DoVSRoutingInClusterForClusterAndIdentity determines if Virtual Service (VS) routing is enabled

@@ -12,6 +12,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	log "github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
+	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +43,27 @@ func updateIdentityDependencyCache(sourceIdentity string, identityDependencyCach
 
 func getIstioResourceName(host string, suffix string) string {
 	return strings.ToLower(host) + suffix
+}
+
+// ShouldProcessVSCreatedBy will return true if the VS contains createdBy label
+// and the label value matches params.ProcessVSCreatedBy
+// TODO: Add unit tests
+func ShouldProcessVSCreatedBy(vs *v1alpha3.VirtualService) bool {
+	if vs == nil {
+		return false
+	}
+	if vs.Labels == nil {
+		return false
+	}
+	vsCreatedBy := common.GetProcessVSCreatedBy()
+	if vsCreatedBy == "" {
+		return false
+	}
+	createdBy, ok := vs.Labels[common.CreatedBy]
+	if !ok {
+		return false
+	}
+	return createdBy == vsCreatedBy
 }
 
 func IgnoreIstioResource(exportTo []string, annotations map[string]string, namespace string) bool {

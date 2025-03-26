@@ -771,6 +771,7 @@ func addUpdateInClusterVirtualServices(
 	return nil
 }
 
+// TODO: Add unit tests
 // getCustomVirtualService returns a custom virtualservice in the sync namespace
 func getCustomVirtualService(
 	ctx context.Context,
@@ -790,9 +791,8 @@ func getCustomVirtualService(
 	}
 
 	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
-		common.CreatedFor:    identity,
-		common.CreatedBy:     "cartographer", //TODO: need to parameterize this
-		common.CreatedForEnv: env,
+		common.CreatedFor: identity,
+		common.CreatedBy:  common.GetProcessVSCreatedBy(),
 	}}
 
 	virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, common.GetSyncNamespace(),
@@ -807,12 +807,24 @@ func getCustomVirtualService(
 	if len(virtualServiceList.Items) == 0 {
 		return nil, nil
 	}
-	if len(virtualServiceList.Items) > 1 {
-		return nil, fmt.Errorf(
-			"multiple custom virtual services found with env %s and identity %s", env, identity)
+	for _, vs := range virtualServiceList.Items {
+		labels := vs.GetLabels()
+		if labels == nil {
+			continue
+		}
+		createdForEnv, ok := labels[common.CreatedForEnv]
+		if !ok {
+			continue
+		}
+		if createdForEnv == "" {
+			continue
+		}
+		if strings.Contains(createdForEnv, env) {
+			return vs, nil
+		}
 	}
 
-	return virtualServiceList.Items[0], nil
+	return nil, nil
 }
 
 // httpRoutesComparator comparator that matches the routes between two virtualservice spec

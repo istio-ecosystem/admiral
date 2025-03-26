@@ -6,12 +6,13 @@ import (
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	cmp "github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istioFake "istio.io/client-go/pkg/clientset/versioned/fake"
@@ -1072,6 +1073,92 @@ func TestGetServiceWithSuffixMatch(t *testing.T) {
 			if result != c.expectedResult {
 				t.Errorf("Failed. Got %v, expected %v", result, c.expectedResult)
 			}
+		})
+	}
+}
+
+func TestShouldProcessVSCreatedBy(t *testing.T) {
+	testCases := []struct {
+		name           string
+		vs             *v1alpha32.VirtualService
+		admiralParams  common.AdmiralParams
+		expectedResult bool
+	}{
+		{
+			name: "Given a nil VS" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs:             nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given a nil VS labels" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs:             &v1alpha32.VirtualService{},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs but the the createdBy param is empty" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs but createdBy label doesnt exists" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"testLabel": "testValue"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs and createdBy exists but it doesnt match" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"createdBy": "somethingElse"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs and createdBy exists and they match" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return true",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"createdBy": "testCreatedBy"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			common.ResetSync()
+			common.InitializeConfig(tc.admiralParams)
+			actual := ShouldProcessVSCreatedBy(tc.vs)
+			assert.Equal(t, tc.expectedResult, actual)
 		})
 	}
 }
