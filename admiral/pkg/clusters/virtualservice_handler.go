@@ -66,7 +66,9 @@ type ProcessVirtualService func(
 	ctx context.Context,
 	virtualService *v1alpha3.VirtualService,
 	remoteRegistry *RemoteRegistry,
-	cluster string) error
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error
 
 // VirtualServiceHandler responsible for handling Add/Update/Delete events for
 // VirtualService resources
@@ -83,14 +85,24 @@ type VirtualServiceHandler struct {
 // and calls rollout and deployment handler for all the envs for the given identity.
 // This mainly used so that any add/update made on the custom vs should trigger a merge
 // on in-cluster VS
-// TODO: Add unit tests
 func processVirtualService(
 	ctx context.Context,
 	virtualService *v1alpha3.VirtualService,
 	remoteRegistry *RemoteRegistry,
-	cluster string) error {
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error {
 	if virtualService == nil {
-		return nil
+		return fmt.Errorf("virtualService is nil")
+	}
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	rc := remoteRegistry.GetRemoteController(cluster)
+	if rc == nil {
+		return fmt.Errorf("remote controller for cluster %s not found", cluster)
 	}
 
 	// Get the identity and the environments from the VS
@@ -110,24 +122,19 @@ func processVirtualService(
 			"virtualservice environment is empty in %s label for virtual service %s", common.CreatedForEnv, virtualService.Name)
 	}
 
-	rc := remoteRegistry.GetRemoteController(cluster)
-	if rc == nil {
-		return fmt.Errorf("remote controller for cluster %s not found", cluster)
-	}
-
 	// Iterate through all the environments and get the rollout and deployment from the cache
 	// and call the respective handlers
 	for _, env := range strings.Split(envs, ",") {
 		if rc.RolloutController != nil {
 			rollout := rc.RolloutController.Cache.Get(identity, env)
 			if rollout != nil {
-				HandleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
+				handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
 			}
 		}
 		if rc.DeploymentController != nil {
 			deployment := rc.DeploymentController.Cache.Get(identity, env)
 			if deployment != nil {
-				HandleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
+				handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
 			}
 		}
 	}
@@ -198,7 +205,8 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 		log.Infof(
 			LogFormat, event, common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,
 			"processing custom virtualService")
-		err := vh.processVirtualService(ctx, virtualService, vh.remoteRegistry, vh.clusterID)
+		err := vh.processVirtualService(
+			ctx, virtualService, vh.remoteRegistry, vh.clusterID, HandleEventForRollout, HandleEventForDeployment)
 		if err != nil {
 			log.Errorf(
 				LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/stretchr/testify/require"
 
@@ -2085,4 +2086,169 @@ func TestUpdateVirtualService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcessVirtualService(t *testing.T) {
+
+	rolloutController := &admiral.RolloutController{
+		Cache: admiral.NewRolloutCache(),
+	}
+
+	rolloutController.Cache.UpdateRolloutToClusterCache("testIdentity", &v1alpha1.Rollout{})
+
+	remoteController := &RemoteController{
+		ClusterID:         "cluster1",
+		RolloutController: rolloutController,
+	}
+	remoteRegistry := &RemoteRegistry{
+		remoteControllers: map[string]*RemoteController{"cluster1": remoteController},
+	}
+
+	testCases := []struct {
+		name                         string
+		vs                           *apiNetworkingV1Alpha3.VirtualService
+		remoteRegistry               *RemoteRegistry
+		cluster                      string
+		expectedVS                   *apiNetworkingV1Alpha3.VirtualService
+		fakeHandleEventForRollout    *fakeHandleEventForRollout
+		fakeHandleEventForDeployment *fakeHandleEventForDeployment
+		expectedErr                  error
+	}{
+		{
+			name: "Given a nil vs" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: nil,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("virtualService is nil"),
+		},
+		{
+			name: "Given a nil remoteRegistry" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{},
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a nil remoteController" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs:             &apiNetworkingV1Alpha3.VirtualService{},
+			cluster:        "cluster2",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("remote controller for cluster cluster2 not found"),
+		},
+		{
+			name: "Given a vs which contains no labels" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice labels is nil on virtual service stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given a vs with identity label missing" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:   "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice identity is empty in createdFor label for virtual service stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given a vs with env label missing" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:   "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{common.CreatedFor: "testIdentity"},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice environment is empty in createdForEnv label for virtual service stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given all valid params" +
+				"When processVirtualService is called" +
+				"Then the func should not return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						common.CreatedFor:    "testIdentity",
+						common.CreatedForEnv: "stage",
+					},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := processVirtualService(
+				context.Background(), tc.vs, tc.remoteRegistry,
+				tc.cluster, tc.fakeHandleEventForRollout.handleEventForRolloutFunc(),
+				tc.fakeHandleEventForDeployment.handleEventForDeploymentFunc())
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+
 }
