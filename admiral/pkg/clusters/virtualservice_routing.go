@@ -667,7 +667,8 @@ func addUpdateInClusterVirtualServices(
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
 	vsName string,
-	sourceIdentity string) error {
+	sourceIdentity string,
+	env string) error {
 
 	if sourceIdentity == "" {
 		return fmt.Errorf("identity is empty")
@@ -708,6 +709,23 @@ func addUpdateInClusterVirtualServices(
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
 			return err
+		}
+
+		// Merge the incluster vs with the custom VS, if enabled
+		if common.IsCustomVSMergeEnabled() {
+			customVS, err := getCustomVirtualService(ctx, ctxLogger, rc, env, sourceIdentity)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf("getCustomVirtualService failed due to %v", err.Error()))
+			}
+			if customVS == nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					"no custom virtual service found")
+			} else {
+				virtualService, err = mergeVS(customVS, virtualService, rc, env)
+			}
 		}
 
 		ctxLogger.Infof(
@@ -751,6 +769,61 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	return nil
+}
+
+// getCustomVirtualService returns a custom virtualservice in the sync namespace
+func getCustomVirtualService(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	env string,
+	identity string) (*v1alpha3.VirtualService, error) {
+
+	if rc == nil {
+		return nil, fmt.Errorf("remoteController is nil")
+	}
+	if env == "" {
+		return nil, fmt.Errorf("env is empty")
+	}
+	if identity == "" {
+		return nil, fmt.Errorf("identity is empty")
+	}
+
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
+		common.CreatedFor: identity,
+		common.CreatedBy:  common.GetProcessVSCreatedBy(),
+	}}
+
+	virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, common.GetSyncNamespace(),
+		metaV1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		})
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to fetch custom vs with env %s and identity %s due to error %w", env, identity, err)
+	}
+	if len(virtualServiceList.Items) == 0 {
+		return nil, nil
+	}
+	for _, vs := range virtualServiceList.Items {
+		labels := vs.GetLabels()
+		if labels == nil {
+			continue
+		}
+		createdForEnv, ok := labels[common.CreatedForEnv]
+		if !ok {
+			continue
+		}
+		if createdForEnv == "" {
+			continue
+		}
+		if strings.Contains(createdForEnv, env) {
+			return vs, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // httpRoutesComparator comparator that matches the routes between two virtualservice spec
@@ -915,7 +988,6 @@ func addUpdateVirtualServicesForIngress(
 // and rollouts.
 // This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
-	ctxLogger *log.Entry,
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
@@ -1492,4 +1564,178 @@ func performInVSRoutingRollback(
 		return fmt.Errorf("%v", errs)
 	}
 	return nil
+}
+
+func mergeVS(
+	customVS *v1alpha3.VirtualService,
+	inclusterVS *v1alpha3.VirtualService,
+	rc *RemoteController,
+	env string) (*v1alpha3.VirtualService, error) {
+
+	if customVS == nil {
+		return nil, fmt.Errorf("custom VS is nil")
+	}
+	if inclusterVS == nil {
+		return nil, fmt.Errorf("incluster VS is nil")
+	}
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+	if env == "" {
+		return nil, fmt.Errorf("env is empty")
+	}
+
+	newVS := inclusterVS.DeepCopy()
+
+	// Merge the hosts of both VS and then de-dup it
+	mergedVSHosts := mergeHosts(customVS.Spec.Hosts, inclusterVS.Spec.Hosts)
+
+	// This is where all the .mesh destination host in the custom VS will be
+	// replaced by .local
+	modifiedCustomVSRouteDestinations, err := modifyCustomVSHTTPRoutes(customVS.Spec.Http, inclusterVS.Spec.Http, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Time to sort the routes
+	// The non-default fqdn from the in-cluster VS will be added first
+	// Then the fdqn that were in the custom VS will be added next
+	// then the remaining
+	sortedRoutes := sortVSRoutes(modifiedCustomVSRouteDestinations, inclusterVS.Spec.Http, env)
+
+	newVS.Spec.Http = sortedRoutes
+	newVS.Spec.Hosts = mergedVSHosts
+
+	return newVS, nil
+
+}
+
+func sortVSRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	env string) []*networkingV1Alpha3.HTTPRoute {
+
+	nonDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	defaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+
+	for _, route := range inclusterVSRoutes {
+		if common.IsDefaultFQDN(route.Name, env) {
+			defaultRoutes = append(defaultRoutes, route)
+			continue
+		}
+		nonDefaultRoutes = append(nonDefaultRoutes, route)
+	}
+
+	finalMergedRoutes = append(finalMergedRoutes, nonDefaultRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, customVSRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, defaultRoutes...)
+
+	return finalMergedRoutes
+}
+
+// modifyCustomVSHTTPRoutes modifies the HTTP Route destination by switching the .global/.mesh FQDN with
+// .svc.cluster.local destinations. The .global/.mesh destination will be looked up
+// in the passed in-cluster VS routes first and if not found, lookup will be performed
+// on the HostRouteDestination cache for a fqdn that might be on another NS or with a separate admiral.io/env.
+// If a FQDN in custom VS is not found in any, then we'll keep it as-is.
+// This is needed if a custom VS thats exists in the sync namespace
+// for an identity.
+func modifyCustomVSHTTPRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	remoteController *RemoteController) ([]*networkingV1Alpha3.HTTPRoute, error) {
+	if customVSRoutes == nil {
+		return nil, fmt.Errorf("custom VS HTTPRoutes is nil")
+	}
+	if inclusterVSRoutes == nil {
+		return nil, fmt.Errorf("incluster VS HTTPRoutes is nil")
+	}
+	if remoteController == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+
+	// Create a lookup map FQDN -> []*RouteDestinations
+	inClusterRouteLookup := make(map[string][]*networkingV1Alpha3.HTTPRouteDestination)
+	for _, route := range inclusterVSRoutes {
+		inClusterRouteLookup[route.Name] = route.Route
+	}
+
+	newCustomVSHTTPRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	for _, httpRoute := range customVSRoutes {
+		copyHTTPRoute := httpRoute.DeepCopy()
+		newRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+		for _, routeDestination := range httpRoute.Route {
+			host := routeDestination.Destination.Host
+			// Check for this fqdn in the current incluster VS routes first
+			rd, ok := inClusterRouteLookup[host]
+			if !ok {
+				// If it is not in the current in-cluster VS then check in the cluster's
+				// HostToRouteDestinationCache cache
+				rd = remoteController.VirtualServiceController.HostToRouteDestinationCache.Get(host)
+			}
+			if rd == nil {
+				// If we are unable to find it in both maps then we add the routedestination as is
+				newRouteDestinations = append(newRouteDestinations, routeDestination)
+				continue
+			}
+			// Adjust the weights only if the customVS's routedestination
+			// has a weight associated with it.
+			if routeDestination.Weight == 0 {
+				newRouteDestinations = append(newRouteDestinations, rd...)
+				continue
+			}
+			adjustedRD, err := adjustWeights(rd, routeDestination.Weight)
+			if err != nil {
+				return nil, err
+			}
+			newRouteDestinations = append(newRouteDestinations, adjustedRD...)
+		}
+		copyHTTPRoute.Route = newRouteDestinations
+		newCustomVSHTTPRoutes = append(newCustomVSHTTPRoutes, copyHTTPRoute)
+	}
+
+	return newCustomVSHTTPRoutes, nil
+}
+
+// adjustWeights splits the percentage on each routeDestination based on the weight
+// passed
+func adjustWeights(
+	routeDestinations []*networkingV1Alpha3.HTTPRouteDestination,
+	weight int32) ([]*networkingV1Alpha3.HTTPRouteDestination, error) {
+
+	if routeDestinations == nil {
+		return nil, fmt.Errorf("slice of HTTPRouteDestination is nil")
+	}
+	adjustedRDs := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+	for _, rd := range routeDestinations {
+		newRD := rd.DeepCopy()
+		if rd.Weight != 0 {
+			newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
+			adjustedRDs = append(adjustedRDs, newRD)
+			continue
+		}
+		newRD.Weight = weight
+		adjustedRDs = append(adjustedRDs, newRD)
+	}
+	return adjustedRDs, nil
+}
+
+// mergeHosts merges the hosts and dedups it
+func mergeHosts(hosts1 []string, hosts2 []string) []string {
+	lookup := make(map[string]bool)
+	mergedHosts := make([]string, 0)
+	for _, host := range hosts1 {
+		lookup[host] = true
+		mergedHosts = append(mergedHosts, host)
+	}
+
+	for _, host := range hosts2 {
+		if !lookup[host] {
+			lookup[host] = true
+			mergedHosts = append(mergedHosts, host)
+		}
+	}
+
+	return mergedHosts
 }

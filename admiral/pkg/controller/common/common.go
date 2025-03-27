@@ -139,6 +139,8 @@ const (
 	VSRoutingType          = "admiral.io/vs-routing-type"
 	InclusterVSNameSuffix  = "incluster-vs"
 	VSRoutingTypeInCluster = "incluster"
+	CreatedByLabel         = "createdBy"
+	CreatedForLabel        = "createdFor"
 )
 
 type Event string
@@ -900,4 +902,12 @@ func IsVSRoutingInClusterVirtualService(vs *v1alpha4.VirtualService) bool {
 		return false
 	}
 	return true
+}
+
+// IsDefaultFQDN return true if the passed fqdn starts with the env
+func IsDefaultFQDN(fqdn, env string) bool {
+	if strings.HasPrefix(fqdn, env) {
+		return true
+	}
+	return false
 }

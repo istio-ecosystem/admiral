@@ -795,7 +795,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		ingressDestinations, err = getAllVSRouteDestinationsByCluster(
-			ctxLogger,
 			serviceInstance,
 			meshDeployAndRolloutPorts,
 			sourceWeightedServices[sourceCluster],
@@ -849,7 +848,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			}
 			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 		}
-	}
+	} // End of source cluster loop
 
 	ctxLogger.Infof(common.CtxLogFormat, "ClientAssets",
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("asset list=%v dependents=%v", registryConfig.ClientAssets, dependents))
@@ -896,7 +895,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateInClusterVirtualServices(
-		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity)
+		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity, env)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			deploymentOrRolloutName, namespace, "", err)

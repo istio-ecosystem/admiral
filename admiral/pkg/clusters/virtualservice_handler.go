@@ -36,6 +36,7 @@ func NewVirtualServiceHandler(remoteRegistry *RemoteRegistry, clusterID string) 
 		updateResource:                         handleVirtualServiceEventForRollout,
 		syncVirtualServiceForDependentClusters: syncVirtualServicesToAllDependentClusters,
 		syncVirtualServiceForAllClusters:       syncVirtualServicesToAllRemoteClusters,
+		processVirtualService:                  processVirtualService,
 	}, nil
 }
 
@@ -61,6 +62,14 @@ type SyncVirtualServiceResource func(
 	vsName string,
 ) error
 
+type ProcessVirtualService func(
+	ctx context.Context,
+	virtualService *v1alpha3.VirtualService,
+	remoteRegistry *RemoteRegistry,
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error
+
 // VirtualServiceHandler responsible for handling Add/Update/Delete events for
 // VirtualService resources
 type VirtualServiceHandler struct {
@@ -69,13 +78,76 @@ type VirtualServiceHandler struct {
 	updateResource                         UpdateResourcesForVirtualService
 	syncVirtualServiceForDependentClusters SyncVirtualServiceResource
 	syncVirtualServiceForAllClusters       SyncVirtualServiceResource
+	processVirtualService                  ProcessVirtualService
+}
+
+// processVirtualService uses the identity and the envs in the virtualService passed
+// and calls rollout and deployment handler for all the envs for the given identity.
+// This mainly used so that any add/update made on the custom vs should trigger a merge
+// on in-cluster VS
+func processVirtualService(
+	ctx context.Context,
+	virtualService *v1alpha3.VirtualService,
+	remoteRegistry *RemoteRegistry,
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error {
+	if virtualService == nil {
+		return fmt.Errorf("virtualService is nil")
+	}
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	rc := remoteRegistry.GetRemoteController(cluster)
+	if rc == nil {
+		return fmt.Errorf("remote controller for cluster %s not found", cluster)
+	}
+
+	// Get the identity and the environments from the VS
+	labels := virtualService.Labels
+	if labels == nil {
+		return fmt.Errorf(
+			"virtualservice labels is nil on virtual service %s", virtualService.Name)
+	}
+	identity := labels[common.CreatedFor]
+	if identity == "" {
+		return fmt.Errorf(
+			"virtualservice identity is empty in %s label for virtual service %s", common.CreatedFor, virtualService.Name)
+	}
+	envs := labels[common.CreatedForEnv]
+	if envs == "" {
+		return fmt.Errorf(
+			"virtualservice environment is empty in %s label for virtual service %s", common.CreatedForEnv, virtualService.Name)
+	}
+
+	// Iterate through all the environments and get the rollout and deployment from the cache
+	// and call the respective handlers
+	for _, env := range strings.Split(envs, ",") {
+		if rc.RolloutController != nil {
+			rollout := rc.RolloutController.Cache.Get(identity, env)
+			if rollout != nil {
+				handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
+			}
+		}
+		if rc.DeploymentController != nil {
+			deployment := rc.DeploymentController.Cache.Get(identity, env)
+			if deployment != nil {
+				handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) error {
 	if commonUtil.IsAdmiralReadOnly() {
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Add)
@@ -85,7 +157,8 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 	if commonUtil.IsAdmiralReadOnly() {
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Update)
@@ -96,7 +169,8 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 		log.Infof(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		log.Infof(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "Skipping resource from namespace="+obj.Namespace)
 		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 			log.Debugf(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
@@ -125,6 +199,21 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 	spec := virtualService.Spec
 
 	log.Infof(LogFormat, event, common.VirtualServiceResourceType, virtualService.Name, vh.clusterID, "Received event")
+
+	// Process VS
+	if ShouldProcessVSCreatedBy(virtualService) {
+		log.Infof(
+			LogFormat, event, common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,
+			"processing custom virtualService")
+		err := vh.processVirtualService(
+			ctx, virtualService, vh.remoteRegistry, vh.clusterID, HandleEventForRollout, HandleEventForDeployment)
+		if err != nil {
+			log.Errorf(
+				LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,
+				fmt.Sprintf("processVirtualService failed due to error %v", err.Error()))
+		}
+		return nil
+	}
 
 	if len(spec.Hosts) > 1 {
 		log.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, vh.clusterID, "Skipping as multiple hosts not supported for virtual service namespace="+virtualService.Namespace)
