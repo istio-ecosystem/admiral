@@ -20,11 +20,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +38,9 @@ type FakeDependencies struct {
 	ns   string
 }
 
-var dependenciesResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "dependencies"}
+var dependenciesResource = v1alpha1.SchemeGroupVersion.WithResource("dependencies")
 
-var dependenciesKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "Dependency"}
+var dependenciesKind = v1alpha1.SchemeGroupVersion.WithKind("Dependency")
 
 // Get takes name of the dependency, and returns the corresponding dependency object, and an error if there is any.
 func (c *FakeDependencies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Dependency, err error) {
@@ -134,6 +136,51 @@ func (c *FakeDependencies) DeleteCollection(ctx context.Context, opts v1.DeleteO
 func (c *FakeDependencies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Dependency, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, name, pt, data, subresources...), &v1alpha1.Dependency{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.Dependency), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied dependency.
+func (c *FakeDependencies) Apply(ctx context.Context, dependency *admiralv1alpha1.DependencyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.Dependency, err error) {
+	if dependency == nil {
+		return nil, fmt.Errorf("dependency provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(dependency)
+	if err != nil {
+		return nil, err
+	}
+	name := dependency.Name
+	if name == nil {
+		return nil, fmt.Errorf("dependency.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.Dependency{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.Dependency), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeDependencies) ApplyStatus(ctx context.Context, dependency *admiralv1alpha1.DependencyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.Dependency, err error) {
+	if dependency == nil {
+		return nil, fmt.Errorf("dependency provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(dependency)
+	if err != nil {
+		return nil, err
+	}
+	name := dependency.Name
+	if name == nil {
+		return nil, fmt.Errorf("dependency.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(dependenciesResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.Dependency{})
 
 	if obj == nil {
 		return nil, err

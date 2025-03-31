@@ -20,11 +20,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +38,9 @@ type FakeOutlierDetections struct {
 	ns   string
 }
 
-var outlierdetectionsResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "outlierdetections"}
+var outlierdetectionsResource = v1alpha1.SchemeGroupVersion.WithResource("outlierdetections")
 
-var outlierdetectionsKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "OutlierDetection"}
+var outlierdetectionsKind = v1alpha1.SchemeGroupVersion.WithKind("OutlierDetection")
 
 // Get takes name of the outlierDetection, and returns the corresponding outlierDetection object, and an error if there is any.
 func (c *FakeOutlierDetections) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.OutlierDetection, err error) {
@@ -134,6 +136,51 @@ func (c *FakeOutlierDetections) DeleteCollection(ctx context.Context, opts v1.De
 func (c *FakeOutlierDetections) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.OutlierDetection, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(outlierdetectionsResource, c.ns, name, pt, data, subresources...), &v1alpha1.OutlierDetection{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.OutlierDetection), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied outlierDetection.
+func (c *FakeOutlierDetections) Apply(ctx context.Context, outlierDetection *admiralv1alpha1.OutlierDetectionApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.OutlierDetection, err error) {
+	if outlierDetection == nil {
+		return nil, fmt.Errorf("outlierDetection provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(outlierDetection)
+	if err != nil {
+		return nil, err
+	}
+	name := outlierDetection.Name
+	if name == nil {
+		return nil, fmt.Errorf("outlierDetection.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(outlierdetectionsResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.OutlierDetection{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.OutlierDetection), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeOutlierDetections) ApplyStatus(ctx context.Context, outlierDetection *admiralv1alpha1.OutlierDetectionApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.OutlierDetection, err error) {
+	if outlierDetection == nil {
+		return nil, fmt.Errorf("outlierDetection provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(outlierDetection)
+	if err != nil {
+		return nil, err
+	}
+	name := outlierDetection.Name
+	if name == nil {
+		return nil, fmt.Errorf("outlierDetection.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(outlierdetectionsResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.OutlierDetection{})
 
 	if obj == nil {
 		return nil, err
