@@ -34,14 +34,6 @@ type DependencyListerExpansion interface{}
 // DependencyNamespaceLister.
 type DependencyNamespaceListerExpansion interface{}
 
-// DependencyProxyListerExpansion allows custom methods to be added to
-// DependencyProxyLister.
-type DependencyProxyListerExpansion interface{}
-
-// DependencyProxyNamespaceListerExpansion allows custom methods to be added to
-// DependencyProxyNamespaceLister.
-type DependencyProxyNamespaceListerExpansion interface{}
-
 // GlobalTrafficPolicyListerExpansion allows custom methods to be added to
 // GlobalTrafficPolicyLister.
 type GlobalTrafficPolicyListerExpansion interface{}

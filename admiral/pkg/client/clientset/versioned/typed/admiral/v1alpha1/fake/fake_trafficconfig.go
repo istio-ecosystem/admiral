@@ -20,11 +20,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +38,9 @@ type FakeTrafficConfigs struct {
 	ns   string
 }
 
-var trafficconfigsResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "trafficconfigs"}
+var trafficconfigsResource = v1alpha1.SchemeGroupVersion.WithResource("trafficconfigs")
 
-var trafficconfigsKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "TrafficConfig"}
+var trafficconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("TrafficConfig")
 
 // Get takes name of the trafficConfig, and returns the corresponding trafficConfig object, and an error if there is any.
 func (c *FakeTrafficConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.TrafficConfig, err error) {
@@ -134,6 +136,51 @@ func (c *FakeTrafficConfigs) DeleteCollection(ctx context.Context, opts v1.Delet
 func (c *FakeTrafficConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.TrafficConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(trafficconfigsResource, c.ns, name, pt, data, subresources...), &v1alpha1.TrafficConfig{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.TrafficConfig), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied trafficConfig.
+func (c *FakeTrafficConfigs) Apply(ctx context.Context, trafficConfig *admiralv1alpha1.TrafficConfigApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.TrafficConfig, err error) {
+	if trafficConfig == nil {
+		return nil, fmt.Errorf("trafficConfig provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(trafficConfig)
+	if err != nil {
+		return nil, err
+	}
+	name := trafficConfig.Name
+	if name == nil {
+		return nil, fmt.Errorf("trafficConfig.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(trafficconfigsResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.TrafficConfig{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.TrafficConfig), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeTrafficConfigs) ApplyStatus(ctx context.Context, trafficConfig *admiralv1alpha1.TrafficConfigApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.TrafficConfig, err error) {
+	if trafficConfig == nil {
+		return nil, fmt.Errorf("trafficConfig provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(trafficConfig)
+	if err != nil {
+		return nil, err
+	}
+	name := trafficConfig.Name
+	if name == nil {
+		return nil, fmt.Errorf("trafficConfig.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(trafficconfigsResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.TrafficConfig{})
 
 	if obj == nil {
 		return nil, err

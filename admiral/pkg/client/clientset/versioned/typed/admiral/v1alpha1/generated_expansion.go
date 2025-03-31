@@ -22,8 +22,6 @@ type ClientConnectionConfigExpansion interface{}
 
 type DependencyExpansion interface{}
 
-type DependencyProxyExpansion interface{}
-
 type GlobalTrafficPolicyExpansion interface{}
 
 type OutlierDetectionExpansion interface{}
