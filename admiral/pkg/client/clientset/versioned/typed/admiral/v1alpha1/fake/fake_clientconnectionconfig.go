@@ -20,11 +20,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +38,9 @@ type FakeClientConnectionConfigs struct {
 	ns   string
 }
 
-var clientconnectionconfigsResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "clientconnectionconfigs"}
+var clientconnectionconfigsResource = v1alpha1.SchemeGroupVersion.WithResource("clientconnectionconfigs")
 
-var clientconnectionconfigsKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "ClientConnectionConfig"}
+var clientconnectionconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("ClientConnectionConfig")
 
 // Get takes name of the clientConnectionConfig, and returns the corresponding clientConnectionConfig object, and an error if there is any.
 func (c *FakeClientConnectionConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClientConnectionConfig, err error) {
@@ -134,6 +136,51 @@ func (c *FakeClientConnectionConfigs) DeleteCollection(ctx context.Context, opts
 func (c *FakeClientConnectionConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ClientConnectionConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(clientconnectionconfigsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ClientConnectionConfig{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.ClientConnectionConfig), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied clientConnectionConfig.
+func (c *FakeClientConnectionConfigs) Apply(ctx context.Context, clientConnectionConfig *admiralv1alpha1.ClientConnectionConfigApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.ClientConnectionConfig, err error) {
+	if clientConnectionConfig == nil {
+		return nil, fmt.Errorf("clientConnectionConfig provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(clientConnectionConfig)
+	if err != nil {
+		return nil, err
+	}
+	name := clientConnectionConfig.Name
+	if name == nil {
+		return nil, fmt.Errorf("clientConnectionConfig.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(clientconnectionconfigsResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.ClientConnectionConfig{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.ClientConnectionConfig), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeClientConnectionConfigs) ApplyStatus(ctx context.Context, clientConnectionConfig *admiralv1alpha1.ClientConnectionConfigApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.ClientConnectionConfig, err error) {
+	if clientConnectionConfig == nil {
+		return nil, fmt.Errorf("clientConnectionConfig provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(clientConnectionConfig)
+	if err != nil {
+		return nil, err
+	}
+	name := clientConnectionConfig.Name
+	if name == nil {
+		return nil, fmt.Errorf("clientConnectionConfig.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(clientconnectionconfigsResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.ClientConnectionConfig{})
 
 	if obj == nil {
 		return nil, err
