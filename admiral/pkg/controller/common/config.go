@@ -436,10 +436,26 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
-func ClientInitiatedProcessingEnabled() bool {
+func ClientInitiatedProcessingEnabledForControllers() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	return wrapper.params.ClientInitiatedProcessingEnabled
+	return wrapper.params.ClientInitiatedProcessingEnabledForControllers
+}
+
+func ClientInitiatedProcessingEnabledForDynamicConfig() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ClientInitiatedProcessingEnabledForDynamicConfig
+}
+
+func GetInitiateClientInitiatedProcessingFor() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	var result = make(map[string]string)
+	for _, identity := range wrapper.params.InitiateClientInitiatedProcessingFor {
+		result[identity] = identity
+	}
+	return result
 }
 
 func GetIngressLBPolicy() string {

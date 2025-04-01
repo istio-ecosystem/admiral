@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/istio-ecosystem/admiral/admiral/apis/v1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -221,11 +222,75 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 		ctx := context.Context(context.Background())
 		//Process NLB Cluster
 		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
+		// Process InitiateClientInitiatedProcessingFor
+		var c ClientDependencyRecordProcessor
+		err := triggerClientInitiatedProcessing(ctx, c, rr, common.GetInitiateClientInitiatedProcessingFor())
+		if err != nil {
+			log.Errorf(fmt.Sprintf("task=%s, Error=%v", common.DynamicConfigUpdate, err))
+		}
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, NeedToUpdateConfig=false", common.DynamicConfigUpdate))
 	}
 
 	return nil
+}
+
+func triggerClientInitiatedProcessing(ctx context.Context, c ProcessClientDependencyRecord, remoteRegistry *RemoteRegistry, processingForMap map[string]string) error {
+	if !common.ClientInitiatedProcessingEnabledForDynamicConfig() {
+		return nil
+	}
+
+	txId := uuid.NewString()
+	ctxLogger := log.WithField("task", common.ClientInitiatedProcessing)
+	ctx = context.WithValue(ctx, "txId", txId)
+
+	var processedGlobalIdentifiers []string
+	for _, globalIdentifier := range processingForMap {
+		var err error
+		clusterNamespaces := remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get(globalIdentifier)
+		if clusterNamespaces == nil {
+			return nil
+		}
+		clusterNamespaces.Range(func(cluster string, nsMap *common.Map) {
+			if nsMap == nil {
+				return
+			}
+			nsMap.Range(func(ns string, v string) {
+				ctxLogger.Infof(LogFormat, "DynamicConfig", "", ns, cluster, "Client initiated processing started for "+globalIdentifier+" txId="+txId)
+				processingErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, cluster, ns)
+
+				if processingErr != nil {
+					ctxLogger.Errorf(common.CtxLogFormat, common.ClientInitiatedProcessing, globalIdentifier, ns, cluster, fmt.Errorf("Client initiated processing error for identity=%s txId=%s, got error=%v", globalIdentifier, txId, processingErr))
+				}
+				err = common.AppendError(processingErr, err)
+			})
+		})
+		if err == nil {
+			processedGlobalIdentifiers = append(processedGlobalIdentifiers, globalIdentifier)
+			ctxLogger.Infof(LogFormat, "DynamicConfig", "", "", "", "Client initiated processing completed for "+globalIdentifier+" txId="+txId)
+		}
+	}
+
+	//Remove processed global identifiers
+	unprocessedCount := removeProcessedIdentities(processedGlobalIdentifiers, processingForMap)
+	if unprocessedCount > 0 {
+		return fmt.Errorf("Failed to process %v identities as a client", unprocessedCount)
+	}
+	return nil
+}
+
+func removeProcessedIdentities(processedGlobalIdentifiers []string, processingForMap map[string]string) int {
+	for _, globalIdentifier := range processedGlobalIdentifiers {
+		delete(processingForMap, globalIdentifier)
+	}
+	var unprocessed []string
+	for k := range processingForMap {
+		unprocessed = append(unprocessed, k)
+	}
+	currentParams := common.GetAdmiralParams()
+	currentParams.InitiateClientInitiatedProcessingFor = unprocessed
+	common.UpdateAdmiralParams(currentParams)
+	return len(unprocessed)
 }
 
 func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []string, existingCache *[]string, lbLabel string) {
@@ -323,7 +388,9 @@ func UpdateSyncAdmiralConfig(configData DynamicConfigData) {
 			newAdmiralConfig.NLBEnabledIdentityList = configData.NLBEnabledIdentityList
 		}
 
+		if len(configData.InitiateClientInitiatedProcessingFor) > 0 {
+			newAdmiralConfig.InitiateClientInitiatedProcessingFor = configData.InitiateClientInitiatedProcessingFor
+		}
 		common.UpdateAdmiralParams(newAdmiralConfig)
-
 	}
 }

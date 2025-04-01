@@ -352,13 +352,26 @@ func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPort
 	return services
 }
 
-func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+type ProcessClientDependencyRecord interface {
+	processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error
+}
+type ClientDependencyRecordProcessor struct{}
+
+func (c ClientDependencyRecordProcessor) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
 	var destinationsToBeProcessed []string
+	if IsCacheWarmupTimeForDependency(remoteRegistry) {
+		log.Debugf(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "processing skipped during cache warm up state for dependency")
+		return nil
+	}
 
 	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
 	log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
-
+	if len(destinationsToBeProcessed) == 0 {
+		log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "no destinations to be processed")
+		return nil
+	}
 	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, common.NewMap(), destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+
 	if err != nil {
 		return errors.New("failed to perform client initiated processing for " + globalIdentifier + ", got error: " + err.Error())
 	}
@@ -372,18 +385,33 @@ func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *Re
 	if actualServerIdentities == nil {
 		return nil
 	}
+	var meshServerIdentities []string
+
+	for _, actualServerIdentity := range actualServerIdentities {
+		if isIdentityMeshEnabled(actualServerIdentity, remoteRegistry) {
+			meshServerIdentities = append(meshServerIdentities, actualServerIdentity)
+		}
+	}
 
 	if processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
-		destinationsToBeProcessed = actualServerIdentities
+		destinationsToBeProcessed = meshServerIdentities
 	} else {
 		processedClientNamespaces := processedClientClusters.Get(clientNs)
-		for _, actualServerIdentity := range actualServerIdentities {
+		for _, actualServerIdentity := range meshServerIdentities {
 			if processedClientNamespaces.Get(actualServerIdentity) == "" {
 				destinationsToBeProcessed = append(destinationsToBeProcessed, actualServerIdentity)
 			}
 		}
 	}
-	return destinationsToBeProcessed
+	sort.Strings(destinationsToBeProcessed)
+	// Remove duplicates
+	var dedupDestinationSlice []string
+	for i := 0; i < len(destinationsToBeProcessed); i++ {
+		if i == 0 || destinationsToBeProcessed[i] != destinationsToBeProcessed[i-1] {
+			dedupDestinationSlice = append(dedupDestinationSlice, destinationsToBeProcessed[i])
+		}
+	}
+	return dedupDestinationSlice
 }
 
 func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *RemoteRegistry, eventType admiral.EventType, hasNonMeshDestination bool, sourceClusters *common.Map, destinations []string, sourceIdentity string, modifySE ModifySEFunc) error {
