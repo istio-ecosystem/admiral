@@ -182,7 +182,7 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 		blueGreenPreviewService = rolloutStrategy.BlueGreen.PreviewService
 		if len(blueGreenActiveService) == 0 {
 			//pick a service that ends in RolloutActiveServiceSuffix if one is available
-			blueGreenActiveService = GetServiceWithSuffixMatch(common.RolloutActiveServiceSuffix, cachedServices, rollout.Spec.Selector)
+			blueGreenActiveService = GetServiceWithNameMatch(common.RolloutActiveServiceSuffix, cachedServices, rollout.Spec.Selector)
 		}
 	} else if rolloutStrategy.Canary != nil {
 		//If istio canary perform below operations
@@ -280,10 +280,10 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 				since istio does not know the split info as there is no virtual service
 			*/
 
-			sName := GetServiceWithSuffixMatch(common.RolloutRootServiceSuffix, cachedServices, rollout.Spec.Selector)
+			sName := GetServiceWithNameMatch(common.RolloutRootServiceSuffix, cachedServices, rollout.Spec.Selector)
 			if len(sName) <= 0 {
 				//Fallback if root service not found
-				sName = GetServiceWithSuffixMatch(common.RolloutStableServiceSuffix, cachedServices, rollout.Spec.Selector)
+				sName = GetServiceWithNameMatch(common.RolloutStableServiceSuffix, cachedServices, rollout.Spec.Selector)
 			}
 
 			// If root and stable not found, exit canary logic and use generic logic to choose random service
@@ -332,12 +332,15 @@ func getServiceForRollout(ctx context.Context, rc *RemoteController, rollout *ro
 	return matchedServices
 }
 
-func GetServiceWithSuffixMatch(suffix string, services []*coreV1.Service, rolloutSelector *v12.LabelSelector) string {
+func GetServiceWithNameMatch(token string, services []*coreV1.Service, rolloutSelector *v12.LabelSelector) string {
 	if rolloutSelector == nil || services == nil {
 		return ""
 	}
 	for _, service := range services {
-		if strings.HasSuffix(service.Name, suffix) && common.IsServiceMatch(service.Spec.Selector, rolloutSelector) {
+		if strings.HasSuffix(service.Name, token) && common.IsServiceMatch(service.Spec.Selector, rolloutSelector) {
+			return service.Name
+		}
+		if strings.Contains(service.Name, token) && common.IsServiceMatch(service.Spec.Selector, rolloutSelector) {
 			return service.Name
 		}
 	}
