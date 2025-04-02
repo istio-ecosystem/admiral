@@ -5265,7 +5265,7 @@ func TestSortVSRoutes(t *testing.T) {
 		name                 string
 		customVSRoutes       []*networkingV1Alpha3.HTTPRoute
 		inclusterVSRoutes    []*networkingV1Alpha3.HTTPRoute
-		env                  string
+		hostsNotInCustomVS   map[string]bool
 		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
 		expectedError        error
 	}{
@@ -5281,8 +5281,10 @@ func TestSortVSRoutes(t *testing.T) {
 			name: "Given empty customVSRoutes params" +
 				"And sortVSRoutes func is called" +
 				"Then the func should return merged routes only from inclusterVSRoutes",
-			env:            "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+			},
 			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Name: "qal.stage1.host1.global",
@@ -5399,10 +5401,9 @@ func TestSortVSRoutes(t *testing.T) {
 			},
 		},
 		{
-			name: "Given empty vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the func should return empty merged routes",
-			env: "qal",
+			name: "Given empty inclusterVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return only routes from customVSRoutes",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Route: []*networkingV1Alpha3.HTTPRouteDestination{
@@ -5455,9 +5456,11 @@ func TestSortVSRoutes(t *testing.T) {
 		},
 		{
 			name: "Given valid params" +
-				"And mergeHTTPRoutes func is called" +
+				"And sortVSRoutes func is called" +
 				"Then the func should return sorted routes",
-			env: "qal",
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+			},
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Route: []*networkingV1Alpha3.HTTPRouteDestination{
@@ -5558,6 +5561,221 @@ func TestSortVSRoutes(t *testing.T) {
 							Authority: &networkingV1Alpha3.StringMatch{
 								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given valid params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return sorted routes",
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+				"qal-air.stage1.host1.global":    true,
+			},
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
 								},
 							},
 						},
@@ -5623,7 +5841,7 @@ func TestSortVSRoutes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := sortVSRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, tc.env)
+			actual := sortVSRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, tc.hostsNotInCustomVS)
 			assert.Equal(t, tc.expectedMergedRoutes, actual)
 		})
 	}
@@ -6493,7 +6711,6 @@ func TestMergeVS(t *testing.T) {
 		customVS         *apiNetworkingV1Alpha3.VirtualService
 		inclusterVS      *apiNetworkingV1Alpha3.VirtualService
 		remoteController *RemoteController
-		env              string
 		expectedVS       *apiNetworkingV1Alpha3.VirtualService
 		expectedError    error
 	}{
@@ -6519,19 +6736,9 @@ func TestMergeVS(t *testing.T) {
 			expectedError: fmt.Errorf("remote controller is nil"),
 		},
 		{
-			name: "Given env is empty" +
-				"When mergeVS func is called" +
-				"Then func should return an error",
-			customVS:         &apiNetworkingV1Alpha3.VirtualService{},
-			inclusterVS:      &apiNetworkingV1Alpha3.VirtualService{},
-			remoteController: rc,
-			expectedError:    fmt.Errorf("env is empty"),
-		},
-		{
 			name: "Given valid params" +
 				"When mergeVS func is called" +
 				"Then func should return a valid merged vs",
-			env: "qal",
 			customVS: &apiNetworkingV1Alpha3.VirtualService{
 				Spec: networkingV1Alpha3.VirtualService{
 					Hosts: []string{
@@ -6596,7 +6803,7 @@ func TestMergeVS(t *testing.T) {
 				Spec: networkingV1Alpha3.VirtualService{
 					Hosts: []string{
 						"qal.stage1.host1.global",
-						"canary.stage1.host1.global",
+						"canary.qal.stage1.host1.global",
 						"east.qal.stage1.host1.global",
 						"west.qal.stage1.host1.global",
 					},
@@ -6710,7 +6917,7 @@ func TestMergeVS(t *testing.T) {
 					Hosts: []string{
 						"qal.stage1.host1.global",
 						"qal-air.stage1.host1.global",
-						"canary.stage1.host1.global",
+						"canary.qal.stage1.host1.global",
 						"east.qal.stage1.host1.global",
 						"west.qal.stage1.host1.global",
 					},
@@ -6884,7 +7091,7 @@ func TestMergeVS(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := mergeVS(tc.customVS, tc.inclusterVS, tc.remoteController, tc.env)
+			actual, err := mergeVS(tc.customVS, tc.inclusterVS, tc.remoteController)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())

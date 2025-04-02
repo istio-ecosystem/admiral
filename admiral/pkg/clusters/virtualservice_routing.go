@@ -724,7 +724,7 @@ func addUpdateInClusterVirtualServices(
 					virtualService.Name, virtualService.Namespace, sourceCluster,
 					"no custom virtual service found")
 			} else {
-				virtualService, err = mergeVS(customVS, virtualService, rc, env)
+				virtualService, err = mergeVS(customVS, virtualService, rc)
 			}
 		}
 
@@ -1569,8 +1569,7 @@ func performInVSRoutingRollback(
 func mergeVS(
 	customVS *v1alpha3.VirtualService,
 	inclusterVS *v1alpha3.VirtualService,
-	rc *RemoteController,
-	env string) (*v1alpha3.VirtualService, error) {
+	rc *RemoteController) (*v1alpha3.VirtualService, error) {
 
 	if customVS == nil {
 		return nil, fmt.Errorf("custom VS is nil")
@@ -1580,9 +1579,6 @@ func mergeVS(
 	}
 	if rc == nil {
 		return nil, fmt.Errorf("remote controller is nil")
-	}
-	if env == "" {
-		return nil, fmt.Errorf("env is empty")
 	}
 
 	newVS := inclusterVS.DeepCopy()
@@ -1597,11 +1593,21 @@ func mergeVS(
 		return nil, err
 	}
 
+	// Get Hosts Diff
+	// This is needed to get hosts that are not in custom VS
+	// The routes for such hosts have to be added towards the top
+	// for them to match on authority and avoid any special routing rules being
+	// applied by the custom VS
+	hostDiff := getHostsDiff(inclusterVS.Spec.Hosts, customVS.Spec.Hosts)
+
 	// Time to sort the routes
 	// The non-default fqdn from the in-cluster VS will be added first
 	// Then the fdqn that were in the custom VS will be added next
 	// then the remaining
-	sortedRoutes := sortVSRoutes(modifiedCustomVSRouteDestinations, inclusterVS.Spec.Http, env)
+	sortedRoutes := sortVSRoutes(
+		modifiedCustomVSRouteDestinations,
+		inclusterVS.Spec.Http,
+		hostDiff)
 
 	newVS.Spec.Http = sortedRoutes
 	newVS.Spec.Hosts = mergedVSHosts
@@ -1610,21 +1616,39 @@ func mergeVS(
 
 }
 
+// getHostsDiff returns a map of hosts that are in in-cluster VS host list but
+// not in the custom VS
+func getHostsDiff(inclusterHosts []string, customVSHosts []string) map[string]bool {
+	result := make(map[string]bool)
+	lookup := make(map[string]bool)
+	for _, host := range customVSHosts {
+		lookup[host] = true
+	}
+
+	for _, host := range inclusterHosts {
+		if lookup[host] {
+			continue
+		}
+		result[host] = true
+	}
+	return result
+}
+
 func sortVSRoutes(
 	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
 	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
-	env string) []*networkingV1Alpha3.HTTPRoute {
+	hostsNotInCustomVS map[string]bool) []*networkingV1Alpha3.HTTPRoute {
 
 	nonDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 	defaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 
 	for _, route := range inclusterVSRoutes {
-		if common.IsDefaultFQDN(route.Name, env) {
-			defaultRoutes = append(defaultRoutes, route)
+		if hostsNotInCustomVS[route.Name] {
+			nonDefaultRoutes = append(nonDefaultRoutes, route)
 			continue
 		}
-		nonDefaultRoutes = append(nonDefaultRoutes, route)
+		defaultRoutes = append(defaultRoutes, route)
 	}
 
 	finalMergedRoutes = append(finalMergedRoutes, nonDefaultRoutes...)
