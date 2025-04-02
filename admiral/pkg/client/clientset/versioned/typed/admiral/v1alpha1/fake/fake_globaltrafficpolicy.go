@@ -20,11 +20,13 @@ package fake
 
 import (
 	"context"
+	json "encoding/json"
+	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +38,9 @@ type FakeGlobalTrafficPolicies struct {
 	ns   string
 }
 
-var globaltrafficpoliciesResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "globaltrafficpolicies"}
+var globaltrafficpoliciesResource = v1alpha1.SchemeGroupVersion.WithResource("globaltrafficpolicies")
 
-var globaltrafficpoliciesKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "GlobalTrafficPolicy"}
+var globaltrafficpoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("GlobalTrafficPolicy")
 
 // Get takes name of the globalTrafficPolicy, and returns the corresponding globalTrafficPolicy object, and an error if there is any.
 func (c *FakeGlobalTrafficPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.GlobalTrafficPolicy, err error) {
@@ -134,6 +136,51 @@ func (c *FakeGlobalTrafficPolicies) DeleteCollection(ctx context.Context, opts v
 func (c *FakeGlobalTrafficPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.GlobalTrafficPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(globaltrafficpoliciesResource, c.ns, name, pt, data, subresources...), &v1alpha1.GlobalTrafficPolicy{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.GlobalTrafficPolicy), err
+}
+
+// Apply takes the given apply declarative configuration, applies it and returns the applied globalTrafficPolicy.
+func (c *FakeGlobalTrafficPolicies) Apply(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error) {
+	if globalTrafficPolicy == nil {
+		return nil, fmt.Errorf("globalTrafficPolicy provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(globalTrafficPolicy)
+	if err != nil {
+		return nil, err
+	}
+	name := globalTrafficPolicy.Name
+	if name == nil {
+		return nil, fmt.Errorf("globalTrafficPolicy.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(globaltrafficpoliciesResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.GlobalTrafficPolicy{})
+
+	if obj == nil {
+		return nil, err
+	}
+	return obj.(*v1alpha1.GlobalTrafficPolicy), err
+}
+
+// ApplyStatus was generated because the type contains a Status member.
+// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+func (c *FakeGlobalTrafficPolicies) ApplyStatus(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error) {
+	if globalTrafficPolicy == nil {
+		return nil, fmt.Errorf("globalTrafficPolicy provided to Apply must not be nil")
+	}
+	data, err := json.Marshal(globalTrafficPolicy)
+	if err != nil {
+		return nil, err
+	}
+	name := globalTrafficPolicy.Name
+	if name == nil {
+		return nil, fmt.Errorf("globalTrafficPolicy.Name must be provided to Apply")
+	}
+	obj, err := c.Fake.
+		Invokes(testing.NewPatchSubresourceAction(globaltrafficpoliciesResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.GlobalTrafficPolicy{})
 
 	if obj == nil {
 		return nil, err
