@@ -7231,3 +7231,92 @@ func TestGetCustomVirtualService(t *testing.T) {
 	}
 
 }
+
+func TestGetHostsDiff(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		inclusterHosts []string
+		customVSHosts  []string
+		expectedHosts  map[string]bool
+	}{
+		{
+			name: "Given empty customVSHosts and inclusterHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return empty map",
+			inclusterHosts: []string{},
+			customVSHosts:  []string{},
+			expectedHosts:  map[string]bool{},
+		},
+		{
+			name: "Given empty customVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return all hosts from inclusterVSHosts",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{},
+			expectedHosts: map[string]bool{
+				"canary.qal.stage.global": true,
+				"east.qal.stage.global":   true,
+				"qal.stage.global":        true,
+			},
+		},
+		{
+			name: "Given empty inclusterVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return an empty map",
+			inclusterHosts: []string{},
+			customVSHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{},
+		},
+		{
+			name: "Given inclusterVSHosts and customVSHosts" +
+				"And they have all common hosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return an empty map",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{},
+		},
+		{
+			name: "Given inclusterVSHosts and customVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return valid diffs",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{
+				"canary.qal.stage.global": true,
+				"east.qal.stage.global":   true,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getHostsDiff(tc.inclusterHosts, tc.customVSHosts)
+			assert.Equal(t, tc.expectedHosts, actual)
+		})
+	}
+
+}
