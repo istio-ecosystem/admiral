@@ -1012,30 +1012,68 @@ func TestGetServiceWithSuffixMatch(t *testing.T) {
 		},
 	}
 
+	services2 := []*coreV1.Service{
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service1-root-service"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service2"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service3-root-service-abc"},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "different",
+				},
+			},
+		},
+	}
+
+	services3 := []*coreV1.Service{
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service2"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service3-root-service-abc"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+	}
+
 	testCases := []struct {
 		name            string
-		suffix          string
+		token           string
 		services        []*coreV1.Service
 		rolloutSelector *metaV1.LabelSelector
 		expectedResult  string
 	}{
 		{
-			name:            "Match found, given suffux, services and selector. Should return service with suffix",
-			suffix:          "root-service",
+			name:            "Match found, given suffux, services and selector. Should return service with token",
+			token:           "root-service",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "service1-root-service",
 		},
 		{
 			name:            "No match found, given incorrect suffux, services and selector. Should return empty",
-			suffix:          "nomatch",
+			token:           "nomatch",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "",
 		},
 		{
 			name:     "No match found, given suffux, services and not matching selector. Should return empty",
-			suffix:   "root-service",
+			token:    "root-service",
 			services: services,
 			rolloutSelector: &metaV1.LabelSelector{
 				MatchLabels: map[string]string{
@@ -1046,30 +1084,44 @@ func TestGetServiceWithSuffixMatch(t *testing.T) {
 		},
 		{
 			name:            "Match found, given empty suffux, services and selector. Should return first service",
-			suffix:          "",
+			token:           "",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "service1-root-service",
 		},
 		{
 			name:            "No match found, given suffux, services and nil selector. Should return empty",
-			suffix:          "suffix",
+			token:           "token",
 			services:        services,
 			rolloutSelector: nil,
 			expectedResult:  "",
 		},
 		{
 			name:            "No match found, given suffux, no services and selector. Should return empty",
-			suffix:          "suffix",
+			token:           "token",
 			services:        []*coreV1.Service{},
 			rolloutSelector: labelSelector,
 			expectedResult:  "",
+		},
+		{
+			name:            "No match found with token, but found with contains check, should return root service",
+			token:           "root-service",
+			services:        services3,
+			rolloutSelector: labelSelector,
+			expectedResult:  "service3-root-service-abc",
+		},
+		{
+			name:            "If match found with token, prefer that service",
+			token:           "root-service",
+			services:        services2,
+			rolloutSelector: labelSelector,
+			expectedResult:  "service1-root-service",
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := GetServiceWithSuffixMatch(c.suffix, c.services, c.rolloutSelector)
+			result := GetServiceWithNameMatch(c.token, c.services, c.rolloutSelector)
 			if result != c.expectedResult {
 				t.Errorf("Failed. Got %v, expected %v", result, c.expectedResult)
 			}
