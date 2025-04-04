@@ -353,18 +353,18 @@ func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPort
 }
 
 type ProcessClientDependencyRecord interface {
-	processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error
+	processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error
 }
 type ClientDependencyRecordProcessor struct{}
 
-func (c ClientDependencyRecordProcessor) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+func (c ClientDependencyRecordProcessor) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error {
 	var destinationsToBeProcessed []string
 	if IsCacheWarmupTimeForDependency(remoteRegistry) {
 		log.Debugf(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "processing skipped during cache warm up state for dependency")
 		return nil
 	}
 
-	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed, bypass)
 	log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
 	if len(destinationsToBeProcessed) == 0 {
 		log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "no destinations to be processed")
@@ -378,7 +378,7 @@ func (c ClientDependencyRecordProcessor) processClientDependencyRecord(ctx conte
 	return nil
 }
 
-func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string) []string {
+func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string, bypass bool) []string {
 	actualServerIdentities := remoteRegistry.AdmiralCache.SourceToDestinations.Get(globalIdentifier)
 	processedClientClusters := remoteRegistry.AdmiralCache.ClientClusterNamespaceServerCache.Get(clusterName)
 
@@ -393,7 +393,7 @@ func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *Re
 		}
 	}
 
-	if processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
+	if bypass || processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
 		destinationsToBeProcessed = meshServerIdentities
 	} else {
 		processedClientNamespaces := processedClientClusters.Get(clientNs)

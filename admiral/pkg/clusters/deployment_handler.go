@@ -72,7 +72,7 @@ func HandleEventForDeployment(ctx context.Context, event admiral.EventType, obj 
 	if common.ClientInitiatedProcessingEnabledForControllers() {
 		var c ClientDependencyRecordProcessor
 		log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Client initiated processing started for "+globalIdentifier)
-		depProcessErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
+		depProcessErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace, false)
 		if depProcessErr != nil {
 			return common.AppendError(err, depProcessErr)
 		}

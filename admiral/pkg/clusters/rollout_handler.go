@@ -72,7 +72,7 @@ func HandleEventForRollout(ctx context.Context, event admiral.EventType, obj *ar
 	if common.ClientInitiatedProcessingEnabledForControllers() {
 		var c ClientDependencyRecordProcessor
 		log.Infof(LogFormat, event, common.DeploymentResourceType, obj.Name, clusterName, "Client initiated processing started for "+globalIdentifier)
-		rolloutProcessErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace)
+		rolloutProcessErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, clusterName, obj.Namespace, false)
 		if rolloutProcessErr != nil {
 			return common.AppendError(err, rolloutProcessErr)
 		}

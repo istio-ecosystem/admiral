@@ -10,10 +10,12 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -182,7 +184,8 @@ func NewDynamicConfigDatabaseClient(path string, dynamoClientInitFunc func(role 
 }
 
 func UpdateASyncAdmiralConfig(ctxDynamicConfig context.Context, rr *RemoteRegistry, syncTime int) {
-
+	//pull once on startup
+	ReadAndUpdateSyncAdmiralConfig(rr)
 	ticker := time.NewTicker(time.Minute * time.Duration(syncTime))
 	defer ticker.Stop()
 
@@ -209,7 +212,11 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 	if !ok {
 		return errors.New(fmt.Sprintf("task=%s, failed to parse DynamicConfigData", common.DynamicConfigUpdate))
 	}
-
+	UpdateSyncAdmiralConfig(configData)
+	if commonUtil.IsAdmiralReadOnly() {
+		log.Infof(common.CtxLogFormat, "DynamicConfig", "", "", "", "processing skipped as Admiral is in Read-only mode")
+		return nil
+	}
 	if IsCacheWarmupTime(rr) {
 		log.Infof("task=%s, NeedToUpdateConfig=false, processing skipped during cache warm up state", common.DynamicConfigUpdate)
 		return nil
@@ -217,9 +224,7 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 
 	if IsDynamicConfigChanged(configData) {
 		log.Infof(fmt.Sprintf("task=%s, NeedToUpdateConfig=true", common.DynamicConfigUpdate))
-		UpdateSyncAdmiralConfig(configData)
-
-		ctx := context.Context(context.Background())
+		ctx := context.Background()
 		//Process NLB Cluster
 		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
 		// Process InitiateClientInitiatedProcessingFor
@@ -243,10 +248,16 @@ func triggerClientInitiatedProcessing(ctx context.Context, c ProcessClientDepend
 	txId := uuid.NewString()
 	ctxLogger := log.WithField("task", common.ClientInitiatedProcessing)
 	ctx = context.WithValue(ctx, "txId", txId)
+	bypassPrefix := "bypass:"
 
 	var processedGlobalIdentifiers []string
 	for _, globalIdentifier := range processingForMap {
 		var err error
+		var bypass bool
+		if strings.HasPrefix(globalIdentifier, bypassPrefix) {
+			globalIdentifier = strings.TrimPrefix(globalIdentifier, bypassPrefix)
+			bypass = true
+		}
 		clusterNamespaces := remoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get(globalIdentifier)
 		if clusterNamespaces == nil {
 			return nil
@@ -257,7 +268,7 @@ func triggerClientInitiatedProcessing(ctx context.Context, c ProcessClientDepend
 			}
 			nsMap.Range(func(ns string, v string) {
 				ctxLogger.Infof(LogFormat, "DynamicConfig", "", ns, cluster, "Client initiated processing started for "+globalIdentifier+" txId="+txId)
-				processingErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, cluster, ns)
+				processingErr := c.processClientDependencyRecord(ctx, remoteRegistry, globalIdentifier, cluster, ns, bypass)
 
 				if processingErr != nil {
 					ctxLogger.Errorf(common.CtxLogFormat, common.ClientInitiatedProcessing, globalIdentifier, ns, cluster, fmt.Errorf("Client initiated processing error for identity=%s txId=%s, got error=%v", globalIdentifier, txId, processingErr))

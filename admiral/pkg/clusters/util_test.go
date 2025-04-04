@@ -1229,7 +1229,7 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualDestinations := getDestinationsToBeProcessedForClientInitiatedProcessing(tc.remoteRegistry, tc.globalIdentifier, tc.clusterName, tc.clientNs, tc.initialDestinations)
+			actualDestinations := getDestinationsToBeProcessedForClientInitiatedProcessing(tc.remoteRegistry, tc.globalIdentifier, tc.clusterName, tc.clientNs, tc.initialDestinations, false)
 			if len(actualDestinations) == 0 && len(tc.expectedDestinations) == 0 {
 				return // both are empty, which is expected
 			}
