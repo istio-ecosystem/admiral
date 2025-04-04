@@ -68,7 +68,6 @@ func setupForConfigTests() {
 			EnableDestinationRuleCache:             true,
 			AlphaIdentityList:                      []string{"identity1", "identity2"},
 			EnableActivePassive:                    true,
-			ClientInitiatedProcessingEnabled:       true,
 			IngressLBPolicy:                        "policy",
 			IngressVSExportToNamespaces:            []string{"namespace"},
 			VSRoutingGateways:                      []string{"gateway"},
@@ -805,10 +804,6 @@ func TestConfigManagement(t *testing.T) {
 
 	if GetIngressLBPolicy() != "policy" {
 		t.Errorf("Ingress LB policy mismatch, expected policy, got %v", GetIngressLBPolicy())
-	}
-
-	if ClientInitiatedProcessingEnabled() != true {
-		t.Errorf("Client initiated processing enabled mismatch, expected true, got %v", ClientInitiatedProcessingEnabled())
 	}
 
 	if GetAdmiralConfigPath() != "someConfig" {

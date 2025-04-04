@@ -79,10 +79,11 @@ type DynamicConfigData struct {
 		DynamoDB primary key only support string, binary, int.
 		Conversation from binary to bool is not straight forward hence choosing string
 	*/
-	EnableDynamicConfig    string   `json:"enableDynamicConfig"`
-	NLBEnabledClusters     []string `json:"nlbEnabledClusters"`
-	NLBEnabledIdentityList []string `json:"nlbEnabledAssetAlias"`
-	CLBEnabledClusters     []string `json:"clbEnabledClusters"`
+	EnableDynamicConfig                  string   `json:"enableDynamicConfig"`
+	NLBEnabledClusters                   []string `json:"nlbEnabledClusters"`
+	NLBEnabledIdentityList               []string `json:"nlbEnabledAssetAlias"`
+	CLBEnabledClusters                   []string `json:"clbEnabledClusters"`
+	InitiateClientInitiatedProcessingFor []string `json:"initiateClientInitiatedProcessingFor"`
 }
 
 type DynamoClient struct {
