@@ -20,13 +20,11 @@ package fake
 
 import (
 	"context"
-	json "encoding/json"
-	"fmt"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
-	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -38,9 +36,9 @@ type FakeRoutingPolicies struct {
 	ns   string
 }
 
-var routingpoliciesResource = v1alpha1.SchemeGroupVersion.WithResource("routingpolicies")
+var routingpoliciesResource = schema.GroupVersionResource{Group: "admiral.io", Version: "v1alpha1", Resource: "routingpolicies"}
 
-var routingpoliciesKind = v1alpha1.SchemeGroupVersion.WithKind("RoutingPolicy")
+var routingpoliciesKind = schema.GroupVersionKind{Group: "admiral.io", Version: "v1alpha1", Kind: "RoutingPolicy"}
 
 // Get takes name of the routingPolicy, and returns the corresponding routingPolicy object, and an error if there is any.
 func (c *FakeRoutingPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.RoutingPolicy, err error) {
@@ -136,51 +134,6 @@ func (c *FakeRoutingPolicies) DeleteCollection(ctx context.Context, opts v1.Dele
 func (c *FakeRoutingPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.RoutingPolicy, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(routingpoliciesResource, c.ns, name, pt, data, subresources...), &v1alpha1.RoutingPolicy{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.RoutingPolicy), err
-}
-
-// Apply takes the given apply declarative configuration, applies it and returns the applied routingPolicy.
-func (c *FakeRoutingPolicies) Apply(ctx context.Context, routingPolicy *admiralv1alpha1.RoutingPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.RoutingPolicy, err error) {
-	if routingPolicy == nil {
-		return nil, fmt.Errorf("routingPolicy provided to Apply must not be nil")
-	}
-	data, err := json.Marshal(routingPolicy)
-	if err != nil {
-		return nil, err
-	}
-	name := routingPolicy.Name
-	if name == nil {
-		return nil, fmt.Errorf("routingPolicy.Name must be provided to Apply")
-	}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(routingpoliciesResource, c.ns, *name, types.ApplyPatchType, data), &v1alpha1.RoutingPolicy{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.RoutingPolicy), err
-}
-
-// ApplyStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
-func (c *FakeRoutingPolicies) ApplyStatus(ctx context.Context, routingPolicy *admiralv1alpha1.RoutingPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.RoutingPolicy, err error) {
-	if routingPolicy == nil {
-		return nil, fmt.Errorf("routingPolicy provided to Apply must not be nil")
-	}
-	data, err := json.Marshal(routingPolicy)
-	if err != nil {
-		return nil, err
-	}
-	name := routingPolicy.Name
-	if name == nil {
-		return nil, fmt.Errorf("routingPolicy.Name must be provided to Apply")
-	}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(routingpoliciesResource, c.ns, *name, types.ApplyPatchType, data, "status"), &v1alpha1.RoutingPolicy{})
 
 	if obj == nil {
 		return nil, err

@@ -33,7 +33,8 @@ type Interface interface {
 	AdmiralV1alpha1() admiralv1alpha1.AdmiralV1alpha1Interface
 }
 
-// Clientset contains the clients for groups.
+// Clientset contains the clients for groups. Each group has exactly one
+// version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
 	admiralV1alpha1 *admiralv1alpha1.AdmiralV1alpha1Client
