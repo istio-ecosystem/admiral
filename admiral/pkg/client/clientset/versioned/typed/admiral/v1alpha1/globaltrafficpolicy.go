@@ -20,12 +20,9 @@ package v1alpha1
 
 import (
 	"context"
-	json "encoding/json"
-	"fmt"
 	"time"
 
 	v1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
-	admiralv1alpha1 "github.com/istio-ecosystem/admiral/admiral/pkg/client/applyconfiguration/admiral/v1alpha1"
 	scheme "github.com/istio-ecosystem/admiral/admiral/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -50,8 +47,6 @@ type GlobalTrafficPolicyInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.GlobalTrafficPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.GlobalTrafficPolicy, err error)
-	Apply(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error)
-	ApplyStatus(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error)
 	GlobalTrafficPolicyExpansion
 }
 
@@ -193,62 +188,6 @@ func (c *globalTrafficPolicies) Patch(ctx context.Context, name string, pt types
 		Name(name).
 		SubResource(subresources...).
 		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Apply takes the given apply declarative configuration, applies it and returns the applied globalTrafficPolicy.
-func (c *globalTrafficPolicies) Apply(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error) {
-	if globalTrafficPolicy == nil {
-		return nil, fmt.Errorf("globalTrafficPolicy provided to Apply must not be nil")
-	}
-	patchOpts := opts.ToPatchOptions()
-	data, err := json.Marshal(globalTrafficPolicy)
-	if err != nil {
-		return nil, err
-	}
-	name := globalTrafficPolicy.Name
-	if name == nil {
-		return nil, fmt.Errorf("globalTrafficPolicy.Name must be provided to Apply")
-	}
-	result = &v1alpha1.GlobalTrafficPolicy{}
-	err = c.client.Patch(types.ApplyPatchType).
-		Namespace(c.ns).
-		Resource("globaltrafficpolicies").
-		Name(*name).
-		VersionedParams(&patchOpts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// ApplyStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
-func (c *globalTrafficPolicies) ApplyStatus(ctx context.Context, globalTrafficPolicy *admiralv1alpha1.GlobalTrafficPolicyApplyConfiguration, opts v1.ApplyOptions) (result *v1alpha1.GlobalTrafficPolicy, err error) {
-	if globalTrafficPolicy == nil {
-		return nil, fmt.Errorf("globalTrafficPolicy provided to Apply must not be nil")
-	}
-	patchOpts := opts.ToPatchOptions()
-	data, err := json.Marshal(globalTrafficPolicy)
-	if err != nil {
-		return nil, err
-	}
-
-	name := globalTrafficPolicy.Name
-	if name == nil {
-		return nil, fmt.Errorf("globalTrafficPolicy.Name must be provided to Apply")
-	}
-
-	result = &v1alpha1.GlobalTrafficPolicy{}
-	err = c.client.Patch(types.ApplyPatchType).
-		Namespace(c.ns).
-		Resource("globaltrafficpolicies").
-		Name(*name).
-		SubResource("status").
-		VersionedParams(&patchOpts, scheme.ParameterCodec).
 		Body(data).
 		Do(ctx).
 		Into(result)
