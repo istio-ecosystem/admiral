@@ -57,6 +57,7 @@ type RolloutController struct {
 }
 
 func (rc *RolloutController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
+	log.Debug("Checking if the generation matches or not.")
 	if !common.DoGenerationCheck() {
 		ctxLogger.Debugf(ControllerLogFormat, "DoesGenerationMatch", "",
 			fmt.Sprintf("generation check is disabled"))
