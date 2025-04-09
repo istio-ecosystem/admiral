@@ -60,6 +60,7 @@ Refer to [Contributing doc](./CONTRIBUTING.md)
 
 Details can be found [here](./docs/Processes.md)
 
+
 ## Admiral Sequence Diagram
 
 ### Legend:
