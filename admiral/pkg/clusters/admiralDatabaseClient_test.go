@@ -801,9 +801,9 @@ type MyMock struct {
 }
 
 // Implement the interface for the mock
-func (m *MyMock) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+func (m *MyMock) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error {
 	var destinationsToBeProcessed []string
-	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed, false)
 	log.Infof(LogFormat, "UpdateFromMock", common.DependencyResourceType, globalIdentifier, clusterName+":"+clientNs, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
 	args := m.Called(ctx, remoteRegistry, globalIdentifier, clusterName, clientNs)
 
