@@ -43,6 +43,24 @@ spec:
               properties:
                 edgeService:
                   properties:
+                    slowStartConfig:
+                      description: Represents the warmup configuration of Service.
+                      items:
+                        properties:
+                          workloadEnvSelectors:
+                            items:
+                              type: string
+                            type: array
+                          duration:
+                            type: string
+                            x-kubernetes-validations:
+                              - message: must be a valid duration greater than 1ms
+                                rule: duration(self) >= duration('1ms')
+                        required:
+                          - duration
+                          - workloadEnvSelectors
+                        type: object
+                      type: array
                     dynamicRouting:
                       items:
                         properties:

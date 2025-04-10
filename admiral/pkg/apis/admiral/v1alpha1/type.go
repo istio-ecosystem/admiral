@@ -161,11 +161,12 @@ type TrafficConfigSpec struct {
 }
 
 type EdgeService struct {
-	DynamicRouting []*DynamicRouting `json:"dynamicRouting"`
-	Filters        []*Filter         `json:"filters"`
-	Routes         []*Route          `json:"routes"`
-	Targets        []*Target         `json:"targets,omitempty"`
-	TargetGroups   []*TargetGroup    `json:"targetGroups,omitempty"`
+	DynamicRouting  []*DynamicRouting  `json:"dynamicRouting"`
+	Filters         []*Filter          `json:"filters"`
+	Routes          []*Route           `json:"routes"`
+	Targets         []*Target          `json:"targets,omitempty"`
+	TargetGroups    []*TargetGroup     `json:"targetGroups,omitempty"`
+	SlowStartConfig []*SlowStartConfig `json:"slowStartConfig,omitempty"`
 }
 
 type Target struct {
@@ -181,6 +182,10 @@ type TargetGroup struct {
 	AppOverrides []*AppOverride `json:"appOverrides,omitempty"`
 }
 
+type SlowStartConfig struct {
+	WorkloadEnvSelectors []string `json:"workloadEnvSelectors"`
+	Duration             string   `json:"duration"`
+}
 type AppOverride struct {
 	AssetAlias string `json:"assetAlias"`
 
