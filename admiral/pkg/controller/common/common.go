@@ -128,9 +128,10 @@ const (
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
 
-	App                 = "app"
-	DynamicConfigUpdate = "DynamicConfigUpdate"
-	LBUpdateProcessor   = "LBUpdateProcessor"
+	App                       = "app"
+	DynamicConfigUpdate       = "DynamicConfigUpdate"
+	LBUpdateProcessor         = "LBUpdateProcessor"
+	ClientInitiatedProcessing = "ClientInitiatedProcessing"
 
 	DummyAdmiralGlobal = "dummy.admiral.global"
 
