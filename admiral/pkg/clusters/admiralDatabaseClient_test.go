@@ -816,7 +816,6 @@ func TestTriggerClientInitiatedProcessing(t *testing.T) {
 		ClientInitiatedProcessingEnabledForDynamicConfig: true,
 		InitiateClientInitiatedProcessingFor:             []string{"globalIdentifier1"},
 	}
-	common.ResetSync()
 	common.InitializeConfig(admiralParams)
 	identityClusterNamespaceCache := common.NewMapOfMapOfMaps()
 	identityClusterNamespaceCache.Put("globalIdentifier1", "cluster1", "namespace1", "namespace1")
