@@ -242,7 +242,12 @@ func (d *sourceToDestinations) put(dependencyObj *admiralV1.Dependency) {
 func (d *sourceToDestinations) Get(key string) []string {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	return d.sourceDestinations[key]
+	// make a copy and return
+
+	destinations := d.sourceDestinations[key]
+	destinationsCopy := make([]string, len(d.sourceDestinations[key]))
+	copy(destinationsCopy, destinations)
+	return destinationsCopy
 }
 
 func (r *RemoteRegistry) GetRemoteController(clusterId string) *RemoteController {
