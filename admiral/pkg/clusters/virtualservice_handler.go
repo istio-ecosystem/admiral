@@ -116,26 +116,31 @@ func processVirtualService(
 		return fmt.Errorf(
 			"virtualservice identity is empty in %s label for virtual service %s", common.CreatedFor, virtualService.Name)
 	}
-	envs := labels[common.CreatedForEnv]
+	annotations := virtualService.Annotations
+	if annotations == nil {
+		return fmt.Errorf(
+			"virtualservice annotations is nil on virtual service %s", virtualService.Name)
+	}
+	envs := annotations[common.CreatedForEnv]
 	if envs == "" {
 		return fmt.Errorf(
-			"virtualservice environment is empty in %s label for virtual service %s", common.CreatedForEnv, virtualService.Name)
+			"virtualservice environment is empty in %s annotations for virtual service %s", common.CreatedForEnv, virtualService.Name)
 	}
 
-	// Iterate through all the environments and get the rollout and deployment from the cache
-	// and call the respective handlers
-	for _, env := range strings.Split(envs, ",") {
-		if rc.RolloutController != nil {
-			rollout := rc.RolloutController.Cache.Get(identity, env)
-			if rollout != nil {
-				handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
-			}
+	// Call the rollout and deployment handlers for just one env
+	// calling for just env is enough as we'll be processing for all environments
+	// later in the modifySE
+	splitEnvs := strings.Split(envs, "_")
+	if rc.RolloutController != nil {
+		rollout := rc.RolloutController.Cache.Get(identity, splitEnvs[0])
+		if rollout != nil {
+			handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
 		}
-		if rc.DeploymentController != nil {
-			deployment := rc.DeploymentController.Cache.Get(identity, env)
-			if deployment != nil {
-				handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
-			}
+	}
+	if rc.DeploymentController != nil {
+		deployment := rc.DeploymentController.Cache.Get(identity, splitEnvs[0])
+		if deployment != nil {
+			handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
 		}
 	}
 
