@@ -124,7 +124,7 @@ func processVirtualService(
 	envs := annotations[common.CreatedForEnv]
 	if envs == "" {
 		return fmt.Errorf(
-			"virtualservice environment is empty in %s annotations for virtual service %s", common.CreatedForEnv, virtualService.Name)
+			"virtualservice environment is empty in %s annotations for virtualservice %s", common.CreatedForEnv, virtualService.Name)
 	}
 
 	// Call the rollout and deployment handlers for just one env

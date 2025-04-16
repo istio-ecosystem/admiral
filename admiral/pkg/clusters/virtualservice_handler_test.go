@@ -2202,8 +2202,9 @@ func TestProcessVirtualService(t *testing.T) {
 				"Then the func should return an error",
 			vs: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
-					Name:   "stage.test00.foo.incluster-vs",
-					Labels: map[string]string{common.CreatedFor: "testIdentity"},
+					Name:        "stage.test00.foo.incluster-vs",
+					Labels:      map[string]string{common.CreatedFor: "testIdentity"},
+					Annotations: map[string]string{"testAnnotation": "testValue"},
 				},
 			},
 			cluster:        "cluster1",
@@ -2215,7 +2216,7 @@ func TestProcessVirtualService(t *testing.T) {
 				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
 			},
 			expectedErr: fmt.Errorf(
-				"virtualservice environment is empty in createdForEnv label for virtual service stage.test00.foo.incluster-vs"),
+				"virtualservice environment is empty in createdForEnv annotations for virtualservice stage.test00.foo.incluster-vs"),
 		},
 		{
 			name: "Given all valid params" +
@@ -2225,7 +2226,9 @@ func TestProcessVirtualService(t *testing.T) {
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: "stage.test00.foo.incluster-vs",
 					Labels: map[string]string{
-						common.CreatedFor:    "testIdentity",
+						common.CreatedFor: "testIdentity",
+					},
+					Annotations: map[string]string{
 						common.CreatedForEnv: "stage",
 					},
 				},
