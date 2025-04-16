@@ -3687,7 +3687,9 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 }
 
 func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
-	setupForServiceEntryTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParamsForServiceEntryTests())
+
 	const NAMESPACE = "test-test"
 	const ACTIVE_SERVICENAME = "serviceNameActive"
 	const PREVIEW_SERVICENAME = "serviceNamePreview"
