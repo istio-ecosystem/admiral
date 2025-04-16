@@ -5265,7 +5265,7 @@ func TestSortVSRoutes(t *testing.T) {
 		name                 string
 		customVSRoutes       []*networkingV1Alpha3.HTTPRoute
 		inclusterVSRoutes    []*networkingV1Alpha3.HTTPRoute
-		env                  string
+		hostsNotInCustomVS   map[string]bool
 		expectedMergedRoutes []*networkingV1Alpha3.HTTPRoute
 		expectedError        error
 	}{
@@ -5281,8 +5281,10 @@ func TestSortVSRoutes(t *testing.T) {
 			name: "Given empty customVSRoutes params" +
 				"And sortVSRoutes func is called" +
 				"Then the func should return merged routes only from inclusterVSRoutes",
-			env:            "qal",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{},
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+			},
 			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Name: "qal.stage1.host1.global",
@@ -5399,10 +5401,9 @@ func TestSortVSRoutes(t *testing.T) {
 			},
 		},
 		{
-			name: "Given empty vsroutes2 params" +
-				"And mergeHTTPRoutes func is called" +
-				"Then the func should return empty merged routes",
-			env: "qal",
+			name: "Given empty inclusterVSRoutes params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return only routes from customVSRoutes",
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Route: []*networkingV1Alpha3.HTTPRouteDestination{
@@ -5455,9 +5456,11 @@ func TestSortVSRoutes(t *testing.T) {
 		},
 		{
 			name: "Given valid params" +
-				"And mergeHTTPRoutes func is called" +
+				"And sortVSRoutes func is called" +
 				"Then the func should return sorted routes",
-			env: "qal",
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+			},
 			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
 				{
 					Route: []*networkingV1Alpha3.HTTPRouteDestination{
@@ -5619,11 +5622,511 @@ func TestSortVSRoutes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given valid params" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return sorted routes",
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+				"qal-air.stage1.host1.global":    true,
+			},
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given valid params" +
+				"And in-cluster VS has duplicate routes" +
+				"And sortVSRoutes func is called" +
+				"Then the func should return deduplicated sorted routes",
+			hostsNotInCustomVS: map[string]bool{
+				"canary.qal.stage1.host1.global": true,
+				"qal-air.stage1.host1.global":    true,
+			},
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1-air.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Name: "air",
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1-air-new.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "air",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1-air.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1-air.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "canary.qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "canary.qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal-air.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal-air.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "stage1-air.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Name: "air",
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "stage1-air-new.host1.global",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "canary.qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := sortVSRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, tc.env)
+			actual := sortVSRoutes(tc.customVSRoutes, tc.inclusterVSRoutes, tc.hostsNotInCustomVS)
 			assert.Equal(t, tc.expectedMergedRoutes, actual)
 		})
 	}
@@ -6493,7 +6996,6 @@ func TestMergeVS(t *testing.T) {
 		customVS         *apiNetworkingV1Alpha3.VirtualService
 		inclusterVS      *apiNetworkingV1Alpha3.VirtualService
 		remoteController *RemoteController
-		env              string
 		expectedVS       *apiNetworkingV1Alpha3.VirtualService
 		expectedError    error
 	}{
@@ -6519,19 +7021,9 @@ func TestMergeVS(t *testing.T) {
 			expectedError: fmt.Errorf("remote controller is nil"),
 		},
 		{
-			name: "Given env is empty" +
-				"When mergeVS func is called" +
-				"Then func should return an error",
-			customVS:         &apiNetworkingV1Alpha3.VirtualService{},
-			inclusterVS:      &apiNetworkingV1Alpha3.VirtualService{},
-			remoteController: rc,
-			expectedError:    fmt.Errorf("env is empty"),
-		},
-		{
 			name: "Given valid params" +
 				"When mergeVS func is called" +
 				"Then func should return a valid merged vs",
-			env: "qal",
 			customVS: &apiNetworkingV1Alpha3.VirtualService{
 				Spec: networkingV1Alpha3.VirtualService{
 					Hosts: []string{
@@ -6596,7 +7088,7 @@ func TestMergeVS(t *testing.T) {
 				Spec: networkingV1Alpha3.VirtualService{
 					Hosts: []string{
 						"qal.stage1.host1.global",
-						"canary.stage1.host1.global",
+						"canary.qal.stage1.host1.global",
 						"east.qal.stage1.host1.global",
 						"west.qal.stage1.host1.global",
 					},
@@ -6710,7 +7202,7 @@ func TestMergeVS(t *testing.T) {
 					Hosts: []string{
 						"qal.stage1.host1.global",
 						"qal-air.stage1.host1.global",
-						"canary.stage1.host1.global",
+						"canary.qal.stage1.host1.global",
 						"east.qal.stage1.host1.global",
 						"west.qal.stage1.host1.global",
 					},
@@ -6884,7 +7376,7 @@ func TestMergeVS(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := mergeVS(tc.customVS, tc.inclusterVS, tc.remoteController, tc.env)
+			actual, err := mergeVS(tc.customVS, tc.inclusterVS, tc.remoteController)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -6921,10 +7413,40 @@ func TestGetCustomVirtualService(t *testing.T) {
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "custom-vs",
 			Namespace: syncNS,
-			Labels: map[string]string{
-				common.CreatedBy:     "testCreatedBy",
-				common.CreatedFor:    "testIdentity",
+			Annotations: map[string]string{
 				common.CreatedForEnv: "stage",
+			},
+			Labels: map[string]string{
+				common.CreatedBy:  "testCreatedBy",
+				common.CreatedFor: "testIdentity",
+			},
+		},
+		Spec: networkingV1Alpha3.VirtualService{},
+	}
+	customVSWithMultipleEnvsStage := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "custom-vs-stage",
+			Namespace: syncNS,
+			Annotations: map[string]string{
+				common.CreatedForEnv: "stage1_stage2_stage",
+			},
+			Labels: map[string]string{
+				common.CreatedBy:  "testCreatedBy",
+				common.CreatedFor: "testIdentity",
+			},
+		},
+		Spec: networkingV1Alpha3.VirtualService{},
+	}
+	customVSWithMultipleEnvsQAL := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "custom-vs-qal",
+			Namespace: syncNS,
+			Annotations: map[string]string{
+				common.CreatedForEnv: "qal1_qal2_qal",
+			},
+			Labels: map[string]string{
+				common.CreatedBy:  "testCreatedBy",
+				common.CreatedFor: "testIdentity",
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
@@ -6932,10 +7454,18 @@ func TestGetCustomVirtualService(t *testing.T) {
 
 	istioClientClusterWithNoVS := istioFake.NewSimpleClientset()
 	istioClientCluster := istioFake.NewSimpleClientset()
+	istioClientClusterWithMultipleEnvs := istioFake.NewSimpleClientset()
+	istioClientClusterWithMultipleVSWithMultipleEnvs := istioFake.NewSimpleClientset()
 	istioClientCluster.NetworkingV1alpha3().VirtualServices(syncNS).
 		Create(context.Background(), nonCustomVS, metaV1.CreateOptions{})
 	istioClientCluster.NetworkingV1alpha3().VirtualServices(syncNS).
 		Create(context.Background(), customVS, metaV1.CreateOptions{})
+	istioClientClusterWithMultipleEnvs.NetworkingV1alpha3().VirtualServices(syncNS).
+		Create(context.Background(), customVSWithMultipleEnvsStage, metaV1.CreateOptions{})
+	istioClientClusterWithMultipleVSWithMultipleEnvs.NetworkingV1alpha3().VirtualServices(syncNS).
+		Create(context.Background(), customVSWithMultipleEnvsQAL, metaV1.CreateOptions{})
+	istioClientClusterWithMultipleVSWithMultipleEnvs.NetworkingV1alpha3().VirtualServices(syncNS).
+		Create(context.Background(), customVSWithMultipleEnvsStage, metaV1.CreateOptions{})
 
 	remoteControllerWithNoVS := &RemoteController{
 		VirtualServiceController: &istio.VirtualServiceController{
@@ -6947,13 +7477,23 @@ func TestGetCustomVirtualService(t *testing.T) {
 			IstioClient: istioClientCluster,
 		},
 	}
+	remoteControllerWithMultipleEnvs := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: istioClientClusterWithMultipleEnvs,
+		},
+	}
+	remoteControllerWithMultipleVSMultipleEnvs := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IstioClient: istioClientClusterWithMultipleVSWithMultipleEnvs,
+		},
+	}
 
 	testCases := []struct {
 		name             string
 		remoteController *RemoteController
 		env              string
 		identity         string
-		expectedVS       *apiNetworkingV1Alpha3.VirtualService
+		expectedVS       []envCustomVSTuple
 		expectedError    error
 	}{
 		{
@@ -6994,7 +7534,46 @@ func TestGetCustomVirtualService(t *testing.T) {
 			remoteController: remoteController,
 			env:              "stage",
 			identity:         "testIdentity",
-			expectedVS:       customVS,
+			expectedVS:       []envCustomVSTuple{{env: "stage", customVS: customVS}},
+		},
+		{
+			name: "Given a cluster where there is customVS with multiple underscore separated envs" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return the correct VS",
+			remoteController: remoteControllerWithMultipleEnvs,
+			env:              "stage",
+			identity:         "testIdentity",
+			expectedVS: []envCustomVSTuple{
+				{env: "stage", customVS: customVSWithMultipleEnvsStage},
+				{env: "stage1", customVS: customVSWithMultipleEnvsStage},
+				{env: "stage2", customVS: customVSWithMultipleEnvsStage},
+			},
+		},
+		{
+			name: "Given a cluster where there is customVS with multiple underscore separated envs" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return the correct VS",
+			remoteController: remoteControllerWithMultipleEnvs,
+			env:              "stage",
+			identity:         "testIdentity",
+			expectedVS: []envCustomVSTuple{
+				{env: "stage", customVS: customVSWithMultipleEnvsStage},
+				{env: "stage1", customVS: customVSWithMultipleEnvsStage},
+				{env: "stage2", customVS: customVSWithMultipleEnvsStage},
+			},
+		},
+		{
+			name: "Given a cluster where there are multiple customVS with multiple underscore separated envs" +
+				"When getCustomVirtualService func is called" +
+				"Then the func should return the correct VS",
+			remoteController: remoteControllerWithMultipleVSMultipleEnvs,
+			env:              "qal",
+			identity:         "testIdentity",
+			expectedVS: []envCustomVSTuple{
+				{env: "qal", customVS: customVSWithMultipleEnvsQAL},
+				{env: "qal1", customVS: customVSWithMultipleEnvsQAL},
+				{env: "qal2", customVS: customVSWithMultipleEnvsQAL},
+			},
 		},
 	}
 
@@ -7020,6 +7599,95 @@ func TestGetCustomVirtualService(t *testing.T) {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expectedVS, actual)
 			}
+		})
+	}
+
+}
+
+func TestGetHostsDiff(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		inclusterHosts []string
+		customVSHosts  []string
+		expectedHosts  map[string]bool
+	}{
+		{
+			name: "Given empty customVSHosts and inclusterHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return empty map",
+			inclusterHosts: []string{},
+			customVSHosts:  []string{},
+			expectedHosts:  map[string]bool{},
+		},
+		{
+			name: "Given empty customVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return all hosts from inclusterVSHosts",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{},
+			expectedHosts: map[string]bool{
+				"canary.qal.stage.global": true,
+				"east.qal.stage.global":   true,
+				"qal.stage.global":        true,
+			},
+		},
+		{
+			name: "Given empty inclusterVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return an empty map",
+			inclusterHosts: []string{},
+			customVSHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{},
+		},
+		{
+			name: "Given inclusterVSHosts and customVSHosts" +
+				"And they have all common hosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return an empty map",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{},
+		},
+		{
+			name: "Given inclusterVSHosts and customVSHosts" +
+				"When getHostsDiff func is called" +
+				"Then the func should return valid diffs",
+			inclusterHosts: []string{
+				"canary.qal.stage.global",
+				"east.qal.stage.global",
+				"qal.stage.global",
+			},
+			customVSHosts: []string{
+				"qal.stage.global",
+			},
+			expectedHosts: map[string]bool{
+				"canary.qal.stage.global": true,
+				"east.qal.stage.global":   true,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getHostsDiff(tc.inclusterHosts, tc.customVSHosts)
+			assert.Equal(t, tc.expectedHosts, actual)
 		})
 	}
 

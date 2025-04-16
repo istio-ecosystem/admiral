@@ -26,6 +26,13 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type envCustomVSTuple struct {
+	env      string
+	customVS *v1alpha3.VirtualService
+}
+
+type GetCustomVirtualService func(context.Context, *log.Entry, *RemoteController, string, string) ([]envCustomVSTuple, error)
+
 type VSRouteComparator func(*networkingV1Alpha3.VirtualService, *networkingV1Alpha3.VirtualService) (bool, error)
 type HTTPRouteSorted []*networkingV1Alpha3.HTTPRoute
 
@@ -711,73 +718,160 @@ func addUpdateInClusterVirtualServices(
 			return err
 		}
 
-		// Merge the incluster vs with the custom VS, if enabled
+		virtualServicesToBeProcessed := []*v1alpha3.VirtualService{virtualService}
+
+		// Merge the incluster vs with custom virtualservice, if enabled
 		if common.IsCustomVSMergeEnabled() {
-			customVS, err := getCustomVirtualService(ctx, ctxLogger, rc, env, sourceIdentity)
+			mergedVirtualServices, err :=
+				mergeCustomVirtualServices(
+					ctx, ctxLogger, rc, virtualService, env, sourceIdentity, sourceCluster, getCustomVirtualService)
 			if err != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-					virtualService.Name, virtualService.Namespace, sourceCluster,
-					fmt.Sprintf("getCustomVirtualService failed due to %v", err.Error()))
+				return err
 			}
-			if customVS == nil {
+			if mergedVirtualServices != nil && len(mergedVirtualServices) > 0 {
+				virtualServicesToBeProcessed = mergedVirtualServices
+			} else {
 				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 					virtualService.Name, virtualService.Namespace, sourceCluster,
-					"no custom virtual service found")
-			} else {
-				virtualService, err = mergeVS(customVS, virtualService, rc, env)
+					fmt.Sprintf("merge skipped as no custom virtual services found for env %s", env))
 			}
 		}
 
-		ctxLogger.Infof(
-			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-			"checking if incluster routing virtualService requires reconciliation")
-		reconcileRequired, err :=
-			doReconcileVirtualService(rc, virtualService, httpRoutesComparator)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster,
-				fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
-		}
-		if !reconcileRequired {
+		for _, vs := range virtualServicesToBeProcessed {
 			ctxLogger.Infof(
-				common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-				"reconcile=false")
-			continue
-		}
-		ctxLogger.Infof(
-			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-			"reconcile=true")
+				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+				"checking if incluster routing virtualService requires reconciliation")
+			reconcileRequired, err :=
+				doReconcileVirtualService(rc, vs, httpRoutesComparator)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster,
+					fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
+			}
+			if !reconcileRequired {
+				ctxLogger.Infof(
+					common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+					"reconcile=false")
+				continue
+			}
+			ctxLogger.Infof(
+				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+				"reconcile=true")
 
-		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
-		if err != nil {
-			ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+			existingVS, err := getExistingVS(ctxLogger, ctx, rc, vs.Name, util.IstioSystemNamespace)
+			if err != nil {
+				ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster, err.Error())
+			}
+
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				vs.Name, vs.Namespace, sourceCluster, "Add/Update ingress virtualservice")
+
+			err = addUpdateVirtualService(
+				ctxLogger, ctx, vs, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster, err.Error())
+				return err
+			}
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				vs.Name, vs.Namespace, sourceCluster, "virtualservice created/updated successfully")
 		}
 
-		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
-
-		err = addUpdateVirtualService(
-			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
-			return err
-		}
-		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-			virtualService.Name, virtualService.Namespace, sourceCluster, "virtualservice created successfully")
 	}
 
 	return nil
 }
 
-// getCustomVirtualService returns a custom virtualservice in the sync namespace
+// mergeCustomVirtualServices gets the custom virtualservices based on the identity passed
+// The getCustomVirtualService func will return a slice of env to custom VS key-value pair.
+// For each of the key value pair returned, we check if the env in the map matches the env passed
+// to the func.
+// If it does, then we merge the corresponding customVS to the virtualservice that was
+// passed to the func.
+// Else, we fetch the VS from the controller cache and use that to merge with the customVS.
+// The func in the end returns a slice of merged virtualservices.
+func mergeCustomVirtualServices(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	virtualService *v1alpha3.VirtualService,
+	env string,
+	sourceIdentity string,
+	sourceCluster string,
+	getCustomVirtualService GetCustomVirtualService,
+) ([]*v1alpha3.VirtualService, error) {
+
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller not initialized")
+	}
+	if virtualService == nil {
+		return nil, fmt.Errorf("nil virtualService")
+	}
+	if rc.VirtualServiceController == nil {
+		return nil, fmt.Errorf("virtualServiceController is nil")
+	}
+	if rc.VirtualServiceController.VirtualServiceCache == nil {
+		return nil, fmt.Errorf("virtualServiceController.VirtualServiceCache is nil")
+	}
+
+	mergedVirtualServices := make([]*v1alpha3.VirtualService, 0)
+
+	customVirtualServices, err := getCustomVirtualService(ctx, ctxLogger, rc, env, sourceIdentity)
+	if err != nil {
+		return nil, fmt.Errorf("getCustomVirtualService failed due to %w", err)
+	}
+	if customVirtualServices == nil {
+		return mergedVirtualServices, nil
+	}
+	for _, tuple := range customVirtualServices {
+		// env matches for which the event was received
+		// then use the virtualService passed to this func
+		if tuple.env == env {
+			mergedVirtualService, err := mergeVS(tuple.customVS, virtualService, rc)
+			if err != nil {
+				return nil, err
+			}
+			mergedVirtualServices = append(
+				mergedVirtualServices, mergedVirtualService)
+			continue
+		}
+		// if env is not for the event's env
+		// then get the VS from the cache and merge it
+		vsName := strings.ToLower(
+			common.GetCnameVal([]string{tuple.env, sourceIdentity, common.GetHostnameSuffix()}))
+		vsName = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
+		vsFromCache := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
+		if vsFromCache == nil {
+			ctxLogger.Infof(common.CtxLogFormat, "mergeCustomVirtualServices",
+				vsName, "", sourceCluster,
+				fmt.Sprintf("no custom virtualservice found for env %s", tuple.env))
+			continue
+		}
+		mergedVirtualService, err := mergeVS(tuple.customVS, vsFromCache, rc)
+		if err != nil {
+			return nil, err
+		}
+		mergedVirtualServices = append(
+			mergedVirtualServices, mergedVirtualService)
+	}
+
+	return mergedVirtualServices, nil
+}
+
+// getCustomVirtualService returns a slice of key-value pair of env to virtualService
+// The custom VS could have a common VS for multiple envs. These envs are separated with an
+// underscore. This func returns a sorted slice of env to virtualService map.
+// The slice is sorted by keeping the env that is passed as a param to this func at the 0th
+// index.
+// Example: if the env passed is stage and the createdForEnv in the VS has "stage1_stage2_stage"
+// []{{"stage":virtualService}, {"stage1": virtualService}, {"stage2": virtualService}}
 func getCustomVirtualService(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	rc *RemoteController,
 	env string,
-	identity string) (*v1alpha3.VirtualService, error) {
+	identity string) ([]envCustomVSTuple, error) {
 
 	if rc == nil {
 		return nil, fmt.Errorf("remoteController is nil")
@@ -806,24 +900,43 @@ func getCustomVirtualService(
 	if len(virtualServiceList.Items) == 0 {
 		return nil, nil
 	}
+	var matchedVS envCustomVSTuple
+
+	finalVirtualServices := make([]envCustomVSTuple, 0)
+	foundMatchingVirtualServices := false
+
 	for _, vs := range virtualServiceList.Items {
-		labels := vs.GetLabels()
-		if labels == nil {
+		vsForOtherEnvs := make([]envCustomVSTuple, 0)
+		annotations := vs.Annotations
+		if annotations == nil {
 			continue
 		}
-		createdForEnv, ok := labels[common.CreatedForEnv]
+		createdForEnv, ok := annotations[common.CreatedForEnv]
 		if !ok {
 			continue
 		}
 		if createdForEnv == "" {
 			continue
 		}
-		if strings.Contains(createdForEnv, env) {
-			return vs, nil
+		//This is to handle multi env usecase
+		splitEnvs := strings.Split(createdForEnv, "_")
+		for _, splitEnv := range splitEnvs {
+			if splitEnv == env {
+				matchedVS = envCustomVSTuple{env: env, customVS: vs}
+				foundMatchingVirtualServices = true
+				continue
+			}
+			vsForOtherEnvs = append(vsForOtherEnvs, envCustomVSTuple{env: splitEnv, customVS: vs})
+		}
+		if foundMatchingVirtualServices {
+			// The matched env should be added at the 0th index
+			finalVirtualServices = append(finalVirtualServices, matchedVS)
+			finalVirtualServices = append(finalVirtualServices, vsForOtherEnvs...)
+			break
 		}
 	}
 
-	return nil, nil
+	return finalVirtualServices, nil
 }
 
 // httpRoutesComparator comparator that matches the routes between two virtualservice spec
@@ -1569,8 +1682,7 @@ func performInVSRoutingRollback(
 func mergeVS(
 	customVS *v1alpha3.VirtualService,
 	inclusterVS *v1alpha3.VirtualService,
-	rc *RemoteController,
-	env string) (*v1alpha3.VirtualService, error) {
+	rc *RemoteController) (*v1alpha3.VirtualService, error) {
 
 	if customVS == nil {
 		return nil, fmt.Errorf("custom VS is nil")
@@ -1580,9 +1692,6 @@ func mergeVS(
 	}
 	if rc == nil {
 		return nil, fmt.Errorf("remote controller is nil")
-	}
-	if env == "" {
-		return nil, fmt.Errorf("env is empty")
 	}
 
 	newVS := inclusterVS.DeepCopy()
@@ -1597,11 +1706,21 @@ func mergeVS(
 		return nil, err
 	}
 
+	// Get Hosts Diff
+	// This is needed to get hosts that are not in custom VS
+	// The routes for such hosts have to be added towards the top
+	// for them to match on authority and avoid any special routing rules being
+	// applied by the custom VS
+	hostDiff := getHostsDiff(inclusterVS.Spec.Hosts, customVS.Spec.Hosts)
+
 	// Time to sort the routes
 	// The non-default fqdn from the in-cluster VS will be added first
 	// Then the fdqn that were in the custom VS will be added next
 	// then the remaining
-	sortedRoutes := sortVSRoutes(modifiedCustomVSRouteDestinations, inclusterVS.Spec.Http, env)
+	sortedRoutes := sortVSRoutes(
+		modifiedCustomVSRouteDestinations,
+		inclusterVS.Spec.Http,
+		hostDiff)
 
 	newVS.Spec.Http = sortedRoutes
 	newVS.Spec.Hosts = mergedVSHosts
@@ -1610,26 +1729,59 @@ func mergeVS(
 
 }
 
+// getHostsDiff returns a map of hosts that are in in-cluster VS host list but
+// not in the custom VS
+func getHostsDiff(inclusterHosts []string, customVSHosts []string) map[string]bool {
+	result := make(map[string]bool)
+	lookup := make(map[string]bool)
+	for _, host := range customVSHosts {
+		lookup[host] = true
+	}
+
+	for _, host := range inclusterHosts {
+		if lookup[host] {
+			continue
+		}
+		result[host] = true
+	}
+	return result
+}
+
 func sortVSRoutes(
 	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
 	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
-	env string) []*networkingV1Alpha3.HTTPRoute {
+	hostsNotInCustomVS map[string]bool) []*networkingV1Alpha3.HTTPRoute {
 
 	nonDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 	defaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
 
+	// This is to make sure the hosts that are not in the customVS
+	// their routes are ordered first.
 	for _, route := range inclusterVSRoutes {
-		if common.IsDefaultFQDN(route.Name, env) {
-			defaultRoutes = append(defaultRoutes, route)
+		if hostsNotInCustomVS[route.Name] {
+			nonDefaultRoutes = append(nonDefaultRoutes, route)
 			continue
 		}
-		nonDefaultRoutes = append(nonDefaultRoutes, route)
+		defaultRoutes = append(defaultRoutes, route)
+	}
+
+	// This is to make sure to remove the customVS routes
+	// that may already exists in the incluster vs coming from cache
+	deduplicatedDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	customVSRouteNames := make(map[string]bool)
+	for _, route := range customVSRoutes {
+		customVSRouteNames[route.Name] = true
+	}
+	for _, route := range defaultRoutes {
+		if !customVSRouteNames[route.Name] {
+			deduplicatedDefaultRoutes = append(deduplicatedDefaultRoutes, route)
+		}
 	}
 
 	finalMergedRoutes = append(finalMergedRoutes, nonDefaultRoutes...)
 	finalMergedRoutes = append(finalMergedRoutes, customVSRoutes...)
-	finalMergedRoutes = append(finalMergedRoutes, defaultRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, deduplicatedDefaultRoutes...)
 
 	return finalMergedRoutes
 }
