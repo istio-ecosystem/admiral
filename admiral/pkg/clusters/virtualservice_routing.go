@@ -739,7 +739,6 @@ func addUpdateInClusterVirtualServices(
 		}
 
 		for _, vs := range virtualServicesToBeProcessed {
-			// Reconciliation check - Start
 			ctxLogger.Infof(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"checking if incluster routing virtualService requires reconciliation")
@@ -759,7 +758,6 @@ func addUpdateInClusterVirtualServices(
 			ctxLogger.Infof(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"reconcile=true")
-			// Reconciliation check - End
 
 			existingVS, err := getExistingVS(ctxLogger, ctx, rc, vs.Name, util.IstioSystemNamespace)
 			if err != nil {
