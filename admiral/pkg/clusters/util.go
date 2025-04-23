@@ -284,6 +284,9 @@ func getSortedDependentNamespaces(
 	// this is to avoid duplication in namespaceSlice e.g. dynamicrouting deployment present in istio-system can be a dependent of blackhole on blackhole's source cluster
 	var dedupNamespaceSlice []string
 	for i := 0; i < len(namespaceSlice); i++ {
+		if skipIstioNSFromExportTo && namespaceSlice[i] == common.NamespaceIstioSystem {
+			continue
+		}
 		if i == 0 || namespaceSlice[i] != namespaceSlice[i-1] {
 			dedupNamespaceSlice = append(dedupNamespaceSlice, namespaceSlice[i])
 		}
