@@ -1005,6 +1005,9 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 	cndepclusternscache.Put("cname", "cluster3", "ns5", "ns5")
 	cndepclusternscache.Put("cname", "cluster4", "ns6", "ns6")
 	cndepclusternscache.Put("cname", "cluster4", "ns7", "ns7")
+	cndepclusternscache.Put("cname", "cluster5", "ns1", "ns1")
+	cndepclusternscache.Put("cname", "cluster5", "ns2", "ns2")
+	cndepclusternscache.Put("cname", "cluster5", "istio-system", "istio-system")
 	for i := range [35]int{} {
 		nshash := "ns" + strconv.Itoa(i+3)
 		cndepclusternscache.Put("cname", "cluster3", nshash, nshash)
@@ -1135,6 +1138,19 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 			cnameDependentClusterNamespaceCache: cndepclusternscache,
 			cname:                               "cname",
 			clusterId:                           "cluster2",
+			skipIstioNSFromExportTo:             true,
+			expectedResult:                      []string{"ns1", "ns2"},
+		},
+		{
+			name: "Given the cname has dependent cluster namespaces and some dependents in the source cluster " +
+				"And there is a dependent in istio-system NS" +
+				"When skipIstioNSFromExportTo is true" +
+				"Then we should return a sorted slice of the dependent cluster namespaces excluding istio-system",
+			identityClusterCache:                idclustercache,
+			cnameIdentityCache:                  cnameidcache,
+			cnameDependentClusterNamespaceCache: cndepclusternscache,
+			cname:                               "cname",
+			clusterId:                           "cluster5",
 			skipIstioNSFromExportTo:             true,
 			expectedResult:                      []string{"ns1", "ns2"},
 		},
