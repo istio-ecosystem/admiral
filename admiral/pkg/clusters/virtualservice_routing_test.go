@@ -3465,12 +3465,16 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rc := &RemoteController{
-				ClusterID:                 "cluster-1",
-				DestinationRuleController: &istio.DestinationRuleController{},
+				ClusterID: "cluster-1",
+				DestinationRuleController: &istio.DestinationRuleController{
+					Cache: istio.NewDestinationRuleCache(),
+				},
 			}
 			rc2 := &RemoteController{
-				ClusterID:                 "cluster-2",
-				DestinationRuleController: &istio.DestinationRuleController{},
+				ClusterID: "cluster-2",
+				DestinationRuleController: &istio.DestinationRuleController{
+					Cache: istio.NewDestinationRuleCache(),
+				},
 			}
 			rc.DestinationRuleController.IstioClient = tc.istioClient
 			rc2.DestinationRuleController.IstioClient = tc.istioClient
@@ -3694,12 +3698,16 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			rc := &RemoteController{
-				ClusterID:                 "cluster-1",
-				DestinationRuleController: &istio.DestinationRuleController{},
+				ClusterID: "cluster-1",
+				DestinationRuleController: &istio.DestinationRuleController{
+					Cache: istio.NewDestinationRuleCache(),
+				},
 			}
 			rc2 := &RemoteController{
-				ClusterID:                 "cluster-2",
-				DestinationRuleController: &istio.DestinationRuleController{},
+				ClusterID: "cluster-2",
+				DestinationRuleController: &istio.DestinationRuleController{
+					Cache: istio.NewDestinationRuleCache(),
+				},
 			}
 			rc.DestinationRuleController.IstioClient = tc.istioClient
 			rc2.DestinationRuleController.IstioClient = tc.istioClient

@@ -1524,7 +1524,7 @@ func addUpdateRoutingDestinationRule(
 		newDR.Spec.ExportTo = exportToNamespaces
 
 		doReconcileDR := reconcileDestinationRule(
-			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster)
+			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, util.IstioSystemNamespace)
 		if !doReconcileDR {
 			continue
 		}

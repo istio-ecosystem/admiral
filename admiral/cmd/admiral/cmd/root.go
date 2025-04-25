@@ -137,7 +137,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Size of the log file in Mbs. If not specified, defaults to 200 Mbs")
 	rootCmd.PersistentFlags().StringVar(&params.KubeconfigPath, "kube_config", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
-	rootCmd.PersistentFlags().BoolVar(&params.ArgoRolloutsEnabled, "argo_rollouts", false,
+	rootCmd.PersistentFlags().BoolVar(&params.ArgoRolloutsEnabled, "argo_rollouts", true,
 		"Use argo rollout configurations")
 	rootCmd.PersistentFlags().StringVar(&params.SecretFilterTags, "secret_filter_tags", "admiral/sync", "Filter tags for the specific admiral namespace secret to watch")
 	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "admiral",

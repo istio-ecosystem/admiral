@@ -1584,7 +1584,8 @@ func AddServiceEntriesWithDrWorker(
 				rc,
 				seDr.DestinationRule.DeepCopy(),
 				seDr.DrName,
-				cluster)
+				cluster,
+				common.GetSyncNamespace())
 			util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileDestinationRule", "", "", cluster, "", start)
 			if drReconciliationRequired {
 				oldDestinationRule, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, seDr.DrName, v12.GetOptions{})
@@ -2815,14 +2816,15 @@ func reconcileDestinationRule(
 	rc *RemoteController,
 	dr *networking.DestinationRule,
 	drName,
-	cluster string) bool {
+	cluster string,
+	namespace string) bool {
 	if !enableDRCache {
 		ctxLogger.Infof(common.CtxLogFormat, "ReconcileDestinationRule", drName, "", cluster, "destinationRuleCache processing is disabled")
 		return true
 	}
 	ctxLogger.Infof(common.CtxLogFormat, "ReconcileDestinationRule", drName, "", cluster, "Checking if DestinationRule requires reconciliation")
 	start := time.Now()
-	currentDR := rc.DestinationRuleController.Cache.Get(drName, common.GetSyncNamespace())
+	currentDR := rc.DestinationRuleController.Cache.Get(drName, namespace)
 	util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileDestinationRule=Get", drName, "", cluster, "", start)
 	if currentDR != nil {
 		drSpec := dr.DeepCopy()
