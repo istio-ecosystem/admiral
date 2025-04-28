@@ -2226,6 +2226,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		meshDeployAndRolloutPorts map[string]map[string]uint32
 		rollout                   *v1alpha1.Rollout
 		deployment                *v1.Deployment
+		resourceTypeBeingDeleted  string
 		expectedError             error
 		expectedRouteDestination  map[string][]*vsrouting.RouteDestination
 	}{
@@ -2445,11 +2446,94 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given an empty route destinations map" +
+				"And serviceInstance has both rollout and deployment" +
+				"And rollout is being deleted" +
+				"When getAllVSRouteDestinationsByCluster is invoked, " +
+				"Then it should populate the destinations with deployment and rollout service",
+			meshDeployAndRolloutPorts: map[string]map[string]uint32{
+				common.Rollout:    {"http": meshPort},
+				common.Deployment: {"http": meshPort},
+			},
+			serviceInstance: map[string]*coreV1.Service{
+				common.Rollout: {},
+				common.Deployment: {
+					ObjectMeta: metaV1.ObjectMeta{
+						Name:      "test-deployment-svc",
+						Namespace: "test-ns",
+					},
+				},
+			},
+			deployment: &v1.Deployment{
+				Spec: v1.DeploymentSpec{
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			rollout: &v1alpha1.Rollout{
+				Spec: v1alpha1.RolloutSpec{
+					Strategy: v1alpha1.RolloutStrategy{
+						BlueGreen: &v1alpha1.BlueGreenStrategy{
+							ActiveService:  "active-svc",
+							PreviewService: "preview-svc",
+						},
+					},
+					Template: coreV1.PodTemplateSpec{
+						ObjectMeta: metaV1.ObjectMeta{
+							Annotations: map[string]string{
+								"identity": "test-identity",
+								"env":      "test-env",
+							},
+						},
+					},
+				},
+			},
+			weightedServices: map[string]*WeightedService{
+				"preview-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "preview-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+				"active-svc": {
+					Service: &coreV1.Service{
+						ObjectMeta: metaV1.ObjectMeta{
+							Name:      "active-svc",
+							Namespace: "test-ns",
+						},
+					},
+				},
+			},
+			resourceTypeBeingDeleted: common.Rollout,
+			expectedError:            nil,
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-deployment-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := getAllVSRouteDestinationsByCluster(tc.serviceInstance, tc.meshDeployAndRolloutPorts, tc.weightedServices, tc.rollout, tc.deployment)
+			actual, err := getAllVSRouteDestinationsByCluster(
+				tc.serviceInstance, tc.meshDeployAndRolloutPorts, tc.weightedServices, tc.rollout, tc.deployment, tc.resourceTypeBeingDeleted)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
