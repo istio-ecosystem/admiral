@@ -738,6 +738,7 @@ func addUpdateInClusterVirtualServices(
 		}
 
 		for _, vs := range virtualServicesToBeProcessed {
+			// Reconciliation check - Start
 			ctxLogger.Infof(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"checking if incluster routing virtualService requires reconciliation")
@@ -757,6 +758,7 @@ func addUpdateInClusterVirtualServices(
 			ctxLogger.Infof(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"reconcile=true")
+			// Reconciliation check - End
 
 			existingVS, err := getExistingVS(ctxLogger, ctx, rc, vs.Name, util.IstioSystemNamespace)
 			if err != nil {
@@ -1521,6 +1523,12 @@ func addUpdateRoutingDestinationRule(
 		}
 
 		newDR.Spec.ExportTo = exportToNamespaces
+
+		doReconcileDR := reconcileDestinationRule(
+			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, util.IstioSystemNamespace)
+		if !doReconcileDR {
+			continue
+		}
 
 		//Get existing DR
 		existingDR, err := rc.

@@ -7926,7 +7926,8 @@ func TestReconcileDestinationRule(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		reconciliationRequired := reconcileDestinationRule(ctxLogger, c.enableDRCache, c.remoteController, c.destinationRule, c.drName, cluster)
+		reconciliationRequired := reconcileDestinationRule(
+			ctxLogger, c.enableDRCache, c.remoteController, c.destinationRule, c.drName, cluster, admiralParams.SyncNamespace)
 		if reconciliationRequired != c.expectedResult {
 			t.Errorf("expected: %v, got: %v", c.expectedResult, reconciliationRequired)
 		}
