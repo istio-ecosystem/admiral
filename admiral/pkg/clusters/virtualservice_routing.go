@@ -1106,7 +1106,8 @@ func getAllVSRouteDestinationsByCluster(
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
-	deployment *k8sAppsV1.Deployment) (map[string][]*vsrouting.RouteDestination, error) {
+	deployment *k8sAppsV1.Deployment,
+	resourceTypeBeingDeleted string) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
@@ -1115,7 +1116,7 @@ func getAllVSRouteDestinationsByCluster(
 	ingressDestinations := make(map[string][]*vsrouting.RouteDestination)
 
 	// Populate the route destinations(svc.cluster.local services) for the deployment
-	if serviceInstance[common.Deployment] != nil {
+	if serviceInstance[common.Deployment] != nil && resourceTypeBeingDeleted != common.Deployment {
 		meshPort, err := getMeshHTTPPortForDeployment(meshDeployAndRolloutPorts)
 		if err != nil {
 			return nil, err
@@ -1128,7 +1129,7 @@ func getAllVSRouteDestinationsByCluster(
 	}
 
 	// Populate the route destinations(svc.cluster.local services) for the rollout
-	if serviceInstance[common.Rollout] != nil {
+	if serviceInstance[common.Rollout] != nil && resourceTypeBeingDeleted != common.Rollout {
 		meshPort, err := getMeshHTTPPortForRollout(meshDeployAndRolloutPorts)
 		if err != nil {
 			return nil, err
