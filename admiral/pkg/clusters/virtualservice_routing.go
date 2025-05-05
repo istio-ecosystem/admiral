@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
@@ -1516,6 +1517,19 @@ func addUpdateRoutingDestinationRule(
 
 		drName := fmt.Sprintf("%s-%s", name, drNameSuffix)
 
+		if common.IsTrafficConfigProcessingEnabledForSlowStart() {
+			assetKey, hasAssetKey := ctx.Value(common.TrafficConfigIdentity).(string)
+			if hasAssetKey {
+				workloadEnvKey, hasWorkloadEnvKey := ctx.Value(common.TrafficConfigContextWorkloadEnvKey).(string)
+				if hasWorkloadEnvKey && workloadEnvKey != "" {
+					err := processSlowStartConfig(remoteRegistry, ctxLogger, assetKey, workloadEnvKey, &drObj, drName, sourceCluster)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
 
 		newDR.Labels = map[string]string{
@@ -1555,6 +1569,59 @@ func addUpdateRoutingDestinationRule(
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
 			drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
 
+		rc.DestinationRuleController.Cache.Put(newDR)
+
+	}
+
+	return nil
+}
+
+// processSlowStartConfig handles the processing of slow start traffic configuration
+// and applies warmup duration to destination rule if found
+func processSlowStartConfig(remoteRegistry *RemoteRegistry, ctxLogger *log.Entry, assetKey string, workloadEnvKey string,
+	drObj *networkingV1Alpha3.DestinationRule, drName string, sourceCluster string) error {
+	assetConfigMap := remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetKey)
+	if assetConfigMap == nil {
+		return nil
+	}
+
+	// Use a function to allow breaking from the Range method
+	var foundWarmupDuration int64
+	var parseError error
+
+	found := false
+	assetConfigMap.Range(func(envKey string, envConfig *common.Map) {
+		// Only process if not already found
+		if !found && envConfig.CheckIfPresent(workloadEnvKey) {
+			// Found a match, get the value
+			durationStr := envConfig.Get(workloadEnvKey)
+			warmupDuration, err := strconv.ParseInt(durationStr, 10, 64)
+
+			if err != nil {
+				parseError = err
+			} else {
+				foundWarmupDuration = warmupDuration
+				found = true // Mark as found to skip remaining iterations
+			}
+		}
+	})
+
+	if parseError != nil {
+		ctxLogger.Errorf(common.CtxLogFormat,
+			"addUpdateRoutingDestinationRule",
+			drName, util.IstioSystemNamespace, sourceCluster,
+			fmt.Sprintf("Failed to parse warmup duration for workload env %s: %v",
+				workloadEnvKey, parseError))
+		return parseError
+	}
+
+	if found {
+		// Apply the found duration to the destination rule
+		drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs = &duration.Duration{Seconds: foundWarmupDuration}
+		ctxLogger.Infof(common.CtxLogFormat,
+			"addUpdateRoutingDestinationRule",
+			drName, util.IstioSystemNamespace, sourceCluster,
+			fmt.Sprintf("Applied warmup duration of %d seconds", foundWarmupDuration))
 	}
 
 	return nil

@@ -59,6 +59,20 @@ func InitAdmiral(ctx context.Context, params common.AdmiralParams) (*RemoteRegis
 		logrus.Info("argo rollouts disabled")
 	}
 
+	if common.IsTrafficConfigProcessingEnabledForSlowStart() {
+		tcHandler := TrafficConfigHandler{
+			RemoteRegistry: rr,
+		}
+
+		tcHandler.TrafficConfigController, err = admiral.NewTrafficConfigController(ctx.Done(), &tcHandler, params.KubeconfigPath, params.DependenciesNamespace, 0, rr.ClientLoader)
+		if err != nil {
+			return nil, fmt.Errorf("error with trafficConfig controller init: %v", err)
+		}
+		rr.TrafficConfigController = tcHandler.TrafficConfigController
+	} else {
+		logrus.Infof("TrafficConfig processing is disabled for slow start")
+	}
+
 	configMapController, err := admiral.NewConfigMapController(params.ServiceEntryIPPrefix, rr.ClientLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error with configmap controller init: %v", err)
