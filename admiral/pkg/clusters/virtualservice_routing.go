@@ -886,7 +886,7 @@ func getCustomVirtualService(
 	}
 
 	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
-		common.CreatedFor: identity,
+		common.CreatedFor: strings.ToLower(identity),
 		common.CreatedBy:  common.GetProcessVSCreatedBy(),
 	}}
 
