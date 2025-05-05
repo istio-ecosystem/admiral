@@ -7510,7 +7510,7 @@ func TestGetCustomVirtualService(t *testing.T) {
 			},
 			Labels: map[string]string{
 				common.CreatedBy:  "testCreatedBy",
-				common.CreatedFor: "testIdentity",
+				common.CreatedFor: "testidentity",
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
@@ -7524,7 +7524,7 @@ func TestGetCustomVirtualService(t *testing.T) {
 			},
 			Labels: map[string]string{
 				common.CreatedBy:  "testCreatedBy",
-				common.CreatedFor: "testIdentity",
+				common.CreatedFor: "testidentity",
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
@@ -7538,7 +7538,7 @@ func TestGetCustomVirtualService(t *testing.T) {
 			},
 			Labels: map[string]string{
 				common.CreatedBy:  "testCreatedBy",
-				common.CreatedFor: "testIdentity",
+				common.CreatedFor: "testidentity",
 			},
 		},
 		Spec: networkingV1Alpha3.VirtualService{},
