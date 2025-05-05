@@ -183,7 +183,7 @@ func TestRolloutHandler(t *testing.T) {
 			gtpCache.mutex = &sync.Mutex{}
 			handler.RemoteRegistry.AdmiralCache.GlobalTrafficCache = gtpCache
 			handler.Added(ctx, c.addedRollout)
-			ns := handler.RemoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get("bar").Get("cluster-1").GetKeys()[0]
+			ns := handler.RemoteRegistry.AdmiralCache.IdentityClusterNamespaceCache.Get("bar").Get("cluster-1").GetValues()[0]
 			if ns != "namespace" {
 				t.Errorf("expected namespace: %v but got %v", "namespace", ns)
 			}

@@ -51,6 +51,7 @@ type RemoteController struct {
 	JobController                    *admiral.JobController
 	VertexController                 *admiral.VertexController
 	MonoVertexController             *admiral.MonoVertexController
+	TrafficConfigController          *admiral.TrafficConfigController
 	stop                             chan struct{}
 	//listener for normal types
 }
@@ -86,6 +87,9 @@ type AdmiralCache struct {
 	//LB Migration Cache
 	NLBEnabledCluster []string
 	CLBEnabledCluster []string
+
+	// TrafficConfigCache
+	SlowStartConfigCache *common.MapOfMapOfMaps // mapping of <asset> to <trafficConfigEnv> to <worklaodEnv> to slowStartDurationInSeconds
 }
 
 type RemoteRegistry struct {
@@ -104,6 +108,7 @@ type RemoteRegistry struct {
 	ClientLoader                loader.ClientLoader
 	RegistryClient              registry.ClientAPI
 	ConfigWriter                ConfigWriter
+	TrafficConfigController     *admiral.TrafficConfigController
 }
 
 // ModifySEFunc is a function that follows the dependency injection pattern which is used by HandleEventForGlobalTrafficPolicy
@@ -157,6 +162,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		CnameDependentClusterNamespaceCache: common.NewMapOfMapOfMaps(),
 		ClientClusterNamespaceServerCache:   common.NewMapOfMapOfMaps(),
 		PartitionIdentityCache:              common.NewMap(),
+		SlowStartConfigCache:                common.NewMapOfMapOfMaps(),
 	}
 	if common.GetAdmiralProfile() == common.AdmiralProfileDefault || common.GetAdmiralProfile() == common.AdmiralProfilePerf {
 		serviceEntrySuspender = NewDefaultServiceEntrySuspender(params.ExcludedIdentityList)

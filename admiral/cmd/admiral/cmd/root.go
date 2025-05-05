@@ -300,6 +300,9 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.CLBEnabledClusters, "clb_enabled_clusters", []string{}, "Comma seperated list of enabled clusters to be enabled for CLB")
 	rootCmd.PersistentFlags().StringVar(&params.NLBIngressLabel, "nlb_ingress_label", common.NLBIstioIngressGatewayLabelValue, "The value of the `app` label to use to match and find the service that represents the NLB ingress for cross cluster traffic")
 
+	//Parameters for slow start
+	rootCmd.PersistentFlags().BoolVar(&params.EnableTrafficConfigProcessingForSlowStart, "enable_traffic_config_processing_for_slow_start", false, "Enable/Disable TrafficConfig Processing for slowStart support")
+
 	return rootCmd
 }
 

@@ -36,6 +36,7 @@ const (
 	taskRequeueAttempt            = "requeueAttempt"
 	taskGivingUpEvent             = "givingUpEvent"
 	taskRequeueEvent              = "requeueEvent"
+	taskCompletedEvent            = "completedEvent"
 )
 
 var (
@@ -354,6 +355,10 @@ func (c *Controller) processNextItem() bool {
 	if err == nil {
 		// No error, forget item
 		c.queue.Forget(item)
+		err := c.delegator.UpdateProcessItemStatus(item.(InformerCacheObj).obj, common.Processed)
+		if err != nil {
+			ctxLogger.Warnf(ControllerLogFormat, taskCompletedEvent, c.queue.Len(), "completed processing")
+		}
 	} else if c.queue.NumRequeues(item) < maxRetries {
 		ctxLogger.Errorf(ControllerLogFormat, taskRequeueAttempt, c.queue.Len(), "checking if event is eligible for requeueing. error="+err.Error())
 		processRetry := shouldRetry(ctxLogger, ctx, item.(InformerCacheObj).obj, c.delegator)

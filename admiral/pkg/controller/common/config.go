@@ -718,3 +718,9 @@ func IsStateSyncerCluster(clusterName string) bool {
 	}
 	return false
 }
+
+func IsTrafficConfigProcessingEnabledForSlowStart() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableTrafficConfigProcessingForSlowStart
+}

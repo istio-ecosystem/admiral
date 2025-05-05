@@ -109,12 +109,17 @@ func modifyServiceEntryForNewServiceOrPod(
 	defer util.LogElapsedTimeForTask(ctxLogger, "event", "", "", "", "TotalModifySETime")()
 	var modifySEerr error
 	var isServiceEntryModifyCalledForSourceCluster bool
+
+	// Admiral 2.0
 	if common.IsAdmiralOperatorMode() {
 		totalConfigWriterEvents.Increment(api.WithAttributes(
 			attribute.Key("identity").String(sourceIdentity),
 			attribute.Key("environment").String(env),
 		))
 	}
+
+	ctx = context.WithValue(ctx, common.TrafficConfigIdentity, sourceIdentity)
+
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
 	partitionedIdentity := sourceIdentity
@@ -135,10 +140,13 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, fmt.Errorf(common.CtxLogFormat, event, env, sourceIdentity, "", "processing skipped during cache warm up state for env="+env+" identity="+sourceIdentity)
 	}
 
+	// Admiral 2.0
 	registryConfig := registry.IdentityConfig{
 		IdentityName: sourceIdentity,
 		Clusters:     make(map[string]*registry.IdentityConfigCluster),
 	}
+	// End admiral 2.0
+
 	ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing")
 	var (
 		cname                                 string
@@ -192,18 +200,20 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, nil
 	}
 
+	// This is done for optimizing dependency handler. If a new asset onboards to a service, we want to create/update the SE only in that dependent's cluster.
+	// START dependency handler optimization
 	var createResourcesOnlyInDependentOverrideClusters bool
 	dependentClusterOverride, ok := ctx.Value(common.DependentClusterOverride).(*common.Map)
 	if !ok {
 		ctxLogger.Warnf(common.CtxLogFormat, "event", "", "", "", "dependent cluster override not passed")
 	} else {
-		if dependentClusterOverride != nil && len(dependentClusterOverride.GetKeys()) > 0 {
+		if dependentClusterOverride != nil && len(dependentClusterOverride.GetValues()) > 0 {
 			ctxLogger.Infof(common.CtxLogFormat, "modifyServiceEntryForNewServiceOrPod", "", "", "", "dependent cluster override passed")
 			createResourcesOnlyInDependentOverrideClusters = true
 		}
 	}
+	// END dependency handler optimization
 
-	// build service entry spec
 	for _, clusterId := range clusters {
 		rc := remoteRegistry.GetRemoteController(clusterId)
 		if rc == nil {
@@ -224,6 +234,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 
+		// START - Admiral 2.0
 		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
@@ -233,6 +244,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			IngressPort:     strconv.Itoa(port),
 			Environment:     map[string]*registry.IdentityConfigEnvironment{},
 		}
+		// END admiral 2.0
 
 		// For Deployment <-> Rollout migration
 		// Check the type of the application and set the required variables.
@@ -404,7 +416,6 @@ func modifyServiceEntryForNewServiceOrPod(
 			}
 		}
 	}
-
 	//PID: use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity - DONE
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
@@ -414,6 +425,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, common.AppendError(modifySEerr, errors.New("skipped processing as cname is empty"))
 	}
 	start = time.Now()
+	// O(n^3) method - to be broken up into source and dependent clusters
 	updateCnameDependentClusterNamespaceCache(ctxLogger, remoteRegistry, dependents, deploymentOrRolloutName, deploymentOrRolloutNS, cname, sourceServices)
 	util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCnameDependentClusterNamespaceCachePut",
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", "", start)
@@ -441,6 +453,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	//cache the latest GTP in global cache to be reused during DR creation
 	start = time.Now()
+	// GTP preference region is the region to which the failover has to be done. Because we want to update the DRs in active region for the service first.
 	gtpPreferenceRegion, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
 	ctx = context.WithValue(ctx, common.GtpPreferenceRegion, gtpPreferenceRegion)
 	if err != nil {
@@ -1722,7 +1735,7 @@ func AddServiceEntriesWithDrWorker(
 										if strings.Contains(strings.ToLower(dependent), strings.ToLower(gwAlias)) {
 											gwClustersMap := getClusters(rr, dependent, ctxLogger)
 											if gwClustersMap != nil {
-												for _, cluster := range gwClustersMap.GetKeys() {
+												for _, cluster := range gwClustersMap.GetValues() {
 													gwClusters = append(gwClusters, cluster)
 												}
 											}
@@ -2075,7 +2088,7 @@ func doGenerateAdditionalEndpoints(ctxLogger *logrus.Entry, labels map[string]st
 	// However, we do not store B's identity in admiralCache.IdentitiesWithAdditionalEndpoints.
 	dependents := admiralCache.IdentityDependencyCache.Get(identity)
 	if dependents != nil {
-		for _, dependent := range dependents.GetKeys() {
+		for _, dependent := range dependents.GetValues() {
 			_, ok := admiralCache.IdentitiesWithAdditionalEndpoints.Load(dependent)
 			if ok {
 				return true
@@ -2858,7 +2871,7 @@ func getCurrentDRForLocalityLbSetting(rr *RemoteRegistry, isServiceEntryModifyCa
 		clustersMap := cache.IdentityClusterCache.Get(identityId)
 		var sourceClusters []string
 		if clustersMap != nil {
-			sourceClusters = clustersMap.GetKeys()
+			sourceClusters = clustersMap.GetValues()
 		}
 		for _, clusterID := range sourceClusters {
 			sourceRC := rr.GetRemoteController(clusterID)
@@ -2897,7 +2910,7 @@ func updateCnameDependentClusterNamespaceCache(
 		identityClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependentId)
 		var clusterIds []string
 		if identityClusters != nil {
-			clusterIds = identityClusters.GetKeys()
+			clusterIds = identityClusters.GetValues()
 		}
 		if len(clusterIds) > 0 {
 			if remoteRegistry.AdmiralCache.CnameDependentClusterCache == nil {
@@ -2923,7 +2936,7 @@ func updateCnameDependentClusterNamespaceCache(
 				}
 				var namespaceIds []string
 				if clusterNamespaces != nil {
-					namespaceIds = clusterNamespaces.GetKeys()
+					namespaceIds = clusterNamespaces.GetValues()
 				}
 				if len(namespaceIds) > 0 && remoteRegistry.AdmiralCache.CnameDependentClusterNamespaceCache != nil {
 					for _, namespaceId := range namespaceIds {
