@@ -45,29 +45,6 @@ func (th *TrafficConfigHandler) Deleted(ctx context.Context, obj *v1.TrafficConf
 	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Delete)
 }
 
-// findSourceClustersForIdentity returns a list of clusters where the given identity and environment exists
-func findSourceClustersForIdentity(remoteRegistry *RemoteRegistry, identity string) []string {
-	// Get all cluster IDs
-	allClusters := remoteRegistry.GetClusterIds()
-
-	// Filter to clusters that contain the identity in the specified environment
-	var sourceClusters []string
-	for _, clusterId := range allClusters {
-		// Check if this cluster has the identity in the IdentityClusterCache
-		if remoteRegistry.AdmiralCache != nil &&
-			remoteRegistry.AdmiralCache.IdentityClusterCache != nil {
-			// Check if identity exists in this cluster
-			clusterMap := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(identity)
-			if clusterMap != nil && clusterMap.CheckIfPresent(clusterId) {
-				sourceClusters = append(sourceClusters, clusterId)
-				log.Infof("Found identity %s in cluster %s", identity, clusterId)
-			}
-		}
-	}
-
-	return sourceClusters
-}
-
 // HandleTrafficConfigRecord processes TrafficConfig records
 func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, obj *v1.TrafficConfig,
 	remoteRegistry *RemoteRegistry, eventType admiral.EventType) error {
@@ -140,9 +117,9 @@ func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, o
 	// Update the warmupDuration in the .local destinationRule
 	for _, cachedWorkloadEnv := range slowStartConfigsForAllWorkloadEnvs.GetKeys() {
 		// Find source clusters where this identity exists
-		sourceClusters := findSourceClustersForIdentity(remoteRegistry, assetAlias)
+		sourceClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(assetAlias).GetValues()
 
-		if len(sourceClusters) == 0 {
+		if sourceClusters == nil || len(sourceClusters) == 0 {
 			log.Warnf("No source clusters found for identity %s in environment %s", assetAlias, cachedWorkloadEnv)
 			continue
 		}

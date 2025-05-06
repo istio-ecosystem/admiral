@@ -419,54 +419,6 @@ func TestTrafficConfigHandler_Added(t *testing.T) {
 	getDrLabels(routingDr)
 	assert.Equal(t, int64(30), routingDr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
 }
-
-func TestFindSourceClustersForIdentity(t *testing.T) {
-	identityClusterCache := common.NewMapOfMaps()
-	identityClusterCache.Put("test-identity", "cluster1", "cluster1")
-	identityClusterCache.Put("test-identity", "cluster2", "cluster2")
-	identityClusterCache.Put("another-identity", "cluster3", "cluster3")
-
-	remoteRegistry := &RemoteRegistry{
-		AdmiralCache: &AdmiralCache{
-			IdentityClusterCache: identityClusterCache,
-		},
-		remoteControllers: map[string]*RemoteController{
-			"cluster1": {},
-			"cluster2": {},
-			"cluster3": {},
-		},
-	}
-
-	testCases := []struct {
-		name           string
-		identity       string
-		expectedResult []string
-	}{
-		{
-			name:           "Identity exists in multiple clusters",
-			identity:       "test-identity",
-			expectedResult: []string{"cluster1", "cluster2"},
-		},
-		{
-			name:           "Identity exists in one cluster",
-			identity:       "another-identity",
-			expectedResult: []string{"cluster3"},
-		},
-		{
-			name:           "Identity doesn't exist",
-			identity:       "non-existent",
-			expectedResult: []string{},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := findSourceClustersForIdentity(remoteRegistry, tc.identity)
-			assert.ElementsMatch(t, tc.expectedResult, result)
-		})
-	}
-}
-
 func TestGetTrafficConfigLabel(t *testing.T) {
 	testCases := []struct {
 		name          string
