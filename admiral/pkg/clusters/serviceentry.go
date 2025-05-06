@@ -991,6 +991,29 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 		})
 	}
 
+	//Overwrite for CLB
+	if slices.Contains(admiralCache.CLBEnabledCluster, clusterName) {
+		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
+		ctx = ctx.WithFields(logrus.Fields{
+			"OverwritenLB":     overwriteEndpoint,
+			"Port":             overwritePort,
+			"OverwrittenLabel": common.GetAdmiralParams().LabelSet.GatewayApp,
+		})
+
+		//Validate if provided LB information is not default dummy, If Dummy then coutinue default LB
+		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
+			ctx = ctx.WithFields(logrus.Fields{
+				"Overwritten": true,
+			})
+			ctx.Info("")
+			return overwriteEndpoint, overwritePort, nil
+		}
+
+		ctx = ctx.WithFields(logrus.Fields{
+			"Overwritten": false,
+		})
+	}
+
 	ctx.Info("")
 	return endpoint, port, nil
 }
