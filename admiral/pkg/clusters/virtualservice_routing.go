@@ -793,6 +793,7 @@ func addUpdateInClusterVirtualServices(
 // passed to the func.
 // Else, we fetch the VS from the controller cache and use that to merge with the customVS.
 // The func in the end returns a slice of merged virtualservices.
+// TODO: Missing unit tests
 func mergeCustomVirtualServices(
 	ctx context.Context,
 	ctxLogger *log.Entry,
@@ -831,6 +832,10 @@ func mergeCustomVirtualServices(
 		// then use the virtualService passed to this func
 		if tuple.env == env {
 			mergedVirtualService, err := mergeVS(tuple.customVS, virtualService, rc)
+			if err != nil {
+				return nil, err
+			}
+			err = rc.VirtualServiceController.HostToRouteDestinationCache.Put(mergedVirtualService)
 			if err != nil {
 				return nil, err
 			}
