@@ -418,6 +418,21 @@ func TestTrafficConfigHandler_Added(t *testing.T) {
 	routingDr = destinationRuleControllerCache.Get(fmt.Sprintf("%s.svc.cluster.local-routing-dr", namespaceForRollout), common.NamespaceIstioSystem)
 	getDrLabels(routingDr)
 	assert.Equal(t, int64(30), routingDr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
+
+	disabledTrafficConfig := defaultTrafficConfig.DeepCopy()
+	disabledTrafficConfig.Annotations = make(map[string]string)
+	disabledTrafficConfig.Annotations["isSlowStartDisabled"] = "true"
+	err = handler.Updated(context.Background(), disabledTrafficConfig)
+	assert.NoError(t, err)
+	destinationRuleControllerCache = handler.RemoteRegistry.remoteControllers[cluster1].DestinationRuleController.Cache
+	dr = destinationRuleControllerCache.Get(fmt.Sprintf("%s.svc.cluster.local-routing-dr", namespaceForRollout), common.NamespaceIstioSystem)
+	// Validate that the DR was updated in the cache.
+	assert.Equal(t, common.GetDefaultWarmupDurationSecs(), dr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
+	//validate that the warmupDuration for default DR is not impacted by this.
+	routingDr = destinationRuleControllerCache.Get(fmt.Sprintf("%s.svc.cluster.local-routing-dr", namespaceForRollout), common.NamespaceIstioSystem)
+	getDrLabels(routingDr)
+	assert.Equal(t, common.GetDefaultWarmupDurationSecs(), routingDr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
+
 }
 func TestGetTrafficConfigLabel(t *testing.T) {
 	testCases := []struct {

@@ -93,7 +93,11 @@ func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, o
 				eventType = admiral.Update
 				remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetAlias).Get(assetEnv).Put(workloadEnv, "")
 			} else {
-				remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, strconv.FormatInt(secondsInt, 10))
+				if obj.Annotations["isSlowStartDisabled"] == "true" {
+					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, "")
+				} else {
+					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, strconv.FormatInt(secondsInt, 10))
+				}
 			}
 		}
 	}

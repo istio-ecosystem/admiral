@@ -1586,43 +1586,35 @@ func processSlowStartConfig(remoteRegistry *RemoteRegistry, ctxLogger *log.Entry
 	}
 
 	// Use a function to allow breaking from the Range method
-	var foundWarmupDuration int64
-	var parseError error
-
-	found := false
+	var warmupDurationValue int64
+	var err error
 	assetConfigMap.Range(func(envKey string, envConfig *common.Map) {
 		// Only process if not already found
-		if !found && envConfig.CheckIfPresent(workloadEnvKey) {
+		if envConfig.CheckIfPresent(workloadEnvKey) {
 			// Found a match, get the value
 			durationStr := envConfig.Get(workloadEnvKey)
-			warmupDuration, err := strconv.ParseInt(durationStr, 10, 64)
-
-			if err != nil {
-				parseError = err
+			if durationStr == "" {
+				warmupDurationValue = common.GetDefaultWarmupDurationSecs()
 			} else {
-				foundWarmupDuration = warmupDuration
-				found = true // Mark as found to skip remaining iterations
+				warmupDurationValue, err = strconv.ParseInt(durationStr, 10, 64)
+				if err != nil {
+					ctxLogger.Warnf(common.CtxLogFormat,
+						"addUpdateRoutingDestinationRule",
+						drName, util.IstioSystemNamespace, sourceCluster,
+						fmt.Sprintf("Failed to parse warmup duration for workload env %s: %v",
+							workloadEnvKey, err))
+					warmupDurationValue = common.GetDefaultWarmupDurationSecs()
+				}
 			}
 		}
 	})
 
-	if parseError != nil {
-		ctxLogger.Errorf(common.CtxLogFormat,
-			"addUpdateRoutingDestinationRule",
-			drName, util.IstioSystemNamespace, sourceCluster,
-			fmt.Sprintf("Failed to parse warmup duration for workload env %s: %v",
-				workloadEnvKey, parseError))
-		return parseError
-	}
-
-	if found {
-		// Apply the found duration to the destination rule
-		drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs = &duration.Duration{Seconds: foundWarmupDuration}
-		ctxLogger.Infof(common.CtxLogFormat,
-			"addUpdateRoutingDestinationRule",
-			drName, util.IstioSystemNamespace, sourceCluster,
-			fmt.Sprintf("Applied warmup duration of %d seconds", foundWarmupDuration))
-	}
+	// Apply the found duration to the destination rule
+	drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs = &duration.Duration{Seconds: warmupDurationValue}
+	ctxLogger.Infof(common.CtxLogFormat,
+		"addUpdateRoutingDestinationRule",
+		drName, util.IstioSystemNamespace, sourceCluster,
+		fmt.Sprintf("Applied warmup duration of %d seconds", warmupDurationValue))
 
 	return nil
 }
