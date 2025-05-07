@@ -532,6 +532,8 @@ func TestHandleTrafficConfigRecord(t *testing.T) {
 
 	remoteRegistry.remoteControllers[cluster1] = rcCluster1
 
+	slowStartConfigs := common.NewMap()
+	slowStartConfigs.Put("test-workload-env", "30")
 	testCases := []struct {
 		name                                 string
 		trafficConfig                        *v1.TrafficConfig
@@ -628,7 +630,7 @@ func TestHandleTrafficConfigRecord(t *testing.T) {
 				RemoteRegistry: remoteRegistry,
 			}
 
-			err := handler.HandleTrafficConfigRecord(context.Background(), tc.trafficConfig, remoteRegistry, admiral.Add, nil)
+			err := handler.HandleTrafficConfigRecord(context.Background(), tc.trafficConfig, remoteRegistry, admiral.Add, slowStartConfigs)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedModifyServiceEntryInvoked, modifyServiceEntryInvoked)
