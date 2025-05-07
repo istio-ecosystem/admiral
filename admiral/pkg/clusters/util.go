@@ -255,7 +255,7 @@ func getSortedDependentNamespaces(
 				if admiralCache.IdentityClusterNamespaceCache != nil && admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)) != nil {
 					sourceNamespacesInCluster := admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)).Get(clusterId)
 					if sourceNamespacesInCluster != nil && sourceNamespacesInCluster.Len() > 0 {
-						namespaceSlice = append(namespaceSlice, sourceNamespacesInCluster.GetKeys()...)
+						namespaceSlice = append(namespaceSlice, sourceNamespacesInCluster.GetValues()...)
 					}
 				}
 			}
@@ -273,7 +273,7 @@ func getSortedDependentNamespaces(
 	if clusterNamespaces != nil && clusterNamespaces.Len() > 0 {
 		namespaces := clusterNamespaces.Get(clusterId)
 		if namespaces != nil && namespaces.Len() > 0 {
-			namespaceSlice = append(namespaceSlice, namespaces.GetKeys()...)
+			namespaceSlice = append(namespaceSlice, namespaces.GetValues()...)
 			if len(namespaceSlice) > common.GetExportToMaxNamespaces() {
 				namespaceSlice = []string{"*"}
 				ctxLogger.Infof("exceeded max namespaces for cname=%s in cluster=%s", cname, clusterId)
@@ -442,7 +442,7 @@ func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *R
 		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", fmt.Sprintf("processing destination %d/%d destinationIdentity=%s", counter, totalDestinations, destinationIdentity))
 		clusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
 		if destinationClusters == nil || destinationClusters.Len() == 0 {
-			listOfSourceClusters := strings.Join(sourceClusters.GetKeys(), ",")
+			listOfSourceClusters := strings.Join(sourceClusters.GetValues(), ",")
 			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, listOfSourceClusters,
 				fmt.Sprintf("destinationClusters does not have any clusters. Skipping processing: %v.", destinationIdentity))
 			continue
@@ -461,7 +461,7 @@ func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *R
 			continue
 		}
 
-		for _, destinationClusterID := range clusters.GetKeys() {
+		for _, destinationClusterID := range clusters.GetValues() {
 			message = fmt.Sprintf("processing cluster=%s for destinationIdentity=%s", destinationClusterID, destinationIdentity)
 			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", message)
 			rc := remoteRegistry.GetRemoteController(destinationClusterID)

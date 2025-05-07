@@ -1,0 +1,71 @@
+apiVersion: admiral.io/v1alpha1
+kind: TrafficConfig
+metadata:
+  annotations:
+    dnsName: slowstarttest-e2e.api.intuit.com
+  labels:
+    asset: Intuit.services.mesh.slowstarttest
+    env: e2e
+  name: intuit.services.mesh.slowstarttest-e2e
+  namespace: admiral
+spec:
+  edgeService:
+    slowStartConfig:
+      - workloadEnvSelectors:
+          - e2e
+        duration: 60s
+    filters:
+      - name: filter-3387192
+      - name: filter--671448791
+    routes:
+      - config:
+          - targetGroupSelector: Default
+            targetSelector: e2e--186971779
+        filterSelector: filter--671448791
+        inbound: /*
+        name: all
+        outbound: /*
+        timeout: 5000
+        workloadEnvSelectors:
+          - e2e
+      - config:
+          - targetGroupSelector: Default
+            targetSelector: e2e--186971779
+        filterSelector: filter-3387192
+        inbound: /health/full
+        name: Health Check
+        outbound: /health/full
+        timeout: 5000
+        workloadEnvSelectors:
+          - e2e
+    targetGroups:
+      - name: Default - Single Swimlane
+        weights:
+          - name: Default - All Traffic
+            weight: 100
+      - name: DefaultGroup
+        weights:
+          - name: Default
+            weight: 100
+    targets:
+      - name: e2e--186971779
+        port: 80
+        socketTimeout: 5000
+  quotaGroup:
+    totalQuotaGroups:
+      - description: Total capacity of service
+        name: Total Throttling Plan
+        podLevelThreshold: 100
+        quotas:
+          - algorithm: scalable
+            behaviour: softThrottle
+            keyType: any
+            maxAmount: 200
+            name: Total
+            rule: /*
+            timePeriod: 1s
+        regionLevelLimit: true
+        workloadEnvSelectors:
+          - e2e
+  workloadEnvs:
+    - e2e

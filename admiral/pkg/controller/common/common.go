@@ -119,10 +119,10 @@ const (
 	EventResourceType      = "eventResourceType"
 	OutlierDetection       = "OutlierDetection"
 	ClientConnectionConfig = "ClientConnectionConfig"
-
-	WasmPathValue = "/etc/istio/extensions/dynamicrouter.wasm"
-	AIREnvSuffix  = "-air"
-	MESHSUFFIX    = ".mesh"
+	TrafficConfig          = "TrafficConfig"
+	WasmPathValue          = "/etc/istio/extensions/dynamicrouter.wasm"
+	AIREnvSuffix           = "-air"
+	MESHSUFFIX             = ".mesh"
 
 	LastUpdatedAt = "lastUpdatedAt"
 	IntuitTID     = "intuit_tid"
@@ -137,11 +137,17 @@ const (
 
 	VSRoutingLabel = "admiral.io/vs-routing"
 	// VSRoutingType This label has been added in order to make the API call efficient
-	VSRoutingType          = "admiral.io/vs-routing-type"
-	InclusterVSNameSuffix  = "incluster-vs"
-	VSRoutingTypeInCluster = "incluster"
-	CreatedByLabel         = "createdBy"
-	CreatedForLabel        = "createdFor"
+	VSRoutingType                      = "admiral.io/vs-routing-type"
+	InclusterVSNameSuffix              = "incluster-vs"
+	VSRoutingTypeInCluster             = "incluster"
+	CreatedByLabel                     = "createdBy"
+	CreatedForLabel                    = "createdFor"
+	WarmupDurationValueInSeconds       = "warmupDurationValueInSeconds"
+	TrafficConfigAssetLabelKey         = "asset"
+	TrafficConfigEnvLabelKey           = "env"
+	TrafficConfigContextCacheKey       = "trafficConfigContextCacheKey"
+	TrafficConfigContextWorkloadEnvKey = "trafficConfigWorkloadEnvKey"
+	TrafficConfigIdentity              = "trafficConfigIdentity"
 )
 
 type Event string
@@ -170,6 +176,7 @@ const (
 	GlobalTrafficPolicyResourceType ResourceType = "GlobalTrafficPolicy"
 	RoutingPolicyResourceType       ResourceType = "RoutingPolicy"
 	ShardResourceType               ResourceType = "Shard"
+	TrafficConfigResourceType       ResourceType = "TrafficConfig"
 
 	// Istio Resource Types
 	VirtualServiceResourceType  ResourceType = "VirtualService"

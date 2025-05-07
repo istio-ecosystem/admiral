@@ -168,6 +168,9 @@ type AdmiralParams struct {
 	NLBEnabledIdentityList []string
 	CLBEnabledClusters     []string
 	NLBIngressLabel        string
+
+	// Slow Start
+	EnableTrafficConfigProcessingForSlowStart bool
 }
 
 func (b AdmiralParams) String() string {
@@ -419,12 +422,22 @@ func (s *MapOfMapOfMaps) Len() int {
 	return len(s.cache)
 }
 
-func (s *Map) GetKeys() []string {
+func (s *Map) GetValues() []string {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	keys := make([]string, 0)
 	for _, val := range s.cache {
 		keys = append(keys, val)
+	}
+	return keys
+}
+
+func (s *Map) GetKeys() []string {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	keys := make([]string, 0)
+	for key, _ := range s.cache {
+		keys = append(keys, key)
 	}
 	return keys
 }
