@@ -1588,17 +1588,9 @@ func processSlowStartConfig(remoteRegistry *RemoteRegistry, ctxLogger *log.Entry
 	// Use a function to allow breaking from the Range method
 	var warmupDurationValue int64
 	var err error
-	found := false
-
-	// Loop is needed to take care of scenarios when admiral is watching multiple trafficConfigs with env A and B for the same asset.
-	// Lets assume asset A has workloadEnv a1 and a2 and asset B has b1 and b2.
-	// We receive an update where asset A adds workloadEnv a3 and removes a1.
-	// To handle such scenario, we want to set the warmupDuration for a1 DR to default value instead of the overridden one.
-	// Also, we should not set warmupDuration for b1 and b2 to the default value.
 	assetConfigMap.Range(func(envKey string, envConfig *common.Map) {
 		// Only process if not already found
-		if !found && envConfig.CheckIfPresent(workloadEnvKey) {
-			found = true
+		if envConfig.CheckIfPresent(workloadEnvKey) {
 			// Found a match, get the value
 			durationStr := envConfig.Get(workloadEnvKey)
 			if durationStr == "" {
