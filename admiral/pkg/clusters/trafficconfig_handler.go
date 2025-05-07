@@ -30,25 +30,36 @@ type TrafficConfigHandler struct {
 // Added method to handle new TrafficConfig additions
 func (th *TrafficConfigHandler) Added(ctx context.Context, obj *v1.TrafficConfig) error {
 	log.Debugf(LogFormat, common.Add, common.TrafficConfigResourceType, obj.Name, "", common.ReceivedStatus)
-	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Add)
+	slowStartConfigs, err := th.populateCaches(obj, admiral.Add)
+	if err != nil {
+		return err
+	}
+	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Add, slowStartConfigs)
 }
 
 // Updated method to handle updates to existing TrafficConfig
 func (th *TrafficConfigHandler) Updated(ctx context.Context, obj *v1.TrafficConfig) error {
 	log.Debugf(LogFormat, common.Update, common.TrafficConfigResourceType, obj.Name, "", common.ReceivedStatus)
-	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Update)
+	slowStartConfigs, err := th.populateCaches(obj, admiral.Update)
+	if err != nil {
+		return err
+	}
+	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Update, slowStartConfigs)
 }
 
 // Deleted method to handle deletions of TrafficConfig
 func (th *TrafficConfigHandler) Deleted(ctx context.Context, obj *v1.TrafficConfig) error {
 	log.Debugf(LogFormat, common.Delete, common.TrafficConfigResourceType, obj.Name, "", common.ReceivedStatus)
-	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Delete)
+	slowStartConfigs, err := th.populateCaches(obj, admiral.Delete)
+	if err != nil {
+		return err
+	}
+	return th.HandleTrafficConfigRecord(ctx, obj, th.RemoteRegistry, admiral.Update, slowStartConfigs)
 }
 
 // HandleTrafficConfigRecord processes TrafficConfig records
-func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, obj *v1.TrafficConfig,
-	remoteRegistry *RemoteRegistry, eventType admiral.EventType) error {
-
+func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, obj *v1.TrafficConfig, remoteRegistry *RemoteRegistry, eventType admiral.EventType, slowStartConfigs *common.Map) error {
+	ctx = context.WithValue(ctx, common.EventResourceType, common.TrafficConfig)
 	if IsCacheWarmupTime(remoteRegistry) {
 		log.Debugf(LogFormat, string(eventType), common.TrafficConfigResourceType, obj.Name, "", "processing skipped during cache warm up state")
 		return nil
@@ -61,65 +72,8 @@ func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, o
 
 	assetAlias := getTrafficConfigLabel(obj.Labels, common.TrafficConfigAssetLabelKey)
 	assetEnv := getTrafficConfigLabel(obj.Labels, common.TrafficConfigEnvLabelKey)
-	//
-	//ctx = context.WithValue(ctx, common.TrafficConfigContextAssetKey, assetAlias)
-	//ctx = context.WithValue(ctx, common.TrafficConfigContextEnvKey, assetEnv)
-	// Implement logic here. Placeholder for now.
-	slowStartConfigs := obj.Spec.EdgeService.SlowStartConfig
-	if slowStartConfigs == nil {
-		log.Warnf("No slowStartConfig found for TrafficConfig %s", obj.Name)
-		return nil
-	}
-	ctx = context.WithValue(ctx, common.EventResourceType, common.TrafficConfig)
-
-	// Create a map of workloadEnvSelectors for quick lookup
-	workloadEnvSelectorsMap := make(map[string]bool)
-	// Iterate over each slowStartConfig
-	for _, slowStartConfig := range slowStartConfigs {
-		// Retrieve the workload environment selectors
-		workloadEnvSelectors := slowStartConfig.WorkloadEnvSelectors
-
-		// Retrieve the duration for the slow start
-		duration, err := time.ParseDuration(slowStartConfig.Duration)
-		if err != nil {
-			log.Errorf("Failed to parse warmup duration specified for TrafficConfig %s: %v", obj.Name, err)
-			return err
-		}
-
-		secondsInt := int64(duration.Seconds())
-		for _, workloadEnv := range workloadEnvSelectors {
-			workloadEnvSelectorsMap[workloadEnv] = true
-			if eventType == admiral.Delete {
-				eventType = admiral.Update
-				remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetAlias).Get(assetEnv).Put(workloadEnv, "")
-			} else {
-				if obj.Annotations["isSlowStartDisabled"] == "true" {
-					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, "")
-				} else {
-					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, strconv.FormatInt(secondsInt, 10))
-				}
-			}
-		}
-	}
-
-	var workloadEnvsNotFoundInTrafficConfig []string
-	slowStartConfigsForAllWorkloadEnvs := remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetAlias).Get(assetEnv)
-	if slowStartConfigsForAllWorkloadEnvs != nil {
-		// Iterate through cached workload environments
-		slowStartConfigsForAllWorkloadEnvs.Range(func(cachedEnv, _ string) {
-			// If this env is not in the current TrafficConfig's selectors, add it to missing list
-			if _, exists := workloadEnvSelectorsMap[cachedEnv]; !exists {
-				workloadEnvsNotFoundInTrafficConfig = append(workloadEnvsNotFoundInTrafficConfig, cachedEnv)
-				log.Infof("Found workload environment in cache that is not in TrafficConfig: asset=%s, env=%s",
-					assetAlias, cachedEnv)
-				// set the value for slowStart for this workloadEnv to blank
-				remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetEnv, assetEnv, cachedEnv, "")
-			}
-		})
-	}
-
 	// Update the warmupDuration in the .local destinationRule
-	for _, cachedWorkloadEnv := range slowStartConfigsForAllWorkloadEnvs.GetKeys() {
+	for _, cachedWorkloadEnv := range slowStartConfigs.GetKeys() {
 		// Find source clusters where this identity exists
 		sourceClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(assetAlias).GetValues()
 
@@ -153,6 +107,67 @@ func (th *TrafficConfigHandler) HandleTrafficConfigRecord(ctx context.Context, o
 	log.Infof("Successfully processed TrafficConfig %s", obj.Name)
 
 	return nil
+}
+
+func (th *TrafficConfigHandler) populateCaches(obj *v1.TrafficConfig, eventType admiral.EventType) (*common.Map, error) {
+	remoteRegistry := th.RemoteRegistry
+	assetAlias := getTrafficConfigLabel(obj.Labels, common.TrafficConfigAssetLabelKey)
+	assetEnv := getTrafficConfigLabel(obj.Labels, common.TrafficConfigEnvLabelKey)
+	//
+	//ctx = context.WithValue(ctx, common.TrafficConfigContextAssetKey, assetAlias)
+	//ctx = context.WithValue(ctx, common.TrafficConfigContextEnvKey, assetEnv)
+	// Implement logic here. Placeholder for now.
+	slowStartConfigs := obj.Spec.EdgeService.SlowStartConfig
+	if slowStartConfigs == nil {
+		log.Warnf("No slowStartConfig found for TrafficConfig %s", obj.Name)
+		return nil, nil
+	}
+
+	// Create a map of workloadEnvSelectors for quick lookup
+	workloadEnvSelectorsMap := make(map[string]bool)
+	// Iterate over each slowStartConfig
+	for _, slowStartConfig := range slowStartConfigs {
+		// Retrieve the workload environment selectors
+		workloadEnvSelectors := slowStartConfig.WorkloadEnvSelectors
+
+		// Retrieve the duration for the slow start
+		duration, err := time.ParseDuration(slowStartConfig.Duration)
+		if err != nil {
+			log.Errorf("Failed to parse warmup duration specified for TrafficConfig %s: %v", obj.Name, err)
+			return nil, err
+		}
+
+		secondsInt := int64(duration.Seconds())
+		for _, workloadEnv := range workloadEnvSelectors {
+			workloadEnvSelectorsMap[workloadEnv] = true
+			if eventType == admiral.Delete {
+				remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetAlias).Get(assetEnv).Put(workloadEnv, "")
+			} else {
+				if obj.Annotations["isSlowStartDisabled"] == "true" {
+					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, "")
+				} else {
+					remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetAlias, assetEnv, workloadEnv, strconv.FormatInt(secondsInt, 10))
+				}
+			}
+		}
+	}
+
+	var workloadEnvsNotFoundInTrafficConfig []string
+	slowStartConfigsForAllWorkloadEnvs := remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetAlias).Get(assetEnv)
+	if slowStartConfigsForAllWorkloadEnvs != nil {
+		// Iterate through cached workload environments
+		slowStartConfigsForAllWorkloadEnvs.Range(func(cachedEnv, _ string) {
+			// If this env is not in the current TrafficConfig's selectors, add it to missing list
+			if _, exists := workloadEnvSelectorsMap[cachedEnv]; !exists {
+				workloadEnvsNotFoundInTrafficConfig = append(workloadEnvsNotFoundInTrafficConfig, cachedEnv)
+				log.Infof("Found workload environment in cache that is not in TrafficConfig: asset=%s, env=%s",
+					assetAlias, cachedEnv)
+				// set the value for slowStart for this workloadEnv to blank
+				remoteRegistry.AdmiralCache.SlowStartConfigCache.Put(assetEnv, assetEnv, cachedEnv, "")
+			}
+		})
+	}
+	return slowStartConfigsForAllWorkloadEnvs, nil
 }
 
 func getTrafficConfigLabel(labels map[string]string, key string) string {

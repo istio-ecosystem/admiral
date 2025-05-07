@@ -384,7 +384,7 @@ func TestTrafficConfigHandler_Added(t *testing.T) {
 	destinationRuleControllerCache := handler.RemoteRegistry.remoteControllers[cluster1].DestinationRuleController.Cache
 	dr := destinationRuleControllerCache.Get(fmt.Sprintf("%s.svc.cluster.local-incluster-dr", namespaceForRollout), common.NamespaceIstioSystem)
 	// validate that the warmupDuration is set to default when trafficConfig processing is not enabled
-	assert.Equal(t, int64(0), dr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
+	assert.Equal(t, common.GetDefaultWarmupDurationSecs(), dr.Spec.TrafficPolicy.LoadBalancer.WarmupDurationSecs.Seconds)
 
 	admiralParams.EnableTrafficConfigProcessingForSlowStart = true
 	common.ResetSync()
@@ -628,7 +628,7 @@ func TestHandleTrafficConfigRecord(t *testing.T) {
 				RemoteRegistry: remoteRegistry,
 			}
 
-			err := handler.HandleTrafficConfigRecord(context.Background(), tc.trafficConfig, remoteRegistry, admiral.Add)
+			err := handler.HandleTrafficConfigRecord(context.Background(), tc.trafficConfig, remoteRegistry, admiral.Add, nil)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedModifyServiceEntryInvoked, modifyServiceEntryInvoked)
