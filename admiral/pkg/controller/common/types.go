@@ -164,6 +164,7 @@ type AdmiralParams struct {
 	NLBEnabledIdentityList []string
 	CLBEnabledClusters     []string
 	NLBIngressLabel        string
+	CLBIngressLabel        string
 }
 
 func (b AdmiralParams) String() string {
