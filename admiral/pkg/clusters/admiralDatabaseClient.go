@@ -227,8 +227,13 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 		//Process NLB Cluster
 		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
 		//Process CLB Cluster
-		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, &rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().LabelSet.GatewayApp)
-
+		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, &rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().CLBIngressLabel)
+		// Process InitiateClientInitiatedProcessingFor
+		var c ClientDependencyRecordProcessor
+		err := triggerClientInitiatedProcessing(ctx, c, rr, common.GetInitiateClientInitiatedProcessingFor())
+		if err != nil {
+			log.Errorf(fmt.Sprintf("task=%s, Error=%v", common.DynamicConfigUpdate, err))
+		}
 	} else {
 		log.Infof(fmt.Sprintf("task=%s, NeedToUpdateConfig=false", common.DynamicConfigUpdate))
 	}
