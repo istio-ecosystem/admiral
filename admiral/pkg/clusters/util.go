@@ -247,9 +247,7 @@ func getSortedDependentNamespaces(
 		if ok && admiralCache.IdentityClusterCache != nil {
 			sourceClusters := admiralCache.IdentityClusterCache.Get(partitionedIdentity.(string))
 			if sourceClusters != nil && sourceClusters.Get(clusterId) != "" {
-				if !skipIstioNSFromExportTo {
-					namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
-				}
+				namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
 
 				// Add source namespaces s.t. throttle filter can query envoy clusters
 				if admiralCache.IdentityClusterNamespaceCache != nil && admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)) != nil {
@@ -284,15 +282,19 @@ func getSortedDependentNamespaces(
 	// this is to avoid duplication in namespaceSlice e.g. dynamicrouting deployment present in istio-system can be a dependent of blackhole on blackhole's source cluster
 	var dedupNamespaceSlice []string
 	for i := 0; i < len(namespaceSlice); i++ {
-		if skipIstioNSFromExportTo && namespaceSlice[i] == common.NamespaceIstioSystem {
-			continue
-		}
 		if i == 0 || namespaceSlice[i] != namespaceSlice[i-1] {
 			dedupNamespaceSlice = append(dedupNamespaceSlice, namespaceSlice[i])
 		}
 	}
-	ctxLogger.Infof("getSortedDependentNamespaces for cname %v and cluster %v got namespaces: %v", cname, clusterId, dedupNamespaceSlice)
-	return dedupNamespaceSlice
+	var finalDeDupedNamespaces []string
+	for _, s := range dedupNamespaceSlice {
+		if skipIstioNSFromExportTo && s == common.NamespaceIstioSystem {
+			continue
+		}
+		finalDeDupedNamespaces = append(finalDeDupedNamespaces, s)
+	}
+	ctxLogger.Infof("getSortedDependentNamespaces for cname %v and cluster %v got namespaces: %v", cname, clusterId, finalDeDupedNamespaces)
+	return finalDeDupedNamespaces
 }
 
 func (w WorkloadEntrySorted) Len() int {
