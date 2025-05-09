@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -608,4 +609,97 @@ func retryUpdatingDR(
 		}
 	}
 	return err
+}
+
+func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegistry, rc *RemoteController, obj *networkingV1Alpha3.DestinationRule, sourceClusterForVSRouting string) *networkingV1Alpha3.DestinationRule {
+	// Add the idle timeout to the DR if NLB is enabled for the destination/server cluster before it is copied anywhere
+	ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "")
+	var sourceClusters []string
+	if sourceClusterForVSRouting != "" {
+		sourceClusters = []string{sourceClusterForVSRouting}
+	} else {
+		if rr.AdmiralCache.CnameClusterCache != nil {
+			if rr.AdmiralCache.CnameClusterCache.Get(obj.Host) != nil {
+				sourceClusters = rr.AdmiralCache.CnameClusterCache.Get(obj.Host).CopyJustValues()
+			}
+		}
+	}
+
+	/*
+		Validate default LB label, source and destination clusters, validate if NLB timeout needed or not
+		If default is NLB, and all source cluster in CLB exclude list then return false
+		If default is CLB, and any of 1 or more source clusters in NLB include list then return true
+		If default is NLB, not all source cluster in CLB exclude list then return true
+		We can't support multiple LB timeout as DR is one. And most case endpoint/LB will be two. So we need to pick one.
+		Excluding mailchimp all are fine to pick any one. All mailchimp will be in exclude list, need to put right cluster in DB
+	*/
+	if !IsNLBTimeoutNeeded(sourceClusters, rr.AdmiralCache.NLBEnabledCluster, rr.AdmiralCache.CLBEnabledCluster) {
+		ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "Skipped")
+		return obj
+	}
+
+	// Get rc of the sourceCluster - if there are multiple source clusters with different NLB timeout values this may not be accurate
+	sourceClusterRc := rr.GetRemoteController(sourceClusters[0])
+	if sourceClusterRc != nil {
+		timeout, scErr := sourceClusterRc.ServiceController.Cache.GetSingleLoadBalancerTimeout(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
+		ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeoutScErr", obj.Host, "", rc.ClusterID, scErr)
+		// Current behavior is to set to 350 if configured timeout is less than 350, otherwise match
+		// In the future it should just match whatever is configured
+		if scErr != nil {
+			// If the istio ingress gateway service wasn't found, it was probably not yet processed and placed in the cache
+			// Make a k8s call to get it and put in cache
+			igw, kcErr := sourceClusterRc.ServiceController.K8sClient.CoreV1().Services(common.NamespaceIstioSystem).Get(ctx, common.NLBIstioIngressGatewayLabelValue, metaV1.GetOptions{})
+			if kcErr != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "AddNLBIdleTimeoutKcErr", obj.Host, "", rc.ClusterID, "no nlb service found for nlb-enabled cluster")
+				return obj
+			} else {
+				timeout = igw.Annotations[common.NLBIdleTimeoutAnnotation]
+				sourceClusterRc.ServiceController.Cache.Put(igw)
+			}
+		}
+		if timeout != "" {
+			timeoutInt, stErr := strconv.Atoi(timeout)
+			if stErr != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "AddNLBIdleTimeoutStErr", obj.Host, "", rc.ClusterID, "failed to convert timeout value to int on istio-ingressgateway-nlb")
+				timeoutInt = common.NLBDefaultTimeoutSeconds
+			}
+			if timeoutInt < common.NLBDefaultTimeoutSeconds {
+				timeoutInt = common.NLBDefaultTimeoutSeconds
+			}
+			if obj.TrafficPolicy == nil {
+				obj.TrafficPolicy = &networkingV1Alpha3.TrafficPolicy{}
+			}
+			if obj.TrafficPolicy.ConnectionPool == nil {
+				obj.TrafficPolicy.ConnectionPool = &networkingV1Alpha3.ConnectionPoolSettings{}
+			}
+			if obj.TrafficPolicy.ConnectionPool.Tcp == nil {
+				obj.TrafficPolicy.ConnectionPool.Tcp = &networkingV1Alpha3.ConnectionPoolSettings_TCPSettings{}
+			}
+			obj.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout = durationpb.New(time.Duration(timeoutInt * int(time.Second)))
+			ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeoutSuccess", obj.Host, "", rc.ClusterID, timeoutInt)
+		}
+	}
+	return obj
+}
+
+/*
+Validate default LB label, source and destination clusters, validate if NLB timeout needed or not
+If default is NLB, and all source cluster in CLB exclude list then return false
+If default is CLB, and any of 1 or more source clusters in NLB include list then return true
+If default is NLB, not all source cluster in CLB exclude list then return true
+We can't support multiple LB timeout as DR is one. And most case endpoint/LB will be two. So we need to pick one.
+Excluding mailchimp all are fine to pick any one. All mailchimp will be in exclude list, need to put right cluster in DB
+*/
+func IsNLBTimeoutNeeded(sourceClusters []string, nlbOverwrite []string, clbOverwrite []string) bool {
+	nlbIntersectClusters := common.SliceIntersection[string](sourceClusters, nlbOverwrite)
+	clbIntersectClusters := common.SliceIntersection[string](sourceClusters, clbOverwrite)
+
+	if len(sourceClusters) == len(clbIntersectClusters) && common.GetAdmiralParams().LabelSet.GatewayApp == common.NLBIstioIngressGatewayLabelValue {
+		//All source cluster have CLB exception and default is NLB, don't overwrite
+		return false
+	} else if len(nlbIntersectClusters) > 0 && common.GetAdmiralParams().LabelSet.GatewayApp == common.IstioIngressGatewayLabelValue {
+		//Default is CLB, but 1 or more source clusters have NLB enabled, overwrite
+		return true
+	}
+	return common.GetAdmiralParams().LabelSet.GatewayApp == common.NLBIstioIngressGatewayLabelValue
 }
