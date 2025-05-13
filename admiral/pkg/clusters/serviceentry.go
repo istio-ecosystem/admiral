@@ -1556,7 +1556,35 @@ func AddServiceEntriesWithDrWorker(
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
-		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
+			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+
+		// This code has been added for custom VS to in-cluster VS migration
+		// We are preventing pinning to remote cluster until the custom VS's
+		// exportTo is set to dot.
+		if doDRUpdateForInClusterVSRouting {
+			envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identityId)
+			if err == nil {
+				if len(envVSTuple) > 0 {
+					customVS := envVSTuple[0].customVS
+					doDRUpdateForInClusterVSRouting = false
+					for _, exportTo := range customVS.Spec.ExportTo {
+						if exportTo == "." {
+							doDRUpdateForInClusterVSRouting = true
+							break
+						}
+					}
+				}
+			}
+			if !doDRUpdateForInClusterVSRouting {
+				ctxLogger.Infof(
+					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
+					cluster,
+					fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
+						doDRUpdateForInClusterVSRouting, cluster, identityId))
+			}
+		}
+
 		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
