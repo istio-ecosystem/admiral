@@ -133,14 +133,26 @@ func processVirtualService(
 	splitEnvs := strings.Split(envs, "_")
 	if rc.RolloutController != nil {
 		rollout := rc.RolloutController.Cache.Get(identity, splitEnvs[0])
+		if rollout == nil {
+			rollout = rc.RolloutController.Cache.Get(strings.ToLower(identity), splitEnvs[0])
+		}
 		if rollout != nil {
 			handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
+		} else {
+			log.Infof(
+				"rollout is nil for identity %s and env %s", identity, splitEnvs[0])
 		}
 	}
 	if rc.DeploymentController != nil {
 		deployment := rc.DeploymentController.Cache.Get(identity, splitEnvs[0])
+		if deployment == nil {
+			deployment = rc.DeploymentController.Cache.Get(strings.ToLower(identity), splitEnvs[0])
+		}
 		if deployment != nil {
 			handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
+		} else {
+			log.Infof(
+				"deployment is nil for identity %s and env %s", identity, splitEnvs[0])
 		}
 	}
 
