@@ -1559,29 +1559,21 @@ func AddServiceEntriesWithDrWorker(
 		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
 			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
 
-		// This code has been added for custom VS to in-cluster VS migration
-		// We are preventing pinning to remote cluster until the custom VS's
-		// exportTo is set to dot.
 		if doDRUpdateForInClusterVSRouting {
-			envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identityId)
-			if err == nil {
-				if len(envVSTuple) > 0 {
-					customVS := envVSTuple[0].customVS
-					doDRUpdateForInClusterVSRouting = false
-					for _, exportTo := range customVS.Spec.ExportTo {
-						if exportTo == "." {
-							doDRUpdateForInClusterVSRouting = true
-							break
-						}
-					}
+			doDRUpdateForInClusterVSRouting, err = DoDRPinning(
+				ctx, ctxLogger, rc, env, identityId, getCustomVirtualService)
+			if err != nil {
+				doDRUpdateForInClusterVSRouting = false
+				ctxLogger.Errorf(common.CtxLogFormat, "DoDRPinning", identityId, syncNamespace, cluster,
+					fmt.Sprintf("failed for identity %s and env %s due to error=%v", identityId, env, err))
+			} else {
+				if !doDRUpdateForInClusterVSRouting {
+					ctxLogger.Infof(
+						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
+						cluster,
+						fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
+							doDRUpdateForInClusterVSRouting, cluster, identityId))
 				}
-			}
-			if !doDRUpdateForInClusterVSRouting {
-				ctxLogger.Infof(
-					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-					cluster,
-					fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
-						doDRUpdateForInClusterVSRouting, cluster, identityId))
 			}
 		}
 
@@ -1842,6 +1834,52 @@ func AddServiceEntriesWithDrWorker(
 		}
 		errors <- addSEorDRToAClusterError
 	}
+}
+
+// DoDRPinning has been added for custom VS to in-cluster VS migration
+// We are preventing pinning to remote cluster until the custom VS's
+// exportTo is set to dot.
+func DoDRPinning(
+	ctx context.Context,
+	ctxLogger *logrus.Entry,
+	rc *RemoteController,
+	env string,
+	identity string,
+	getCustomVirtualService GetCustomVirtualService) (bool, error) {
+
+	if rc == nil {
+		return false, fmt.Errorf("remoteController is nil")
+	}
+	if env == "" {
+		return false, fmt.Errorf("env is empty")
+	}
+	if identity == "" {
+		return false, fmt.Errorf("identity is empty")
+	}
+	envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identity)
+	if err != nil {
+		return false, err
+	}
+
+	// There are no customVS for this identity and env
+	// so we are ok to pin the DR to the other region
+	if len(envVSTuple) == 0 {
+		return true, nil
+	}
+
+	// Get the first VS because it has the same VS for
+	// multi-env custom VS
+	customVS := envVSTuple[0].customVS
+
+	// Iterate through the exportTo and return true if
+	// the list has a dot
+	for _, exportTo := range customVS.Spec.ExportTo {
+		if exportTo == "." {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func validateServiceEntryEndpoints(entry *v1alpha3.ServiceEntry) (bool, error) {
