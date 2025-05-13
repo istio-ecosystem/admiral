@@ -134,7 +134,7 @@ func processVirtualService(
 	if rc.RolloutController != nil {
 		rollout := rc.RolloutController.Cache.Get(identity, splitEnvs[0])
 		if rollout == nil {
-			rollout = rc.RolloutController.Cache.Get(strings.ToLower(identity), splitEnvs[0])
+			rollout = rc.RolloutController.Cache.Get(toUpperFirst(identity), splitEnvs[0])
 		}
 		if rollout != nil {
 			handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
@@ -157,6 +157,13 @@ func processVirtualService(
 	}
 
 	return nil
+}
+
+func toUpperFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[0:1]) + s[1:]
 }
 
 func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) error {

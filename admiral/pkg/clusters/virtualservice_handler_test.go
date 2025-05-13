@@ -2255,3 +2255,34 @@ func TestProcessVirtualService(t *testing.T) {
 	}
 
 }
+
+func TestToUpperFirst(t *testing.T) {
+
+	testCases := []struct {
+		name string
+		in   string
+		out  string
+	}{
+		{
+			name: "Given an identity in lowercase" +
+				"When processVirtualService is called" +
+				"Then the func should return the identity's first char in uppercase",
+			in:  "stage.test00.foo",
+			out: "Stage.test00.foo",
+		},
+		{
+			name: "Given an identity correct case" +
+				"When processVirtualService is called" +
+				"Then the func should return the identity's first char in uppercase",
+			in:  "Stage.test00.foo",
+			out: "Stage.test00.foo",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := toUpperFirst(tc.in)
+			assert.Equal(t, tc.out, out)
+		})
+	}
+}
