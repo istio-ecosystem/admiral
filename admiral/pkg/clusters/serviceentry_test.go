@@ -10083,3 +10083,161 @@ func TestGetClusterIngressGateway(t *testing.T) {
 	}
 
 }
+
+func TestDoDRPinning(t *testing.T) {
+
+	testCases := []struct {
+		name                    string
+		rc                      *RemoteController
+		env                     string
+		identity                string
+		getCustomVirtualService GetCustomVirtualService
+		expectedResult          bool
+		exptectedError          error
+	}{
+		{
+			name: "Given a nil remotecontroller" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			exptectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given empty env" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			exptectedError: fmt.Errorf("env is empty"),
+		},
+		{
+			name: "Given empty identity" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			env:            "stage",
+			exptectedError: fmt.Errorf("identity is empty"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns an error" +
+				"And func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, fmt.Errorf("error getting custom virtualService")
+			},
+			exptectedError: fmt.Errorf("error getting custom virtualService"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns no matching VS" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, nil
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"testNS"},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"."},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := DoDRPinning(
+				context.Background(), nil, tc.rc, tc.env, tc.identity, tc.getCustomVirtualService)
+			if tc.exptectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.exptectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
