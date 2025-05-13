@@ -146,7 +146,7 @@ func processVirtualService(
 	if rc.DeploymentController != nil {
 		deployment := rc.DeploymentController.Cache.Get(identity, splitEnvs[0])
 		if deployment == nil {
-			deployment = rc.DeploymentController.Cache.Get(strings.ToLower(identity), splitEnvs[0])
+			deployment = rc.DeploymentController.Cache.Get(toUpperFirst(identity), splitEnvs[0])
 		}
 		if deployment != nil {
 			handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
