@@ -1570,7 +1570,7 @@ func AddServiceEntriesWithDrWorker(
 
 		// The below code checks if there is custom VS in the identity's namespace
 		// Any Argo VS will be ignored as they are not added to the IdentityNamespaceVirtualServiceCache
-		if doDRUpdateForInClusterVSRouting && isServiceEntryModifyCalledForSourceCluster {
+		if doDRUpdateForInClusterVSRouting {
 			if eventNamespace != "" {
 				virtualServicesInIdentityNamespace := rc.
 					VirtualServiceController.IdentityNamespaceVirtualServiceCache.Get(eventNamespace)
@@ -1589,7 +1589,7 @@ func AddServiceEntriesWithDrWorker(
 		// This code has been added for custom VS to in-cluster VS migration
 		// We are preventing pinning to remote cluster until the custom VS's
 		// exportTo is set to dot.
-		if doDRUpdateForInClusterVSRouting && isServiceEntryModifyCalledForSourceCluster {
+		if doDRUpdateForInClusterVSRouting {
 			envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identityId)
 			if err == nil {
 				if len(envVSTuple) > 0 {
