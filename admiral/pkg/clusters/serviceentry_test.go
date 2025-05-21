@@ -1694,7 +1694,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx = context.WithValue(ctx, common.EventResourceType, common.Rollout)
 			ctx = context.WithValue(ctx, common.EventType, admiral.Add)
-			err := AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, tt.sourceClusters, tt.serviceEntries, tt.isAdditionalEndpointsEnabled, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env)
+			err := AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, tt.sourceClusters, tt.serviceEntries, tt.isAdditionalEndpointsEnabled, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env, "")
 
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["se1"].Hosts = []string{tt.dnsPrefix + ".e2e." + tt.identity + ".global"}
@@ -1979,7 +1979,7 @@ func TestAddServiceEntriesWithDrWithoutDatabaseClient(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			rr.AdmiralDatabaseClient = nil
-			AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries, false, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env)
+			AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries, false, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env, "")
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["dummySe"].Hosts = []string{tt.dnsPrefix + ".e2e." + tt.identity + ".global"}
 			}
@@ -8404,6 +8404,7 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 				c.isSourceCluster,
 				c.identity,
 				c.env,
+				"",
 				c.se,
 				clusterChan,
 				c.errors,
