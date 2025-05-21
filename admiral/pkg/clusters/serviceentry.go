@@ -486,6 +486,8 @@ func modifyServiceEntryForNewServiceOrPod(
 	sourceClusterKeys := orderSourceClusters(ctx, remoteRegistry, sourceServices)
 
 	for _, sourceCluster := range sourceClusterKeys {
+		eventNamespace := sourceClusterToEventNsCache[sourceCluster]
+
 		serviceInstance := sourceServices[sourceCluster]
 		resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 		if resourceLabels != nil {
@@ -593,7 +595,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					map[string]*networking.ServiceEntry{key: serviceEntry},
 					isAdditionalEndpointGenerationEnabled,
 					isServiceEntryModifyCalledForSourceCluster,
-					partitionedIdentity, env)
+					partitionedIdentity, env, eventNamespace)
 				if err != nil {
 					ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
 					modifySEerr = common.AppendError(modifySEerr, err)
@@ -645,7 +647,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry},
-							isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster,
+							partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -677,7 +680,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						ep.Ports = meshPorts
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -697,7 +701,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -726,7 +731,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						}
 						err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -751,7 +757,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						ep.Ports = meshPorts
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -788,7 +795,6 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		var (
 			sourceClusterLocality string
-			eventNamespace        string
 			ingressDestinations   = make(map[string][]*vsrouting.RouteDestination)
 			inClusterDestinations = make(map[string][]*vsrouting.RouteDestination)
 		)
@@ -796,7 +802,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 		// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 		// endpoints.
-		eventNamespace = sourceClusterToEventNsCache[sourceCluster]
 		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 			deploymentOrRolloutName, eventNamespace, sourceCluster,
 			"Discovery phase: VS based routing enabled for cluster")
@@ -943,7 +948,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToDependentClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("Using override values of dependent clusters: %v, count: %v", clusters, len(clusters)))
 		dependentClusters = clusters
 	}
-	err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, remoteRegistry, dependentClusters, serviceEntries, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+	err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
+		ctxLogger, ctx, remoteRegistry, dependentClusters, serviceEntries, isAdditionalEndpointGenerationEnabled,
+		isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, "")
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, "", err.Error())
 		modifySEerr = common.AppendError(modifySEerr, err)
@@ -1420,7 +1427,7 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 type ConfigWriter interface {
 	AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 		serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-		identityId, env string) error
+		identityId, env, eventNamespace string) error
 }
 
 func NewConfigWriter() ConfigWriter {
@@ -1431,15 +1438,16 @@ type configWrite struct{}
 
 func (w *configWrite) AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-	identityId, env string) error {
+	identityId, env, eventNamespace string) error {
 	return AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, sourceClusters,
-		serviceEntries, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster, identityId, env)
+		serviceEntries, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster,
+		identityId, env, eventNamespace)
 }
 
 // AddServiceEntriesWithDrToAllCluster will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-	identityId, env string) error {
+	identityId, env, eventNamespace string) error {
 	if identityId == "" {
 		return fmt.Errorf("failed to process service entry as identity passed was empty")
 	}
@@ -1461,7 +1469,7 @@ func AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Co
 
 		for w := 1; w <= common.DependentClusterWorkerConcurrency(); w++ {
 			go AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster,
-				identityId, env, copyServiceEntry(se), clusters, errors)
+				identityId, env, eventNamespace, copyServiceEntry(se), clusters, errors)
 		}
 
 		for _, c := range sourceClusters {
@@ -1485,7 +1493,8 @@ func AddServiceEntriesWithDrWorker(
 	isAdditionalEndpointsEnabled bool,
 	isServiceEntryModifyCalledForSourceCluster bool,
 	identityId,
-	env string,
+	env,
+	eventNamespace string,
 	seObj *networking.ServiceEntry,
 	clusters <-chan string,
 	errors chan<- error) {
@@ -1558,6 +1567,24 @@ func AddServiceEntriesWithDrWorker(
 
 		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
 			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+
+		// The below code checks if there is custom VS in the identity's namespace
+		// Any Argo VS will be ignored as they are not added to the IdentityNamespaceVirtualServiceCache
+		if doDRUpdateForInClusterVSRouting {
+			if eventNamespace != "" {
+				virtualServicesInIdentityNamespace := rc.
+					VirtualServiceController.IdentityNamespaceVirtualServiceCache.Get(eventNamespace)
+				if virtualServicesInIdentityNamespace != nil && len(virtualServicesInIdentityNamespace) > 0 {
+					doDRUpdateForInClusterVSRouting = false
+					ctxLogger.Infof(
+						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
+						cluster,
+						fmt.Sprintf(
+							"VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as there are custom virtualServices in the namespace %v",
+							doDRUpdateForInClusterVSRouting, cluster, identityId, eventNamespace))
+				}
+			}
+		}
 
 		// This code has been added for custom VS to in-cluster VS migration
 		// We are preventing pinning to remote cluster until the custom VS's

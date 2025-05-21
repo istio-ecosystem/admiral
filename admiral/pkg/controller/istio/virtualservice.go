@@ -38,11 +38,12 @@ type IVirtualServiceCache interface {
 }
 
 type VirtualServiceController struct {
-	IstioClient                 versioned.Interface
-	VirtualServiceHandler       VirtualServiceHandler
-	VirtualServiceCache         IVirtualServiceCache
-	HostToRouteDestinationCache *HostToRouteDestinationCache
-	informer                    cache.SharedIndexInformer
+	IstioClient                          versioned.Interface
+	VirtualServiceHandler                VirtualServiceHandler
+	VirtualServiceCache                  IVirtualServiceCache
+	IdentityNamespaceVirtualServiceCache IIdentityNamespaceVirtualServiceCache
+	HostToRouteDestinationCache          *HostToRouteDestinationCache
+	informer                             cache.SharedIndexInformer
 }
 
 // HostToRouteDestinationCache holds only in-cluster VS's FQDN -> []HttpRouteDestinations cache
@@ -74,6 +75,87 @@ func NewHostToRouteDestinationCache() *HostToRouteDestinationCache {
 		cache: make(map[string][]*networkingv1alpha3.HTTPRouteDestination),
 		mutex: &sync.RWMutex{},
 	}
+}
+
+type IIdentityNamespaceVirtualServiceCache interface {
+	Get(namespace string) map[string]*networking.VirtualService
+	Put(vs *networking.VirtualService) error
+	Delete(vs *networking.VirtualService) error
+}
+
+// IdentityNamespaceVirtualServiceCache holds VS that are in identity's NS
+// excluding argo VS
+// namespace:[vsName:vs]
+type IdentityNamespaceVirtualServiceCache struct {
+	cache map[string]map[string]*networking.VirtualService
+	mutex *sync.RWMutex
+}
+
+func NewIdentityNamespaceVirtualServiceCache() *IdentityNamespaceVirtualServiceCache {
+	return &IdentityNamespaceVirtualServiceCache{
+		cache: make(map[string]map[string]*networking.VirtualService),
+		mutex: &sync.RWMutex{},
+	}
+}
+
+func (i *IdentityNamespaceVirtualServiceCache) Get(namespace string) map[string]*networking.VirtualService {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	return i.cache[namespace]
+}
+
+func (i *IdentityNamespaceVirtualServiceCache) Put(vs *networking.VirtualService) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	namespace := vs.Namespace
+	name := vs.Name
+	if name == "" {
+		return fmt.Errorf(
+			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty")
+	}
+	if namespace == "" {
+		return fmt.Errorf(
+			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs %s", name)
+	}
+	hosts := vs.Spec.Hosts
+	if hosts == nil {
+		return nil
+	}
+	if len(hosts) == 0 {
+		return nil
+	}
+	// This is to skip Argo VS
+	for _, host := range hosts {
+		if strings.HasPrefix(host, "dummy") {
+			return nil
+		}
+	}
+	if i.cache[namespace] == nil {
+		i.cache[namespace] = make(map[string]*networking.VirtualService)
+	}
+	i.cache[namespace][name] = vs
+	return nil
+}
+
+func (i *IdentityNamespaceVirtualServiceCache) Delete(vs *networking.VirtualService) error {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	namespace := vs.Namespace
+	name := vs.Name
+	if name == "" {
+		return fmt.Errorf(
+			"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty")
+	}
+	if namespace == "" {
+		return fmt.Errorf(
+			"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs %s", name)
+	}
+	vsMap, ok := i.cache[namespace]
+	if !ok {
+		return nil
+	}
+	delete(vsMap, name)
+	return nil
 }
 
 func (v *VirtualServiceCache) Put(vs *networking.VirtualService) error {
@@ -145,6 +227,7 @@ func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceH
 
 	vsController.VirtualServiceCache = NewVirtualServiceCache()
 	vsController.HostToRouteDestinationCache = NewHostToRouteDestinationCache()
+	vsController.IdentityNamespaceVirtualServiceCache = NewIdentityNamespaceVirtualServiceCache()
 
 	var err error
 
@@ -174,6 +257,7 @@ func (v *VirtualServiceController) Added(ctx context.Context, obj interface{}) e
 	if err != nil {
 		return err
 	}
+	v.IdentityNamespaceVirtualServiceCache.Put(vs)
 	return v.VirtualServiceHandler.Added(ctx, vs)
 }
 
@@ -184,6 +268,7 @@ func (v *VirtualServiceController) Updated(ctx context.Context, obj interface{},
 	}
 	v.VirtualServiceCache.Put(vs)
 	v.HostToRouteDestinationCache.Put(vs)
+	v.IdentityNamespaceVirtualServiceCache.Put(vs)
 	return v.VirtualServiceHandler.Updated(ctx, vs)
 }
 
@@ -194,6 +279,7 @@ func (v *VirtualServiceController) Deleted(ctx context.Context, obj interface{})
 	}
 	v.VirtualServiceCache.Delete(vs)
 	v.HostToRouteDestinationCache.Delete(vs)
+	v.IdentityNamespaceVirtualServiceCache.Delete(vs)
 	return v.VirtualServiceHandler.Deleted(ctx, vs)
 }
 
