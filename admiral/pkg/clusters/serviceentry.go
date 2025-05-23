@@ -1570,7 +1570,7 @@ func AddServiceEntriesWithDrWorker(
 		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
 		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
-			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
+			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting, isServiceEntryModifyCalledForSourceCluster)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
 		for _, seDr := range seDrSet {
@@ -2312,9 +2312,7 @@ func isGeneratedByCartographer(annotations map[string]string) bool {
 	return true
 }
 
-func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region string, cluster string,
-	se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection,
-	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule, doDRUpdateForInClusterRouting bool) (map[string]*SeDrTuple, []string) {
+func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region, cluster string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection, clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule, doDRUpdateForInClusterRouting, isServiceEntryModifyCalledForSourceCluster bool) (map[string]*SeDrTuple, []string) {
 	var (
 		defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 		defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -2372,6 +2370,15 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				} else {
 					modifiedSe.Addresses = []string{newAddress}
 				}
+
+				if isServiceEntryModifyCalledForSourceCluster {
+					if cache.CnameClusterCache == nil {
+						ctxLogger.Error("CnameClusterCache is nil.")
+					} else {
+						cache.CnameClusterCache.Put(host, cluster, cluster)
+					}
+				}
+
 			}
 			var seDr = &SeDrTuple{
 				DrName:                      drName,

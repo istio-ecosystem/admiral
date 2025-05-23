@@ -2195,15 +2195,23 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		},
 	}
 
+	admiralCache.CnameClusterCache = common.NewMapOfMaps()
+
+	expectedCnameCache := common.NewMapOfMaps()
+	expectedCnameCache.Put("east.dev.bar.global", "fake-cluster", "fake-cluster")
+	expectedCnameCache.Put("west.dev.bar.global", "fake-cluster", "fake-cluster")
+
 	testCases := []struct {
-		name                string
-		env                 string
-		locality            string
-		se                  *istioNetworkingV1Alpha3.ServiceEntry
-		gtp                 *v13.GlobalTrafficPolicy
-		seDrSet             map[string]*SeDrTuple
-		cc                  admiral.ConfigMapControllerInterface
-		disableIPGeneration bool
+		name                                       string
+		env                                        string
+		locality                                   string
+		se                                         *istioNetworkingV1Alpha3.ServiceEntry
+		gtp                                        *v13.GlobalTrafficPolicy
+		seDrSet                                    map[string]*SeDrTuple
+		cc                                         admiral.ConfigMapControllerInterface
+		disableIPGeneration                        bool
+		isServiceEntryModifyCalledForSourceCluster bool
+		cnameCache                                 *common.MapOfMaps
 	}{
 		{
 			name:     "Should handle a nil GTP",
@@ -2213,6 +2221,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			gtp:      nil,
 			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{}},
 			cc:       cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: common.NewMapOfMaps(),
 		},
 		{
 			name:     "Should handle a GTP with default overide",
@@ -2222,6 +2232,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			gtp:      gTPDefaultOverride,
 			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{SeDnsPrefix: "default", SeDrGlobalTrafficPolicyName: "gTPDefaultOverrideName"}},
 			cc:       cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: common.NewMapOfMaps(),
 		},
 		{
 			name:     "Should handle a GTP with multiple Dns",
@@ -2232,6 +2244,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				common.GetCnameVal([]string{east, host}): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: true,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with Dns prefix with Caps",
@@ -2242,6 +2256,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with canary endpoint",
@@ -2253,6 +2269,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 				common.GetCnameVal([]string{west, hostCanary}):                          &SeDrTuple{SeDnsPrefix: "west.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, hostCanary})): &SeDrTuple{SeDnsPrefix: "east.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with canary endpoint ande default",
@@ -2265,6 +2283,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 				common.GetCnameVal([]string{east, hostCanary}): &SeDrTuple{SeDnsPrefix: "east.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				hostCanary: &SeDrTuple{SeDnsPrefix: "canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name: "Given a SE is getting updated due to a GTP applied to a Deployment, " +
@@ -2279,6 +2299,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet:             nil,
 			cc:                  errorCacheController,
 			disableIPGeneration: false,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 	}
 	ctx := context.Background()
@@ -2292,7 +2314,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
 			admiralCache.ConfigMapController = c.cc
-			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil, false)
+			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil, false, c.isServiceEntryModifyCalledForSourceCluster)
 			if c.seDrSet == nil {
 				if !reflect.DeepEqual(result, c.seDrSet) {
 					t.Fatalf("Expected nil seDrSet but got %+v", result)
@@ -2313,6 +2335,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 					t.Fatalf("Expected seDrSet entry global traffic policy name %s does not match the result %s", c.seDrSet[host].SeDrGlobalTrafficPolicyName, result[host].SeDrGlobalTrafficPolicyName)
 				}
 			}
+
+			assert.Equal(t, c.cnameCache, admiralCache.CnameClusterCache)
 		})
 	}
 }

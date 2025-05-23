@@ -625,6 +625,8 @@ func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegi
 		}
 	}
 
+	ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "srcClusters="+strings.Join(sourceClusters, ","))
+
 	/*
 		Validate default LB label, source and destination clusters, validate if NLB timeout needed or not
 		If default is NLB, and all source cluster in CLB exclude list then return false
