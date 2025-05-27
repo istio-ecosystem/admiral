@@ -739,26 +739,31 @@ func addUpdateInClusterVirtualServices(
 			}
 		}
 
-		// Get SE from cache. We need this to see if this identity is multi-region
-		// This is required later to pin DR to the remote region
 		doPerformDRPinning := false
-		if rc.ServiceEntryController != nil && rc.ServiceEntryController.Cache != nil {
-			SEName := fmt.Sprintf("%s-se", vsName)
-			cachedSE := rc.ServiceEntryController.Cache.Get(SEName, sourceCluster)
-			if cachedSE != nil {
-				// Pinning DR to remote region is only needed if the identity is multi-region
-				if isSEMultiRegion(&cachedSE.Spec) {
-					doPerformDRPinning = true
+		doPerformDRPinning = common.DoDRUpdateForInClusterVSRouting(
+			sourceCluster, sourceIdentity, true)
+
+		if doPerformDRPinning {
+			// Get SE from cache. We need this to see if this identity is multi-region
+			// This is required later to pin DR to the remote region
+			if rc.ServiceEntryController != nil && rc.ServiceEntryController.Cache != nil {
+				SEName := fmt.Sprintf("%s-se", vsName)
+				cachedSE := rc.ServiceEntryController.Cache.Get(SEName, sourceCluster)
+				if cachedSE != nil {
+					// Pinning DR to remote region is only needed if the identity is multi-region
+					if isSEMultiRegion(&cachedSE.Spec) {
+						doPerformDRPinning = true
+					} else {
+						ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+							virtualService.Name, virtualService.Namespace, sourceCluster,
+							"skipped pinning DR to remote region as the identity is not multi-region")
+					}
 				} else {
 					ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 						virtualService.Name, virtualService.Namespace, sourceCluster,
-						"skipped pinning DR to remote region as the identity is not multi-region")
+						fmt.Sprintf(
+							"skipped pinning DR to remote region as no SE found in cache for identity %s", sourceIdentity))
 				}
-			} else {
-				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-					virtualService.Name, virtualService.Namespace, sourceCluster,
-					fmt.Sprintf(
-						"skipped pinning DR to remote region as no SE found in cache for identity %s", sourceIdentity))
 			}
 		}
 
