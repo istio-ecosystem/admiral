@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	v1alpha12 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
@@ -7783,4 +7785,426 @@ func TestGetHostsDiff(t *testing.T) {
 		})
 	}
 
+}
+
+func TestIsSEMultiRegion(t *testing.T) {
+
+	// write table test cases for IsSEMultiRegion function
+	testCases := []struct {
+		name           string
+		serviceEntry   *networkingV1Alpha3.ServiceEntry
+		expectedResult bool
+	}{
+		{
+			name: "Given nil ServiceEntry" +
+				"When IsSEMultiRegion is called" +
+				"Then it should return false",
+			serviceEntry:   nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given ServiceEntry with no endpoints" +
+				"When IsSEMultiRegion is called" +
+				"Then it should return false",
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Endpoints: nil,
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given ServiceEntry with endpoints in a single region" +
+				"When IsSEMultiRegion is called" +
+				"Then it should return false",
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+					{
+						Locality: "us-west-2",
+					},
+					{
+						Locality: "us-west-2",
+					},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given ServiceEntry with endpoints in multiple regions" +
+				"When IsSEMultiRegion is called" +
+				"Then it should return true",
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+					{
+						Locality: "us-west-2",
+					},
+					{
+						Locality: "us-east-2",
+					},
+				},
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualResult := isSEMultiRegion(tc.serviceEntry)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+
+}
+
+func TestPerformDRPinning(t *testing.T) {
+
+	cachedAdditionalEndpointDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "west.foo.test-ns.global-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "west.foo.test-ns.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-west-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expectedAdditionalEndpointDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "west.foo.test-ns.global-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "west.foo.test-ns.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	cachedDefaultDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "foo.test-ns.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "foo.test-ns.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-west-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	expectedDefaultDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "foo.test-ns.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "foo.test-ns.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	drCache := istio.NewDestinationRuleCache()
+	drCache.Put(cachedDefaultDR)
+	drCache.Put(cachedAdditionalEndpointDR)
+
+	istioClient := istioFake.NewSimpleClientset()
+	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
+		Create(context.Background(), cachedDefaultDR, metaV1.CreateOptions{})
+	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
+		Create(context.Background(), cachedAdditionalEndpointDR, metaV1.CreateOptions{})
+
+	admiralParams := common.AdmiralParams{
+		LabelSet: &common.LabelSet{
+			WorkloadIdentityKey: "identity",
+			EnvKey:              "env",
+		},
+		HostnameSuffix: "global",
+		SyncNamespace:  "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	testCases := []struct {
+		name                  string
+		remoteRegistry        *RemoteRegistry
+		remoteController      *RemoteController
+		vs                    *apiNetworkingV1Alpha3.VirtualService
+		env                   string
+		sourceIdentity        string
+		sourceCluster         string
+		drName                string
+		expectedError         error
+		expectDestinationRule *apiNetworkingV1Alpha3.DestinationRule
+	}{
+		{
+			name: "Given nil remoteRegistry" +
+				"When performDRPinning func is called" +
+				"Then the func should return an error",
+			remoteRegistry: nil,
+			expectedError:  fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given nil remoteController" +
+				"When performDRPinning func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{},
+			expectedError:  fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given nil vs" +
+				"When performDRPinning func is called" +
+				"Then the func should return an error",
+			remoteRegistry:   &RemoteRegistry{},
+			remoteController: &RemoteController{},
+			expectedError:    fmt.Errorf("virtualService is nil"),
+		},
+		{
+			name: "Given locality is missing" +
+				"When performDRPinning func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				ClusterID: "cluster1",
+			},
+			vs:            &apiNetworkingV1Alpha3.VirtualService{},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("getClusterRegion failed due to failed to get region of cluster cluster1"),
+		},
+		{
+			name: "Given for a VS host there is no DR in cache" +
+				"When performDRPinning func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-west-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioFake.NewSimpleClientset(),
+					Cache:       istio.NewDestinationRuleCache(),
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"foo.test-ns.global"},
+				},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf(
+				"skipped pinning DR to remote region as no cached DR found with drName foo.test-ns.global-default-dr in cluster cluster1"),
+		},
+		{
+			name: "Given for a VS host there is DR in cache with same region" +
+				"When performDRPinning func is called" +
+				"Then the func should not return an error but DR will not change as reconcile is not needed",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-east-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioClient,
+					Cache:       drCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"foo.test-ns.global"},
+				},
+			},
+			drName:                "foo.test-ns.global-default-dr",
+			sourceCluster:         "cluster1",
+			sourceIdentity:        "foo.test-ns.global-default-dr",
+			env:                   "foo",
+			expectDestinationRule: cachedDefaultDR,
+		},
+		{
+			name: "Given for a VS host there is DR in cache and region needs to be flipped" +
+				"When performDRPinning func is called" +
+				"Then the func should not return an error and DR will be updated with new region",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-west-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioClient,
+					Cache:       drCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"foo.test-ns.global"},
+				},
+			},
+			drName:                "foo.test-ns.global-default-dr",
+			sourceCluster:         "cluster1",
+			sourceIdentity:        "foo.test-ns.global-default-dr",
+			env:                   "foo",
+			expectDestinationRule: expectedDefaultDR,
+		},
+		{
+			name: "Given for a VS with additonal endpoint host with DR in cache and region needs to be flipped" +
+				"When performDRPinning func is called" +
+				"Then the func should not return an error and DR will be updated with new region",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-west-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioClient,
+					Cache:       drCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"west.foo.test-ns.global"},
+				},
+			},
+			drName:                "west.foo.test-ns.global-dr",
+			sourceCluster:         "cluster1",
+			sourceIdentity:        "west.foo.test-ns.global-dr",
+			env:                   "foo",
+			expectDestinationRule: expectedAdditionalEndpointDR,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := performDRPinning(
+				context.Background(), ctxLogger, tc.remoteRegistry,
+				tc.remoteController, tc.vs, tc.env, tc.sourceCluster)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				actualDr, err := tc.remoteController.DestinationRuleController.IstioClient.NetworkingV1alpha3().
+					DestinationRules(common.GetSyncNamespace()).Get(context.Background(), tc.drName, metaV1.GetOptions{})
+				assert.Nil(t, err)
+				assert.True(t,
+					reflect.DeepEqual(
+						tc.expectDestinationRule.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute,
+						actualDr.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute))
+			}
+		})
+	}
+
+}
+
+func TestGetLocalityLBSettings(t *testing.T) {
+
+	testCases := []struct {
+		name           string
+		locality       string
+		expectedResult *networkingV1Alpha3.LocalityLoadBalancerSetting
+		expectedError  error
+	}{
+		{
+			name: "Given empty locality" +
+				"When getLocalityLBSettings func is called" +
+				"Then the func should return an error",
+			locality:      "",
+			expectedError: fmt.Errorf("currentLocality is empty"),
+		},
+		{
+			name: "Given current locality is west" +
+				"When getLocalityLBSettings func is called" +
+				"Then the func should pin to east region",
+			locality: "us-west-2",
+			expectedResult: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+				Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+					{
+						From: "*",
+						To:   map[string]uint32{"us-east-2": 100},
+					},
+				},
+			},
+		},
+		{
+			name: "Given current locality is east" +
+				"When getLocalityLBSettings func is called" +
+				"Then the func should pin to west region",
+			locality: "us-east-2",
+			expectedResult: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+				Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+					{
+						From: "*",
+						To:   map[string]uint32{"us-west-2": 100},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualResult, err := getLocalityLBSettings(tc.locality)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.True(t, reflect.DeepEqual(tc.expectedResult, actualResult))
+			}
+		})
+	}
 }

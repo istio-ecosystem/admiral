@@ -95,21 +95,20 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 		return dr
 	}
 
+	// Pin the DR to remote region if in-cluster VS routing is enabled
 	if doDRUpdateForInClusterRouting {
-		remoteRegion := common.WestLocality
-		if locality == common.WestLocality {
-			remoteRegion = common.EastLocality
+		// Perform DR pinning only if it is multi-region
+		var err error
+		if isSEMultiRegion(se) {
+			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(locality)
+			if err == nil {
+				return dr
+			} else {
+				ctxLogger.Errorf(common.CtxLogFormat,
+					"doDRUpdateForInClusterRouting", "", "", "",
+					fmt.Sprintf("error getting locality LB settings: %v", err))
+			}
 		}
-
-		dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{
-			Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-				{
-					From: "*",
-					To:   map[string]uint32{remoteRegion: 100},
-				},
-			},
-		}
-		return dr
 	}
 
 	if gtpTrafficPolicy == nil {
