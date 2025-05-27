@@ -86,11 +86,17 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		VirtualServiceController: &istio.VirtualServiceController{
 			VirtualServiceCache: istio.NewVirtualServiceCache(),
 		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			Cache: istio.NewServiceEntryCache(),
+		},
 	}
 
 	rc1 := &RemoteController{
 		ClusterID:                "cluster-2",
 		VirtualServiceController: &istio.VirtualServiceController{},
+		ServiceEntryController: &istio.ServiceEntryController{
+			Cache: istio.NewServiceEntryCache(),
+		},
 	}
 
 	rr := NewRemoteRegistry(context.Background(), admiralParams)
