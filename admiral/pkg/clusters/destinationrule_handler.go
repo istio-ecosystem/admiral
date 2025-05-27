@@ -3,6 +3,7 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"net"
 	"strconv"
 	"strings"
@@ -611,8 +612,9 @@ func retryUpdatingDR(
 	return err
 }
 
-func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegistry, rc *RemoteController, obj *networkingV1Alpha3.DestinationRule, sourceClusterForVSRouting string) *networkingV1Alpha3.DestinationRule {
+func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegistry, rc *RemoteController, obj *networkingV1Alpha3.DestinationRule, sourceClusterForVSRouting string, sourceIdentity string) *networkingV1Alpha3.DestinationRule {
 	// Add the idle timeout to the DR if NLB is enabled for the destination/server cluster before it is copied anywhere
+
 	ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "")
 	var sourceClusters []string
 	if sourceClusterForVSRouting != "" {
@@ -626,16 +628,16 @@ func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegi
 	}
 
 	ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "srcClusters="+strings.Join(sourceClusters, ","))
-
 	/*
 		Validate default LB label, source and destination clusters, validate if NLB timeout needed or not
 		If default is NLB, and all source cluster in CLB exclude list then return false
 		If default is CLB, and any of 1 or more source clusters in NLB include list then return true
 		If default is NLB, not all source cluster in CLB exclude list then return true
+		If asset level migration enable then return true
 		We can't support multiple LB timeout as DR is one. And most case endpoint/LB will be two. So we need to pick one.
 		Excluding mailchimp all are fine to pick any one. All mailchimp will be in exclude list, need to put right cluster in DB
 	*/
-	if !IsNLBTimeoutNeeded(sourceClusters, rr.AdmiralCache.NLBEnabledCluster, rr.AdmiralCache.CLBEnabledCluster) {
+	if !IsNLBTimeoutNeeded(sourceClusters, rr.AdmiralCache.NLBEnabledCluster, rr.AdmiralCache.CLBEnabledCluster, sourceIdentity) {
 		ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeout", obj.Host, "", rc.ClusterID, "Skipped")
 		return obj
 	}
@@ -659,29 +661,32 @@ func addNLBIdleTimeout(ctx context.Context, ctxLogger *log.Entry, rr *RemoteRegi
 				sourceClusterRc.ServiceController.Cache.Put(igw)
 			}
 		}
-		if timeout != "" {
-			timeoutInt, stErr := strconv.Atoi(timeout)
-			if stErr != nil {
-				ctxLogger.Errorf(common.CtxLogFormat, "AddNLBIdleTimeoutStErr", obj.Host, "", rc.ClusterID, "failed to convert timeout value to int on istio-ingressgateway-nlb")
-				timeoutInt = common.NLBDefaultTimeoutSeconds
-			}
-			if timeoutInt < common.NLBDefaultTimeoutSeconds {
-				timeoutInt = common.NLBDefaultTimeoutSeconds
-			}
-			if obj.TrafficPolicy == nil {
-				obj.TrafficPolicy = &networkingV1Alpha3.TrafficPolicy{}
-			}
-			if obj.TrafficPolicy.ConnectionPool == nil {
-				obj.TrafficPolicy.ConnectionPool = &networkingV1Alpha3.ConnectionPoolSettings{}
-			}
-			if obj.TrafficPolicy.ConnectionPool.Tcp == nil {
-				obj.TrafficPolicy.ConnectionPool.Tcp = &networkingV1Alpha3.ConnectionPoolSettings_TCPSettings{}
-			}
-			obj.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout = durationpb.New(time.Duration(timeoutInt * int(time.Second)))
-			ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeoutSuccess", obj.Host, "", rc.ClusterID, timeoutInt)
-		}
+		obj = buildNLBTimeout(ctxLogger, timeout, obj, rc)
 	}
 	return obj
+}
+
+func buildNLBTimeout(ctxLogger *log.Entry, timeout string, dr *networkingV1Alpha3.DestinationRule, rc *RemoteController) *networkingV1Alpha3.DestinationRule {
+	timeoutInt, stErr := strconv.Atoi(timeout)
+	if stErr != nil {
+		ctxLogger.Errorf(common.CtxLogFormat, "AddNLBIdleTimeoutStErr", dr.Host, "", rc.ClusterID, "failed to convert timeout value to int on istio-ingressgateway-nlb")
+		timeoutInt = common.NLBDefaultTimeoutSeconds
+	}
+	if timeoutInt < common.NLBDefaultTimeoutSeconds {
+		timeoutInt = common.NLBDefaultTimeoutSeconds
+	}
+	if dr.TrafficPolicy == nil {
+		dr.TrafficPolicy = &networkingV1Alpha3.TrafficPolicy{}
+	}
+	if dr.TrafficPolicy.ConnectionPool == nil {
+		dr.TrafficPolicy.ConnectionPool = &networkingV1Alpha3.ConnectionPoolSettings{}
+	}
+	if dr.TrafficPolicy.ConnectionPool.Tcp == nil {
+		dr.TrafficPolicy.ConnectionPool.Tcp = &networkingV1Alpha3.ConnectionPoolSettings_TCPSettings{}
+	}
+	dr.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout = durationpb.New(time.Duration(timeoutInt * int(time.Second)))
+	ctxLogger.Infof(common.CtxLogFormat, "AddNLBIdleTimeoutSuccess", dr.Host, "", rc.ClusterID, timeoutInt)
+	return dr
 }
 
 /*
@@ -692,9 +697,14 @@ If default is NLB, not all source cluster in CLB exclude list then return true
 We can't support multiple LB timeout as DR is one. And most case endpoint/LB will be two. So we need to pick one.
 Excluding mailchimp all are fine to pick any one. All mailchimp will be in exclude list, need to put right cluster in DB
 */
-func IsNLBTimeoutNeeded(sourceClusters []string, nlbOverwrite []string, clbOverwrite []string) bool {
+func IsNLBTimeoutNeeded(sourceClusters []string, nlbOverwrite []string, clbOverwrite []string, sourceIdentity string) bool {
 	nlbIntersectClusters := common.SliceIntersection[string](sourceClusters, nlbOverwrite)
 	clbIntersectClusters := common.SliceIntersection[string](sourceClusters, clbOverwrite)
+
+	if slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
+		//if sourceAsset is part of asset level migration then return default NLB timeout
+		return true
+	}
 
 	if len(sourceClusters) == len(clbIntersectClusters) && common.GetAdmiralParams().LabelSet.GatewayApp == common.NLBIstioIngressGatewayLabelValue {
 		//All source cluster have CLB exception and default is NLB, don't overwrite

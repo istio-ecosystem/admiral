@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
@@ -25,6 +26,13 @@ import (
 	k8sV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type envCustomVSTuple struct {
+	env      string
+	customVS *v1alpha3.VirtualService
+}
+
+type GetCustomVirtualService func(context.Context, *log.Entry, *RemoteController, string, string) ([]envCustomVSTuple, error)
 
 type VSRouteComparator func(*networkingV1Alpha3.VirtualService, *networkingV1Alpha3.VirtualService) (bool, error)
 type HTTPRouteSorted []*networkingV1Alpha3.HTTPRoute
@@ -667,7 +675,8 @@ func addUpdateInClusterVirtualServices(
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
 	vsName string,
-	sourceIdentity string) error {
+	sourceIdentity string,
+	env string) error {
 
 	if sourceIdentity == "" {
 		return fmt.Errorf("identity is empty")
@@ -710,47 +719,232 @@ func addUpdateInClusterVirtualServices(
 			return err
 		}
 
-		ctxLogger.Infof(
-			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-			"checking if incluster routing virtualService requires reconciliation")
-		reconcileRequired, err :=
-			doReconcileVirtualService(rc, virtualService, httpRoutesComparator)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster,
-				fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
+		virtualServicesToBeProcessed := []*v1alpha3.VirtualService{virtualService}
+
+		// Merge the incluster vs with custom virtualservice, if enabled
+		if common.IsCustomVSMergeEnabled() {
+			mergedVirtualServices, err :=
+				mergeCustomVirtualServices(
+					ctx, ctxLogger, rc, virtualService, env, sourceIdentity, sourceCluster, getCustomVirtualService)
+			if err != nil {
+				return err
+			}
+			if mergedVirtualServices != nil && len(mergedVirtualServices) > 0 {
+				virtualServicesToBeProcessed = mergedVirtualServices
+			} else {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf("merge skipped as no custom virtual services found for env %s", env))
+			}
 		}
-		if !reconcileRequired {
+
+		for _, vs := range virtualServicesToBeProcessed {
+			// Reconciliation check - Start
 			ctxLogger.Infof(
-				common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-				"reconcile=false")
-			continue
-		}
-		ctxLogger.Infof(
-			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
-			"reconcile=true")
+				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+				"checking if incluster routing virtualService requires reconciliation")
+			reconcileRequired, err :=
+				doReconcileVirtualService(rc, vs, httpRoutesComparator)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster,
+					fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
+			}
+			if !reconcileRequired {
+				ctxLogger.Infof(
+					common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+					"reconcile=false")
+				continue
+			}
+			ctxLogger.Infof(
+				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
+				"reconcile=true")
+			// Reconciliation check - End
 
-		existingVS, err := getExistingVS(ctxLogger, ctx, rc, virtualService.Name, util.IstioSystemNamespace)
-		if err != nil {
-			ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
+			existingVS, err := getExistingVS(ctxLogger, ctx, rc, vs.Name, util.IstioSystemNamespace)
+			if err != nil {
+				ctxLogger.Warn(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster, err.Error())
+			}
+
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				vs.Name, vs.Namespace, sourceCluster, "Add/Update ingress virtualservice")
+
+			err = addUpdateVirtualService(
+				ctxLogger, ctx, vs, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					vs.Name, vs.Namespace, sourceCluster, err.Error())
+				return err
+			}
+			ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				vs.Name, vs.Namespace, sourceCluster, "virtualservice created/updated successfully")
 		}
 
-		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-			virtualService.Name, virtualService.Namespace, sourceCluster, "Add/Update ingress virtualservice")
-
-		err = addUpdateVirtualService(
-			ctxLogger, ctx, virtualService, existingVS, util.IstioSystemNamespace, rc, remoteRegistry)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-				virtualService.Name, virtualService.Namespace, sourceCluster, err.Error())
-			return err
-		}
-		ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-			virtualService.Name, virtualService.Namespace, sourceCluster, "virtualservice created successfully")
 	}
 
 	return nil
+}
+
+// mergeCustomVirtualServices gets the custom virtualservices based on the identity passed
+// The getCustomVirtualService func will return a slice of env to custom VS key-value pair.
+// For each of the key value pair returned, we check if the env in the map matches the env passed
+// to the func.
+// If it does, then we merge the corresponding customVS to the virtualservice that was
+// passed to the func.
+// Else, we fetch the VS from the controller cache and use that to merge with the customVS.
+// The func in the end returns a slice of merged virtualservices.
+// TODO: Missing unit tests
+func mergeCustomVirtualServices(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	virtualService *v1alpha3.VirtualService,
+	env string,
+	sourceIdentity string,
+	sourceCluster string,
+	getCustomVirtualService GetCustomVirtualService,
+) ([]*v1alpha3.VirtualService, error) {
+
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller not initialized")
+	}
+	if virtualService == nil {
+		return nil, fmt.Errorf("nil virtualService")
+	}
+	if rc.VirtualServiceController == nil {
+		return nil, fmt.Errorf("virtualServiceController is nil")
+	}
+	if rc.VirtualServiceController.VirtualServiceCache == nil {
+		return nil, fmt.Errorf("virtualServiceController.VirtualServiceCache is nil")
+	}
+
+	mergedVirtualServices := make([]*v1alpha3.VirtualService, 0)
+
+	customVirtualServices, err := getCustomVirtualService(ctx, ctxLogger, rc, env, sourceIdentity)
+	if err != nil {
+		return nil, fmt.Errorf("getCustomVirtualService failed due to %w", err)
+	}
+	if customVirtualServices == nil {
+		return mergedVirtualServices, nil
+	}
+	for _, tuple := range customVirtualServices {
+		// env matches for which the event was received
+		// then use the virtualService passed to this func
+		if tuple.env == env {
+			mergedVirtualService, err := mergeVS(tuple.customVS, virtualService, rc)
+			if err != nil {
+				return nil, err
+			}
+			err = rc.VirtualServiceController.HostToRouteDestinationCache.Put(mergedVirtualService)
+			if err != nil {
+				return nil, err
+			}
+			mergedVirtualServices = append(
+				mergedVirtualServices, mergedVirtualService)
+			continue
+		}
+		// if env is not for the event's env
+		// then get the VS from the cache and merge it
+		vsName := strings.ToLower(
+			common.GetCnameVal([]string{tuple.env, sourceIdentity, common.GetHostnameSuffix()}))
+		vsName = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
+		vsFromCache := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
+		if vsFromCache == nil {
+			ctxLogger.Infof(common.CtxLogFormat, "mergeCustomVirtualServices",
+				vsName, "", sourceCluster,
+				fmt.Sprintf("no custom virtualservice found for env %s", tuple.env))
+			continue
+		}
+		mergedVirtualService, err := mergeVS(tuple.customVS, vsFromCache, rc)
+		if err != nil {
+			return nil, err
+		}
+		mergedVirtualServices = append(
+			mergedVirtualServices, mergedVirtualService)
+	}
+
+	return mergedVirtualServices, nil
+}
+
+// getCustomVirtualService returns a slice of key-value pair of env to virtualService
+// The custom VS could have a common VS for multiple envs. These envs are separated with an
+// underscore. This func returns a sorted slice of env to virtualService map.
+// The slice is sorted by keeping the env that is passed as a param to this func at the 0th
+// index.
+// Example: if the env passed is stage and the createdForEnv in the VS has "stage1_stage2_stage"
+// []{{"stage":virtualService}, {"stage1": virtualService}, {"stage2": virtualService}}
+func getCustomVirtualService(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	env string,
+	identity string) ([]envCustomVSTuple, error) {
+
+	if rc == nil {
+		return nil, fmt.Errorf("remoteController is nil")
+	}
+	if env == "" {
+		return nil, fmt.Errorf("env is empty")
+	}
+	if identity == "" {
+		return nil, fmt.Errorf("identity is empty")
+	}
+
+	labelSelector := metaV1.LabelSelector{MatchLabels: map[string]string{
+		common.CreatedFor: strings.ToLower(identity),
+		common.CreatedBy:  common.GetProcessVSCreatedBy(),
+	}}
+
+	virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, common.GetSyncNamespace(),
+		metaV1.ListOptions{
+			LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+		})
+
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to fetch custom vs with env %s and identity %s due to error %w", env, identity, err)
+	}
+	if len(virtualServiceList.Items) == 0 {
+		return nil, nil
+	}
+	var matchedVS envCustomVSTuple
+
+	finalVirtualServices := make([]envCustomVSTuple, 0)
+	foundMatchingVirtualServices := false
+
+	for _, vs := range virtualServiceList.Items {
+		vsForOtherEnvs := make([]envCustomVSTuple, 0)
+		annotations := vs.Annotations
+		if annotations == nil {
+			continue
+		}
+		createdForEnv, ok := annotations[common.CreatedForEnv]
+		if !ok {
+			continue
+		}
+		if createdForEnv == "" {
+			continue
+		}
+		//This is to handle multi env usecase
+		splitEnvs := strings.Split(createdForEnv, "_")
+		for _, splitEnv := range splitEnvs {
+			if splitEnv == env {
+				matchedVS = envCustomVSTuple{env: env, customVS: vs}
+				foundMatchingVirtualServices = true
+				continue
+			}
+			vsForOtherEnvs = append(vsForOtherEnvs, envCustomVSTuple{env: splitEnv, customVS: vs})
+		}
+		if foundMatchingVirtualServices {
+			// The matched env should be added at the 0th index
+			finalVirtualServices = append(finalVirtualServices, matchedVS)
+			finalVirtualServices = append(finalVirtualServices, vsForOtherEnvs...)
+			break
+		}
+	}
+
+	return finalVirtualServices, nil
 }
 
 // httpRoutesComparator comparator that matches the routes between two virtualservice spec
@@ -915,12 +1109,12 @@ func addUpdateVirtualServicesForIngress(
 // and rollouts.
 // This map will be used to create the route destinations for the VirtualService
 func getAllVSRouteDestinationsByCluster(
-	ctxLogger *log.Entry,
 	serviceInstance map[string]*k8sV1.Service,
 	meshDeployAndRolloutPorts map[string]map[string]uint32,
 	weightedServices map[string]*WeightedService,
 	rollout *argo.Rollout,
-	deployment *k8sAppsV1.Deployment) (map[string][]*vsrouting.RouteDestination, error) {
+	deployment *k8sAppsV1.Deployment,
+	resourceTypeBeingDeleted string) (map[string][]*vsrouting.RouteDestination, error) {
 
 	if serviceInstance == nil {
 		return nil, fmt.Errorf("serviceInstance is nil")
@@ -929,7 +1123,7 @@ func getAllVSRouteDestinationsByCluster(
 	ingressDestinations := make(map[string][]*vsrouting.RouteDestination)
 
 	// Populate the route destinations(svc.cluster.local services) for the deployment
-	if serviceInstance[common.Deployment] != nil {
+	if serviceInstance[common.Deployment] != nil && resourceTypeBeingDeleted != common.Deployment {
 		meshPort, err := getMeshHTTPPortForDeployment(meshDeployAndRolloutPorts)
 		if err != nil {
 			return nil, err
@@ -942,7 +1136,7 @@ func getAllVSRouteDestinationsByCluster(
 	}
 
 	// Populate the route destinations(svc.cluster.local services) for the rollout
-	if serviceInstance[common.Rollout] != nil {
+	if serviceInstance[common.Rollout] != nil && resourceTypeBeingDeleted != common.Rollout {
 		meshPort, err := getMeshHTTPPortForRollout(meshDeployAndRolloutPorts)
 		if err != nil {
 			return nil, err
@@ -1223,7 +1417,7 @@ func addUpdateInClusterDestinationRule(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"incluster-dr", exportToNamespaces, clientTLSSettings)
+			"incluster-dr", exportToNamespaces, clientTLSSettings, sourceIdentity)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1273,7 +1467,7 @@ func addUpdateDestinationRuleForSourceIngress(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"routing-dr", common.GetIngressVSExportToNamespace(), clientTLSSettings)
+			"routing-dr", common.GetIngressVSExportToNamespace(), clientTLSSettings, sourceIdentity)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1285,15 +1479,7 @@ func addUpdateDestinationRuleForSourceIngress(
 }
 
 // addUpdateRoutingDestinationRule creates the DR for VS Based Routing
-func addUpdateRoutingDestinationRule(
-	ctx context.Context,
-	ctxLogger *log.Entry,
-	remoteRegistry *RemoteRegistry,
-	drHosts map[string]string,
-	sourceCluster string,
-	drNameSuffix string,
-	exportToNamespaces []string,
-	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings) error {
+func addUpdateRoutingDestinationRule(ctx context.Context, ctxLogger *log.Entry, remoteRegistry *RemoteRegistry, drHosts map[string]string, sourceCluster string, drNameSuffix string, exportToNamespaces []string, clientTLSSettings *networkingV1Alpha3.ClientTLSSettings, sourceIdentity string) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
@@ -1328,6 +1514,19 @@ func addUpdateRoutingDestinationRule(
 
 		drName := fmt.Sprintf("%s-%s", name, drNameSuffix)
 
+		if common.IsTrafficConfigProcessingEnabledForSlowStart() {
+			assetKey, hasAssetKey := ctx.Value(common.TrafficConfigIdentity).(string)
+			if hasAssetKey {
+				workloadEnvKey, hasWorkloadEnvKey := ctx.Value(common.TrafficConfigContextWorkloadEnvKey).(string)
+				if hasWorkloadEnvKey && workloadEnvKey != "" {
+					err := processSlowStartConfig(remoteRegistry, ctxLogger, assetKey, workloadEnvKey, &drObj, drName, sourceCluster)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		newDR := createDestinationRuleSkeleton(drObj, drName, util.IstioSystemNamespace)
 
 		newDR.Labels = map[string]string{
@@ -1335,6 +1534,12 @@ func addUpdateRoutingDestinationRule(
 		}
 
 		newDR.Spec.ExportTo = exportToNamespaces
+
+		doReconcileDR := reconcileDestinationRule(
+			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, util.IstioSystemNamespace)
+		if !doReconcileDR {
+			continue
+		}
 
 		//Get existing DR
 		existingDR, err := rc.
@@ -1350,7 +1555,7 @@ func addUpdateRoutingDestinationRule(
 				sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
 			existingDR = nil
 		}
-
+		newDR.Spec = *addNLBIdleTimeout(ctx, ctxLogger, remoteRegistry, rc, newDR.Spec.DeepCopy(), sourceCluster, sourceIdentity)
 		err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
@@ -1361,7 +1566,52 @@ func addUpdateRoutingDestinationRule(
 		ctxLogger.Infof(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
 			drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
 
+		rc.DestinationRuleController.Cache.Put(newDR)
+
 	}
+
+	return nil
+}
+
+// processSlowStartConfig handles the processing of slow start traffic configuration
+// and applies warmup duration to destination rule if found
+func processSlowStartConfig(remoteRegistry *RemoteRegistry, ctxLogger *log.Entry, assetKey string, workloadEnvKey string,
+	drObj *networkingV1Alpha3.DestinationRule, drName string, sourceCluster string) error {
+	assetConfigMap := remoteRegistry.AdmiralCache.SlowStartConfigCache.Get(assetKey)
+	if assetConfigMap == nil {
+		return nil
+	}
+
+	// Use a function to allow breaking from the Range method
+	var warmupDurationValue int64
+	var err error
+	assetConfigMap.Range(func(envKey string, envConfig *common.Map) {
+		// Only process if not already found
+		if envConfig.CheckIfPresent(workloadEnvKey) {
+			// Found a match, get the value
+			durationStr := envConfig.Get(workloadEnvKey)
+			if durationStr == "" {
+				warmupDurationValue = common.GetDefaultWarmupDurationSecs()
+			} else {
+				warmupDurationValue, err = strconv.ParseInt(durationStr, 10, 64)
+				if err != nil {
+					ctxLogger.Warnf(common.CtxLogFormat,
+						"addUpdateRoutingDestinationRule",
+						drName, util.IstioSystemNamespace, sourceCluster,
+						fmt.Sprintf("Failed to parse warmup duration for workload env %s: %v",
+							workloadEnvKey, err))
+					warmupDurationValue = common.GetDefaultWarmupDurationSecs()
+				}
+			}
+		}
+	})
+
+	// Apply the found duration to the destination rule
+	drObj.TrafficPolicy.LoadBalancer.WarmupDurationSecs = &duration.Duration{Seconds: warmupDurationValue}
+	ctxLogger.Infof(common.CtxLogFormat,
+		"addUpdateRoutingDestinationRule",
+		drName, util.IstioSystemNamespace, sourceCluster,
+		fmt.Sprintf("Applied warmup duration of %d seconds", warmupDurationValue))
 
 	return nil
 }
@@ -1492,4 +1742,217 @@ func performInVSRoutingRollback(
 		return fmt.Errorf("%v", errs)
 	}
 	return nil
+}
+
+func mergeVS(
+	customVS *v1alpha3.VirtualService,
+	inclusterVS *v1alpha3.VirtualService,
+	rc *RemoteController) (*v1alpha3.VirtualService, error) {
+
+	if customVS == nil {
+		return nil, fmt.Errorf("custom VS is nil")
+	}
+	if inclusterVS == nil {
+		return nil, fmt.Errorf("incluster VS is nil")
+	}
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+
+	newVS := inclusterVS.DeepCopy()
+
+	// Merge the hosts of both VS and then de-dup it
+	mergedVSHosts := mergeHosts(customVS.Spec.Hosts, inclusterVS.Spec.Hosts)
+
+	// This is where all the .mesh destination host in the custom VS will be
+	// replaced by .local
+	modifiedCustomVSRouteDestinations, err := modifyCustomVSHTTPRoutes(customVS.Spec.Http, inclusterVS.Spec.Http, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get Hosts Diff
+	// This is needed to get hosts that are not in custom VS
+	// The routes for such hosts have to be added towards the top
+	// for them to match on authority and avoid any special routing rules being
+	// applied by the custom VS
+	hostDiff := getHostsDiff(inclusterVS.Spec.Hosts, customVS.Spec.Hosts)
+
+	// Time to sort the routes
+	// The non-default fqdn from the in-cluster VS will be added first
+	// Then the fdqn that were in the custom VS will be added next
+	// then the remaining
+	sortedRoutes := sortVSRoutes(
+		modifiedCustomVSRouteDestinations,
+		inclusterVS.Spec.Http,
+		hostDiff)
+
+	newVS.Spec.Http = sortedRoutes
+	newVS.Spec.Hosts = mergedVSHosts
+
+	return newVS, nil
+
+}
+
+// getHostsDiff returns a map of hosts that are in in-cluster VS host list but
+// not in the custom VS
+func getHostsDiff(inclusterHosts []string, customVSHosts []string) map[string]bool {
+	result := make(map[string]bool)
+	lookup := make(map[string]bool)
+	for _, host := range customVSHosts {
+		lookup[host] = true
+	}
+
+	for _, host := range inclusterHosts {
+		if lookup[host] {
+			continue
+		}
+		result[host] = true
+	}
+	return result
+}
+
+func sortVSRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	hostsNotInCustomVS map[string]bool) []*networkingV1Alpha3.HTTPRoute {
+
+	nonDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	defaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	finalMergedRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+
+	// This is to make sure the hosts that are not in the customVS
+	// their routes are ordered first.
+	for _, route := range inclusterVSRoutes {
+		if hostsNotInCustomVS[route.Name] {
+			nonDefaultRoutes = append(nonDefaultRoutes, route)
+			continue
+		}
+		defaultRoutes = append(defaultRoutes, route)
+	}
+
+	// This is to make sure to remove the customVS routes
+	// that may already exists in the incluster vs coming from cache
+	deduplicatedDefaultRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	customVSRouteNames := make(map[string]bool)
+	for _, route := range customVSRoutes {
+		customVSRouteNames[route.Name] = true
+	}
+	for _, route := range defaultRoutes {
+		if !customVSRouteNames[route.Name] {
+			deduplicatedDefaultRoutes = append(deduplicatedDefaultRoutes, route)
+		}
+	}
+
+	finalMergedRoutes = append(finalMergedRoutes, nonDefaultRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, customVSRoutes...)
+	finalMergedRoutes = append(finalMergedRoutes, deduplicatedDefaultRoutes...)
+
+	return finalMergedRoutes
+}
+
+// modifyCustomVSHTTPRoutes modifies the HTTP Route destination by switching the .global/.mesh FQDN with
+// .svc.cluster.local destinations. The .global/.mesh destination will be looked up
+// in the passed in-cluster VS routes first and if not found, lookup will be performed
+// on the HostRouteDestination cache for a fqdn that might be on another NS or with a separate admiral.io/env.
+// If a FQDN in custom VS is not found in any, then we'll keep it as-is.
+// This is needed if a custom VS thats exists in the sync namespace
+// for an identity.
+func modifyCustomVSHTTPRoutes(
+	customVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	inclusterVSRoutes []*networkingV1Alpha3.HTTPRoute,
+	remoteController *RemoteController) ([]*networkingV1Alpha3.HTTPRoute, error) {
+	if customVSRoutes == nil {
+		return nil, fmt.Errorf("custom VS HTTPRoutes is nil")
+	}
+	if inclusterVSRoutes == nil {
+		return nil, fmt.Errorf("incluster VS HTTPRoutes is nil")
+	}
+	if remoteController == nil {
+		return nil, fmt.Errorf("remote controller is nil")
+	}
+
+	// Create a lookup map FQDN -> []*RouteDestinations
+	inClusterRouteLookup := make(map[string][]*networkingV1Alpha3.HTTPRouteDestination)
+	for _, route := range inclusterVSRoutes {
+		inClusterRouteLookup[route.Name] = route.Route
+	}
+
+	newCustomVSHTTPRoutes := make([]*networkingV1Alpha3.HTTPRoute, 0)
+	for _, httpRoute := range customVSRoutes {
+		copyHTTPRoute := httpRoute.DeepCopy()
+		newRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+		for _, routeDestination := range httpRoute.Route {
+			host := routeDestination.Destination.Host
+			// Check for this fqdn in the current incluster VS routes first
+			rd, ok := inClusterRouteLookup[host]
+			if !ok {
+				// If it is not in the current in-cluster VS then check in the cluster's
+				// HostToRouteDestinationCache cache
+				rd = remoteController.VirtualServiceController.HostToRouteDestinationCache.Get(host)
+			}
+			if rd == nil {
+				// If we are unable to find it in both maps then we add the routedestination as is
+				newRouteDestinations = append(newRouteDestinations, routeDestination)
+				continue
+			}
+			// Adjust the weights only if the customVS's routedestination
+			// has a weight associated with it.
+			if routeDestination.Weight == 0 {
+				newRouteDestinations = append(newRouteDestinations, rd...)
+				continue
+			}
+			adjustedRD, err := adjustWeights(rd, routeDestination.Weight)
+			if err != nil {
+				return nil, err
+			}
+			newRouteDestinations = append(newRouteDestinations, adjustedRD...)
+		}
+		copyHTTPRoute.Route = newRouteDestinations
+		newCustomVSHTTPRoutes = append(newCustomVSHTTPRoutes, copyHTTPRoute)
+	}
+
+	return newCustomVSHTTPRoutes, nil
+}
+
+// adjustWeights splits the percentage on each routeDestination based on the weight
+// passed
+func adjustWeights(
+	routeDestinations []*networkingV1Alpha3.HTTPRouteDestination,
+	weight int32) ([]*networkingV1Alpha3.HTTPRouteDestination, error) {
+
+	if routeDestinations == nil {
+		return nil, fmt.Errorf("slice of HTTPRouteDestination is nil")
+	}
+	adjustedRDs := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+	for _, rd := range routeDestinations {
+		newRD := rd.DeepCopy()
+		if rd.Weight != 0 {
+			newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
+			adjustedRDs = append(adjustedRDs, newRD)
+			continue
+		}
+		newRD.Weight = weight
+		adjustedRDs = append(adjustedRDs, newRD)
+	}
+	return adjustedRDs, nil
+}
+
+// mergeHosts merges the hosts and dedups it
+func mergeHosts(hosts1 []string, hosts2 []string) []string {
+	lookup := make(map[string]bool)
+	mergedHosts := make([]string, 0)
+	for _, host := range hosts1 {
+		lookup[host] = true
+		mergedHosts = append(mergedHosts, host)
+	}
+
+	for _, host := range hosts2 {
+		if !lookup[host] {
+			lookup[host] = true
+			mergedHosts = append(mergedHosts, host)
+		}
+	}
+
+	return mergedHosts
 }

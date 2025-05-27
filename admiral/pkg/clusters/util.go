@@ -120,8 +120,7 @@ func removeSeEndpoints(eventCluster string, event admiral.EventType, clusterId s
 
 // GenerateServiceEntryForCanary - generates a service entry only for canary endpoint
 // This is required for rollouts to test only canary version of the services
-func GenerateServiceEntryForCanary(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache,
-	meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, workloadIdentityKey string, san []string) error {
+func GenerateServiceEntryForCanary(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache, meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, workloadIdentityKey string, san []string, sourceIdentity string) error {
 
 	if destRollout.Spec.Strategy.Canary != nil && destRollout.Spec.Strategy.Canary.CanaryService != "" &&
 		destRollout.Spec.Strategy.Canary.TrafficRouting != nil && destRollout.Spec.Strategy.Canary.TrafficRouting.Istio != nil {
@@ -133,7 +132,7 @@ func GenerateServiceEntryForCanary(ctxLogger *logrus.Entry, ctx context.Context,
 		if _, ok := rolloutServices[destRollout.Spec.Strategy.Canary.CanaryService]; ok {
 			canaryGlobalFqdn := common.CanaryRolloutCanaryPrefix + common.Sep + common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 			admiralCache.CnameIdentityCache.Store(canaryGlobalFqdn, common.GetRolloutGlobalIdentifier(destRollout))
-			err := generateSECanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, serviceEntries, san, canaryGlobalFqdn)
+			err := generateSECanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, serviceEntries, san, canaryGlobalFqdn, sourceIdentity)
 			if err != nil {
 				return err
 			}
@@ -176,7 +175,7 @@ func GetAllServicesForRollout(rc *RemoteController, rollout *argo.Rollout) map[s
 }
 
 // generateSECanary generates uniqui IP address for the SE, it also calls generateServiceEntry to create the skeleton Service entry
-func generateSECanary(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache, meshPorts map[string]uint32, serviceEntries map[string]*networking.ServiceEntry, san []string, fqdn string) error {
+func generateSECanary(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache, meshPorts map[string]uint32, serviceEntries map[string]*networking.ServiceEntry, san []string, fqdn string, sourceIdentity string) error {
 
 	address, err := getUniqueAddress(ctxLogger, ctx, admiralCache, fqdn)
 	if err != nil {
@@ -187,7 +186,7 @@ func generateSECanary(ctxLogger *logrus.Entry, ctx context.Context, event admira
 	// generating SE when disable_ip_generation=false. When disable_ip_generation=true, it still
 	// checks for non-empty fqdn but allows for empty address.
 	if len(fqdn) != 0 && (common.DisableIPGeneration() || len(address) != 0) {
-		generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, fqdn, rc, serviceEntries, address, san, common.Rollout)
+		generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, fqdn, rc, serviceEntries, address, san, common.Rollout, sourceIdentity)
 	}
 	return nil
 }

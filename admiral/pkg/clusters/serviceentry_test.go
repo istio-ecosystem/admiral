@@ -3384,7 +3384,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE, err := createServiceEntryForDeployment(ctxLogger, ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE, err := createServiceEntryForDeployment(ctxLogger, ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries, "")
 			if err != nil {
 				assert.Equal(t, err.Error(), c.expectedError.Error())
 			} else if !compareServiceEntries(createdSE, c.expectedResult) {
@@ -3471,7 +3471,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE, _ := createServiceEntryForRollout(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
+			createdSE, _ := createServiceEntryForRollout(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{}, "")
 			if !compareServiceEntries(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -10027,7 +10027,7 @@ func Test_getOverwrittenLoadBalancer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
+			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, "")
 			assert.Equalf(t, tt.expectedEndpoint, actualEndpoint, fmt.Sprintf("getOverwrittenLoadBalancer should return endpoint %s, but got %s", tt.expectedEndpoint, actualEndpoint))
 			assert.Equalf(t, tt.expectedPort, actualPort, fmt.Sprintf("getOverwrittenLoadBalancer should return port %d, but got %d", tt.expectedPort, actualPort))
 		})
@@ -10092,7 +10092,7 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{})
+			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{}, "")
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError, err)
@@ -10103,4 +10103,136 @@ func TestGetClusterIngressGateway(t *testing.T) {
 		})
 	}
 
+}
+
+func Test_getOverwrittenLoadBalancerSourceOverwrite(t *testing.T) {
+	type args struct {
+		ctx            *logrus.Entry
+		rc             *RemoteController
+		clusterName    string
+		admiralCache   *AdmiralCache
+		sourceIdentity string
+		lbLabel        string
+	}
+
+	testAdmiralParam := common.GetAdmiralParams()
+	testAdmiralParam.NLBEnabledIdentityList = append(testAdmiralParam.NLBEnabledIdentityList, "intuit.source.asset.match")
+	testAdmiralParam.NLBIngressLabel = common.NLBIstioIngressGatewayLabelValue
+	common.UpdateAdmiralParams(testAdmiralParam)
+
+	//Before
+	beforeDefaultLB := common.GetAdmiralParams().LabelSet.GatewayApp
+
+	noSourceIdentityOnlyCLBFound := args{
+		ctx:            logrus.New().WithContext(context.Background()),
+		rc:             &RemoteController{},
+		clusterName:    "test-cluster",
+		admiralCache:   &AdmiralCache{NLBEnabledCluster: []string{"test-cluster1"}},
+		sourceIdentity: "",
+		lbLabel:        common.IstioIngressGatewayLabelValue,
+	}
+
+	testLoadBalancerIngressArgCLB := v1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "clb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]v1.PortStatus, 0),
+	}
+
+	testLoadBalancerIngressArgNLB := v1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "nlb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]v1.PortStatus, 0),
+	}
+
+	portStatus := v1.PortStatus{
+		Port:     007,
+		Protocol: "HTTP",
+		Error:    nil,
+	}
+
+	testServiceCLB := v1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "clb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.IstioIngressGatewayLabelValue},
+		},
+		Spec: v1.ServiceSpec{},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{Ingress: make([]v1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	testServiceNLB := v1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "nlb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.NLBIstioIngressGatewayLabelValue},
+		},
+		Spec: v1.ServiceSpec{},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{Ingress: make([]v1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	testLoadBalancerIngressArgCLB.Ports = append(testLoadBalancerIngressArgCLB.Ports, portStatus)
+	testServiceCLB.Status.LoadBalancer.Ingress = append(testServiceCLB.Status.LoadBalancer.Ingress, testLoadBalancerIngressArgCLB)
+
+	noSourceIdentityOnlyCLBFound.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	noSourceIdentityOnlyCLBFound.rc.ServiceController.Cache.Put(&testServiceCLB)
+
+	sourceIdentityOnlyCLBFound := noSourceIdentityOnlyCLBFound
+	sourceIdentityOnlyCLBFound.sourceIdentity = "intuit.source.asset.match"
+
+	sourceIdentityBothLBFound := args{
+		ctx:            logrus.New().WithContext(context.Background()),
+		rc:             &RemoteController{},
+		clusterName:    "test-cluster",
+		admiralCache:   &AdmiralCache{NLBEnabledCluster: []string{"test-cluster1"}},
+		sourceIdentity: "",
+		lbLabel:        common.IstioIngressGatewayLabelValue,
+	}
+
+	sourceIdentityBothLBFound.sourceIdentity = "intuit.source.asset.match"
+	sourceIdentityBothLBFound.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testServiceNLB.Status.LoadBalancer.Ingress = append(testServiceNLB.Status.LoadBalancer.Ingress, testLoadBalancerIngressArgNLB)
+	noSourceIdentityOnlyCLBFound.rc.ServiceController.Cache.Put(&testServiceCLB)
+	sourceIdentityBothLBFound.rc.ServiceController.Cache.Put(&testServiceNLB)
+
+	tests := []struct {
+		name     string
+		args     args
+		wantLB   string
+		wantPort int
+		//wantErr  assert.ErrorAssertionFunc
+	}{
+		{"No Source Asset overwrite", noSourceIdentityOnlyCLBFound, "clb.istio.com", 15443},
+		{"Source Asset Overwrite with Only CLB found", sourceIdentityOnlyCLBFound, "clb.istio.com", 15443},
+		{"Source Asset Overwrite with Both LB Found", sourceIdentityBothLBFound, "nlb.istio.com", 15443},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			common.GetAdmiralParams().LabelSet.GatewayApp = tt.args.lbLabel
+			gotLB, gotPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+			assert.Equalf(t, tt.wantLB, gotLB, "getOverwrittenLoadBalancer(%v, %v, %v, %v, %v)", tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+			assert.Equalf(t, tt.wantPort, gotPort, "getOverwrittenLoadBalancer(%v, %v, %v, %v, %v)", tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+		})
+	}
+
+	//restore
+	common.GetAdmiralParams().LabelSet.GatewayApp = beforeDefaultLB
 }

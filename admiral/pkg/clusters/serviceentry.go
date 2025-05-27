@@ -13,8 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 	"k8s.io/utils/strings/slices"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
@@ -48,6 +49,7 @@ type SeDrTuple struct {
 }
 
 const (
+	intuitHostSuffix                             = "intuit"
 	resourceCreatedByAnnotationLabel             = "app.kubernetes.io/created-by"
 	resourceCreatedByAnnotationValue             = "admiral"
 	resourceCreatedByAnnotationCartographerValue = "cartographer"
@@ -57,11 +59,6 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
-	bluegreenStrategy                            = "bluegreen"
-	canaryStrategy                               = "canary"
-	deployToRolloutStrategy                      = "deployToRollout"
-	rolloutToDeployStrategy                      = "rolloutToDeploy"
-	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service on cluster %s due to error %w"
 )
 
 func createServiceEntryForDeployment(
@@ -72,7 +69,8 @@ func createServiceEntryForDeployment(
 	admiralCache *AdmiralCache,
 	meshPorts map[string]uint32,
 	destDeployment *k8sAppsV1.Deployment,
-	serviceEntries map[string]*networking.ServiceEntry) (*networking.ServiceEntry, error) {
+	serviceEntries map[string]*networking.ServiceEntry,
+	sourceIdentity string) (*networking.ServiceEntry, error) {
 	defer util.LogElapsedTimeForTask(ctxLogger, "createServiceEntryForDeployment", "", "", "", "")()
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
@@ -96,7 +94,7 @@ func createServiceEntryForDeployment(
 	}
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
-	return generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Deployment), nil
+	return generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Deployment, sourceIdentity), nil
 }
 
 // modifyServiceEntryForNewServiceOrPod creates/updates
@@ -109,12 +107,18 @@ func modifyServiceEntryForNewServiceOrPod(
 	defer util.LogElapsedTimeForTask(ctxLogger, "event", "", "", "", "TotalModifySETime")()
 	var modifySEerr error
 	var isServiceEntryModifyCalledForSourceCluster bool
+
+	// Admiral 2.0
 	if common.IsAdmiralOperatorMode() {
 		totalConfigWriterEvents.Increment(api.WithAttributes(
 			attribute.Key("identity").String(sourceIdentity),
 			attribute.Key("environment").String(env),
 		))
 	}
+
+	ctx = context.WithValue(ctx, common.TrafficConfigIdentity, sourceIdentity)
+	ctx = context.WithValue(ctx, common.TrafficConfigContextWorkloadEnvKey, env)
+
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
 	partitionedIdentity := sourceIdentity
@@ -124,6 +128,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			"processing skipped as service entry update is suspended for identity "+sourceIdentity+" in environment "+env)
 		return nil, nil
 	}
+
 	if commonUtil.IsAdmiralReadOnly() {
 		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped as Admiral is in Read-only mode")
 		return nil, nil
@@ -135,10 +140,13 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, fmt.Errorf(common.CtxLogFormat, event, env, sourceIdentity, "", "processing skipped during cache warm up state for env="+env+" identity="+sourceIdentity)
 	}
 
+	// Admiral 2.0
 	registryConfig := registry.IdentityConfig{
 		IdentityName: sourceIdentity,
 		Clusters:     make(map[string]*registry.IdentityConfigCluster),
 	}
+	// End admiral 2.0
+
 	ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing")
 	var (
 		cname                                 string
@@ -192,16 +200,19 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, nil
 	}
 
+	// This is done for optimizing dependency handler. If a new asset onboards to a service, we want to create/update the SE only in that dependent's cluster.
+	// START dependency handler optimization
 	var createResourcesOnlyInDependentOverrideClusters bool
 	dependentClusterOverride, ok := ctx.Value(common.DependentClusterOverride).(*common.Map)
 	if !ok {
 		ctxLogger.Warnf(common.CtxLogFormat, "event", "", "", "", "dependent cluster override not passed")
 	} else {
-		if dependentClusterOverride != nil && len(dependentClusterOverride.GetKeys()) > 0 {
+		if dependentClusterOverride != nil && len(dependentClusterOverride.GetValues()) > 0 {
 			ctxLogger.Infof(common.CtxLogFormat, "modifyServiceEntryForNewServiceOrPod", "", "", "", "dependent cluster override passed")
 			createResourcesOnlyInDependentOverrideClusters = true
 		}
 	}
+	// END dependency handler optimization
 
 	// build service entry spec
 	for _, clusterId := range clusters {
@@ -224,15 +235,19 @@ func modifyServiceEntryForNewServiceOrPod(
 			continue
 		}
 
-		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+		// START - Admiral 2.0
+		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache, sourceIdentity)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
 			Locality:        getLocality(rc),
 			IngressEndpoint: ingressEndpoint,
 			IngressPort:     strconv.Itoa(port),
-			Environment:     map[string]*registry.IdentityConfigEnvironment{},
+			Environment: map[string]*registry.IdentityConfigEnvironment{
+				env: &registry.IdentityConfigEnvironment{},
+			},
 		}
+		// END admiral 2.0
 
 		// For Deployment <-> Rollout migration
 		// Check the type of the application and set the required variables.
@@ -298,7 +313,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			clustersToDeleteSE[clusterId] = deleteCluster
 
 			start = time.Now()
-			_, errCreateSE := createServiceEntryForDeployment(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+			_, errCreateSE := createServiceEntryForDeployment(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries, sourceIdentity)
 			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry",
 				deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "total service entries built="+strconv.Itoa(len(serviceEntries)))
 			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForDeployment",
@@ -308,8 +323,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      map[string]*registry.TypeConfig{common.Deployment: {Selectors: deployment.Spec.Selector.MatchLabels}},
-				Services:  make(map[string][]*registry.RegistryServiceConfig),
+				Type:      common.Deployment,
 			}
 		}
 
@@ -351,7 +365,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			clustersToDeleteSE[clusterId] = deleteCluster
 
 			start = time.Now()
-			_, errCreateSE := createServiceEntryForRollout(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+			_, errCreateSE := createServiceEntryForRollout(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries, sourceIdentity)
 			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry", deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "total service entries built="+strconv.Itoa(len(serviceEntries)))
 			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForRollout",
 				deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
@@ -359,8 +373,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
-				Services:  make(map[string][]*registry.RegistryServiceConfig),
+				Type:      common.Rollout,
 			}
 		}
 
@@ -405,6 +418,27 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 	}
 
+	if common.IsAdmiralStateSyncerMode() {
+		ctxLogger.Infof(
+			common.CtxLogFormat, "AdmiralStateSyncer", deploymentOrRolloutName,
+			deploymentOrRolloutNS, "", "Running in admiral state syncer mode")
+		var sourceClusters []string
+		// fetch all clusters where a deployment
+		// for the identity is present
+		for cluster := range sourceDeployments {
+			sourceClusters = append(sourceClusters, cluster)
+		}
+		// fetch all clusters where a rollout
+		// for the identity is present
+		for cluster := range sourceRollouts {
+			sourceClusters = append(sourceClusters, cluster)
+		}
+		err := updateClusterIdentityCache(remoteRegistry, sourceClusters, sourceIdentity)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	//PID: use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity - DONE
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
@@ -414,6 +448,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		return nil, common.AppendError(modifySEerr, errors.New("skipped processing as cname is empty"))
 	}
 	start = time.Now()
+	// O(n^3) method - to be broken up into source and dependent clusters
 	updateCnameDependentClusterNamespaceCache(ctxLogger, remoteRegistry, dependents, deploymentOrRolloutName, deploymentOrRolloutNS, cname, sourceServices)
 	util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCnameDependentClusterNamespaceCachePut",
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", "", start)
@@ -424,7 +459,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	if common.IsPersonaTrafficConfig() {
 		ctxLogger.Info(common.CtxLogFormat, deploymentOrRolloutName, deploymentOrRolloutNS, "", "NOT Generating Service Entry in Traffic Config Persona")
-		for sourceCluster := range sourceServices {
+		for sourceCluster, _ := range sourceServices {
 			resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 			if resourceLabels != nil {
 				// check if additional endpoint generation is required
@@ -441,6 +476,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	//cache the latest GTP in global cache to be reused during DR creation
 	start = time.Now()
+	// GTP preference region is the region to which the failover has to be done. Because we want to update the DRs in active region for the service first.
 	gtpPreferenceRegion, err := updateGlobalGtpCacheAndGetGtpPreferenceRegion(remoteRegistry, partitionedIdentity, env, gtps, clusterName, ctxLogger)
 	ctx = context.WithValue(ctx, common.GtpPreferenceRegion, gtpPreferenceRegion)
 	if err != nil {
@@ -473,6 +509,8 @@ func modifyServiceEntryForNewServiceOrPod(
 	sourceClusterKeys := orderSourceClusters(ctx, remoteRegistry, sourceServices)
 
 	for _, sourceCluster := range sourceClusterKeys {
+		eventNamespace := sourceClusterToEventNsCache[sourceCluster]
+
 		serviceInstance := sourceServices[sourceCluster]
 		resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 		if resourceLabels != nil {
@@ -563,13 +601,8 @@ func modifyServiceEntryForNewServiceOrPod(
 					registryConfig.Clusters[sourceCluster].Environment[env] = &registry.IdentityConfigEnvironment{
 						Name:      env,
 						Namespace: namespace,
-						Type: map[string]*registry.TypeConfig{
-							eventResourceType: {
-								Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
-							},
-						},
-						Event: admiral.Delete,
-						//TODO: we need to handle DELETE operations in admiral operator
+						Type:      common.Rollout,
+						Event:     admiral.Delete, // TODO: we need to handle DELETE operations in admiral operator
 					}
 					continue
 				}
@@ -580,13 +613,13 @@ func modifyServiceEntryForNewServiceOrPod(
 					map[string]*networking.ServiceEntry{key: serviceEntry},
 					isAdditionalEndpointGenerationEnabled,
 					isServiceEntryModifyCalledForSourceCluster,
-					partitionedIdentity, env)
+					partitionedIdentity, env, eventNamespace)
 				if err != nil {
 					ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
 					modifySEerr = common.AppendError(modifySEerr, err)
 				}
 			}
-			clusterIngress, _, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+			clusterIngress, _, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache, sourceIdentity)
 
 			if err != nil {
 				err := fmt.Errorf(
@@ -604,35 +637,25 @@ func modifyServiceEntryForNewServiceOrPod(
 						ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry with blue/green endpoints")
 						oldPorts := ep.Ports
-						updateEndpointsForBlueGreen(
+						blueGreenService := updateEndpointsForBlueGreen(
 							sourceRollouts[sourceCluster],
 							sourceWeightedServices[sourceCluster],
 							cnames, ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
-							activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
-							previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
-							if activeServiceInstance, ok := sourceWeightedServices[sourceCluster][activeServiceName]; ok {
-								registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = []*registry.RegistryServiceConfig{{
-									Name:      activeServiceName,
-									Ports:     GetMeshPortsForRollout(sourceCluster, activeServiceInstance.Service, rollout),
-									Selectors: activeServiceInstance.Service.Spec.Selector,
-								}}
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
+								blueGreenService.Service.Name: &registry.RegistryServiceConfig{
+									Name:   blueGreenService.Service.Name,
+									Weight: -1,
+									Ports:  GetMeshPortsForRollout(sourceCluster, blueGreenService.Service, sourceRollouts[sourceCluster]),
+								},
 							}
-							if previewServiceInstance, ok := sourceWeightedServices[sourceCluster][previewServiceName]; ok {
-								registryConfig.Clusters[sourceCluster].Environment[env].Services[testServiceKey] = []*registry.RegistryServiceConfig{{
-									Name:      previewServiceName,
-									Ports:     GetMeshPortsForRollout(sourceCluster, previewServiceInstance.Service, rollout),
-									Selectors: previewServiceInstance.Service.Spec.Selector,
-								}}
-							}
-							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = bluegreenStrategy
 							continue
 						}
-
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry},
-							isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster,
+							partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -650,12 +673,13 @@ func modifyServiceEntryForNewServiceOrPod(
 						canaryService := sourceRollouts[sourceCluster].Spec.Strategy.Canary.CanaryService
 						// use only canary service for fqdn
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services[testServiceKey] = []*registry.RegistryServiceConfig{{
-								Name:      canaryService,
-								Ports:     meshPorts,
-								Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
-							}}
-							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = canaryStrategy
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
+								canaryService: &registry.RegistryServiceConfig{
+									Name:   canaryService,
+									Weight: -1,
+									Ports:  meshPorts,
+								},
+							}
 							continue
 						}
 						fqdn := canaryService + common.Sep + serviceInstance[appType[sourceCluster]].Namespace + common.GetLocalDomainSuffix()
@@ -664,7 +688,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						ep.Ports = meshPorts
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -679,12 +704,13 @@ func modifyServiceEntryForNewServiceOrPod(
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = parseWeightedService(sourceWeightedServices[sourceCluster], meshPorts)
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseWeightedService(sourceWeightedServices[sourceCluster])
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -695,7 +721,7 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry for Deployment to Rollout migration")
 						var err error
 						var se = copyServiceEntry(serviceEntry)
-						_, err = util.UpdateEndpointsForDeployToRolloutMigration(
+						migrationService, err := util.UpdateEndpointsForDeployToRolloutMigration(
 							serviceInstance, se, meshDeployAndRolloutPorts,
 							clusterIngress, clusterAppDeleteMap, sourceCluster,
 							clusterDeployRolloutPresent)
@@ -708,12 +734,13 @@ func modifyServiceEntryForNewServiceOrPod(
 							break
 						}
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = parseMigrationService(serviceInstance, meshDeployAndRolloutPorts)
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseMigrationService(migrationService)
 							continue
 						}
 						err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: se}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -724,11 +751,11 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry regular endpoints")
 						// call State Syncer's config syncer for deployment
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = []*registry.RegistryServiceConfig{
-								{
-									Name:      localFqdn,
-									Ports:     meshPorts,
-									Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
+							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
+								localFqdn: &registry.RegistryServiceConfig{
+									Name:   localFqdn,
+									Weight: 0,
+									Ports:  meshPorts,
 								},
 							}
 							continue
@@ -738,7 +765,8 @@ func modifyServiceEntryForNewServiceOrPod(
 						ep.Ports = meshPorts
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
-							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+							map[string]*networking.ServiceEntry{key: serviceEntry}, isAdditionalEndpointGenerationEnabled,
+							isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, eventNamespace)
 						if err != nil {
 							ctxLogger.Errorf(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 								deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, err.Error())
@@ -775,15 +803,13 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		var (
 			sourceClusterLocality string
-			eventNamespace        string
-			ingressDestinations   = make(map[string][]*vsrouting.RouteDestination)
+			ingressDestinations   map[string][]*vsrouting.RouteDestination
 			inClusterDestinations = make(map[string][]*vsrouting.RouteDestination)
 		)
 
 		// Discovery phase: This is where we build a map of all the svc.cluster.local destinations
 		// for the identity's source cluster. This map will contain the RouteDestination of all svc.cluster.local
 		// endpoints.
-		eventNamespace = sourceClusterToEventNsCache[sourceCluster]
 		ctxLogger.Infof(common.CtxLogFormat, "VSBasedRouting",
 			deploymentOrRolloutName, eventNamespace, sourceCluster,
 			"Discovery phase: VS based routing enabled for cluster")
@@ -795,12 +821,12 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		ingressDestinations, err = getAllVSRouteDestinationsByCluster(
-			ctxLogger,
 			serviceInstance,
 			meshDeployAndRolloutPorts,
 			sourceWeightedServices[sourceCluster],
 			sourceRollouts[sourceCluster],
-			sourceDeployments[sourceCluster])
+			sourceDeployments[sourceCluster],
+			clusterAppDeleteMap[sourceCluster])
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "getAllVSRouteDestinationsByCluster",
@@ -814,48 +840,57 @@ func modifyServiceEntryForNewServiceOrPod(
 			for key, value := range ingressDestinations {
 				inClusterDestinations[key] = value
 			}
-		}
+			drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
+			sourceClusterToDRHosts[sourceCluster] = map[string]string{
+				eventNamespace + common.DotLocalDomainSuffix: drHost,
+			}
 
-		drHost := fmt.Sprintf("*.%s%s", eventNamespace, common.DotLocalDomainSuffix)
-		sourceClusterToDRHosts[sourceCluster] = map[string]string{
-			eventNamespace + common.DotLocalDomainSuffix: drHost,
-		}
+			//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				ingressDestinations,
+				false)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToDestinations[sourceCluster] = ingressDestinations
 
-		//Discovery Phase: process ingress routing destinations with dns prefixes based on GTP. No GTP weights are updated for ingress destinations
-		err = processGTPAndAddWeightsByCluster(ctxLogger,
-			remoteRegistry,
-			sourceIdentity,
-			env,
-			sourceClusterLocality,
-			ingressDestinations,
-			false)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-			modifySEerr = common.AppendError(modifySEerr, err)
+			//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
+			err = processGTPAndAddWeightsByCluster(ctxLogger,
+				remoteRegistry,
+				sourceIdentity,
+				env,
+				sourceClusterLocality,
+				inClusterDestinations,
+				true)
+			if err != nil {
+				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
+					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
+				modifySEerr = common.AppendError(modifySEerr, err)
+			}
+			sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
 		}
-		sourceClusterToDestinations[sourceCluster] = ingressDestinations
-
-		//Discovery Phase: process in-cluster routing destinations with dns prefixes and weights based on GTP
-		err = processGTPAndAddWeightsByCluster(ctxLogger,
-			remoteRegistry,
-			sourceIdentity,
-			env,
-			sourceClusterLocality,
-			inClusterDestinations,
-			true)
-		if err != nil {
-			ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
-				deploymentOrRolloutName, eventNamespace, sourceCluster, err)
-			modifySEerr = common.AppendError(modifySEerr, err)
-		}
-		sourceClusterToInClusterDestinations[sourceCluster] = inClusterDestinations
-	}
+	} // End of source cluster loop
 
 	ctxLogger.Infof(common.CtxLogFormat, "ClientAssets",
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("asset list=%v dependents=%v", registryConfig.ClientAssets, dependents))
 	util.LogElapsedTimeSinceTask(ctxLogger, "WriteServiceEntryToSourceClusters",
 		deploymentOrRolloutName, deploymentOrRolloutNS, sourceIdentity, "", start)
+
+	ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "")
+	if common.IsAdmiralStateSyncerMode() {
+		err = updateRegistryConfigForClusterPerEnvironment(ctxLogger, remoteRegistry, registryConfig)
+		if err != nil {
+			return nil, err
+		}
+		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
+		return nil, nil
+	}
 
 	// VS Based Routing
 	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
@@ -897,7 +932,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	// Writing phase: We update the base in-cluster virtualservices with the RouteDestinations
 	// gathered during the discovery phase and write them to the source cluster
 	err = addUpdateInClusterVirtualServices(
-		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity)
+		ctx, ctxLogger, remoteRegistry, sourceClusterToInClusterDestinations, cname, sourceIdentity, env)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 			deploymentOrRolloutName, namespace, "", err)
@@ -931,7 +966,9 @@ func modifyServiceEntryForNewServiceOrPod(
 		ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToDependentClusters", deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("Using override values of dependent clusters: %v, count: %v", clusters, len(clusters)))
 		dependentClusters = clusters
 	}
-	err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, remoteRegistry, dependentClusters, serviceEntries, isAdditionalEndpointGenerationEnabled, isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env)
+	err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
+		ctxLogger, ctx, remoteRegistry, dependentClusters, serviceEntries, isAdditionalEndpointGenerationEnabled,
+		isServiceEntryModifyCalledForSourceCluster, partitionedIdentity, env, "")
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat, "Event", deploymentOrRolloutName, deploymentOrRolloutNS, "", err.Error())
 		modifySEerr = common.AppendError(modifySEerr, err)
@@ -949,7 +986,7 @@ If provided cluster is overwritten with some other app label mention in nlb-isti
 
 	then overwrite load balancer
 */
-func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int, error) {
+func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache, sourceIdentity string) (string, int, error) {
 
 	err := isServiceControllerInitialized(rc)
 	if err != nil {
@@ -957,8 +994,9 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	}
 
 	ctx = ctx.WithFields(logrus.Fields{
-		"task":        common.LBUpdateProcessor,
-		"clusterName": clusterName,
+		"task":           common.LBUpdateProcessor,
+		"clusterName":    clusterName,
+		"sourceIdentity": sourceIdentity,
 	})
 
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
@@ -969,7 +1007,7 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	})
 
 	//Overwrite for NLB
-	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
+	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) || slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
 		ctx = ctx.WithFields(logrus.Fields{
 			"OverwritenLB":     overwriteEndpoint,
@@ -1431,7 +1469,7 @@ func copySidecar(sidecar *v1alpha3.Sidecar) *v1alpha3.Sidecar {
 type ConfigWriter interface {
 	AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 		serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-		identityId, env string) error
+		identityId, env, eventNamespace string) error
 }
 
 func NewConfigWriter() ConfigWriter {
@@ -1442,15 +1480,16 @@ type configWrite struct{}
 
 func (w *configWrite) AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-	identityId, env string) error {
+	identityId, env, eventNamespace string) error {
 	return AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, sourceClusters,
-		serviceEntries, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster, identityId, env)
+		serviceEntries, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster,
+		identityId, env, eventNamespace)
 }
 
 // AddServiceEntriesWithDrToAllCluster will create the default service entries and also additional ones specified in GTP
 func AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Context, rr *RemoteRegistry, sourceClusters map[string]string,
 	serviceEntries map[string]*networking.ServiceEntry, isAdditionalEndpointsEnabled bool, isServiceEntryModifyCalledForSourceCluster bool,
-	identityId, env string) error {
+	identityId, env, eventNamespace string) error {
 	if identityId == "" {
 		return fmt.Errorf("failed to process service entry as identity passed was empty")
 	}
@@ -1472,7 +1511,7 @@ func AddServiceEntriesWithDrToAllCluster(ctxLogger *logrus.Entry, ctx context.Co
 
 		for w := 1; w <= common.DependentClusterWorkerConcurrency(); w++ {
 			go AddServiceEntriesWithDrWorker(ctxLogger, ctx, rr, isAdditionalEndpointsEnabled, isServiceEntryModifyCalledForSourceCluster,
-				identityId, env, copyServiceEntry(se), clusters, errors)
+				identityId, env, eventNamespace, copyServiceEntry(se), clusters, errors)
 		}
 
 		for _, c := range sourceClusters {
@@ -1496,7 +1535,8 @@ func AddServiceEntriesWithDrWorker(
 	isAdditionalEndpointsEnabled bool,
 	isServiceEntryModifyCalledForSourceCluster bool,
 	identityId,
-	env string,
+	env,
+	eventNamespace string,
 	seObj *networking.ServiceEntry,
 	clusters <-chan string,
 	errors chan<- error) {
@@ -1567,7 +1607,53 @@ func AddServiceEntriesWithDrWorker(
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
-		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
+			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+
+		// The below code checks if there is custom VS in the identity's namespace
+		// Any Argo VS will be ignored as they are not added to the IdentityNamespaceVirtualServiceCache
+		if doDRUpdateForInClusterVSRouting {
+			if eventNamespace != "" {
+				virtualServicesInIdentityNamespace := rc.
+					VirtualServiceController.IdentityNamespaceVirtualServiceCache.Get(eventNamespace)
+				if virtualServicesInIdentityNamespace != nil && len(virtualServicesInIdentityNamespace) > 0 {
+					doDRUpdateForInClusterVSRouting = false
+					ctxLogger.Infof(
+						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
+						cluster,
+						fmt.Sprintf(
+							"VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as there are custom virtualServices in the namespace %v",
+							doDRUpdateForInClusterVSRouting, cluster, identityId, eventNamespace))
+				}
+			}
+		}
+
+		// This code has been added for custom VS to in-cluster VS migration
+		// We are preventing pinning to remote cluster until the custom VS's
+		// exportTo is set to dot.
+		if doDRUpdateForInClusterVSRouting {
+			envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identityId)
+			if err == nil {
+				if len(envVSTuple) > 0 {
+					customVS := envVSTuple[0].customVS
+					doDRUpdateForInClusterVSRouting = false
+					for _, exportTo := range customVS.Spec.ExportTo {
+						if exportTo == "." {
+							doDRUpdateForInClusterVSRouting = true
+							break
+						}
+					}
+				}
+			}
+			if !doDRUpdateForInClusterVSRouting {
+				ctxLogger.Infof(
+					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
+					cluster,
+					fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
+						doDRUpdateForInClusterVSRouting, cluster, identityId))
+			}
+		}
+
 		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting, isServiceEntryModifyCalledForSourceCluster)
@@ -1603,13 +1689,15 @@ func AddServiceEntriesWithDrWorker(
 				ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", oldServiceEntry.Name, syncNamespace, cluster, "skipped updating the SE as there exists a custom SE with the same name")
 				skipSEUpdate = true
 			}
+			seDr.DestinationRule = addNLBIdleTimeout(ctx, ctxLogger, rr, rc, seDr.DestinationRule.DeepCopy(), "", identityId)
 			drReconciliationRequired := reconcileDestinationRule(
 				ctxLogger,
 				common.EnableDestinationRuleCache(),
 				rc,
 				seDr.DestinationRule.DeepCopy(),
 				seDr.DrName,
-				cluster)
+				cluster,
+				common.GetSyncNamespace())
 			util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileDestinationRule", "", "", cluster, "", start)
 			if drReconciliationRequired {
 				oldDestinationRule, err = rc.DestinationRuleController.IstioClient.NetworkingV1alpha3().DestinationRules(syncNamespace).Get(ctx, seDr.DrName, v12.GetOptions{})
@@ -1747,7 +1835,7 @@ func AddServiceEntriesWithDrWorker(
 										if strings.Contains(strings.ToLower(dependent), strings.ToLower(gwAlias)) {
 											gwClustersMap := getClusters(rr, dependent, ctxLogger)
 											if gwClustersMap != nil {
-												for _, cluster := range gwClustersMap.GetKeys() {
+												for _, cluster := range gwClustersMap.GetValues() {
 													gwClusters = append(gwClusters, cluster)
 												}
 											}
@@ -1882,6 +1970,44 @@ func getDNSPrefixFromServiceEntry(seDR *SeDrTuple) string {
 }
 
 func deleteWorkloadData(clusterName, env string, serviceEntry *v1alpha3.ServiceEntry, rr *RemoteRegistry, ctxLogger *logrus.Entry) error {
+	start := time.Now()
+
+	if serviceEntry == nil {
+		return fmt.Errorf("provided service entry is nil")
+	}
+
+	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
+		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
+	}
+
+	if serviceEntry.Spec.Hosts == nil {
+		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
+	}
+
+	if len(serviceEntry.Spec.Hosts) == 0 {
+		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
+	}
+
+	if rr.AdmiralDatabaseClient == nil {
+		return fmt.Errorf("dynamodb client for workload data table is not initialized")
+	}
+
+	workloadDataToDelete := WorkloadData{
+		AssetAlias: serviceEntry.Annotations[common.GetWorkloadIdentifier()],
+		Endpoint:   serviceEntry.Spec.Hosts[0],
+	}
+
+	err := rr.AdmiralDatabaseClient.Delete(workloadDataToDelete, ctxLogger)
+	if err != nil {
+		return err
+	}
+
+	_, ok := rr.AdmiralCache.DynamoDbEndpointUpdateCache.Load(workloadDataToDelete.Endpoint)
+	if ok {
+		rr.AdmiralCache.DynamoDbEndpointUpdateCache.Delete(workloadDataToDelete.Endpoint)
+	}
+
+	util.LogElapsedTimeSince("DeleteEndpointRecord", serviceEntry.Spec.Hosts[0], env, clusterName, start)
 	return nil
 }
 
@@ -1962,6 +2088,37 @@ func pushWorkloadDataToDynamodbTable(workloadDataToUpdate WorkloadData, endpoint
 
 func storeWorkloadData(clusterName string, serviceEntry *v1alpha3.ServiceEntry,
 	globalTrafficPolicy *v1.GlobalTrafficPolicy, additionalEndpoints []string, rr *RemoteRegistry, ctxLogger *logrus.Entry, dr networking.DestinationRule, isSuccess bool) error {
+
+	start := time.Now()
+
+	if serviceEntry == nil {
+		return fmt.Errorf("provided service entry is nil")
+	}
+
+	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
+		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
+	}
+
+	if serviceEntry.Spec.Hosts == nil {
+		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
+	}
+
+	if len(serviceEntry.Spec.Hosts) == 0 {
+		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
+	}
+
+	if rr.AdmiralDatabaseClient == nil {
+		return fmt.Errorf("dynamodb client for workload data table is not initialized")
+	}
+
+	//get workload data based on service entry, globaltrafficpolicy and additional endpoints
+	workloadData := getWorkloadData(ctxLogger, serviceEntry, globalTrafficPolicy, additionalEndpoints, dr, clusterName, isSuccess)
+
+	err := pushWorkloadDataToDynamodbTable(workloadData, serviceEntry.Spec.Hosts[0], clusterName, rr, ctxLogger)
+	util.LogElapsedTimeSinceTask(ctxLogger, "UpdateEndpointRecord", serviceEntry.Spec.Hosts[0], "", clusterName, "", start)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2011,6 +2168,20 @@ func getWorkloadData(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntr
 					trafficDistribution[region] = int32(weight)
 					lbType = model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)]
 				}
+			}
+		}
+	}
+
+	// always update trafficDistribution to reflect deployed regions from se.
+	if serviceEntry != nil &&
+		serviceEntry.Spec.Endpoints != nil {
+		for _, ep := range serviceEntry.Spec.Endpoints {
+			region := ep.Locality
+			_, present := trafficDistribution[region]
+			if !present {
+				// topology: region keys indicate the deployments. ignore the weights which would be 0 for all deployed regions.
+				// failover: regions keys indicate the deployments with weights indicating the split across the regions.
+				trafficDistribution[region] = 0
 			}
 		}
 	}
@@ -2100,7 +2271,7 @@ func doGenerateAdditionalEndpoints(ctxLogger *logrus.Entry, labels map[string]st
 	// However, we do not store B's identity in admiralCache.IdentitiesWithAdditionalEndpoints.
 	dependents := admiralCache.IdentityDependencyCache.Get(identity)
 	if dependents != nil {
-		for _, dependent := range dependents.GetKeys() {
+		for _, dependent := range dependents.GetValues() {
 			_, ok := admiralCache.IdentitiesWithAdditionalEndpoints.Load(dependent)
 			if ok {
 				return true
@@ -2566,9 +2737,7 @@ func putServiceEntryStateFromConfigmap(ctxLogger *logrus.Entry, ctx context.Cont
 	return c.PutConfigMap(ctx, originalConfigmap)
 }
 
-func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController,
-	admiralCache *AdmiralCache, meshPorts map[string]uint32, destRollout *argo.Rollout,
-	serviceEntries map[string]*networking.ServiceEntry) (*networking.ServiceEntry, error) {
+func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache, meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, sourceIdentity string) (*networking.ServiceEntry, error) {
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 
@@ -2601,7 +2770,7 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 			if len(previewGlobalFqdn) != 0 && (common.DisableIPGeneration() || len(previewAddress) != 0) {
 				ctxLogger.Infof(common.CtxLogFormat,
 					"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "ServiceEntry previewGlobalFqdn="+previewGlobalFqdn+". previewAddress="+previewAddress)
-				generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout)
+				generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout, sourceIdentity)
 			}
 		}
 	}
@@ -2609,14 +2778,14 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 	// Works for istio canary only, creates an additional SE for canary service
 	ctxLogger.Infof(common.CtxLogFormat,
 		"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "Generating service entry for canary")
-	err = GenerateServiceEntryForCanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, destRollout, serviceEntries, workloadIdentityKey, san)
+	err = GenerateServiceEntryForCanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, destRollout, serviceEntries, workloadIdentityKey, san, sourceIdentity)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat,
 			"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", err.Error())
 		return nil, err
 	}
 
-	tmpSe := generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Rollout)
+	tmpSe := generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Rollout, sourceIdentity)
 	ctxLogger.Infof(common.CtxLogFormat,
 		"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "service entry generated")
 	return tmpSe, nil
@@ -2696,7 +2865,7 @@ func generateServiceEntry(
 	serviceEntries map[string]*networking.ServiceEntry,
 	address string,
 	san []string,
-	appType string) *networking.ServiceEntry {
+	appType string, sourceIdentity string) *networking.ServiceEntry {
 	start := time.Now()
 	defer util.LogElapsedTimeSinceTask(ctxLogger, "GenerateServiceEntry", "", "", rc.ClusterID, "", start)
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
@@ -2730,7 +2899,7 @@ func generateServiceEntry(
 	}
 
 	start = time.Now()
-	endpointAddress, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
+	endpointAddress, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache, sourceIdentity)
 	util.LogElapsedTimeSinceTask(ctxLogger, "GetLoadBalancer", "", "", rc.ClusterID, "", start)
 	var locality string
 	if rc.NodeController.Locality != nil {
@@ -2847,14 +3016,15 @@ func reconcileDestinationRule(
 	rc *RemoteController,
 	dr *networking.DestinationRule,
 	drName,
-	cluster string) bool {
+	cluster string,
+	namespace string) bool {
 	if !enableDRCache {
 		ctxLogger.Infof(common.CtxLogFormat, "ReconcileDestinationRule", drName, "", cluster, "destinationRuleCache processing is disabled")
 		return true
 	}
 	ctxLogger.Infof(common.CtxLogFormat, "ReconcileDestinationRule", drName, "", cluster, "Checking if DestinationRule requires reconciliation")
 	start := time.Now()
-	currentDR := rc.DestinationRuleController.Cache.Get(drName, common.GetSyncNamespace())
+	currentDR := rc.DestinationRuleController.Cache.Get(drName, namespace)
 	util.LogElapsedTimeSinceTask(ctxLogger, "ReconcileDestinationRule=Get", drName, "", cluster, "", start)
 	if currentDR != nil {
 		drSpec := dr.DeepCopy()
@@ -2890,7 +3060,7 @@ func getCurrentDRForLocalityLbSetting(rr *RemoteRegistry, isServiceEntryModifyCa
 		clustersMap := cache.IdentityClusterCache.Get(identityId)
 		var sourceClusters []string
 		if clustersMap != nil {
-			sourceClusters = clustersMap.GetKeys()
+			sourceClusters = clustersMap.GetValues()
 		}
 		for _, clusterID := range sourceClusters {
 			sourceRC := rr.GetRemoteController(clusterID)
@@ -2929,7 +3099,7 @@ func updateCnameDependentClusterNamespaceCache(
 		identityClusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(dependentId)
 		var clusterIds []string
 		if identityClusters != nil {
-			clusterIds = identityClusters.GetKeys()
+			clusterIds = identityClusters.GetValues()
 		}
 		if len(clusterIds) > 0 {
 			if remoteRegistry.AdmiralCache.CnameDependentClusterCache == nil {
@@ -2955,7 +3125,7 @@ func updateCnameDependentClusterNamespaceCache(
 				}
 				var namespaceIds []string
 				if clusterNamespaces != nil {
-					namespaceIds = clusterNamespaces.GetKeys()
+					namespaceIds = clusterNamespaces.GetValues()
 				}
 				if len(namespaceIds) > 0 && remoteRegistry.AdmiralCache.CnameDependentClusterNamespaceCache != nil {
 					for _, namespaceId := range namespaceIds {

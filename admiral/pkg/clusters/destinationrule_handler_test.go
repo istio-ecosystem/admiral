@@ -1764,7 +1764,7 @@ func TestAddNLBIdleTimeout(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			nlbService.Annotations = map[string]string{common.NLBIdleTimeoutAnnotation: c.svcTimeout}
 			serviceControllerWithOneMatchingService.K8sClient.CoreV1().Services(common.NamespaceIstioSystem).Update(ctx, nlbService, metaV1.UpdateOptions{})
-			updatedDr := addNLBIdleTimeout(ctx, ctxLogger, rr, rc, c.newDR.Spec.DeepCopy(), c.VSSourceCluster)
+			updatedDr := addNLBIdleTimeout(ctx, ctxLogger, rr, rc, c.newDR.Spec.DeepCopy(), c.VSSourceCluster, "")
 			if updatedDr.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout.String() != c.expTimeout {
 				t.Errorf("got tcp idle timeout: %s, expected %s", updatedDr.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout, c.expTimeout)
 			}
@@ -2107,10 +2107,16 @@ func TestIsNLBTimeoutNeeded(t *testing.T) {
 		sourceClusters []string
 		nlbOverwrite   []string
 		clbOverwrite   []string
+		sourceIdentity string
 	}
 
 	//Store previous state
 	beforeRunningtest := common.GetAdmiralParams().LabelSet.GatewayApp
+
+	updateAdmiralParam := common.GetAdmiralParams()
+	updateAdmiralParam.NLBEnabledIdentityList = []string{"intuit.test.asset"}
+
+	common.UpdateAdmiralParams(updateAdmiralParam)
 
 	//common.GetAdmiralParams().LabelSet.GatewayApp = common.NLBIstioIngressGatewayLabelValue
 	//NLB is default. SourceCluster doen't have clb overwrite
@@ -2148,6 +2154,35 @@ func TestIsNLBTimeoutNeeded(t *testing.T) {
 		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
 	}
 
+	//CLB is default, Source Asset found
+	withSourceAsset := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "intuit.test.asset",
+	}
+
+	withSourceAssetCamelCase := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "Intuit.test.asset",
+	}
+
+	withSourceAssetEmpty := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "",
+	}
+
+	withSourceAssetNotMatching := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "intuit.test.asset.trymatchme",
+	}
+
 	tests := []struct {
 		name      string
 		args      args
@@ -2161,11 +2196,21 @@ func TestIsNLBTimeoutNeeded(t *testing.T) {
 		//CLB Default
 		{"CLB is default. SourceCluster does have partial nlb overwrite", clbDefaultWithPartialNLBOverwrite, common.IstioIngressGatewayLabelValue, true},
 		{"CLB is default. SourceCluster doen't have nlb overwrite, SourceCluster doesn't have clb overwrite", clbDefaultWithNoOverwrite, common.IstioIngressGatewayLabelValue, false},
+
+		//Overwrite source asset
+		{"CLB is default. Source Asset overwrite is present", withSourceAsset, common.IstioIngressGatewayLabelValue, true},
+		{"NLB is default. Source Asset overwrite is present", withSourceAsset, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is present - Camel Case", withSourceAssetCamelCase, common.IstioIngressGatewayLabelValue, true},
+		{"NLB is default. Source Asset overwrite is present - Camel Case", withSourceAssetCamelCase, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is empty", withSourceAssetEmpty, common.IstioIngressGatewayLabelValue, false},
+		{"NLB is default. Source Asset overwrite is empty", withSourceAssetEmpty, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.IstioIngressGatewayLabelValue, false},
+		{"NLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.NLBIstioIngressGatewayLabelValue, true},
 	}
 	for _, tt := range tests {
 		common.GetAdmiralParams().LabelSet.GatewayApp = tt.defaultLB
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, IsNLBTimeoutNeeded(tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite), "IsNLBTimeoutNeeded(%v, %v, %v)", tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite)
+			assert.Equalf(t, tt.want, IsNLBTimeoutNeeded(tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite, tt.args.sourceIdentity), "IsNLBTimeoutNeeded(%v, %v, %v)", tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite)
 		})
 	}
 
