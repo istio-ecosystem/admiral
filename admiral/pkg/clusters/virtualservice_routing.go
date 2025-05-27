@@ -760,6 +760,28 @@ func addUpdateInClusterVirtualServices(
 					"skipped pinning DR to remote region as no SE found in cache for identity %s", sourceIdentity))
 		}
 
+		// Pin the DR only if there is a GTP for the identity.
+		// We can't pin the DR without a GTP as we would loose the previous state of the DR
+		// if we had to rollback.
+		if doPerformDRPinning {
+			globalTrafficPolicy, err :=
+				remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
+			if err != nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf(
+						"skipped pinning DR to remote region for identity %s due to err %v", sourceIdentity, err.Error()))
+				doPerformDRPinning = false
+			}
+			if globalTrafficPolicy == nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf(
+						"skipped pinning DR to remote region for identity %s as there is no GTP in the namespace", sourceIdentity))
+				doPerformDRPinning = false
+			}
+		}
+
 		for _, vs := range virtualServicesToBeProcessed {
 			// Reconciliation check - start
 			ctxLogger.Infof(
@@ -773,6 +795,18 @@ func addUpdateInClusterVirtualServices(
 					fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
 			}
 			if !reconcileRequired {
+				// Perform DR pinning to remote region if required
+				// Even if there is no change to the VS, DR pinning might be required.
+				// This is handle cases where a GTP is added after the VS is created.
+				// The GTP did not change the VS, but we still need to pin the DR
+				if doPerformDRPinning {
+					err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
+					if err != nil {
+						ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+							vs.Name, vs.Namespace, sourceCluster,
+							"performDRPinning failed due to %v", err.Error())
+					}
+				}
 				ctxLogger.Infof(
 					common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 					"reconcile=false")

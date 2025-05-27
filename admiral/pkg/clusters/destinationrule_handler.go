@@ -95,7 +95,13 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 		return dr
 	}
 
+	if gtpTrafficPolicy == nil {
+		return dr
+	}
+
 	// Pin the DR to remote region if in-cluster VS routing is enabled
+	// This will only be done if a GTP exists in the NS because by default
+	// we are active/passive and the previous state of the DR is lost if we pin the DR.
 	if doDRUpdateForInClusterRouting {
 		// Perform DR pinning only if it is multi-region
 		var err error
@@ -109,10 +115,6 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 					fmt.Sprintf("error getting locality LB settings: %v", err))
 			}
 		}
-	}
-
-	if gtpTrafficPolicy == nil {
-		return dr
 	}
 
 	if len(gtpTrafficPolicy.Target) == 0 {
