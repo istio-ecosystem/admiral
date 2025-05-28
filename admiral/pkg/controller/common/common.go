@@ -148,6 +148,8 @@ const (
 	TrafficConfigContextCacheKey       = "trafficConfigContextCacheKey"
 	TrafficConfigContextWorkloadEnvKey = "trafficConfigWorkloadEnvKey"
 	TrafficConfigIdentity              = "trafficConfigIdentity"
+	RoutingDRSuffix                    = "routing-dr"
+	InclusterDRSuffix                  = "incluster-dr"
 )
 
 type Event string

@@ -3495,6 +3495,8 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 		ExportToIdentityList:               []string{"*"},
 		ExportToMaxNamespaces:              100,
 		EnableSWAwareNSCaches:              true,
+		MaxRequestsPerConnection:           DefaultMaxRequestsPerConnection,
+		DisableDefaultAutomaticFailover:    true,
 	}
 
 	common.ResetSync()
@@ -3530,6 +3532,8 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 		"test-env.test-identity.global", "cluster-2", "test-dependent-ns0", "test-dependent-ns0")
 	rr.AdmiralCache.CnameDependentClusterNamespaceCache.Put(
 		"test-env.test-identity.global", "cluster-2", "test-dependent-ns1", "test-dependent-ns1")
+
+	rr.AdmiralCache.ClientConnectionConfigCache = NewClientConnectionConfigCache()
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type": "DestinationRule",
@@ -3611,6 +3615,15 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 							Mode:            networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
 							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
 						},
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: 100,
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+						},
 					},
 				},
 			},
@@ -3652,6 +3665,15 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 							Mode:            networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
 							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
 						},
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: 100,
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+						},
 					},
 				},
 			},
@@ -3692,6 +3714,15 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 						Tls: &networkingV1Alpha3.ClientTLSSettings{
 							Mode:            networkingV1Alpha3.ClientTLSSettings_ISTIO_MUTUAL,
 							SubjectAltNames: []string{"spiffe://test-san-prefix/test-identity"},
+						},
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: 100,
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 						},
 					},
 				},
@@ -3751,6 +3782,9 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				require.Equal(
 					t, tc.expectedDestinationRules.Spec.TrafficPolicy.Tls, actualDR.Spec.TrafficPolicy.Tls)
 				require.Equal(t, tc.expectedDestinationRules.Spec.ExportTo, actualDR.Spec.ExportTo)
+				require.Equal(t,
+					tc.expectedDestinationRules.Spec.TrafficPolicy.ConnectionPool.Http.MaxRequestsPerConnection,
+					actualDR.Spec.TrafficPolicy.ConnectionPool.Http.MaxRequestsPerConnection)
 			}
 		})
 	}

@@ -1705,6 +1705,14 @@ func addUpdateInClusterDestinationRule(
 	cname string,
 	env string) error {
 
+	clientConnectionSettings, err :=
+		remoteRegistry.AdmiralCache.ClientConnectionConfigCache.GetFromIdentity(sourceIdentity, env)
+	if err != nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
+			sourceIdentity, "", "",
+			fmt.Sprintf("no clientConnectionConfig found for identity %s env %s", sourceIdentity, env))
+	}
+
 	if sourceIdentity == "" {
 		return fmt.Errorf("sourceIdentity is empty")
 	}
@@ -1737,7 +1745,7 @@ func addUpdateInClusterDestinationRule(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"incluster-dr", exportToNamespaces, clientTLSSettings)
+			common.InclusterDRSuffix, exportToNamespaces, clientTLSSettings, clientConnectionSettings)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1787,7 +1795,7 @@ func addUpdateDestinationRuleForSourceIngress(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"routing-dr", common.GetIngressVSExportToNamespace(), clientTLSSettings)
+			common.RoutingDRSuffix, common.GetIngressVSExportToNamespace(), clientTLSSettings, nil)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1807,7 +1815,8 @@ func addUpdateRoutingDestinationRule(
 	sourceCluster string,
 	drNameSuffix string,
 	exportToNamespaces []string,
-	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings) error {
+	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings,
+	clientConnectionSettings *v1alpha1.ClientConnectionConfig) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
@@ -1851,6 +1860,23 @@ func addUpdateRoutingDestinationRule(
 					if err != nil {
 						return err
 					}
+				}
+			}
+		}
+
+		// We are going to add client connection pool overrides and default outlierDetection
+		// only for in-cluster DRs
+		if drNameSuffix == common.InclusterDRSuffix {
+			clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
+			if clientConnectionSettingsOverride != nil {
+				drObj.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
+			}
+			if common.DisableDefaultAutomaticFailover() {
+				// If automatic failover is disabled, we set the outlier detection settings to zero
+				// TODO: need add OOD processing similar to SE based routing
+				drObj.TrafficPolicy.OutlierDetection = &networkingV1Alpha3.OutlierDetection{
+					ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+					Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 				}
 			}
 		}
