@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -738,8 +739,58 @@ func addUpdateInClusterVirtualServices(
 			}
 		}
 
+		doPerformDRPinning := false
+		doPerformDRPinning = common.DoDRUpdateForInClusterVSRouting(
+			sourceCluster, sourceIdentity, true)
+
+		if doPerformDRPinning {
+			// Get SE from cache. We need this to see if this identity is multi-region
+			// This is required later to pin DR to the remote region
+			if rc.ServiceEntryController != nil && rc.ServiceEntryController.Cache != nil {
+				SEName := fmt.Sprintf("%s-se", vsName)
+				cachedSE := rc.ServiceEntryController.Cache.Get(SEName, sourceCluster)
+				if cachedSE != nil {
+					// Pinning DR to remote region is only needed if the identity is multi-region
+					if isSEMultiRegion(&cachedSE.Spec) {
+						doPerformDRPinning = true
+					} else {
+						ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+							virtualService.Name, virtualService.Namespace, sourceCluster,
+							"skipped pinning DR to remote region as the identity is not multi-region")
+					}
+				} else {
+					ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+						virtualService.Name, virtualService.Namespace, sourceCluster,
+						fmt.Sprintf(
+							"skipped pinning DR to remote region as no SE found in cache for identity %s", sourceIdentity))
+				}
+			}
+		}
+
+		// Pin the DR only if there is a GTP for the identity.
+		// We can't pin the DR without a GTP as we would loose the previous state of the DR
+		// if we had to rollback.
+		if doPerformDRPinning {
+			globalTrafficPolicy, err :=
+				remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
+			if err != nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf(
+						"skipped pinning DR to remote region for identity %s due to err %v", sourceIdentity, err.Error()))
+				doPerformDRPinning = false
+			}
+			if globalTrafficPolicy == nil {
+				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+					virtualService.Name, virtualService.Namespace, sourceCluster,
+					fmt.Sprintf(
+						"skipped pinning DR to remote region for identity %s as there is no GTP in the namespace", sourceIdentity))
+				doPerformDRPinning = false
+			}
+		}
+
 		for _, vs := range virtualServicesToBeProcessed {
-			// Reconciliation check - Start
+			// Reconciliation check - start
 			ctxLogger.Infof(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"checking if incluster routing virtualService requires reconciliation")
@@ -751,6 +802,18 @@ func addUpdateInClusterVirtualServices(
 					fmt.Sprintf("doReconcileVirtualService failed due to %v", err.Error()))
 			}
 			if !reconcileRequired {
+				// Perform DR pinning to remote region if required
+				// Even if there is no change to the VS, DR pinning might be required.
+				// This is handle cases where a GTP is added after the VS is created.
+				// The GTP did not change the VS, but we still need to pin the DR
+				if doPerformDRPinning {
+					err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
+					if err != nil {
+						ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+							vs.Name, vs.Namespace, sourceCluster,
+							"performDRPinning failed due to %v", err.Error())
+					}
+				}
 				ctxLogger.Infof(
 					common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 					"reconcile=false")
@@ -779,11 +842,129 @@ func addUpdateInClusterVirtualServices(
 			}
 			ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				vs.Name, vs.Namespace, sourceCluster, "virtualservice created/updated successfully")
+
+			// Perform DR pinning to remote region if required
+			if doPerformDRPinning {
+				err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
+				if err != nil {
+					ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+						vs.Name, vs.Namespace, sourceCluster,
+						"performDRPinning failed due to %v", err.Error())
+				}
+			}
+
 		}
 
 	}
 
 	return nil
+}
+
+func isSEMultiRegion(se *networkingV1Alpha3.ServiceEntry) bool {
+	if se == nil {
+		return false
+	}
+	regions := make(map[string]bool)
+	// Can't just do length of endpoints because there could be
+	// a rollout and a deployment in the same namespace
+	for _, ep := range se.Endpoints {
+		regions[ep.Locality] = true
+	}
+	if len(regions) > 1 {
+		return true
+	}
+	return false
+}
+
+// performDRPinning updates the destination rules to pin the .mesh/.global DR to the remote region
+func performDRPinning(ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	rc *RemoteController,
+	vs *v1alpha3.VirtualService,
+	env string,
+	sourceCluster string) error {
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+	if rc == nil {
+		return fmt.Errorf("remoteController is nil")
+	}
+	if vs == nil {
+		return fmt.Errorf("virtualService is nil")
+	}
+
+	currentLocality, err := getClusterRegion(remoteRegistry, sourceCluster, rc)
+	if err != nil {
+		return fmt.Errorf("getClusterRegion failed due to %w", err)
+	}
+
+	var errs []error
+	// Update the .global/.mesh DR to point to the remote region
+	for _, host := range vs.Spec.Hosts {
+		if !strings.HasSuffix(host, common.GetHostnameSuffix()) {
+			continue
+		}
+		drName := fmt.Sprintf("%s-default-dr", host)
+		// Check if it is an additional endpoint
+		if !strings.HasPrefix(host, env) {
+			drName = fmt.Sprintf("%s-dr", host)
+		}
+		// Get DR from cache
+		cachedDR := rc.DestinationRuleController.Cache.Get(drName, common.GetSyncNamespace())
+		if cachedDR == nil {
+			errs = append(errs, fmt.Errorf(
+				"skipped pinning DR to remote region as no cached DR found with drName %s in cluster %s",
+				drName, sourceCluster))
+			continue
+		}
+		newDR := cachedDR.DeepCopy()
+
+		newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(currentLocality)
+		if err != nil {
+			errs = append(errs, fmt.Errorf(
+				"performDRPinning failed for DR %s in cluster %s: %w", drName, sourceCluster, err))
+			continue
+		}
+		doReconcileDR := reconcileDestinationRule(
+			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, common.GetSyncNamespace())
+		if !doReconcileDR {
+			continue
+		}
+		err = addUpdateDestinationRule(ctxLogger, ctx, newDR, cachedDR, common.GetSyncNamespace(), rc, remoteRegistry)
+		if err != nil {
+			errs = append(errs, fmt.Errorf(
+				"performDRPinning failed for DR %s in cluster %s: %w", drName, sourceCluster, err))
+			continue
+		}
+		ctxLogger.Infof(common.CtxLogFormat, "performDRPinning",
+			drName, common.GetSyncNamespace(), sourceCluster, "DR pinning completed successfully")
+	}
+
+	return errors.Join(errs...)
+
+}
+
+func getLocalityLBSettings(currentLocality string) (*networkingV1Alpha3.LocalityLoadBalancerSetting, error) {
+
+	if currentLocality == "" {
+		return nil, fmt.Errorf("currentLocality is empty")
+	}
+
+	remoteRegion := common.WestLocality
+	if currentLocality == common.WestLocality {
+		remoteRegion = common.EastLocality
+	}
+
+	return &networkingV1Alpha3.LocalityLoadBalancerSetting{
+		Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+			{
+				From: "*",
+				To:   map[string]uint32{remoteRegion: 100},
+			},
+		},
+	}, nil
 }
 
 // mergeCustomVirtualServices gets the custom virtualservices based on the identity passed

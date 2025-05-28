@@ -10084,3 +10084,283 @@ func TestGetClusterIngressGateway(t *testing.T) {
 	}
 
 }
+
+func TestDoDRPinning(t *testing.T) {
+
+	testCases := []struct {
+		name                    string
+		rc                      *RemoteController
+		env                     string
+		identity                string
+		getCustomVirtualService GetCustomVirtualService
+		expectedResult          bool
+		exptectedError          error
+	}{
+		{
+			name: "Given a nil remotecontroller" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			exptectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given empty env" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			exptectedError: fmt.Errorf("env is empty"),
+		},
+		{
+			name: "Given empty identity" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			env:            "stage",
+			exptectedError: fmt.Errorf("identity is empty"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns an error" +
+				"And func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, fmt.Errorf("error getting custom virtualService")
+			},
+			exptectedError: fmt.Errorf("error getting custom virtualService"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns no matching VS" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, nil
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"testNS"},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"."},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := DoDRPinning(
+				context.Background(), nil, tc.rc, tc.env, tc.identity, tc.getCustomVirtualService)
+			if tc.exptectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.exptectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
+func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
+
+	vsWithValidNS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "foo.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			ExportTo: []string{"testNS"},
+		},
+	}
+	vsWithSyncNS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "bar.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			ExportTo: []string{"sync-ns"},
+		},
+	}
+
+	admiralParams := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	virtualServiceCache := istio.NewVirtualServiceCache()
+	virtualServiceCache.Put(vsWithValidNS)
+	virtualServiceCache.Put(vsWithSyncNS)
+
+	testCases := []struct {
+		name          string
+		serviceEntry  *istioNetworkingV1Alpha3.ServiceEntry
+		remoteCtrl    *RemoteController
+		expected      bool
+		expectedError error
+	}{
+		{
+			name: "Given a nil remoteController" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given a nil serviceEntry" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			remoteCtrl:    &RemoteController{},
+			expectedError: fmt.Errorf("serviceEntry is nil"),
+		},
+		{
+			name: "Given an SE with multiple hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			remoteCtrl: &RemoteController{},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"host1", "host2"},
+			},
+			expectedError: fmt.Errorf("serviceEntry has more than one host"),
+		},
+		{
+			name: "Given an SE with valid host" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS does not exists in the cache" +
+				"Then it should return an error",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"baz.testns.global"},
+			},
+			expectedError: fmt.Errorf("virtualService baz.testns.global-incluster-vs not found in cache"),
+		},
+		{
+			name: "Given an SE with valid hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has valid NS" +
+				"Then it should return true",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: true,
+		},
+		{
+			name: "Given an SE with valid hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has sync NS" +
+				"Then it should return false",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"bar.testns.global"},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := hasInClusterVSWithValidExportToNS(tc.serviceEntry, tc.remoteCtrl)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
+}
