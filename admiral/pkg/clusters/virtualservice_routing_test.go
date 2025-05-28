@@ -7885,29 +7885,6 @@ func TestPerformDRPinning(t *testing.T) {
 		},
 	}
 
-	expectedAdditionalEndpointDR := &apiNetworkingV1Alpha3.DestinationRule{
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "west.foo.test-ns.global-dr",
-			Namespace: "sync-ns",
-		},
-		Spec: networkingV1Alpha3.DestinationRule{
-			Host:     "west.foo.test-ns.global",
-			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
-			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
-				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
-					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
-						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-							{
-								From: "*",
-								To:   map[string]uint32{"us-east-2": 100},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
 	cachedDefaultDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "foo.test-ns.global-default-dr",
@@ -8100,33 +8077,6 @@ func TestPerformDRPinning(t *testing.T) {
 			env:                   "foo",
 			expectDestinationRule: expectedDefaultDR,
 		},
-		{
-			name: "Given for a VS with additonal endpoint host with DR in cache and region needs to be flipped" +
-				"When performDRPinning func is called" +
-				"Then the func should not return an error and DR will be updated with new region",
-			remoteRegistry: &RemoteRegistry{},
-			remoteController: &RemoteController{
-				NodeController: &admiral.NodeController{
-					Locality: &admiral.Locality{
-						Region: "us-west-2",
-					},
-				},
-				DestinationRuleController: &istio.DestinationRuleController{
-					IstioClient: istioClient,
-					Cache:       drCache,
-				},
-			},
-			vs: &apiNetworkingV1Alpha3.VirtualService{
-				Spec: networkingV1Alpha3.VirtualService{
-					Hosts: []string{"west.foo.test-ns.global"},
-				},
-			},
-			drName:                "west.foo.test-ns.global-dr",
-			sourceCluster:         "cluster1",
-			sourceIdentity:        "west.foo.test-ns.global-dr",
-			env:                   "foo",
-			expectDestinationRule: expectedAdditionalEndpointDR,
-		},
 	}
 
 	ctxLogger := log.WithFields(log.Fields{
@@ -8137,7 +8087,7 @@ func TestPerformDRPinning(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := performDRPinning(
 				context.Background(), ctxLogger, tc.remoteRegistry,
-				tc.remoteController, tc.vs, tc.env, tc.sourceCluster)
+				tc.remoteController, tc.vs, tc.sourceCluster)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())

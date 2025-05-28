@@ -807,7 +807,7 @@ func addUpdateInClusterVirtualServices(
 				// This is handle cases where a GTP is added after the VS is created.
 				// The GTP did not change the VS, but we still need to pin the DR
 				if doPerformDRPinning {
-					err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
+					err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, sourceCluster)
 					if err != nil {
 						ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 							vs.Name, vs.Namespace, sourceCluster,
@@ -845,7 +845,7 @@ func addUpdateInClusterVirtualServices(
 
 			// Perform DR pinning to remote region if required
 			if doPerformDRPinning {
-				err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
+				err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, sourceCluster)
 				if err != nil {
 					ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 						vs.Name, vs.Namespace, sourceCluster,
@@ -882,7 +882,6 @@ func performDRPinning(ctx context.Context,
 	remoteRegistry *RemoteRegistry,
 	rc *RemoteController,
 	vs *v1alpha3.VirtualService,
-	env string,
 	sourceCluster string) error {
 
 	if remoteRegistry == nil {
@@ -907,10 +906,6 @@ func performDRPinning(ctx context.Context,
 			continue
 		}
 		drName := fmt.Sprintf("%s-default-dr", host)
-		// Check if it is an additional endpoint
-		if !strings.HasPrefix(host, env) {
-			drName = fmt.Sprintf("%s-dr", host)
-		}
 		// Get DR from cache
 		cachedDR := rc.DestinationRuleController.Cache.Get(drName, common.GetSyncNamespace())
 		if cachedDR == nil {
