@@ -7862,13 +7862,13 @@ func TestIsSEMultiRegion(t *testing.T) {
 
 func TestPerformDRPinning(t *testing.T) {
 
-	cachedAdditionalEndpointDR := &apiNetworkingV1Alpha3.DestinationRule{
+	cachedCanaryDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "west.foo.test-ns.global-dr",
+			Name:      "canary.foo.test-ns.global-default-dr",
 			Namespace: "sync-ns",
 		},
 		Spec: networkingV1Alpha3.DestinationRule{
-			Host:     "west.foo.test-ns.global",
+			Host:     "canary.foo.test-ns.global",
 			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
 			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
 				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
@@ -7933,13 +7933,13 @@ func TestPerformDRPinning(t *testing.T) {
 
 	drCache := istio.NewDestinationRuleCache()
 	drCache.Put(cachedDefaultDR)
-	drCache.Put(cachedAdditionalEndpointDR)
+	drCache.Put(cachedCanaryDR)
 
 	istioClient := istioFake.NewSimpleClientset()
 	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
 		Create(context.Background(), cachedDefaultDR, metaV1.CreateOptions{})
 	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
-		Create(context.Background(), cachedAdditionalEndpointDR, metaV1.CreateOptions{})
+		Create(context.Background(), cachedCanaryDR, metaV1.CreateOptions{})
 
 	admiralParams := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -8072,6 +8072,33 @@ func TestPerformDRPinning(t *testing.T) {
 				},
 			},
 			drName:                "foo.test-ns.global-default-dr",
+			sourceCluster:         "cluster1",
+			sourceIdentity:        "foo.test-ns.global-default-dr",
+			env:                   "foo",
+			expectDestinationRule: expectedDefaultDR,
+		},
+		{
+			name: "Given for a canary VS host there is DR in cache" +
+				"When performDRPinning func is called" +
+				"Then the func should not return an error and DR will be updated with new region",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-west-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioClient,
+					Cache:       drCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"canary.foo.test-ns.global"},
+				},
+			},
+			drName:                "canary.foo.test-ns.global-default-dr",
 			sourceCluster:         "cluster1",
 			sourceIdentity:        "foo.test-ns.global-default-dr",
 			env:                   "foo",
