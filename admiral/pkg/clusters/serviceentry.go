@@ -843,7 +843,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				env,
 				sourceClusterLocality,
 				ingressDestinations,
-				false)
+				false, cname, sourceCluster)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
@@ -858,7 +858,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				env,
 				sourceClusterLocality,
 				inClusterDestinations,
-				true)
+				true, cname, sourceCluster)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)

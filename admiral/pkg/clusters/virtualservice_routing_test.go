@@ -2579,7 +2579,9 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			EnvKey:                  "env",
 			AdmiralCRDIdentityLabel: "identity",
 		},
-		HostnameSuffix: "global",
+		EnableActivePassive: true,
+		HostnameSuffix:      "global",
+		SyncNamespace:       "sync-ns",
 	}
 	common.ResetSync()
 	common.InitializeConfig(ap)
@@ -2632,6 +2634,67 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 		GlobalTrafficCache: gtpCache,
 	}
 
+	passiveDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "stage.foo.passive.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	drCache := istio.NewDestinationRuleCache()
+	drCache.Put(passiveDR)
+
+	passiveRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.passive.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+
+	seCache := istio.NewServiceEntryCache()
+	seCache.Put(passiveRegionSE, cluster1)
+
+	rrWithNoGTP := NewRemoteRegistry(context.Background(), admiralParams)
+	rrWithNoGTP.remoteControllers = map[string]*RemoteController{
+		"cluster1": {
+			DestinationRuleController: &istio.DestinationRuleController{
+				Cache: drCache,
+			},
+			ServiceEntryController: &istio.ServiceEntryController{
+				Cache: seCache,
+			},
+		},
+	}
+	rrWithNoGTP.AdmiralCache = &AdmiralCache{
+		GlobalTrafficCache: &globalTrafficCache{
+			identityCache: make(map[string]*v1alpha12.GlobalTrafficPolicy),
+			mutex:         &sync.Mutex{},
+		},
+	}
+
 	meshPort := uint32(8080)
 	testCases := []struct {
 		name                     string
@@ -2642,6 +2705,9 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 		env                      string
 		updateWeights            bool
 		sourceClusterLocality    string
+		cname                    string
+		sourceCluster            string
+		remoteRegistry           *RemoteRegistry
 	}{
 		{
 			name: "Given valid empty route destinations and valid GTP" +
@@ -2651,6 +2717,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			env:            "test-env",
 			expectedError:  fmt.Errorf("destinations map is nil"),
 			updateWeights:  true,
+			remoteRegistry: rr,
 		},
 		{
 			name: "Given valid sourceIdenity, sourceClusterLocality, env and route destinations" +
@@ -2662,6 +2729,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			sourceClusterLocality: "us-east-2",
 			expectedError:         nil,
 			updateWeights:         true,
+			remoteRegistry:        rr,
 			destinations: map[string][]*vsrouting.RouteDestination{
 				"test-env.test-identity.global": {
 					{
@@ -2836,6 +2904,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 			expectedError:         nil,
 			updateWeights:         false,
 			sourceClusterLocality: "us-east-2",
+			remoteRegistry:        rr,
 			destinations: map[string][]*vsrouting.RouteDestination{
 				"test-env.test-identity.global": {
 					{
@@ -2941,6 +3010,66 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given valid params" +
+				"And there is no corresponding GTP" +
+				"And the func is called for in-cluster vs" +
+				"And the active passive is enabled" +
+				"When processGTPAndAddWeightsByCluster is invoked, " +
+				"Then it should populate the destinations with one region's VS having SE endpoints",
+			sourceIdentity:        "test-identity",
+			env:                   "test-env",
+			expectedError:         nil,
+			updateWeights:         true,
+			sourceClusterLocality: "us-west-2",
+			sourceCluster:         "cluster1",
+			cname:                 "stage.foo.passive.global",
+			remoteRegistry:        rrWithNoGTP,
+			destinations: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+				"canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "desired-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-env.test-identity.global",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: 80,
+							},
+						},
+					},
+				},
+				"canary.test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "canary.test-env.test-identity.global",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: 80,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	ctxLogger := log.WithFields(log.Fields{})
@@ -2949,12 +3078,12 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := processGTPAndAddWeightsByCluster(
 				ctxLogger,
-				rr,
+				tc.remoteRegistry,
 				tc.sourceIdentity,
 				tc.env,
 				tc.sourceClusterLocality,
 				tc.destinations,
-				tc.updateWeights)
+				tc.updateWeights, tc.cname, tc.sourceCluster)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -8801,6 +8930,475 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 		})
 	}
 
+}
+
+func TestDoActivePassiveInClusterVS(t *testing.T) {
+
+	passiveDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "stage.foo.passive.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	activeDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "stage.foo.active.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-west-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	drWithNoLBDistribution := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "stage.foo.nolb.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{},
+				},
+			},
+		},
+	}
+	splitDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "stage.foo.split.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-west-2": 50},
+							},
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 50},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	drCache := istio.NewDestinationRuleCache()
+	drCache.Put(passiveDR)
+	drCache.Put(activeDR)
+	drCache.Put(drWithNoLBDistribution)
+	drCache.Put(splitDR)
+
+	singleRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+			},
+		},
+	}
+	multiRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.multi.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	activeRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.active.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	passiveRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.passive.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	splitRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.split.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	barRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.bar.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	noLBRegionSE := &apiNetworkingV1Alpha3.ServiceEntry{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.foo.nolb.global-se",
+		},
+		Spec: networkingV1Alpha3.ServiceEntry{
+			Endpoints: []*networkingV1Alpha3.WorkloadEntry{
+				{
+					Locality: "us-east-2",
+				},
+				{
+					Locality: "us-west-2",
+				},
+			},
+		},
+	}
+	seCache := istio.NewServiceEntryCache()
+	seCache.Put(singleRegionSE, cluster1)
+	seCache.Put(multiRegionSE, cluster1)
+	seCache.Put(activeRegionSE, cluster1)
+	seCache.Put(passiveRegionSE, cluster1)
+	seCache.Put(splitRegionSE, cluster1)
+	seCache.Put(barRegionSE, cluster1)
+	seCache.Put(noLBRegionSE, cluster1)
+
+	testCases := []struct {
+		name                  string
+		remoteRegistry        *RemoteRegistry
+		cname                 string
+		sourceCluster         string
+		sourceClusterLocality string
+		expectedGTP           *v1alpha12.GlobalTrafficPolicy
+		expectedError         error
+	}{
+		{
+			name: "Given a nil remoteRegistry" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: nil,
+			expectedError:  fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a nil remoteController" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("remotecontroller is nil for cluster cluster1"),
+		},
+		{
+			name: "Given a nil destinationRuleController" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {},
+				},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("destinationRuleController is nil for cluster cluster1"),
+		},
+		{
+			name: "Given a nil destinationRuleController.Cache" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("destinationRuleController.Cache is nil for cluster cluster1"),
+		},
+		{
+			name: "Given a nil serviceEntryController" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: istio.NewDestinationRuleCache(),
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("serviceEntryController is nil for cluster cluster1"),
+		},
+		{
+			name: "Given a nil serviceEntryController.Cache" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: istio.NewDestinationRuleCache(),
+						},
+						ServiceEntryController: &istio.ServiceEntryController{},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			expectedError: fmt.Errorf("serviceEntryController.Cache is nil for cluster cluster1"),
+		},
+		{
+			name: "Given a SE missing in serviceEntryController.Cache" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: istio.NewDestinationRuleCache(),
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: istio.NewServiceEntryCache(),
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			cname:         "stage.foo.global",
+			expectedError: fmt.Errorf("no se found in cache for seName stage.foo.global-se"),
+		},
+		{
+			name: "Given a SE in cache is not multiRegion" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: istio.NewDestinationRuleCache(),
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			cname:         "stage.foo.global",
+			expectedError: fmt.Errorf(
+				"skipped active passive for incluster as the SE is not multi-region stage.foo.global-se"),
+		},
+		{
+			name: "Given there is no DR in the cache" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: istio.NewDestinationRuleCache(),
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			cname:         "stage.bar.global",
+			expectedError: fmt.Errorf("no dr found in cache for drName stage.bar.global-default-dr"),
+		},
+		{
+			name: "Given a DR with no load distribution" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: drCache,
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			cname:         "stage.foo.nolb.global",
+			expectedError: fmt.Errorf(
+				"skipped active passive for incluster as the DR has no localityLBSetting stage.foo.nolb.global-default-dr"),
+		},
+		{
+			name: "Given a DR with traffic split" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: drCache,
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster: "cluster1",
+			cname:         "stage.foo.split.global",
+			expectedError: fmt.Errorf(
+				"distribution on the DR stage.foo.split.global-default-dr has a traffic split"),
+		},
+		{
+			name: "Given a DR pointing to active region" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return an error",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: drCache,
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster:         "cluster1",
+			cname:                 "stage.foo.active.global",
+			sourceClusterLocality: "us-west-2",
+			expectedError: fmt.Errorf(
+				"the DR stage.foo.active.global-default-dr is pointing to the active cluster us-west-2 already"),
+		},
+		{
+			name: "Given a DR pointing to passive region" +
+				"When doActivePassiveInClusterVS func is called" +
+				"Then the func should return a failover GTP",
+			remoteRegistry: &RemoteRegistry{
+				remoteControllers: map[string]*RemoteController{
+					"cluster1": {
+						DestinationRuleController: &istio.DestinationRuleController{
+							Cache: drCache,
+						},
+						ServiceEntryController: &istio.ServiceEntryController{
+							Cache: seCache,
+						},
+					},
+				},
+			},
+			sourceCluster:         "cluster1",
+			cname:                 "stage.foo.passive.global",
+			sourceClusterLocality: "us-west-2",
+			expectedGTP: &v1alpha12.GlobalTrafficPolicy{
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							DnsPrefix: common.Default,
+							LbType:    model.TrafficPolicy_FAILOVER,
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-west-2",
+									Weight: int32(0),
+								},
+								{
+									Region: "us-east-2",
+									Weight: int32(100),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	admiralParams := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualGTP, err := doActivePassiveInClusterVS(tc.remoteRegistry,
+				tc.cname, tc.sourceCluster, tc.sourceClusterLocality)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.True(t, reflect.DeepEqual(actualGTP, tc.expectedGTP))
+			}
+		})
+	}
 }
 
 func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
