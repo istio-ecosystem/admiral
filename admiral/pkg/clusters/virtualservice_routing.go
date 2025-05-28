@@ -1705,12 +1705,19 @@ func addUpdateInClusterDestinationRule(
 	cname string,
 	env string) error {
 
-	clientConnectionSettings, err :=
-		remoteRegistry.AdmiralCache.ClientConnectionConfigCache.GetFromIdentity(sourceIdentity, env)
-	if err != nil {
-		ctxLogger.Warnf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
-			sourceIdentity, "", "",
-			fmt.Sprintf("no clientConnectionConfig found for identity %s env %s", sourceIdentity, env))
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+	var clientConnectionSettings *v1alpha1.ClientConnectionConfig
+	var err error
+	if remoteRegistry.AdmiralCache != nil && remoteRegistry.AdmiralCache.ClientConnectionConfigCache != nil {
+		clientConnectionSettings, err =
+			remoteRegistry.AdmiralCache.ClientConnectionConfigCache.GetFromIdentity(sourceIdentity, env)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
+				sourceIdentity, "", "",
+				fmt.Sprintf("no clientConnectionConfig found for identity %s env %s", sourceIdentity, env))
+		}
 	}
 
 	if sourceIdentity == "" {
