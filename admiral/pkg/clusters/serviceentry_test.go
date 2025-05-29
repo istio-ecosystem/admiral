@@ -4182,7 +4182,7 @@ func TestHandleDynamoDbUpdateForOldGtp(t *testing.T) {
 	}
 }
 
-func TestupdateGlobalGtpCacheAndGetGtpPreferenceRegion(t *testing.T) {
+func TestUpdateGlobalGtpCacheAndGetGtpPreferenceRegion(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
 		remoteRegistryWithoutGtpWithoutAdmiralClient = &RemoteRegistry{
@@ -7842,12 +7842,12 @@ func TestReconcileDestinationRule(t *testing.T) {
 		cluster = "test-cluster"
 	)
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace: "admiral-sync",
 	}
 
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	alreadyUpdatedDRSpec := &istioNetworkingV1Alpha3.DestinationRule{
 		Host: "host-1",
@@ -8426,12 +8426,12 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 }
 
 func TestGetCurrentDRForLocalityLbSetting(t *testing.T) {
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace: "ns",
 	}
 
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	var (
 		fakeIstioClient             = istiofake.NewSimpleClientset()
@@ -10085,7 +10085,7 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 }
 
-func TestDoDRPinning(t *testing.T) {
+func TestIsCartographerVSDisabled(t *testing.T) {
 
 	testCases := []struct {
 		name                    string
@@ -10229,7 +10229,7 @@ func TestDoDRPinning(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := DoDRPinning(
+			actual, err := IsCartographerVSDisabled(
 				context.Background(), nil, tc.rc, tc.env, tc.identity, tc.getCustomVirtualService)
 			if tc.exptectedError != nil {
 				assert.NotNil(t, err)
@@ -10264,11 +10264,11 @@ func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace: "sync-ns",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	virtualServiceCache := istio.NewVirtualServiceCache()
 	virtualServiceCache.Put(vsWithValidNS)
@@ -10360,6 +10360,117 @@ func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestDoesIdentityHaveVS(t *testing.T) {
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("identity0", "cluster0", "cluster0")
+	identityClusterCache.Put("identity1", "cluster1", "cluster1")
+	identityClusterCache.Put("identity2", "cluster2", "cluster2")
+
+	identityVirtualServiceCache := istio.NewIdentityVirtualServiceCache()
+	identityVirtualServiceCache.Put(&v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vs1",
+			Namespace: "test-ns",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{Hosts: []string{"stage.identity0.global"}},
+	})
+
+	remoteController := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: identityVirtualServiceCache,
+		},
+	}
+
+	ap := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+
+	remoteRegistry := NewRemoteRegistry(context.Background(), ap)
+	remoteRegistry.AdmiralCache.IdentityClusterCache = identityClusterCache
+	remoteRegistry.PutRemoteController("cluster0", remoteController)
+	remoteRegistry.PutRemoteController("cluster2", remoteController)
+
+	testCases := []struct {
+		name           string
+		remoteRegistry *RemoteRegistry
+		identity       string
+		expectedError  error
+		expectedResult bool
+	}{
+		{
+			name: "Given a nil remoteRegistry" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: nil,
+			expectedError:  fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a nil admiralCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: &RemoteRegistry{},
+			expectedError:  fmt.Errorf("AdmiralCache is nil in remoteRegistry"),
+		},
+		{
+			name: "Given a nil IdentityClusterCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: &RemoteRegistry{
+				AdmiralCache: &AdmiralCache{},
+			},
+			expectedError: fmt.Errorf("IdentityClusterCache is nil in AdmiralCache"),
+		},
+		{
+			name: "Given an identity not in IdentityClusterCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity9",
+			expectedError:  fmt.Errorf("identityClustersMap is nil for identity identity9"),
+		},
+		{
+			name: "Given an identity with no remoteController" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity1",
+			expectedError:  fmt.Errorf("remoteController is nil for cluster cluster1"),
+		},
+		{
+			name: "Given an identity which has no VS in its NS" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return false",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity2",
+			expectedError:  nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given an identity which has VS in its NS" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return true",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity0",
+			expectedError:  nil,
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := DoesIdentityHaveVS(tc.remoteRegistry, tc.identity)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
 			}
 		})
 	}

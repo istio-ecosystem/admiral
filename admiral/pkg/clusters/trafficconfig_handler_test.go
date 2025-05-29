@@ -3,6 +3,11 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"testing"
+	"time"
+
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
@@ -13,10 +18,6 @@ import (
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
-	"os"
-	"sync"
-	"testing"
-	"time"
 
 	v1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"

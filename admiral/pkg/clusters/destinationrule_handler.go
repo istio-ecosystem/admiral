@@ -20,7 +20,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,7 +43,7 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 	clientConnectionSettings *v1.ClientConnectionConfig,
 	currentDR *v1alpha3.DestinationRule,
 	eventResourceType string,
-	ctxLogger *logrus.Entry,
+	ctxLogger *log.Entry,
 	event admiral.EventType,
 	doDRUpdateForInClusterRouting bool) *networkingV1Alpha3.DestinationRule {
 

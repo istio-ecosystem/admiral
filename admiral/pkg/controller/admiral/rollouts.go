@@ -47,13 +47,32 @@ type RolloutClusterEntry struct {
 	Rollouts map[string]*RolloutItem
 }
 
+type IIdentityArgoVSCache interface {
+	Get(identity string) map[string]bool
+	Put(newRolloutObj *argo.Rollout, oldRolloutObj *argo.Rollout) error
+	Delete(rolloutObj *argo.Rollout) error
+}
+
+type IdentityArgoVSCache struct {
+	cache map[string]map[string]bool
+	mutex *sync.RWMutex
+}
+
+func NewIdentityArgoVSCache() IIdentityArgoVSCache {
+	return &IdentityArgoVSCache{
+		cache: make(map[string]map[string]bool),
+		mutex: &sync.RWMutex{},
+	}
+}
+
 type RolloutController struct {
-	K8sClient      kubernetes.Interface
-	RolloutClient  argoprojv1alpha1.ArgoprojV1alpha1Interface
-	RolloutHandler RolloutHandler
-	informer       cache.SharedIndexInformer
-	Cache          *rolloutCache
-	labelSet       *common.LabelSet
+	K8sClient           kubernetes.Interface
+	RolloutClient       argoprojv1alpha1.ArgoprojV1alpha1Interface
+	RolloutHandler      RolloutHandler
+	informer            cache.SharedIndexInformer
+	Cache               *rolloutCache
+	labelSet            *common.LabelSet
+	IdentityArgoVSCache IIdentityArgoVSCache
 }
 
 func (rc *RolloutController) DoesGenerationMatch(ctxLogger *log.Entry, obj interface{}, oldObj interface{}) (bool, error) {
@@ -293,9 +312,10 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 	var (
 		err        error
 		controller = RolloutController{
-			RolloutHandler: handler,
-			labelSet:       common.GetLabelSet(),
-			Cache:          NewRolloutCache(),
+			RolloutHandler:      handler,
+			labelSet:            common.GetLabelSet(),
+			Cache:               NewRolloutCache(),
+			IdentityArgoVSCache: NewIdentityArgoVSCache(),
 		}
 	)
 
@@ -323,10 +343,18 @@ func NewRolloutsController(stopCh <-chan struct{}, handler RolloutHandler, confi
 }
 
 func (roc *RolloutController) Added(ctx context.Context, obj interface{}) error {
+	err := roc.populateIdentityArgoVSCache(obj, nil)
+	if err != nil {
+		log.Errorf("failed populateIdentityArgoVSCache due to error: %v", err)
+	}
 	return HandleAddUpdateRollout(ctx, obj, roc)
 }
 
 func (roc *RolloutController) Updated(ctx context.Context, obj interface{}, oldObj interface{}) error {
+	err := roc.populateIdentityArgoVSCache(obj, oldObj)
+	if err != nil {
+		log.Errorf("failed populateIdentityArgoVSCache due to error: %v", err)
+	}
 	return HandleAddUpdateRollout(ctx, obj, roc)
 }
 
@@ -361,6 +389,10 @@ func (roc *RolloutController) Deleted(ctx context.Context, obj interface{}) erro
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", obj)
 	}
+	err := roc.IdentityArgoVSCache.Delete(rollout)
+	if err != nil {
+		log.Errorf("failed deleteIdentityArgoVSCache due to error: %v", err)
+	}
 	if roc.shouldIgnoreBasedOnLabelsForRollout(ctx, rollout) {
 		ns, err := roc.K8sClient.CoreV1().Namespaces().Get(ctx, rollout.Namespace, meta_v1.GetOptions{})
 		if err != nil {
@@ -374,7 +406,7 @@ func (roc *RolloutController) Deleted(ctx context.Context, obj interface{}) erro
 		return nil
 	}
 	key := roc.Cache.getKey(rollout)
-	err := roc.RolloutHandler.Deleted(ctx, rollout)
+	err = roc.RolloutHandler.Deleted(ctx, rollout)
 	if err == nil && len(key) > 0 {
 		roc.Cache.DeleteFromRolloutToClusterCache(key, rollout)
 		roc.Cache.DeleteFromRolloutToClusterCache(common.GetRolloutOriginalIdentifier(rollout), rollout)
@@ -447,4 +479,90 @@ func (d *RolloutController) Get(ctx context.Context, isRetry bool, obj interface
 		return d.RolloutClient.Rollouts(rollout.Namespace).Get(ctx, rollout.Name, meta_v1.GetOptions{})
 	}
 	return nil, fmt.Errorf("rollout client is not initialized, txId=%s", ctx.Value("txId"))
+}
+
+// populateIdentityArgoVSCache populates the IdentityArgoVSCache with the Argo Virtual Service names
+// associated with the rollout. It also handles the case where the Argo VS name is removed or renamed
+// in the rollout object by checking the old object and removing the old Argo VS name from the cache.
+// TODO: Add unit tests
+func (r *RolloutController) populateIdentityArgoVSCache(
+	obj interface{},
+	oldObj interface{}) error {
+
+	rollout, ok := obj.(*argo.Rollout)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", obj)
+	}
+	if oldObj == nil {
+		return r.IdentityArgoVSCache.Put(rollout, nil)
+	}
+	oldRollout, oldOk := oldObj.(*argo.Rollout)
+	if !oldOk {
+		return fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", oldObj)
+	}
+
+	return r.IdentityArgoVSCache.Put(rollout, oldRollout)
+}
+
+func getArgoVSFromRollout(rollout *argo.Rollout) string {
+	rolloutStrategy := rollout.Spec.Strategy
+	if rolloutStrategy.Canary != nil &&
+		rolloutStrategy.Canary.TrafficRouting != nil &&
+		rolloutStrategy.Canary.TrafficRouting.Istio != nil &&
+		rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService != nil &&
+		rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name != "" {
+		return rolloutStrategy.Canary.TrafficRouting.Istio.VirtualService.Name
+	}
+	return ""
+}
+
+func (i *IdentityArgoVSCache) Get(identity string) map[string]bool {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	return i.cache[identity]
+}
+
+// Put adds or updates the Argo VS name in the cache for the given rollout object.
+// TODO: Add unit tests
+func (i *IdentityArgoVSCache) Put(newRolloutObj *argo.Rollout, oldRolloutObj *argo.Rollout) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	oldArgoVSName := ""
+	if oldRolloutObj != nil {
+		oldArgoVSName = getArgoVSFromRollout(oldRolloutObj)
+	}
+
+	identity := common.GetRolloutGlobalIdentifier(newRolloutObj)
+	argoVSName := getArgoVSFromRollout(newRolloutObj)
+
+	// If the Argo VS was removed/renamed from rollout object
+	if oldArgoVSName != "" && oldArgoVSName != argoVSName {
+		if _, exists := i.cache[identity]; exists {
+			delete(i.cache[identity], oldArgoVSName)
+		}
+	}
+
+	if argoVSName == "" {
+		return nil
+	}
+
+	if _, exists := i.cache[identity]; !exists {
+		i.cache[identity] = make(map[string]bool)
+	}
+	i.cache[identity][argoVSName] = true
+	return nil
+}
+
+// Delete removes the Argo VS name from the cache for the given rollout object.
+// TODO: Add unit tests
+func (i *IdentityArgoVSCache) Delete(rolloutObj *argo.Rollout) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	identity := common.GetRolloutGlobalIdentifier(rolloutObj)
+	argoVSName := getArgoVSFromRollout(rolloutObj)
+
+	if _, exists := i.cache[identity]; exists {
+		delete(i.cache[identity], argoVSName)
+	}
+	return nil
 }
