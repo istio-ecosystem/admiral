@@ -1482,11 +1482,11 @@ func doActivePassiveInClusterVS(remoteRegistry *RemoteRegistry,
 		return nil, fmt.Errorf(
 			"the DR %s is pointing to the active cluster %s already", drName, sourceClusterLocality)
 	}
-	passiveLocality := ""
+	activeLocality := ""
 	for currentLocalityOnDR := range distribution[0].To {
-		passiveLocality = currentLocalityOnDR
+		activeLocality = currentLocalityOnDR
 	}
-	if passiveLocality == "" {
+	if activeLocality == "" {
 		return nil, fmt.Errorf("current locality is empty for dr %s", drName)
 	}
 	globalTrafficPolicy := &v1alpha1.GlobalTrafficPolicy{
@@ -1501,7 +1501,7 @@ func doActivePassiveInClusterVS(remoteRegistry *RemoteRegistry,
 							Weight: int32(0),
 						},
 						{
-							Region: passiveLocality,
+							Region: activeLocality,
 							Weight: int32(100),
 						},
 					},
