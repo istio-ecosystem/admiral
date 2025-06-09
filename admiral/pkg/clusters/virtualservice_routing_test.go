@@ -4098,6 +4098,72 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given a GTP with failover" +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an routeDestinations with .local to 0 and .global to 100",
+			gtp: &v1alpha12.GlobalTrafficPolicy{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:        "test-gtp",
+					Annotations: map[string]string{"env": "test-env"},
+					Labels:      map[string]string{"identity": "test-identity"},
+				},
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							DnsPrefix: "default",
+							LbType:    model.TrafficPolicy_FAILOVER,
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-east-2",
+									Weight: 100,
+								},
+								{
+									Region: "us-west-2",
+									Weight: 0,
+								},
+							},
+						},
+					},
+				},
+			},
+			sourceClusterLocality: "us-west-2",
+			routeDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedGTPRouteDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+						Weight: 0,
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-env.test-identity.global",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: 80,
+							},
+						},
+						Weight: 100,
+					},
+				},
+			},
+		},
 	}
 
 	ctxLogger := log.WithFields(log.Fields{})
@@ -8582,6 +8648,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 		env                                   string
 		enableVSRoutingInCluster              bool
 		enabledVSRoutingInClusterForResources map[string]string
+		vsRoutingInClusterDisabledResources   map[string]string
 		remoteRegistry                        *RemoteRegistry
 		expected                              bool
 	}{
@@ -8639,6 +8706,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 			cluster:                               "cluster1",
 			enableVSRoutingInCluster:              true,
 			env:                                   "stage",
+			identity:                              "identity1",
 			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "*"},
 			remoteRegistry:                        remoteRegistry,
 			expected:                              true,
@@ -8650,6 +8718,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 			cluster:                               "cluster1",
 			enableVSRoutingInCluster:              true,
 			env:                                   "stage",
+			identity:                              "identity1",
 			enabledVSRoutingInClusterForResources: map[string]string{"*": "*"},
 			remoteRegistry:                        remoteRegistry,
 			expected:                              true,
@@ -8689,6 +8758,30 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 			enabledVSRoutingInClusterForResources: map[string]string{"cluster0": "*"},
 			remoteRegistry:                        remoteRegistry,
 			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, but is disabled for all identities on the give cluster" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster0",
+			identity:                            "identity0",
+			enableVSRoutingInCluster:            true,
+			env:                                 "stage",
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster0": "*"},
+			remoteRegistry:                      remoteRegistry,
+			expected:                            false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, but is disabled for an identity on the given cluster" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster0",
+			identity:                            "identity0",
+			enableVSRoutingInCluster:            true,
+			env:                                 "stage",
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster0": "identity0"},
+			remoteRegistry:                      remoteRegistry,
+			expected:                            false,
 		},
 	}
 

@@ -101,7 +101,7 @@ func NewIdentityVirtualServiceCache() *IdentityVirtualServiceCache {
 func (i *IdentityVirtualServiceCache) Get(identity string) map[string]*networking.VirtualService {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return i.cache[identity]
+	return i.cache[strings.ToLower(identity)]
 }
 
 func (i *IdentityVirtualServiceCache) Put(vs *networking.VirtualService) error {
@@ -133,6 +133,7 @@ func (i *IdentityVirtualServiceCache) Put(vs *networking.VirtualService) error {
 	}
 	identities := getIdentitiesFromVSHostName(hosts[0])
 	for _, identity := range identities {
+		identity = strings.ToLower(identity)
 		if i.cache[identity] == nil {
 			i.cache[identity] = map[string]*networking.VirtualService{name: vs}
 			continue
@@ -177,6 +178,7 @@ func (i *IdentityVirtualServiceCache) Delete(vs *networking.VirtualService) erro
 	}
 	identities := getIdentitiesFromVSHostName(hosts[0])
 	for _, identity := range identities {
+		identity = strings.ToLower(identity)
 		vsMap, ok := i.cache[identity]
 		if !ok {
 			continue

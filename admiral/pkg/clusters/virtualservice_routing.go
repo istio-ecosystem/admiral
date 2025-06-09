@@ -696,13 +696,6 @@ func addUpdateInClusterVirtualServices(
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
 
-		if IsVSRoutingInClusterDisabledForIdentity(sourceCluster, sourceIdentity) {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				fmt.Sprintf("Writing phase: addUpdateInClusterVirtualServices: VS based routing disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-			continue
-		}
-
 		ctxLogger.Debugf(common.CtxLogFormat, "VSBasedRoutingInCluster",
 			"", "", sourceCluster,
 			"Writing phase: addUpdateInClusterVirtualServices VS based routing enabled for cluster")
@@ -1532,10 +1525,8 @@ func getDestinationsForGTPDNSPrefixes(
 				}
 
 				if weightForLocality == 0 {
-					rd.Destination.Host = routeHost
-					rd.Destination.Port = &networkingV1Alpha3.PortSelector{
-						Number: 80,
-					}
+					remoteRD = getRouteDestination(routeHost, 80, 100-weightForLocality)
+					rd.Weight = weightForLocality
 					continue
 				}
 
@@ -2211,13 +2202,28 @@ func DoVSRoutingInClusterForClusterAndIdentity(
 		return false
 	}
 
-	if remoteRegistry == nil {
-		ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
-			identity, "", cluster, "remoteRegistry is nil")
+	if IsVSRoutingInClusterDisabledForCluster(cluster) || IsVSRoutingInClusterDisabledForIdentity(cluster, identity) {
+		ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+			identity, "", cluster, "VS routing in-cluster is disabled for cluster/identity")
 		return false
 	}
 
-	if identity != "" {
+	enabledResources := common.GetVSRoutingInClusterEnabledResources()
+
+	isInClusterVSEnabledForClusterOrIdentity :=
+		enabledResources["*"] == "*" ||
+			enabledResources[cluster] == "*" ||
+			checkClusterIdentity(enabledResources["*"], identity) ||
+			checkClusterIdentity(enabledResources[cluster], identity)
+
+	// If the feature is enabled for the cluster or identity, we need to perform
+	// additional checks.
+	if isInClusterVSEnabledForClusterOrIdentity {
+		if remoteRegistry == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, "remoteRegistry is nil")
+			return false
+		}
 		// Check if there is any custom VS in the identity's namespace
 		// We will disable this feature if there is a custom VS in the identity's namespace
 		hasVSInNS, err := DoesIdentityHaveVS(remoteRegistry, identity)
@@ -2251,17 +2257,11 @@ func DoVSRoutingInClusterForClusterAndIdentity(
 				identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
 			return false
 		}
-	}
 
-	enabledResources := common.GetVSRoutingInClusterEnabledResources()
-
-	//check if vs routing is enabled for everything or for all identities on a specific cluster
-	if enabledResources["*"] == "*" || enabledResources[cluster] == "*" {
 		return true
 	}
 
-	//check if vs routing is enabled for an identity on all source clusters or for an identity on a specific cluster
-	return checkClusterIdentity(enabledResources["*"], identity) || checkClusterIdentity(enabledResources[cluster], identity)
+	return false
 }
 
 // Verify the specific identity is part of the configured identities
