@@ -957,7 +957,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 	}{
 		{
 			name: "Given a vs with no name" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should return an error",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -965,11 +965,11 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 				},
 			},
 			expectedError: fmt.Errorf(
-				"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty"),
+				"failed to put virtualService in IdentityVirtualServiceCache as vs name is empty"),
 		},
 		{
 			name: "Given a vs with no namespace" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should return an error",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -977,11 +977,11 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 				},
 			},
 			expectedError: fmt.Errorf(
-				"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs namespace is empty"),
+				"failed to put virtualService in IdentityVirtualServiceCache as vs namespace is empty"),
 		},
 		{
 			name: "Given a vs with no hosts" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -994,7 +994,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a vs with dummy prefixed host" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1010,7 +1010,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a valid vs" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should add the VS to the cache",
 			vs: validVS,
 			expectedCache: map[string]map[string]*v1alpha3.VirtualService{
@@ -1025,7 +1025,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a vs which was created in sync NS" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1038,7 +1038,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a vs which was created in istio-system NS" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1116,7 +1116,7 @@ func TestIdentityVirtualServiceCacheDelete(t *testing.T) {
 				},
 			},
 			expectedError: fmt.Errorf(
-				"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as vs namespace is empty"),
+				"failed to delete virtualService in IdentityVirtualServiceCache as vs namespace is empty"),
 		},
 		{
 			name: "Given a vs on some other host" +
