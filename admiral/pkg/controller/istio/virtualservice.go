@@ -110,7 +110,7 @@ func (i *IdentityVirtualServiceCache) Put(vs *networking.VirtualService) error {
 	namespace := vs.Namespace
 	if namespace == "" {
 		return fmt.Errorf(
-			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs namespace is empty")
+			"failed to put virtualService in IdentityVirtualServiceCache as vs namespace is empty")
 	}
 	if namespace == common.GetSyncNamespace() || namespace == common.NamespaceIstioSystem {
 		return nil
@@ -118,7 +118,7 @@ func (i *IdentityVirtualServiceCache) Put(vs *networking.VirtualService) error {
 	name := vs.Name
 	if name == "" {
 		return fmt.Errorf(
-			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty")
+			"failed to put virtualService in IdentityVirtualServiceCache as vs name is empty")
 	}
 	hosts := vs.Spec.Hosts
 	if hosts == nil {

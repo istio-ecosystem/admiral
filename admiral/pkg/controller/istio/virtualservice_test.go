@@ -1057,7 +1057,7 @@ func TestIdentityVirtualServiceCachePut(t *testing.T) {
 			err := idNSCache.Put(tc.vs)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
-				assert.Equal(t, err, tc.expectedError)
+				assert.Equal(t, tc.expectedError, err)
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expectedCache, idNSCache.cache)
