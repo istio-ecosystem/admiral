@@ -64,7 +64,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace:                      "admiral-sync",
 		LabelSet:                           &common.LabelSet{},
 		ExportToIdentityList:               []string{"*"},
@@ -74,7 +74,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		VSRoutingInClusterEnabledResources: map[string]string{"cluster-1": "test-identity"},
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	istioClientWithExistingVS := istioFake.NewSimpleClientset()
 	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
@@ -84,7 +84,8 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	rc := &RemoteController{
 		ClusterID: "cluster-1",
 		VirtualServiceController: &istio.VirtualServiceController{
-			VirtualServiceCache: istio.NewVirtualServiceCache(),
+			VirtualServiceCache:         istio.NewVirtualServiceCache(),
+			IdentityVirtualServiceCache: istio.NewIdentityVirtualServiceCache(),
 		},
 		ServiceEntryController: &istio.ServiceEntryController{
 			Cache: istio.NewServiceEntryCache(),
@@ -92,14 +93,16 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 	}
 
 	rc1 := &RemoteController{
-		ClusterID:                "cluster-2",
-		VirtualServiceController: &istio.VirtualServiceController{},
+		ClusterID: "cluster-2",
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: istio.NewIdentityVirtualServiceCache(),
+		},
 		ServiceEntryController: &istio.ServiceEntryController{
 			Cache: istio.NewServiceEntryCache(),
 		},
 	}
 
-	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr := NewRemoteRegistry(context.Background(), ap)
 	rr.PutRemoteController("cluster-1", rc)
 	rr.PutRemoteController("cluster-2", rc1)
 
@@ -223,6 +226,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 		istioClient                 *istioFake.Clientset
 		sourceIdentity              string
 		expectedError               error
+		env                         string
 		expectedVS                  *apiNetworkingV1Alpha3.VirtualService
 	}{
 		{
@@ -241,13 +245,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			expectedError:               fmt.Errorf("remoteRegistry is nil"),
 		},
 		{
-			name: "Given a empty vsName, " +
+			name: "Given a empty cname, " +
 				"When addUpdateInClusterVirtualServices is invoked, " +
 				"Then it should return an error",
 			sourceIdentity:              "test-identity",
 			remoteRegistry:              rr,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
-			expectedError:               fmt.Errorf("vsName is empty"),
+			expectedError:               fmt.Errorf("cname is empty"),
 		},
 		{
 			name: "Given a valid sourceClusterToDestinations " +
@@ -260,6 +264,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-incluster-vs",
@@ -307,6 +312,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: cluster2SourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity1.global-incluster-vs",
@@ -353,6 +359,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-incluster-vs",
@@ -399,6 +406,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithPreviewSvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-incluster-vs",
@@ -470,6 +478,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithCanarySvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-incluster-vs",
@@ -551,6 +560,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 			istioClient:                 istioClientWithNoExistingVS,
 			sourceClusterToDestinations: sourceDestinationsWithSingleDestinationSvc,
 			expectedError:               nil,
+			env:                         "stage",
 			expectedVS: &apiNetworkingV1Alpha3.VirtualService{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name:      "test-env.test-identity.global-incluster-vs",
@@ -601,7 +611,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 				tc.remoteRegistry,
 				tc.sourceClusterToDestinations,
 				tc.vsName,
-				tc.sourceIdentity, "")
+				tc.sourceIdentity, tc.env)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -661,7 +671,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet:                    &common.LabelSet{},
 		EnableSWAwareNSCaches:       true,
 		IngressVSExportToNamespaces: []string{"istio-system"},
@@ -669,7 +679,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		EnableVSRouting:             true,
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	istioClientWithExistingVS := istioFake.NewSimpleClientset()
 	istioClientWithExistingVS.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
@@ -683,7 +693,7 @@ func TestAddUpdateVirtualServicesForIngress(t *testing.T) {
 		},
 	}
 
-	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr := NewRemoteRegistry(context.Background(), ap)
 	rr.PutRemoteController("cluster-1", rc)
 
 	defaultFQDN := "test-env.test-identity.global"
@@ -1177,7 +1187,7 @@ func TestGetFQDNFromSNIHost(t *testing.T) {
 
 func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -1185,7 +1195,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1340,7 +1350,7 @@ func TestPopulateVSRouteDestinationForDeployment(t *testing.T) {
 
 func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -1348,7 +1358,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1695,7 +1705,7 @@ func TestPopulateVSRouteDestinationForRollout(t *testing.T) {
 
 func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -1703,7 +1713,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -1836,7 +1846,7 @@ func TestPopulateDestinationsForBlueGreenStrategy(t *testing.T) {
 
 func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -1844,7 +1854,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -2000,7 +2010,7 @@ func TestPopulateDestinationsForCanaryStrategy(t *testing.T) {
 
 func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		IngressVSExportToNamespaces: []string{"istio-system"},
 	}
 
@@ -2045,9 +2055,9 @@ func TestGetBaseVirtualServiceForIngress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			admiralParams.VSRoutingGateways = tc.routingGateways
+			ap.VSRoutingGateways = tc.routingGateways
 			common.ResetSync()
-			common.InitializeConfig(admiralParams)
+			common.InitializeConfig(ap)
 			actual, err := getBaseVirtualServiceForIngress()
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
@@ -2215,7 +2225,7 @@ func TestGetMeshHTTPPortForDeployment(t *testing.T) {
 
 func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey:     "identity",
 			EnvKey:                  "env",
@@ -2224,7 +2234,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	meshPort := uint32(8080)
 	testCases := []struct {
@@ -2563,7 +2573,7 @@ func TestGetAllVSRouteDestinationsByCluster(t *testing.T) {
 
 func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey:     "identity",
 			EnvKey:                  "env",
@@ -2572,7 +2582,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	gtpCache := &globalTrafficCache{}
 	gtpCache.identityCache = make(map[string]*v1alpha12.GlobalTrafficPolicy)
@@ -2967,7 +2977,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 
 func TestGetDefaultFQDNFromDeployment(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -2975,7 +2985,7 @@ func TestGetDefaultFQDNFromDeployment(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	testCases := []struct {
 		name            string
@@ -3035,7 +3045,7 @@ func TestGetDefaultFQDNFromDeployment(t *testing.T) {
 
 func TestGetDefaultFQDNFromRollout(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -3043,7 +3053,7 @@ func TestGetDefaultFQDNFromRollout(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	testCases := []struct {
 		name            string
@@ -3109,7 +3119,7 @@ func TestGetDefaultFQDNFromRollout(t *testing.T) {
 
 func TestGetCanaryFQDNFromRollout(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -3117,7 +3127,7 @@ func TestGetCanaryFQDNFromRollout(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	testCases := []struct {
 		name            string
@@ -3186,7 +3196,7 @@ func TestGetCanaryFQDNFromRollout(t *testing.T) {
 
 func TestGetPreviewFQDNFromRollout(t *testing.T) {
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -3194,7 +3204,7 @@ func TestGetPreviewFQDNFromRollout(t *testing.T) {
 		HostnameSuffix: "global",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	testCases := []struct {
 		name            string
@@ -3348,7 +3358,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SANPrefix:                          "test-san-prefix",
 		EnableVSRoutingInCluster:           true,
 		VSRoutingInClusterEnabledResources: map[string]string{"cluster-1": "test-identity", "cluster-2": "*"},
@@ -3359,7 +3369,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 	}
 
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	istioClientWithExistingDR := istioFake.NewSimpleClientset()
 	istioClientWithExistingDR.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
@@ -3403,6 +3413,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 		sourceClusterToDRHosts   map[string]map[string]string
 		sourceIdentity           string
 		cname                    string
+		env                      string
 		expectedError            error
 		expectedDestinationRules *apiNetworkingV1Alpha3.DestinationRule
 	}{
@@ -3417,6 +3428,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				},
 			},
 			sourceIdentity: "",
+			env:            "stage",
 			expectedError:  fmt.Errorf("sourceIdentity is empty"),
 		},
 		{
@@ -3430,6 +3442,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				},
 			},
 			sourceIdentity: "test-identity",
+			env:            "stage",
 			expectedError:  fmt.Errorf("cname is empty"),
 		},
 		{
@@ -3445,6 +3458,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				},
 			},
 			istioClient:   istioClientWithNoExistingDR,
+			env:           "stage",
 			expectedError: nil,
 			expectedDestinationRules: &apiNetworkingV1Alpha3.DestinationRule{
 				ObjectMeta: metaV1.ObjectMeta{
@@ -3479,6 +3493,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 			drName:         "test-ns.svc.cluster.local-incluster-dr",
 			sourceIdentity: "test-identity",
 			cname:          "test-env.test-identity.global",
+			env:            "stage",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-1": {
 					"test-ns.svc.cluster.local": "*.test-ns.svc.cluster.local",
@@ -3520,6 +3535,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 			drName:         "test-ns2.svc.cluster.local-incluster-dr",
 			sourceIdentity: "test-identity",
 			cname:          "test-env.test-identity.global",
+			env:            "stage",
 			sourceClusterToDRHosts: map[string]map[string]string{
 				"cluster-2": {
 					"test-ns2.svc.cluster.local": "*.test-ns2.svc.cluster.local",
@@ -3561,11 +3577,19 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				DestinationRuleController: &istio.DestinationRuleController{
 					Cache: istio.NewDestinationRuleCache(),
 				},
+				VirtualServiceController: &istio.VirtualServiceController{
+					IdentityVirtualServiceCache: istio.NewIdentityVirtualServiceCache(),
+					IstioClient:                 istioFake.NewSimpleClientset(),
+				},
 			}
 			rc2 := &RemoteController{
 				ClusterID: "cluster-2",
 				DestinationRuleController: &istio.DestinationRuleController{
 					Cache: istio.NewDestinationRuleCache(),
+				},
+				VirtualServiceController: &istio.VirtualServiceController{
+					IdentityVirtualServiceCache: istio.NewIdentityVirtualServiceCache(),
+					IstioClient:                 istioFake.NewSimpleClientset(),
 				},
 			}
 			rc.DestinationRuleController.IstioClient = tc.istioClient
@@ -3579,7 +3603,7 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 				rr,
 				tc.sourceClusterToDRHosts,
 				tc.sourceIdentity,
-				tc.cname)
+				tc.cname, tc.env)
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -3628,14 +3652,14 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SANPrefix:                         "test-san-prefix",
 		IngressVSExportToNamespaces:       []string{"istio-system"},
 		EnableVSRouting:                   true,
 		VSRoutingSlowStartEnabledClusters: []string{"cluster-1"},
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	istioClientWithExistingDR := istioFake.NewSimpleClientset()
 	istioClientWithExistingDR.NetworkingV1alpha3().DestinationRules(util.IstioSystemNamespace).
@@ -3643,7 +3667,7 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 
 	istioClientWithNoExistingDR := istioFake.NewSimpleClientset()
 
-	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr := NewRemoteRegistry(context.Background(), ap)
 
 	ctxLogger := log.WithFields(log.Fields{
 		"type": "DestinationRule",
@@ -4074,6 +4098,72 @@ func TestGetDestinationsForGTPDNSPrefixes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Given a GTP with failover" +
+				"When getDestinationsForGTPDNSPrefixes is invoked, " +
+				"Then it should return an routeDestinations with .local to 0 and .global to 100",
+			gtp: &v1alpha12.GlobalTrafficPolicy{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:        "test-gtp",
+					Annotations: map[string]string{"env": "test-env"},
+					Labels:      map[string]string{"identity": "test-identity"},
+				},
+				Spec: model.GlobalTrafficPolicy{
+					Policy: []*model.TrafficPolicy{
+						{
+							DnsPrefix: "default",
+							LbType:    model.TrafficPolicy_FAILOVER,
+							Target: []*model.TrafficGroup{
+								{
+									Region: "us-east-2",
+									Weight: 100,
+								},
+								{
+									Region: "us-west-2",
+									Weight: 0,
+								},
+							},
+						},
+					},
+				},
+			},
+			sourceClusterLocality: "us-west-2",
+			routeDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+					},
+				},
+			},
+			expectedError: nil,
+			expectedGTPRouteDestination: map[string][]*vsrouting.RouteDestination{
+				"test-env.test-identity.global": {
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: meshPort,
+							},
+						},
+						Weight: 0,
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
+							Host: "test-env.test-identity.global",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: 80,
+							},
+						},
+						Weight: 100,
+					},
+				},
+			},
+		},
 	}
 
 	ctxLogger := log.WithFields(log.Fields{})
@@ -4252,7 +4342,20 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 					Weight: 25,
 				},
 			}},
-			expectedError: fmt.Errorf("total weight is 50, expected 100 or 0"),
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+			}},
 		},
 		{
 			name: "Given a routeDestination with a two destinations with weights=0" +
@@ -4452,7 +4555,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		},
 	}
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet:                            &common.LabelSet{},
 		SyncNamespace:                       "test-sync-ns",
 		ExportToIdentityList:                []string{"*"},
@@ -4462,7 +4565,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		VSRoutingInClusterDisabledResources: map[string]string{"cluster-2": "*", "cluster-1": "test-identity"},
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	istioClientCluster1 := istioFake.NewSimpleClientset()
 	istioClientCluster1.NetworkingV1alpha3().VirtualServices(util.IstioSystemNamespace).
@@ -4482,7 +4585,7 @@ func TestPerformInVSRoutingRollback(t *testing.T) {
 		VirtualServiceController: &istio.VirtualServiceController{IstioClient: istioClientCluster2},
 	}
 
-	rr := NewRemoteRegistry(context.Background(), admiralParams)
+	rr := NewRemoteRegistry(context.Background(), ap)
 	rr.PutRemoteController("cluster-1", rc)
 	rr.PutRemoteController("cluster-2", rc1)
 
@@ -7681,12 +7784,12 @@ func TestGetCustomVirtualService(t *testing.T) {
 		"type": "VirtualService",
 	})
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace:      syncNS,
 		ProcessVSCreatedBy: "testCreatedBy",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -7964,7 +8067,7 @@ func TestPerformDRPinning(t *testing.T) {
 	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
 		Create(context.Background(), cachedAdditionalEndpointDR, metaV1.CreateOptions{})
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
 			WorkloadIdentityKey: "identity",
 			EnvKey:              "env",
@@ -7973,7 +8076,7 @@ func TestPerformDRPinning(t *testing.T) {
 		SyncNamespace:  "sync-ns",
 	}
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	testCases := []struct {
 		name                  string
@@ -8211,6 +8314,550 @@ func TestGetLocalityLBSettings(t *testing.T) {
 				assert.Nil(t, err)
 				assert.True(t, reflect.DeepEqual(tc.expectedResult, actualResult))
 			}
+		})
+	}
+}
+
+func TestDoDRUpdateForInClusterVSRouting(t *testing.T) {
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("identity0", "cluster1", "cluster1")
+	identityClusterCache.Put("identity1", "cluster1", "cluster1")
+
+	identityVirtualServiceCache := istio.NewIdentityVirtualServiceCache()
+	identityVirtualServiceCache.Put(&apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "vs1",
+		},
+		Spec: networkingV1Alpha3.VirtualService{Hosts: []string{"stage.identity0.global"}},
+	})
+
+	vsWithValidNS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:   "foo.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"testNS"},
+		},
+	}
+	vsWithSyncNS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:   "bar.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"sync-ns"},
+		},
+	}
+
+	virtualServiceCache := istio.NewVirtualServiceCache()
+	virtualServiceCache.Put(vsWithValidNS)
+	virtualServiceCache.Put(vsWithSyncNS)
+
+	remoteController := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: identityVirtualServiceCache,
+			VirtualServiceCache:         virtualServiceCache,
+			IstioClient:                 istioFake.NewSimpleClientset(),
+		},
+	}
+
+	remoteRegistry := NewRemoteRegistry(context.Background(), common.AdmiralParams{})
+	remoteRegistry.AdmiralCache.IdentityClusterCache = identityClusterCache
+	remoteRegistry.PutRemoteController("cluster1", remoteController)
+
+	testCases := []struct {
+		name                               string
+		cluster                            string
+		identity                           string
+		env                                string
+		isSourceCluster                    bool
+		enableVSRoutingInCluster           bool
+		remoteRegistry                     *RemoteRegistry
+		serviceEntry                       *networkingV1Alpha3.ServiceEntry
+		enabledVSRoutingInClusterResources map[string]string
+		expected                           bool
+	}{
+		{
+			name: "Given nil remoteRegistry" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return false",
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is source cluster" +
+				"When corresponding incluster VS's exportTo has not been updated with valid namespaces" +
+				"And DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return false",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"bar.testns.global"},
+			},
+			expected: false,
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: true,
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1 and identity1, cluster is remote cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    false,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: false,
+		},
+		{
+			name: "Given VSRoutingInCluster is not enabled for cluster1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster2": ""},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: false,
+		},
+		{
+			name: "Given VSRoutingInCluster is not enabled, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           false,
+			enabledVSRoutingInClusterResources: map[string]string{"": ""},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: false,
+		},
+		{
+			name: "Given VSRoutingInCluster is enabled for cluster1,  VSRoutingInCluster not enabled for identity1, cluster is source cluster" +
+				"When DoDRUpdateForInClusterVSRouting is called" +
+				"Then it should return true",
+			cluster:                            "cluster1",
+			identity:                           "identity1",
+			env:                                "stage",
+			isSourceCluster:                    true,
+			enableVSRoutingInCluster:           true,
+			enabledVSRoutingInClusterResources: map[string]string{"cluster1": ""},
+			remoteRegistry:                     remoteRegistry,
+			serviceEntry: &networkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: false,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := common.AdmiralParams{
+				SyncNamespace: "sync-ns",
+			}
+			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
+			p.VSRoutingInClusterEnabledResources = tc.enabledVSRoutingInClusterResources
+			common.ResetSync()
+			common.InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoDRUpdateForInClusterVSRouting(context.Background(),
+				ctxLogger, tc.env, tc.cluster, tc.identity, tc.isSourceCluster, tc.remoteRegistry, tc.serviceEntry))
+		})
+	}
+
+}
+
+func TestIsVSRoutingInClusterDisabledForClusterAndIdentity(t *testing.T) {
+
+	testCases := []struct {
+		name                                string
+		cluster                             string
+		identity                            string
+		disabledVSRoutingInClusterResources map[string]string
+		expected                            bool
+	}{
+		{
+			name: "Given disabledVSRoutingInClusterResources is empty" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster1",
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{},
+			expected:                            false,
+		},
+		{
+			name: "Given cluster doesn't exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster2",
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{},
+			expected:                            false,
+		},
+		{
+			name: "Given cluster does exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": "*"},
+			expected:                            true,
+		},
+		{
+			name: "Given VS routing is disabled in all clusters using '*'" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			identity:                            "identity",
+			disabledVSRoutingInClusterResources: map[string]string{"*": "*"},
+			expected:                            true,
+		},
+		{
+			name: "Given cluster does exists in the disabledVSRoutingInClusterResources and given identity does not exists" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster1",
+			identity:                            "identity1",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": ""},
+			expected:                            false,
+		},
+		{
+			name: "Given cluster and identity does exists in the disabledVSRoutingInClusterResources" +
+				"When IsVSRoutingInClusterDisabledForIdentity is called" +
+				"Then it should return true",
+			cluster:                             "cluster1",
+			identity:                            "identity1",
+			disabledVSRoutingInClusterResources: map[string]string{"cluster1": "identity1"},
+			expected:                            true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := common.AdmiralParams{}
+			p.VSRoutingInClusterDisabledResources = tc.disabledVSRoutingInClusterResources
+			common.ResetSync()
+			common.InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, IsVSRoutingInClusterDisabledForIdentity(tc.cluster, tc.identity))
+		})
+	}
+}
+
+func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
+
+	customVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "custom-vs",
+			Namespace: "sync-ns",
+			Annotations: map[string]string{
+				common.CreatedForEnv: "stage",
+			},
+			Labels: map[string]string{
+				common.CreatedBy:  "testCreatedBy",
+				common.CreatedFor: "identity1",
+			},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"*"},
+		},
+	}
+
+	istioClientCluster := istioFake.NewSimpleClientset()
+	istioClientCluster.NetworkingV1alpha3().VirtualServices("sync-ns").
+		Create(context.Background(), customVS, metaV1.CreateOptions{})
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("identity0", "cluster0", "cluster0")
+	identityClusterCache.Put("identity1", "cluster1", "cluster1")
+
+	identityVirtualServiceCache := istio.NewIdentityVirtualServiceCache()
+	identityVirtualServiceCache.Put(&apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "vs1",
+			Namespace: "ns1",
+		},
+		Spec: networkingV1Alpha3.VirtualService{Hosts: []string{"stage.identity0.global"}},
+	})
+
+	remoteController := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: identityVirtualServiceCache,
+			IstioClient:                 istioFake.NewSimpleClientset(),
+		},
+	}
+	remoteControllerWithCustomVS := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: identityVirtualServiceCache,
+			IstioClient:                 istioClientCluster,
+		},
+	}
+
+	p := common.AdmiralParams{
+		SyncNamespace:      "sync-ns",
+		ProcessVSCreatedBy: "testCreatedBy",
+	}
+
+	remoteRegistry := NewRemoteRegistry(context.Background(), p)
+	remoteRegistry.AdmiralCache.IdentityClusterCache = identityClusterCache
+	remoteRegistry.PutRemoteController("cluster1", remoteController)
+	remoteRegistry.PutRemoteController("cluster0", remoteController)
+	remoteRegistry.PutRemoteController("cluster9", remoteControllerWithCustomVS)
+
+	testCases := []struct {
+		name                                  string
+		cluster                               string
+		identity                              string
+		env                                   string
+		enableVSRoutingInCluster              bool
+		enabledVSRoutingInClusterForResources map[string]string
+		vsRoutingInClusterDisabledResources   map[string]string
+		remoteRegistry                        *RemoteRegistry
+		expected                              bool
+	}{
+		{
+			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForResources is empty" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster1",
+			env:                                   "stage",
+			enableVSRoutingInCluster:              false,
+			enabledVSRoutingInClusterForResources: map[string]string{},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, enabledVSRoutingInClusterForResources is empty" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster1",
+			identity:                              "identity1",
+			env:                                   "stage",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster doesn't exists in the enabledVSRoutingInClusterForResources" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster2",
+			identity:                              "identity1",
+			env:                                   "stage",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "test1"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and there is a cartographer VS with valid(non-dot) NS" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster9",
+			identity:                              "identity1",
+			env:                                   "stage",
+			enableVSRoutingInCluster:              true,
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster9": "*"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return true",
+			cluster:                               "cluster1",
+			enableVSRoutingInCluster:              true,
+			env:                                   "stage",
+			identity:                              "identity1",
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "*"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and all VS routing is enabled in all clusters using '*'" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return true",
+			cluster:                               "cluster1",
+			enableVSRoutingInCluster:              true,
+			env:                                   "stage",
+			identity:                              "identity1",
+			enabledVSRoutingInClusterForResources: map[string]string{"*": "*"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster and identity does exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return true",
+			cluster:                               "cluster1",
+			identity:                              "identity1",
+			enableVSRoutingInCluster:              true,
+			env:                                   "stage",
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "identity1, identity2"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              true,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map, and given identity does not exists in the map" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster1",
+			identity:                              "identity3",
+			enableVSRoutingInCluster:              true,
+			env:                                   "stage",
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster1": "identity1, identity2"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map, and given identity has a VS in its namespace" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                               "cluster0",
+			identity:                              "identity0",
+			enableVSRoutingInCluster:              true,
+			env:                                   "stage",
+			enabledVSRoutingInClusterForResources: map[string]string{"cluster0": "*"},
+			remoteRegistry:                        remoteRegistry,
+			expected:                              false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, but is disabled for all identities on the give cluster" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster0",
+			identity:                            "identity0",
+			enableVSRoutingInCluster:            true,
+			env:                                 "stage",
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster0": "*"},
+			remoteRegistry:                      remoteRegistry,
+			expected:                            false,
+		},
+		{
+			name: "Given enableVSRoutingInCluster is true, but is disabled for an identity on the given cluster" +
+				"When DoVSRoutingInClusterForClusterAndIdentity is called" +
+				"Then it should return false",
+			cluster:                             "cluster0",
+			identity:                            "identity0",
+			enableVSRoutingInCluster:            true,
+			env:                                 "stage",
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster0": "identity0"},
+			remoteRegistry:                      remoteRegistry,
+			expected:                            false,
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p.EnableVSRoutingInCluster = tc.enableVSRoutingInCluster
+			p.VSRoutingInClusterEnabledResources = tc.enabledVSRoutingInClusterForResources
+			common.ResetSync()
+			common.InitializeConfig(p)
+
+			assert.Equal(t, tc.expected, DoVSRoutingInClusterForClusterAndIdentity(
+				context.Background(), ctxLogger, tc.env, tc.cluster, tc.identity, tc.remoteRegistry))
+		})
+	}
+
+}
+
+func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
+	testCases := []struct {
+		name                                string
+		vsRoutingInClusterDisabledResources map[string]string
+		cluster                             string
+		expectedResult                      bool
+	}{
+		{
+			name: "Given nil vs routing disabled resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: nil,
+		},
+		{
+			name: "Given empty vs routing disabled resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: map[string]string{},
+		},
+		{
+			name: "Given non-empty vs routing disabled resources but for unique identity" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return false",
+			expectedResult:                      false,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "identity1"},
+			cluster:                             "cluster1",
+		},
+		{
+			name: "Given non-empty vs routing disabled resources for all the cluster identities" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"cluster1": "*"},
+			cluster:                             "cluster1",
+		},
+		{
+			name: "Given non-empty vs routing disabled resources for all the resources" +
+				"When func IsVSRoutingInClusterDisabledForCluster is called" +
+				"Then the func should return true",
+			expectedResult:                      true,
+			vsRoutingInClusterDisabledResources: map[string]string{"*": "*"},
+			cluster:                             "cluster1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := common.AdmiralParams{}
+			p.VSRoutingInClusterDisabledResources = tc.vsRoutingInClusterDisabledResources
+			common.ResetSync()
+			common.InitializeConfig(p)
+			actual := IsVSRoutingInClusterDisabledForCluster(tc.cluster)
+			assert.Equal(t, tc.expectedResult, actual)
 		})
 	}
 }

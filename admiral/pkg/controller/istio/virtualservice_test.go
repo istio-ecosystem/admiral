@@ -25,10 +25,10 @@ func TestAdded(t *testing.T) {
 	mockVirtualServiceHandler := &test.MockVirtualServiceHandler{}
 	ctx := context.Background()
 	virtualServiceController := VirtualServiceController{
-		VirtualServiceHandler:                mockVirtualServiceHandler,
-		VirtualServiceCache:                  NewVirtualServiceCache(),
-		HostToRouteDestinationCache:          NewHostToRouteDestinationCache(),
-		IdentityNamespaceVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
+		VirtualServiceHandler:       mockVirtualServiceHandler,
+		VirtualServiceCache:         NewVirtualServiceCache(),
+		HostToRouteDestinationCache: NewHostToRouteDestinationCache(),
+		IdentityVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
 	}
 
 	testCases := []struct {
@@ -82,10 +82,10 @@ func TestUpdated(t *testing.T) {
 	mockVirtualServiceHandler := &test.MockVirtualServiceHandler{}
 	ctx := context.Background()
 	virtualServiceController := VirtualServiceController{
-		VirtualServiceHandler:                mockVirtualServiceHandler,
-		VirtualServiceCache:                  NewVirtualServiceCache(),
-		HostToRouteDestinationCache:          NewHostToRouteDestinationCache(),
-		IdentityNamespaceVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
+		VirtualServiceHandler:       mockVirtualServiceHandler,
+		VirtualServiceCache:         NewVirtualServiceCache(),
+		HostToRouteDestinationCache: NewHostToRouteDestinationCache(),
+		IdentityVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
 	}
 
 	testCases := []struct {
@@ -139,10 +139,10 @@ func TestDeleted(t *testing.T) {
 	mockVirtualServiceHandler := &test.MockVirtualServiceHandler{}
 	ctx := context.Background()
 	virtualServiceController := VirtualServiceController{
-		VirtualServiceHandler:                mockVirtualServiceHandler,
-		VirtualServiceCache:                  NewVirtualServiceCache(),
-		HostToRouteDestinationCache:          NewHostToRouteDestinationCache(),
-		IdentityNamespaceVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
+		VirtualServiceHandler:       mockVirtualServiceHandler,
+		VirtualServiceCache:         NewVirtualServiceCache(),
+		HostToRouteDestinationCache: NewHostToRouteDestinationCache(),
+		IdentityVirtualServiceCache: MockIdentityNamespaceVirtualServiceCache{},
 	}
 
 	testCases := []struct {
@@ -931,7 +931,13 @@ func TestUpdateVSProcessStatus(t *testing.T) {
 
 }
 
-func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
+func TestIdentityVirtualServiceCachePut(t *testing.T) {
+
+	ap := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(ap)
 
 	validVS := &v1alpha3.VirtualService{
 		ObjectMeta: v1.ObjectMeta{
@@ -939,7 +945,7 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: networkingv1alpha3.VirtualService{
-			Hosts: []string{"foo.host.global"},
+			Hosts: []string{"stage.foo.host.global"},
 		},
 	}
 
@@ -951,15 +957,19 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 	}{
 		{
 			name: "Given a vs with no name" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should return an error",
-			vs: &v1alpha3.VirtualService{},
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "test-ns",
+				},
+			},
 			expectedError: fmt.Errorf(
-				"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty"),
+				"failed to put virtualService in IdentityVirtualServiceCache as vs name is empty"),
 		},
 		{
 			name: "Given a vs with no namespace" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should return an error",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -967,11 +977,11 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 				},
 			},
 			expectedError: fmt.Errorf(
-				"failed to put virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs test-vs"),
+				"failed to put virtualService in IdentityVirtualServiceCache as vs namespace is empty"),
 		},
 		{
 			name: "Given a vs with no hosts" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -984,7 +994,7 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a vs with dummy prefixed host" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should not add the VS to the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1000,25 +1010,54 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 		},
 		{
 			name: "Given a valid vs" +
-				"When IdentityNamespaceVirtualServiceCache.Put func is called" +
+				"When IdentityVirtualServiceCache.Put func is called" +
 				"Then the func should add the VS to the cache",
 			vs: validVS,
 			expectedCache: map[string]map[string]*v1alpha3.VirtualService{
-				"test-ns": {
+				"foo.host": {
+					"test-vs": validVS,
+				},
+				"host": {
 					"test-vs": validVS,
 				},
 			},
+			expectedError: nil,
+		},
+		{
+			name: "Given a vs which was created in sync NS" +
+				"When IdentityVirtualServiceCache.Put func is called" +
+				"Then the func should not add the VS to the cache",
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-vs",
+					Namespace: "sync-ns",
+				},
+			},
+			expectedCache: make(map[string]map[string]*v1alpha3.VirtualService),
+			expectedError: nil,
+		},
+		{
+			name: "Given a vs which was created in istio-system NS" +
+				"When IdentityVirtualServiceCache.Put func is called" +
+				"Then the func should not add the VS to the cache",
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-vs",
+					Namespace: "istio-system",
+				},
+			},
+			expectedCache: make(map[string]map[string]*v1alpha3.VirtualService),
 			expectedError: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			idNSCache := NewIdentityNamespaceVirtualServiceCache()
+			idNSCache := NewIdentityVirtualServiceCache()
 			err := idNSCache.Put(tc.vs)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
-				assert.Equal(t, err, tc.expectedError)
+				assert.Equal(t, tc.expectedError, err)
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expectedCache, idNSCache.cache)
@@ -1028,7 +1067,13 @@ func TestIdentityNamespaceVirtualServiceCachePut(t *testing.T) {
 
 }
 
-func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
+func TestIdentityVirtualServiceCacheDelete(t *testing.T) {
+
+	ap := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(ap)
 
 	validVS := &v1alpha3.VirtualService{
 		ObjectMeta: v1.ObjectMeta{
@@ -1036,11 +1081,11 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 			Namespace: "test-ns",
 		},
 		Spec: networkingv1alpha3.VirtualService{
-			Hosts: []string{"foo.host.global"},
+			Hosts: []string{"stage.foo.host.global"},
 		},
 	}
 
-	idNSCache := NewIdentityNamespaceVirtualServiceCache()
+	idNSCache := NewIdentityVirtualServiceCache()
 	idNSCache.Put(validVS)
 
 	testCases := []struct {
@@ -1051,15 +1096,19 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 	}{
 		{
 			name: "Given a vs with no name" +
-				"When IdentityNamespaceVirtualServiceCache.Delete func is called" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
 				"Then the func should return an error",
-			vs: &v1alpha3.VirtualService{},
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "test-ns",
+				},
+			},
 			expectedError: fmt.Errorf(
-				"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty"),
+				"failed to delete virtualService in IdentityVirtualServiceCache as vs name is empty"),
 		},
 		{
 			name: "Given a vs with no namespace" +
-				"When IdentityNamespaceVirtualServiceCache.Delete func is called" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
 				"Then the func should return an error",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1067,11 +1116,11 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 				},
 			},
 			expectedError: fmt.Errorf(
-				"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs test-vs"),
+				"failed to delete virtualService in IdentityVirtualServiceCache as vs namespace is empty"),
 		},
 		{
-			name: "Given a vs on someother namespace" +
-				"When IdentityNamespaceVirtualServiceCache.Delete func is called" +
+			name: "Given a vs on some other host" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
 				"Then the func should not delete any VS from the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1079,7 +1128,7 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 					Namespace: "test-someotherns",
 				},
 				Spec: networkingv1alpha3.VirtualService{
-					Hosts: []string{"foo.host.global"},
+					Hosts: []string{"foo.bar.global"},
 				},
 			},
 			expectedCache: idNSCache.cache,
@@ -1087,7 +1136,7 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 		},
 		{
 			name: "Given a vs on someother name" +
-				"When IdentityNamespaceVirtualServiceCache.Delete func is called" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
 				"Then the func should not delete any VS from the cache",
 			vs: &v1alpha3.VirtualService{
 				ObjectMeta: v1.ObjectMeta{
@@ -1103,12 +1152,45 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 		},
 		{
 			name: "Given a valid vs" +
-				"When IdentityNamespaceVirtualServiceCache.Delete func is called" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
 				"Then the func should delete the VS from the cache",
 			vs: validVS,
 			expectedCache: map[string]map[string]*v1alpha3.VirtualService{
-				"test-ns": {},
+				"foo.host": {},
+				"host":     {},
 			},
+			expectedError: nil,
+		},
+		{
+			name: "Given a vs created in sync NS" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
+				"Then the func should not delete any VS from the cache",
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-bar-vs",
+					Namespace: "sync-ns",
+				},
+				Spec: networkingv1alpha3.VirtualService{
+					Hosts: []string{"bar.host.global"},
+				},
+			},
+			expectedCache: idNSCache.cache,
+			expectedError: nil,
+		},
+		{
+			name: "Given a vs created in istio-system NS" +
+				"When IdentityVirtualServiceCache.Delete func is called" +
+				"Then the func should not delete any VS from the cache",
+			vs: &v1alpha3.VirtualService{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-bar-vs",
+					Namespace: "istio-system",
+				},
+				Spec: networkingv1alpha3.VirtualService{
+					Hosts: []string{"bar.host.global"},
+				},
+			},
+			expectedCache: idNSCache.cache,
 			expectedError: nil,
 		},
 	}
@@ -1118,11 +1200,57 @@ func TestIdentityNamespaceVirtualServiceCacheDelete(t *testing.T) {
 			err := idNSCache.Delete(tc.vs)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
-				assert.Equal(t, err, tc.expectedError)
+				assert.Equal(t, tc.expectedError, err)
 			} else {
 				assert.Nil(t, err)
 				assert.Equal(t, tc.expectedCache, idNSCache.cache)
 			}
+		})
+	}
+
+}
+
+func TestGetIdentitiesFromVSHostName(t *testing.T) {
+
+	testCases := []struct {
+		name               string
+		hostName           string
+		expectedIdentities []string
+	}{
+		{
+			name: "Given an empty host name" +
+				"When getIdentitiesFromVSHostName func is called" +
+				"Then the func should return nil",
+			hostName:           "",
+			expectedIdentities: nil,
+		},
+		{
+			name: "Given an invalid host name" +
+				"When getIdentitiesFromVSHostName func is called" +
+				"Then the func should return nil",
+			hostName:           "foo.global",
+			expectedIdentities: nil,
+		},
+		{
+			name: "Given a valid host name with a canary prefix" +
+				"When getIdentitiesFromVSHostName func is called" +
+				"Then the func should return a slice of identities",
+			hostName:           "canary.stage.foo.global",
+			expectedIdentities: []string{"stage.foo", "foo"},
+		},
+		{
+			name: "Given a valid default host name" +
+				"When getIdentitiesFromVSHostName func is called" +
+				"Then the func should return a slice of identities",
+			hostName:           "stage.foo.global",
+			expectedIdentities: []string{"foo"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := getIdentitiesFromVSHostName(tc.hostName)
+			assert.Equal(t, tc.expectedIdentities, actual)
 		})
 	}
 

@@ -476,12 +476,14 @@ func populateDestinationsForCanaryStrategy(
 
 // generateVirtualServiceForIncluster generates the VirtualService for the in-cluster routing
 func generateVirtualServiceForIncluster(
+	ctx context.Context,
 	ctxLogger *log.Entry,
 	destination map[string][]*vsrouting.RouteDestination,
 	vsName string,
 	remoteRegistry *RemoteRegistry,
 	sourceCluster string,
-	sourceIdentity string) (*v1alpha3.VirtualService, error) {
+	sourceIdentity string,
+	env string) (*v1alpha3.VirtualService, error) {
 
 	virtualService, err := getBaseInClusterVirtualService()
 	if err != nil {
@@ -536,7 +538,8 @@ func generateVirtualServiceForIncluster(
 	// Add the exportTo namespaces to the virtual service
 	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
 	vsRoutingInclusterEnabledForClusterAndIdentity := false
-	if common.EnableExportTo(vsName) && common.DoVSRoutingInClusterForClusterAndIdentity(sourceCluster, sourceIdentity) {
+	if common.EnableExportTo(vsName) &&
+		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
 		vsRoutingInclusterEnabledForClusterAndIdentity = true
 		virtualService.Spec.ExportTo = getSortedDependentNamespaces(
 			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
@@ -675,7 +678,7 @@ func addUpdateInClusterVirtualServices(
 	ctxLogger *log.Entry,
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
-	vsName string,
+	cname string,
 	sourceIdentity string,
 	env string) error {
 
@@ -687,18 +690,11 @@ func addUpdateInClusterVirtualServices(
 		return fmt.Errorf("remoteRegistry is nil")
 	}
 
-	if vsName == "" {
-		return fmt.Errorf("vsName is empty")
+	if cname == "" {
+		return fmt.Errorf("cname is empty")
 	}
 
 	for sourceCluster, destination := range sourceClusterToDestinations {
-
-		if common.IsVSRoutingInClusterDisabledForIdentity(sourceCluster, sourceIdentity) {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				fmt.Sprintf("Writing phase: addUpdateInClusterVirtualServices: VS based routing disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-			continue
-		}
 
 		ctxLogger.Debugf(common.CtxLogFormat, "VSBasedRoutingInCluster",
 			"", "", sourceCluster,
@@ -713,7 +709,7 @@ func addUpdateInClusterVirtualServices(
 		}
 
 		virtualService, err := generateVirtualServiceForIncluster(
-			ctxLogger, destination, vsName, remoteRegistry, sourceCluster, sourceIdentity)
+			ctx, ctxLogger, destination, cname, remoteRegistry, sourceCluster, sourceIdentity, env)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
@@ -739,56 +735,6 @@ func addUpdateInClusterVirtualServices(
 			}
 		}
 
-		doPerformDRPinning := false
-		doPerformDRPinning = common.DoDRUpdateForInClusterVSRouting(
-			sourceCluster, sourceIdentity, true)
-
-		if doPerformDRPinning {
-			// Get SE from cache. We need this to see if this identity is multi-region
-			// This is required later to pin DR to the remote region
-			if rc.ServiceEntryController != nil && rc.ServiceEntryController.Cache != nil {
-				SEName := fmt.Sprintf("%s-se", vsName)
-				cachedSE := rc.ServiceEntryController.Cache.Get(SEName, sourceCluster)
-				if cachedSE != nil {
-					// Pinning DR to remote region is only needed if the identity is multi-region
-					if isSEMultiRegion(&cachedSE.Spec) {
-						doPerformDRPinning = true
-					} else {
-						ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-							virtualService.Name, virtualService.Namespace, sourceCluster,
-							"skipped pinning DR to remote region as the identity is not multi-region")
-					}
-				} else {
-					ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-						virtualService.Name, virtualService.Namespace, sourceCluster,
-						fmt.Sprintf(
-							"skipped pinning DR to remote region as no SE found in cache for identity %s", sourceIdentity))
-				}
-			}
-		}
-
-		// Pin the DR only if there is a GTP for the identity.
-		// We can't pin the DR without a GTP as we would loose the previous state of the DR
-		// if we had to rollback.
-		if doPerformDRPinning {
-			globalTrafficPolicy, err :=
-				remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
-			if err != nil {
-				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-					virtualService.Name, virtualService.Namespace, sourceCluster,
-					fmt.Sprintf(
-						"skipped pinning DR to remote region for identity %s due to err %v", sourceIdentity, err.Error()))
-				doPerformDRPinning = false
-			}
-			if globalTrafficPolicy == nil {
-				ctxLogger.Infof(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
-					virtualService.Name, virtualService.Namespace, sourceCluster,
-					fmt.Sprintf(
-						"skipped pinning DR to remote region for identity %s as there is no GTP in the namespace", sourceIdentity))
-				doPerformDRPinning = false
-			}
-		}
-
 		for _, vs := range virtualServicesToBeProcessed {
 			// Reconciliation check - start
 			ctxLogger.Infof(
@@ -804,9 +750,9 @@ func addUpdateInClusterVirtualServices(
 			if !reconcileRequired {
 				// Perform DR pinning to remote region if required
 				// Even if there is no change to the VS, DR pinning might be required.
-				// This is handle cases where a GTP is added after the VS is created.
-				// The GTP did not change the VS, but we still need to pin the DR
-				if doPerformDRPinning {
+				// This is handle cases where a GTP is added after the incluster VS is created.
+				// The GTP did not change the incluster VS, but we still need to pin the DR
+				if shouldPerformDRPinning(ctx, ctxLogger, rc, cname, sourceCluster, sourceIdentity, env, remoteRegistry) {
 					err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
 					if err != nil {
 						ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
@@ -844,7 +790,7 @@ func addUpdateInClusterVirtualServices(
 				vs.Name, vs.Namespace, sourceCluster, "virtualservice created/updated successfully")
 
 			// Perform DR pinning to remote region if required
-			if doPerformDRPinning {
+			if shouldPerformDRPinning(ctx, ctxLogger, rc, cname, sourceCluster, sourceIdentity, env, remoteRegistry) {
 				err = performDRPinning(ctx, ctxLogger, remoteRegistry, rc, vs, env, sourceCluster)
 				if err != nil {
 					ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
@@ -858,6 +804,103 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	return nil
+}
+
+// shouldPerformDRPinning checks if the DR pinning to remote region is required
+// It checks if the identity is multi-region and if there is a GTP for the identity
+// If the identity is multi-region and has GTP in the NS, it returns true, else false
+// TODO: Add unit tests
+func shouldPerformDRPinning(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	cname string,
+	sourceCluster string,
+	sourceIdentity string,
+	env string,
+	remoteRegistry *RemoteRegistry) bool {
+
+	vsName := fmt.Sprintf("%s-%s", cname, common.InclusterVSNameSuffix)
+
+	if rc == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			"skipped pinning DR to remote region as remoteController is nil")
+		return false
+	}
+	if remoteRegistry == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			"skipped pinning DR to remote region as remoteRegistry is nil")
+		return false
+	}
+	if remoteRegistry.AdmiralCache == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			"skipped pinning DR to remote region as AdmiralCache is nil")
+		return false
+	}
+	if remoteRegistry.AdmiralCache.GlobalTrafficCache == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			"skipped pinning DR to remote region as GlobalTrafficCache is nil")
+		return false
+	}
+
+	if !DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
+		ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			fmt.Sprintf("DoVSRoutingInClusterForClusterAndIdentity=false for cluster %s and identity %s", sourceCluster, sourceIdentity))
+		return false
+	}
+
+	// Pin the DR only if there is a GTP for the identity.
+	// We can't pin the DR without a GTP as we would loose the previous state of the DR
+	// if we had to rollback.
+	globalTrafficPolicy, err :=
+		remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
+	if err != nil {
+		ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			fmt.Sprintf(
+				"skipped pinning DR to remote region for identity %s due to err %v", sourceIdentity, err.Error()))
+		return false
+	}
+	if globalTrafficPolicy == nil {
+		ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			fmt.Sprintf(
+				"skipped pinning DR to remote region for identity %s as there is no GTP in the namespace", sourceIdentity))
+		return false
+	}
+
+	// Get SE from cache. We need this to see if this identity is multi-region
+	// This is required later to pin DR to the remote region
+	if rc.ServiceEntryController == nil || rc.ServiceEntryController.Cache == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			"skipped pinning DR to remote region as ServiceEntryController or Cache is nil")
+		return false
+	}
+	SEName := fmt.Sprintf("%s-se", cname)
+	cachedSE := rc.ServiceEntryController.Cache.Get(SEName, sourceCluster)
+	if cachedSE != nil {
+		// Pinning DR to remote region is only needed if the identity is multi-region
+		if !isSEMultiRegion(&cachedSE.Spec) {
+			ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
+				vsName, common.NamespaceIstioSystem, sourceCluster,
+				"skipped pinning DR to remote region as the identity is not multi-region")
+			return false
+		}
+	} else {
+		ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
+			vsName, common.NamespaceIstioSystem, sourceCluster,
+			fmt.Sprintf(
+				"skipped pinning DR to remote region as no SE found in cache with name %s in cluster %s", SEName, sourceCluster))
+		return false
+	}
+
+	return true
 }
 
 func isSEMultiRegion(se *networkingV1Alpha3.ServiceEntry) bool {
@@ -1385,9 +1428,6 @@ func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDes
 			if totalWeight == 100 {
 				continue
 			}
-			if totalWeight > 0 {
-				return fmt.Errorf("total weight is %d, expected 100 or 0", totalWeight)
-			}
 			weightSplits := getWeightSplits(len(routeDestinations))
 			for i, destination := range routeDestinations {
 				destination.Weight = weightSplits[i]
@@ -1485,10 +1525,8 @@ func getDestinationsForGTPDNSPrefixes(
 				}
 
 				if weightForLocality == 0 {
-					rd.Destination.Host = routeHost
-					rd.Destination.Port = &networkingV1Alpha3.PortSelector{
-						Number: 80,
-					}
+					remoteRD = getRouteDestination(routeHost, 80, 100-weightForLocality)
+					rd.Weight = weightForLocality
 					continue
 				}
 
@@ -1564,7 +1602,8 @@ func addUpdateInClusterDestinationRule(
 	remoteRegistry *RemoteRegistry,
 	sourceClusterToDRHosts map[string]map[string]string,
 	sourceIdentity string,
-	cname string) error {
+	cname string,
+	env string) error {
 
 	if sourceIdentity == "" {
 		return fmt.Errorf("sourceIdentity is empty")
@@ -1575,7 +1614,7 @@ func addUpdateInClusterDestinationRule(
 	}
 
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
-		if !common.DoVSRoutingInClusterForClusterAndIdentity(sourceCluster, sourceIdentity) {
+		if !DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
 			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
 				"", "", sourceCluster,
 				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
@@ -1858,7 +1897,7 @@ func performInVSRoutingRollback(
 		if rc == nil {
 			return fmt.Errorf("remote controller not initialized on cluster %v", clusterID)
 		}
-		if common.IsVSRoutingInClusterDisabledForCluster(clusterID) {
+		if IsVSRoutingInClusterDisabledForCluster(clusterID) {
 			// Disable all in-cluster VS
 			virtualServiceList, err := getAllVirtualServices(ctxLogger, ctx, rc, util.IstioSystemNamespace,
 				metaV1.ListOptions{
@@ -1890,7 +1929,7 @@ func performInVSRoutingRollback(
 			}
 			continue
 		}
-		if common.IsVSRoutingInClusterDisabledForIdentity(clusterID, sourceIdentity) {
+		if IsVSRoutingInClusterDisabledForIdentity(clusterID, sourceIdentity) {
 			// If we enter this block that means the entire cluster is not disabled
 			// just a single identity's VS need to be rolled back.
 			virtualServiceName := fmt.Sprintf("%s-%s", vsname, common.InclusterVSNameSuffix)
@@ -2144,4 +2183,154 @@ func mergeHosts(hosts1 []string, hosts2 []string) []string {
 	}
 
 	return mergedHosts
+}
+
+// DoVSRoutingInClusterForClusterAndIdentity determines whether in-cluster VS routing is enabled globally
+// or for a specific cluster and identity.
+// It also checks if there is a custom Virtual Service in the identity's namespace
+// and if the Cartographer Virtual Service is disabled for the given cluster and identity.
+func DoVSRoutingInClusterForClusterAndIdentity(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	env,
+	cluster,
+	identity string,
+	remoteRegistry *RemoteRegistry) bool {
+
+	// Check if the feature is enabled globally
+	if !common.GetEnableVSRoutingInCluster() {
+		return false
+	}
+
+	if IsVSRoutingInClusterDisabledForCluster(cluster) || IsVSRoutingInClusterDisabledForIdentity(cluster, identity) {
+		ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+			identity, "", cluster, "VS routing in-cluster is disabled for cluster/identity")
+		return false
+	}
+
+	enabledResources := common.GetVSRoutingInClusterEnabledResources()
+
+	isInClusterVSEnabledForClusterOrIdentity :=
+		enabledResources["*"] == "*" ||
+			enabledResources[cluster] == "*" ||
+			checkClusterIdentity(enabledResources["*"], identity) ||
+			checkClusterIdentity(enabledResources[cluster], identity)
+
+	// If the feature is enabled for the cluster or identity, we need to perform
+	// additional checks.
+	if isInClusterVSEnabledForClusterOrIdentity {
+		if remoteRegistry == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, "remoteRegistry is nil")
+			return false
+		}
+		// Check if there is any custom VS in the identity's namespace
+		// We will disable this feature if there is a custom VS in the identity's namespace
+		hasVSInNS, err := DoesIdentityHaveVS(remoteRegistry, identity)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, fmt.Sprintf("error checking if identity has VS %v", err))
+			return false
+		}
+		if hasVSInNS {
+			ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, "identity has a custom VS in its namespace")
+			return false
+		}
+
+		// Check if the Cartographer Virtual Service is disabled
+		// We will disable this feature if the Cartographer VS does not have dot in exportTo
+		rc := remoteRegistry.GetRemoteController(cluster)
+		if rc == nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, "remote controller is nil")
+			return false
+		}
+		isCartographerVSDisabled, err := IsCartographerVSDisabled(ctx, ctxLogger, rc, env, identity, getCustomVirtualService)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, fmt.Sprintf("failed IsCartographerVSDisabled check due to error %v", err))
+			return false
+		}
+		if !isCartographerVSDisabled {
+			ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// Verify the specific identity is part of the configured identities
+func checkClusterIdentity(identities string, identity string) bool {
+	if strings.TrimSpace(identities) == "*" {
+		return true
+	}
+
+	for _, id := range strings.Split(identities, ",") {
+		if strings.TrimSpace(id) == strings.TrimSpace(identity) {
+			return true
+		}
+	}
+	return false
+}
+
+// DoDRUpdateForInClusterVSRouting determines whether mesh DR pinning should be skipped
+// for in-cluster virtual service routing for the given cluster and identity.
+// This is needed for in-cluster VS routing as the DR create/update is done.
+func DoDRUpdateForInClusterVSRouting(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	env string,
+	cluster string,
+	identity string,
+	isSourceCluster bool,
+	remoteRegistry *RemoteRegistry,
+	se *networkingV1Alpha3.ServiceEntry) bool {
+
+	if remoteRegistry == nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+			"", "", cluster, "remoteRegistry is nil")
+		return false
+	}
+	// Check if the incluster VS has valid exportTo namespaces (not sync namespace)
+	hasValidInClusterVS, err := hasInClusterVSWithValidExportToNS(se, remoteRegistry.GetRemoteController(cluster))
+	if err != nil {
+		ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+			identity, "", cluster, fmt.Sprintf("error checking for valid in-cluster VS %v", err))
+		return false
+	}
+	if !hasValidInClusterVS {
+		ctxLogger.Infof(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+			identity, "", cluster, "skipping DR update as incluter VS does not have valid exportTo namespaces")
+		return false
+	}
+	if isSourceCluster &&
+		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, cluster, identity, remoteRegistry) {
+		return true
+	}
+	return false
+}
+
+// IsVSRoutingInClusterDisabledForIdentity checks whether in-cluster vs routing is disabled
+// for a specific identity, either globally across all clusters or for a specific cluster.
+func IsVSRoutingInClusterDisabledForIdentity(cluster, identity string) bool {
+
+	vsRoutingInClusterDisabledResources := common.GetVSRoutingInClusterDisabledResources()
+
+	if checkClusterIdentity(vsRoutingInClusterDisabledResources["*"], identity) || checkClusterIdentity(vsRoutingInClusterDisabledResources[cluster], identity) {
+		return true
+	}
+	return false
+}
+
+// IsVSRoutingInClusterDisabledForCluster checks whether in-cluster vs routing is disabled globally or for specific cluster resources
+func IsVSRoutingInClusterDisabledForCluster(cluster string) bool {
+
+	vsRoutingInClusterDisabledResources := common.GetVSRoutingInClusterDisabledResources()
+
+	return vsRoutingInClusterDisabledResources["*"] == "*" || vsRoutingInClusterDisabledResources[cluster] == "*"
 }

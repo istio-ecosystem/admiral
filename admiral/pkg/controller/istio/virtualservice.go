@@ -38,12 +38,12 @@ type IVirtualServiceCache interface {
 }
 
 type VirtualServiceController struct {
-	IstioClient                          versioned.Interface
-	VirtualServiceHandler                VirtualServiceHandler
-	VirtualServiceCache                  IVirtualServiceCache
-	IdentityNamespaceVirtualServiceCache IIdentityNamespaceVirtualServiceCache
-	HostToRouteDestinationCache          *HostToRouteDestinationCache
-	informer                             cache.SharedIndexInformer
+	IstioClient                 versioned.Interface
+	VirtualServiceHandler       VirtualServiceHandler
+	VirtualServiceCache         IVirtualServiceCache
+	IdentityVirtualServiceCache IIdentityVirtualServiceCache
+	HostToRouteDestinationCache *HostToRouteDestinationCache
+	informer                    cache.SharedIndexInformer
 }
 
 // HostToRouteDestinationCache holds only in-cluster VS's FQDN -> []HttpRouteDestinations cache
@@ -77,45 +77,48 @@ func NewHostToRouteDestinationCache() *HostToRouteDestinationCache {
 	}
 }
 
-type IIdentityNamespaceVirtualServiceCache interface {
-	Get(namespace string) map[string]*networking.VirtualService
+type IIdentityVirtualServiceCache interface {
+	Get(identity string) map[string]*networking.VirtualService
 	Put(vs *networking.VirtualService) error
 	Delete(vs *networking.VirtualService) error
 }
 
-// IdentityNamespaceVirtualServiceCache holds VS that are in identity's NS
+// IdentityVirtualServiceCache holds VS that are in identity's NS
 // excluding argo VS
-// namespace:[vsName:vs]
-type IdentityNamespaceVirtualServiceCache struct {
+// identity:[vsName:vs]
+type IdentityVirtualServiceCache struct {
 	cache map[string]map[string]*networking.VirtualService
 	mutex *sync.RWMutex
 }
 
-func NewIdentityNamespaceVirtualServiceCache() *IdentityNamespaceVirtualServiceCache {
-	return &IdentityNamespaceVirtualServiceCache{
+func NewIdentityVirtualServiceCache() *IdentityVirtualServiceCache {
+	return &IdentityVirtualServiceCache{
 		cache: make(map[string]map[string]*networking.VirtualService),
 		mutex: &sync.RWMutex{},
 	}
 }
 
-func (i *IdentityNamespaceVirtualServiceCache) Get(namespace string) map[string]*networking.VirtualService {
+func (i *IdentityVirtualServiceCache) Get(identity string) map[string]*networking.VirtualService {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
-	return i.cache[namespace]
+	return i.cache[strings.ToLower(identity)]
 }
 
-func (i *IdentityNamespaceVirtualServiceCache) Put(vs *networking.VirtualService) error {
+func (i *IdentityVirtualServiceCache) Put(vs *networking.VirtualService) error {
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 	namespace := vs.Namespace
+	if namespace == "" {
+		return fmt.Errorf(
+			"failed to put virtualService in IdentityVirtualServiceCache as vs namespace is empty")
+	}
+	if namespace == common.GetSyncNamespace() || namespace == common.NamespaceIstioSystem {
+		return nil
+	}
 	name := vs.Name
 	if name == "" {
 		return fmt.Errorf(
-			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty")
-	}
-	if namespace == "" {
-		return fmt.Errorf(
-			"failed to put virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs %s", name)
+			"failed to put virtualService in IdentityVirtualServiceCache as vs name is empty")
 	}
 	hosts := vs.Spec.Hosts
 	if hosts == nil {
@@ -125,37 +128,83 @@ func (i *IdentityNamespaceVirtualServiceCache) Put(vs *networking.VirtualService
 		return nil
 	}
 	// This is to skip Argo VS
-	for _, host := range hosts {
-		if strings.HasPrefix(host, "dummy") {
-			return nil
+	if isArgoVS(hosts, vs.Labels) {
+		return nil
+	}
+	identities := getIdentitiesFromVSHostName(hosts[0])
+	for _, identity := range identities {
+		identity = strings.ToLower(identity)
+		if i.cache[identity] == nil {
+			i.cache[identity] = map[string]*networking.VirtualService{name: vs}
+			continue
 		}
+		i.cache[identity][name] = vs
 	}
-	if i.cache[namespace] == nil {
-		i.cache[namespace] = make(map[string]*networking.VirtualService)
-	}
-	i.cache[namespace][name] = vs
 	return nil
 }
 
-func (i *IdentityNamespaceVirtualServiceCache) Delete(vs *networking.VirtualService) error {
+// isArgoVS checks if the virtual service is an Argo VS by checking if any of the hosts start with "dummy"
+func isArgoVS(hosts []string, labels map[string]string) bool {
+	for _, host := range hosts {
+		if strings.HasPrefix(host, "dummy") {
+			return true
+		}
+	}
+	return false
+}
+
+func (i *IdentityVirtualServiceCache) Delete(vs *networking.VirtualService) error {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
 	namespace := vs.Namespace
+	if namespace == "" {
+		return fmt.Errorf(
+			"failed to delete virtualService in IdentityVirtualServiceCache as vs namespace is empty")
+	}
+	if namespace == common.GetSyncNamespace() || namespace == common.NamespaceIstioSystem {
+		return nil
+	}
 	name := vs.Name
 	if name == "" {
 		return fmt.Errorf(
-			"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as vs name is empty")
+			"failed to delete virtualService in IdentityVirtualServiceCache as vs name is empty")
 	}
-	if namespace == "" {
-		return fmt.Errorf(
-			"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as namespace is empty for vs %s", name)
-	}
-	vsMap, ok := i.cache[namespace]
-	if !ok {
+	hosts := vs.Spec.Hosts
+	if hosts == nil {
 		return nil
 	}
-	delete(vsMap, name)
+	if len(hosts) == 0 {
+		return nil
+	}
+	identities := getIdentitiesFromVSHostName(hosts[0])
+	for _, identity := range identities {
+		identity = strings.ToLower(identity)
+		vsMap, ok := i.cache[identity]
+		if !ok {
+			continue
+		}
+		delete(vsMap, name)
+	}
 	return nil
+}
+
+func getIdentitiesFromVSHostName(hostName string) []string {
+
+	if hostName == "" {
+		return nil
+	}
+	hostNameSplit := strings.Split(hostName, ".")
+	hostNameWithoutSuffix := hostNameSplit[:len(hostNameSplit)-1]
+	if len(hostNameWithoutSuffix) < 2 {
+		return nil
+	}
+	identities := make([]string, 0)
+	identities = append(identities, strings.Join(hostNameWithoutSuffix[1:], "."))
+	if len(hostNameWithoutSuffix) < 3 {
+		return identities
+	}
+	identities = append(identities, strings.Join(hostNameWithoutSuffix[2:], "."))
+	return identities
 }
 
 func (v *VirtualServiceCache) Put(vs *networking.VirtualService) error {
@@ -227,7 +276,7 @@ func NewVirtualServiceController(stopCh <-chan struct{}, handler VirtualServiceH
 
 	vsController.VirtualServiceCache = NewVirtualServiceCache()
 	vsController.HostToRouteDestinationCache = NewHostToRouteDestinationCache()
-	vsController.IdentityNamespaceVirtualServiceCache = NewIdentityNamespaceVirtualServiceCache()
+	vsController.IdentityVirtualServiceCache = NewIdentityVirtualServiceCache()
 
 	var err error
 
@@ -257,7 +306,7 @@ func (v *VirtualServiceController) Added(ctx context.Context, obj interface{}) e
 	if err != nil {
 		return err
 	}
-	v.IdentityNamespaceVirtualServiceCache.Put(vs)
+	v.IdentityVirtualServiceCache.Put(vs)
 	return v.VirtualServiceHandler.Added(ctx, vs)
 }
 
@@ -268,7 +317,7 @@ func (v *VirtualServiceController) Updated(ctx context.Context, obj interface{},
 	}
 	v.VirtualServiceCache.Put(vs)
 	v.HostToRouteDestinationCache.Put(vs)
-	v.IdentityNamespaceVirtualServiceCache.Put(vs)
+	v.IdentityVirtualServiceCache.Put(vs)
 	return v.VirtualServiceHandler.Updated(ctx, vs)
 }
 
@@ -279,7 +328,7 @@ func (v *VirtualServiceController) Deleted(ctx context.Context, obj interface{})
 	}
 	v.VirtualServiceCache.Delete(vs)
 	v.HostToRouteDestinationCache.Delete(vs)
-	v.IdentityNamespaceVirtualServiceCache.Delete(vs)
+	v.IdentityVirtualServiceCache.Delete(vs)
 	return v.VirtualServiceHandler.Deleted(ctx, vs)
 }
 

@@ -925,7 +925,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry,
 			sourceClusterToDRHosts,
 			sourceIdentity,
-			cname)
+			cname,
+			env)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
 				deploymentOrRolloutName, namespace, "", err)
@@ -1104,6 +1105,12 @@ func getAllVirtualServices(
 	rc *RemoteController,
 	namespace string,
 	listOptions v12.ListOptions) (*v1alpha3.VirtualServiceList, error) {
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller is not initialized")
+	}
+	if rc.VirtualServiceController == nil || rc.VirtualServiceController.IstioClient == nil {
+		return nil, fmt.Errorf("virtualservice controller is not initialized")
+	}
 	virtualServicesList, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).List(ctx, listOptions)
 	if err != nil && k8sErrors.IsNotFound(err) {
 		ctxLogger.Debugf(LogFormat, "list", common.VirtualServiceResourceType, "", rc.ClusterID, "virtualservices not found")
@@ -1564,74 +1571,13 @@ func AddServiceEntriesWithDrWorker(
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
-		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
-			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		doDRUpdateForInClusterVSRouting := DoDRUpdateForInClusterVSRouting(
+			ctx, ctxLogger, env, cluster, identityId, isServiceEntryModifyCalledForSourceCluster, rr, se)
 
-		// The below code checks if the in-cluster VS's exportTo has valid namespaces
-		// This is needed so that we don't prematurely pin the region until the
-		// in-cluster vs is enabled or updated with valid exportTo namespaces.
-		if doDRUpdateForInClusterVSRouting {
-			doDRUpdateForInClusterVSRouting, err = hasInClusterVSWithValidExportToNS(se, rc)
-			if err != nil {
-				ctxLogger.Errorf(
-					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-					cluster,
-					fmt.Sprintf(
-						"hasInClusterVSWithValidExportToNS: failed with error for Identity: %s err: %v",
-						identityId, err.Error()))
-				doDRUpdateForInClusterVSRouting = false
-			}
-			if !doDRUpdateForInClusterVSRouting {
-				ctxLogger.Infof(
-					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-					cluster,
-					fmt.Sprintf(
-						"VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as corresponding in-cluster vs still contains sync ns",
-						doDRUpdateForInClusterVSRouting, cluster, identityId))
-			}
-		}
-
-		// The below code checks if there is custom VS in the identity's namespace
-		// Any Argo VS will be ignored as they are not added to the IdentityNamespaceVirtualServiceCache
-		if doDRUpdateForInClusterVSRouting {
-			if eventNamespace != "" {
-				virtualServicesInIdentityNamespace := rc.
-					VirtualServiceController.IdentityNamespaceVirtualServiceCache.Get(eventNamespace)
-				if virtualServicesInIdentityNamespace != nil && len(virtualServicesInIdentityNamespace) > 0 {
-					doDRUpdateForInClusterVSRouting = false
-					ctxLogger.Infof(
-						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-						cluster,
-						fmt.Sprintf(
-							"VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as there are custom virtualServices in the namespace %v",
-							doDRUpdateForInClusterVSRouting, cluster, identityId, eventNamespace))
-				}
-			}
-		}
-
-		// This code has been added for custom VS to in-cluster VS migration
-		// We are preventing pinning to remote cluster until the custom VS's
-		// exportTo is set to dot.
-		if doDRUpdateForInClusterVSRouting {
-			doDRUpdateForInClusterVSRouting, err = DoDRPinning(
-				ctx, ctxLogger, rc, env, identityId, getCustomVirtualService)
-			if err != nil {
-				doDRUpdateForInClusterVSRouting = false
-				ctxLogger.Errorf(common.CtxLogFormat, "DoDRPinning", identityId, syncNamespace, cluster,
-					fmt.Sprintf("failed for identity %s and env %s due to error=%v", identityId, env, err))
-			} else {
-				if !doDRUpdateForInClusterVSRouting {
-					ctxLogger.Infof(
-						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-						cluster,
-						fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
-							doDRUpdateForInClusterVSRouting, cluster, identityId))
-				}
-			}
-
-		}
-
-		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
+		ctxLogger.Infof(
+			common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster,
+			fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s",
+				doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
@@ -1890,10 +1836,73 @@ func AddServiceEntriesWithDrWorker(
 	}
 }
 
-// DoDRPinning has been added for custom VS to in-cluster VS migration
-// We are preventing pinning to remote cluster until the custom VS's
-// exportTo is set to dot.
-func DoDRPinning(
+// DoesIdentityHaveVS checks if the identity has any virtual services in its namespace
+// It iterates through all the clusters for the identity
+// and check in the IdentityVirtualServiceCache if there is a corresponding custom VS
+// If it finds any, it returns true, otherwise false
+func DoesIdentityHaveVS(
+	remoteRegistry *RemoteRegistry,
+	identityId string) (bool, error) {
+
+	if remoteRegistry == nil {
+		return false, fmt.Errorf("remoteRegistry is nil")
+	}
+	if remoteRegistry.AdmiralCache == nil {
+		return false, fmt.Errorf("AdmiralCache is nil in remoteRegistry")
+	}
+	if remoteRegistry.AdmiralCache.IdentityClusterCache == nil {
+		return false, fmt.Errorf("IdentityClusterCache is nil in AdmiralCache")
+	}
+
+	identityClustersMap := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(identityId)
+	if identityClustersMap == nil {
+		return false, fmt.Errorf("identityClustersMap is nil for identity %s", identityId)
+	}
+	identityClusters := identityClustersMap.GetValues()
+	if len(identityClusters) == 0 {
+		return false, fmt.Errorf("no clusters found for identity %s", identityId)
+	}
+	for _, identityCluster := range identityClusters {
+		remoteController := remoteRegistry.GetRemoteController(identityCluster)
+		if remoteController == nil {
+			return false, fmt.Errorf("remoteController is nil for cluster %s", identityCluster)
+		}
+		if remoteController.VirtualServiceController == nil {
+			return false, fmt.Errorf("VirtualServiceController is nil for cluster %s", identityCluster)
+		}
+		if remoteController.VirtualServiceController.IdentityVirtualServiceCache == nil {
+			return false, fmt.Errorf("IdentityVirtualServiceCache is nil for cluster %s", identityCluster)
+		}
+		virtualServicesInIdentityNamespace := remoteController.
+			VirtualServiceController.IdentityVirtualServiceCache.Get(identityId)
+		if virtualServicesInIdentityNamespace == nil || len(virtualServicesInIdentityNamespace) == 0 {
+			continue
+		}
+		// Check if the VS in the namespace is an Argo VS
+		if common.GetArgoRolloutsEnabled() &&
+			remoteController.RolloutController != nil &&
+			remoteController.RolloutController.IdentityArgoVSCache != nil {
+			argoVSInIdentityNamespace := remoteController.RolloutController.IdentityArgoVSCache.Get(identityId)
+			if argoVSInIdentityNamespace == nil || len(argoVSInIdentityNamespace) == 0 {
+				return true, nil
+			}
+			for vsName := range virtualServicesInIdentityNamespace {
+				if _, ok := argoVSInIdentityNamespace[vsName]; !ok {
+					return true, nil
+				}
+			}
+		} else {
+			// If Argo Rollouts is not enabled, then all VS in the namespace are considered custom VS
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// IsCartographerVSDisabled has been added for cartographer VS to in-cluster VS migration
+// It checks if the cartographer virtual service for the given identity and environment
+// has exportTo set to dot. If it does, it returns true, otherwise false.
+func IsCartographerVSDisabled(
 	ctx context.Context,
 	ctxLogger *logrus.Entry,
 	rc *RemoteController,
@@ -1949,6 +1958,12 @@ func hasInClusterVSWithValidExportToNS(se *networking.ServiceEntry, rc *RemoteCo
 	}
 	if len(se.Hosts) != 1 {
 		return false, fmt.Errorf("serviceEntry has more than one host")
+	}
+	if rc.VirtualServiceController == nil {
+		return false, fmt.Errorf("VirtualServiceController is nil in remoteController")
+	}
+	if rc.VirtualServiceController.VirtualServiceCache == nil {
+		return false, fmt.Errorf("VirtualServiceCache is nil in VirtualServiceController")
 	}
 	vsName := fmt.Sprintf("%s-%s", se.Hosts[0], common.InclusterVSNameSuffix)
 	cachedVS := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
