@@ -159,7 +159,7 @@ func (i *IdentityVirtualServiceCache) Delete(vs *networking.VirtualService) erro
 	namespace := vs.Namespace
 	if namespace == "" {
 		return fmt.Errorf(
-			"failed to delete virtualService in IdentityNamespaceVirtualServiceCache as vs namespace is empty")
+			"failed to delete virtualService in IdentityVirtualServiceCache as vs namespace is empty")
 	}
 	if namespace == common.GetSyncNamespace() || namespace == common.NamespaceIstioSystem {
 		return nil
