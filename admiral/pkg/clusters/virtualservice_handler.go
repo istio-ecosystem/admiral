@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -20,6 +21,16 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type IsVSAlreadyDeletedErr struct {
+	msg string
+}
+
+var vsAlreadyDeletedMsg = "either VirtualService was already deleted, or it never existed"
+
+func (e *IsVSAlreadyDeletedErr) Error() string {
+	return vsAlreadyDeletedMsg
+}
 
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
 // the required properties are set correctly
@@ -445,9 +456,10 @@ func syncVirtualServiceToDependentCluster(
 		// Best effort delete for existing virtual service with old name
 		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := deleteVirtualService(ctx, vSName, syncNamespace, rc)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
+			var vsAlreadyDeletedErr *IsVSAlreadyDeletedErr
+			if errors.As(err, &vsAlreadyDeletedErr) {
 				ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vSName, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
@@ -572,9 +584,10 @@ func syncVirtualServiceToRemoteCluster(
 		// Best effort delete for existing virtual service with old name
 		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := deleteVirtualService(ctx, vSName, syncNamespace, rc)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
+			var vsAlreadyDeletedErr *IsVSAlreadyDeletedErr
+			if errors.As(err, &vsAlreadyDeletedErr) {
 				ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
@@ -814,16 +827,19 @@ func createVirtualServiceSkeleton(vs networkingV1Alpha3.VirtualService, name str
 	return &v1alpha3.VirtualService{Spec: vs, ObjectMeta: metaV1.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-func deleteVirtualService(ctx context.Context, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) error {
-	if exist == nil {
-		return fmt.Errorf("the VirtualService passed was nil")
+func deleteVirtualService(ctx context.Context, vsName string, namespace string, rc *RemoteController) error {
+	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, vsName, metaV1.DeleteOptions{})
+	if err == nil {
+		return nil
 	}
-	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, exist.Name, metaV1.DeleteOptions{})
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return fmt.Errorf("either VirtualService was already deleted, or it never existed")
+	if k8sErrors.IsNotFound(err) {
+		err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, strings.ToLower(vsName), metaV1.DeleteOptions{})
+		if err == nil {
+			return nil
 		}
-		return err
+		if k8sErrors.IsNotFound(err) {
+			return &IsVSAlreadyDeletedErr{vsAlreadyDeletedMsg}
+		}
 	}
-	return nil
+	return err
 }
