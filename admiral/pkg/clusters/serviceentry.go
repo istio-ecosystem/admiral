@@ -2320,7 +2320,7 @@ func deleteAdditionalEndpoints(ctxLogger *logrus.Entry, ctx context.Context, rc 
 			return nil
 		}
 
-		err = deleteVirtualService(ctx, vsToDelete, namespace, rc)
+		err = deleteVirtualService(ctx, vsToDelete.Name, namespace, rc)
 		if err != nil {
 			ctxLogger.Errorf(LogErrFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, err)
 			return err

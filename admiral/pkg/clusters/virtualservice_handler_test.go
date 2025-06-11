@@ -1488,26 +1488,30 @@ func TestDeleteVirtualService(t *testing.T) {
 			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
 		},
 	}
+	barVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.test00.bar-vs",
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
+		},
+	}
 
 	validIstioClient := istioFake.NewSimpleClientset()
 	validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, fooVS, metaV1.CreateOptions{})
+	validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, barVS, metaV1.CreateOptions{})
 
 	testcases := []struct {
 		name                  string
-		virtualService        *apiNetworkingV1Alpha3.VirtualService
+		virtualServiceName    string
 		rc                    *RemoteController
 		expectedError         error
 		expectedDeletedVSName string
 	}{
 		{
-			name:           "Given virtualservice to delete, when nil VS is passed, the func should return an error",
-			virtualService: nil,
-			expectedError:  fmt.Errorf("the VirtualService passed was nil"),
-		},
-		{
-			name:           "Given virtualservice to delete, when VS passed does not exists, the func should return an error",
-			virtualService: &apiNetworkingV1Alpha3.VirtualService{ObjectMeta: metaV1.ObjectMeta{Name: "vs-does-not-exists"}},
-			expectedError:  fmt.Errorf("either VirtualService was already deleted, or it never existed"),
+			name:               "Given virtualservice to delete, when VS passed does not exists, the func should return an error",
+			virtualServiceName: "vs-does-not-exists",
+			expectedError:      fmt.Errorf("either VirtualService was already deleted, or it never existed"),
 			rc: &RemoteController{
 				VirtualServiceController: &istio.VirtualServiceController{
 					IstioClient: validIstioClient,
@@ -1515,9 +1519,9 @@ func TestDeleteVirtualService(t *testing.T) {
 			},
 		},
 		{
-			name:           "Given virtualservice to delete, when VS exists, the func should delete the VS and not return any error",
-			virtualService: fooVS,
-			expectedError:  nil,
+			name:               "Given virtualservice to delete, when VS exists, the func should delete the VS and not return any error",
+			virtualServiceName: "stage.test00.foo-vs",
+			expectedError:      nil,
 			rc: &RemoteController{
 				VirtualServiceController: &istio.VirtualServiceController{
 					IstioClient: validIstioClient,
@@ -1525,12 +1529,23 @@ func TestDeleteVirtualService(t *testing.T) {
 			},
 			expectedDeletedVSName: "stage.test00.foo-vs",
 		},
+		{
+			name:               "Given virtualservice to delete, when VS exists with capital in name, the func should delete the VS and not return any error",
+			virtualServiceName: "stage.test00.Bar-vs",
+			expectedError:      nil,
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: validIstioClient,
+				},
+			},
+			expectedDeletedVSName: "stage.test00.bar-vs",
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			err := deleteVirtualService(ctx, tc.virtualService, namespace, tc.rc)
+			err := deleteVirtualService(ctx, tc.virtualServiceName, namespace, tc.rc)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
