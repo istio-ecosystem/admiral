@@ -1884,20 +1884,16 @@ func addUpdateRoutingDestinationRule(
 			}
 		}
 
-		// We are going to add client connection pool overrides and default outlierDetection
-		// only for in-cluster DRs
-		if drNameSuffix == common.InclusterDRSuffix {
-			clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
-			if clientConnectionSettingsOverride != nil {
-				drObj.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
-			}
-			if common.DisableDefaultAutomaticFailover() {
-				// If automatic failover is disabled, we set the outlier detection settings to zero
-				// TODO: need add OOD processing similar to SE based routing
-				drObj.TrafficPolicy.OutlierDetection = &networkingV1Alpha3.OutlierDetection{
-					ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
-					Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
-				}
+		clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
+		if clientConnectionSettingsOverride != nil {
+			drObj.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
+		}
+		if common.DisableDefaultAutomaticFailover() {
+			// If automatic failover is disabled, we set the outlier detection settings to zero
+			// TODO: need add OOD processing similar to SE based routing
+			drObj.TrafficPolicy.OutlierDetection = &networkingV1Alpha3.OutlierDetection{
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 			}
 		}
 

@@ -3810,6 +3810,7 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 		IngressVSExportToNamespaces:       []string{"istio-system"},
 		EnableVSRouting:                   true,
 		VSRoutingSlowStartEnabledClusters: []string{"cluster-1"},
+		DisableDefaultAutomaticFailover:   true,
 	}
 	common.ResetSync()
 	common.InitializeConfig(ap)
@@ -3870,6 +3871,15 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 					Host:     "*.test-ns.svc.cluster.local",
 					ExportTo: []string{util.IstioSystemNamespace},
 					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: common.MaxRequestsPerConnection(),
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+						},
 						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
 							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
 								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
@@ -3908,6 +3918,15 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 					Host:     "*.test-ns.svc.cluster.local",
 					ExportTo: []string{util.IstioSystemNamespace},
 					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: common.MaxRequestsPerConnection(),
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+						},
 						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
 							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
 								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
@@ -3947,6 +3966,15 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 					Host:     "*.test-ns2.svc.cluster.local",
 					ExportTo: []string{util.IstioSystemNamespace},
 					TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+						ConnectionPool: &networkingV1Alpha3.ConnectionPoolSettings{
+							Http: &networkingV1Alpha3.ConnectionPoolSettings_HTTPSettings{
+								MaxRequestsPerConnection: common.MaxRequestsPerConnection(),
+							},
+						},
+						OutlierDetection: &networkingV1Alpha3.OutlierDetection{
+							ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+							Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
+						},
 						LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
 							LbPolicy: &networkingV1Alpha3.LoadBalancerSettings_Simple{
 								Simple: networkingV1Alpha3.LoadBalancerSettings_ROUND_ROBIN,
