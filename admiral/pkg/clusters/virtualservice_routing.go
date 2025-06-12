@@ -1528,6 +1528,10 @@ func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDes
 			if totalWeight == 100 {
 				continue
 			}
+			if totalWeight > 0 {
+				log.Warnf("total weight is %d, expected 100 or 0", totalWeight)
+				continue
+			}
 			weightSplits := getWeightSplits(len(routeDestinations))
 			for i, destination := range routeDestinations {
 				destination.Weight = weightSplits[i]

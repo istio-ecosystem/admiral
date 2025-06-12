@@ -4607,6 +4607,40 @@ func TestAddWeightsToRouteDestinations(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "Given a routeDestination with weights total over 100" +
+				"When addWeightsToRouteDestinations is invoked, " +
+				"Then it should return with weights the same weights",
+			routeDestinations: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 100,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 1,
+				},
+			}},
+			expectedError: nil,
+			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{"test-svc.test-ns.mesh": {
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "active.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 100,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "preview.test-svc.test-ns.svc.cluster.local",
+					},
+					Weight: 1,
+				},
+			}},
+		},
 	}
 
 	for _, tc := range testCases {
