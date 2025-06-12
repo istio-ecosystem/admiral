@@ -3036,16 +3036,6 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						},
 					},
 				},
-				"canary.test-env.test-identity.global": {
-					{
-						Destination: &networkingV1Alpha3.Destination{
-							Host: "desired-svc.test-ns.svc.cluster.local",
-							Port: &networkingV1Alpha3.PortSelector{
-								Number: meshPort,
-							},
-						},
-					},
-				},
 			},
 			expectedRouteDestination: map[string][]*vsrouting.RouteDestination{
 				"test-env.test-identity.global": {
@@ -3053,7 +3043,7 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 						Destination: &networkingV1Alpha3.Destination{
 							Host: "active-svc.test-ns.svc.cluster.local",
 							Port: &networkingV1Alpha3.PortSelector{
-								Number: 80,
+								Number: meshPort,
 							},
 						},
 						Weight: 0,
@@ -3066,16 +3056,6 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 							},
 						},
 						Weight: 100,
-					},
-				},
-				"canary.test-env.test-identity.global": {
-					{
-						Destination: &networkingV1Alpha3.Destination{
-							Host: "canary.test-env.test-identity.global",
-							Port: &networkingV1Alpha3.PortSelector{
-								Number: 80,
-							},
-						},
 					},
 				},
 			},
