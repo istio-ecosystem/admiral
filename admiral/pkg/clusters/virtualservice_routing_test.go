@@ -3051,11 +3051,21 @@ func TestProcessGTPAndAddWeightsByCluster(t *testing.T) {
 				"test-env.test-identity.global": {
 					{
 						Destination: &networkingV1Alpha3.Destination{
+							Host: "active-svc.test-ns.svc.cluster.local",
+							Port: &networkingV1Alpha3.PortSelector{
+								Number: 80,
+							},
+						},
+						Weight: 0,
+					},
+					{
+						Destination: &networkingV1Alpha3.Destination{
 							Host: "test-env.test-identity.global",
 							Port: &networkingV1Alpha3.PortSelector{
 								Number: 80,
 							},
 						},
+						Weight: 100,
 					},
 				},
 				"canary.test-env.test-identity.global": {
