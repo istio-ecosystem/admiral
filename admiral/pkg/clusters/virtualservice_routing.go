@@ -964,6 +964,15 @@ func performDRPinning(ctx context.Context,
 		}
 		newDR := cachedDR.DeepCopy()
 
+		if newDR.Spec.TrafficPolicy == nil ||
+			newDR.Spec.TrafficPolicy.LoadBalancer == nil ||
+			newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting == nil {
+			errs = append(errs, fmt.Errorf(
+				"skipped pinning DR to remote region as TrafficPolicy or LoadBalancer or LocalityLbSetting is nil for DR %s in cluster %s",
+				drName, sourceCluster))
+			continue
+		}
+
 		newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(currentLocality)
 		if err != nil {
 			errs = append(errs, fmt.Errorf(
