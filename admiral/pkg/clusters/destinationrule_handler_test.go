@@ -2193,6 +2193,7 @@ func TestIsNLBTimeoutNeeded(t *testing.T) {
 		{"NLB is default. SourceCluster doen't have clb overwrite", nlbDefaultWithNoCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, true},
 		{"NLB is default. SourceCluster does have clb overwrite partially", nlbDefaultWithCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, true},
 		{"NLB is default. All sourcecluster belongs to clb overwrite", nlbDefaultWithAllCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, false},
+
 		//CLB Default
 		{"CLB is default. SourceCluster does have partial nlb overwrite", clbDefaultWithPartialNLBOverwrite, common.IstioIngressGatewayLabelValue, true},
 		{"CLB is default. SourceCluster doen't have nlb overwrite, SourceCluster doesn't have clb overwrite", clbDefaultWithNoOverwrite, common.IstioIngressGatewayLabelValue, false},
@@ -2206,6 +2207,21 @@ func TestIsNLBTimeoutNeeded(t *testing.T) {
 		{"NLB is default. Source Asset overwrite is empty", withSourceAssetEmpty, common.NLBIstioIngressGatewayLabelValue, true},
 		{"CLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.IstioIngressGatewayLabelValue, false},
 		{"NLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.NLBIstioIngressGatewayLabelValue, true},
+
+		//Cluster Specific Asset migration. CLB is default
+		{"CLB is default. Source Asset overwrite for a matching cluster", args{
+			sourceClusters: []string{"nlb1-k8s", "test2-k8s"},
+			nlbOverwrite:   []string{"intuit.test.asset.trymatchme:nlb1-k8s", "nlb2-k8s"},
+			clbOverwrite:   []string{"clb1-k8s", "clb2-k8s"},
+			sourceIdentity: "intuit.test.asset.trymatchme",
+		}, common.IstioIngressGatewayLabelValue, true},
+
+		{"CLB is default. Source Asset overwrite for a non matching cluster", args{
+			sourceClusters: []string{"test1-k8s", "test2-k8s"},
+			nlbOverwrite:   []string{"intuit.test.asset.trymatchme:nlb1-k8s", "nlb2-k8s"},
+			clbOverwrite:   []string{"clb1-k8s", "clb2-k8s"},
+			sourceIdentity: "intuit.test.asset.trymatchme",
+		}, common.IstioIngressGatewayLabelValue, false},
 	}
 	for _, tt := range tests {
 		common.GetAdmiralParams().LabelSet.GatewayApp = tt.defaultLB

@@ -698,16 +698,33 @@ We can't support multiple LB timeout as DR is one. And most case endpoint/LB wil
 Excluding mailchimp all are fine to pick any one. All mailchimp will be in exclude list, need to put right cluster in DB
 */
 func IsNLBTimeoutNeeded(sourceClusters []string, nlbOverwrite []string, clbOverwrite []string, sourceIdentity string) bool {
-	nlbIntersectClusters := common.SliceIntersection[string](sourceClusters, nlbOverwrite)
+	var onlyNLBOverwrite []string
+
+	for _, nlbCluster := range nlbOverwrite {
+		nlbSplits := strings.Split(nlbCluster, ":")
+		if len(nlbSplits) == 2 {
+			//This means entire cluster is not enabled for NLB
+			identities := strings.Split(nlbSplits[0], ",")
+			if slices.Contains(identities, sourceIdentity) && slices.Contains(sourceClusters, nlbSplits[1]) {
+				return true
+			}
+			onlyNLBOverwrite = append(onlyNLBOverwrite, nlbSplits[1])
+		} else {
+			//This means entire cluster is enabled for NLB
+			onlyNLBOverwrite = append(onlyNLBOverwrite, nlbCluster)
+		}
+	}
+
+	nlbIntersectClusters := common.SliceIntersection[string](sourceClusters, onlyNLBOverwrite)
 	clbIntersectClusters := common.SliceIntersection[string](sourceClusters, clbOverwrite)
 
+	//if sourceAsset is part of asset level migration then return default NLB timeout
 	if slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
-		//if sourceAsset is part of asset level migration then return default NLB timeout
 		return true
 	}
 
+	//All source cluster have CLB exception and default is NLB, don't overwrite
 	if len(sourceClusters) == len(clbIntersectClusters) && common.GetAdmiralParams().LabelSet.GatewayApp == common.NLBIstioIngressGatewayLabelValue {
-		//All source cluster have CLB exception and default is NLB, don't overwrite
 		return false
 	} else if len(nlbIntersectClusters) > 0 && common.GetAdmiralParams().LabelSet.GatewayApp == common.IstioIngressGatewayLabelValue {
 		//Default is CLB, but 1 or more source clusters have NLB enabled, overwrite

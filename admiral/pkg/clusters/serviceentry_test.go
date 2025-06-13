@@ -1,9 +1,11 @@
 package clusters
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -13,6 +15,10 @@ import (
 	"unicode"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
+	registryMocks "github.com/istio-ecosystem/admiral/admiral/pkg/registry/mocks"
+	"github.com/stretchr/testify/mock"
+
 	"k8s.io/client-go/rest"
 
 	"github.com/golang/protobuf/ptypes/duration"
@@ -426,7 +432,6 @@ func TestModifyServiceEntryForNewServiceOrPodForServiceEntryUpdateSuspension(t *
 }
 
 func TestModifyServiceEntryForRolloutsMultipleEndpointsUseCase(t *testing.T) {
-	setupForServiceEntryTests()
 	var (
 		env                     = "test"
 		stop                    = make(chan struct{})
@@ -780,6 +785,7 @@ func TestModifyServiceEntryForRolloutsMultipleEndpointsUseCase(t *testing.T) {
 		},
 	}
 	for _, c := range testCases {
+		setupForServiceEntryTests()
 		commonUtil.CurrentAdmiralState.ReadOnly = ReadWriteEnabled
 		t.Run(c.name, func(t *testing.T) {
 			serviceEntries, _ := modifyServiceEntryForNewServiceOrPod(
@@ -1694,7 +1700,7 @@ func TestAddServiceEntriesWithDr(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx = context.WithValue(ctx, common.EventResourceType, common.Rollout)
 			ctx = context.WithValue(ctx, common.EventType, admiral.Add)
-			err := AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, tt.sourceClusters, tt.serviceEntries, tt.isAdditionalEndpointsEnabled, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env)
+			err := AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, tt.sourceClusters, tt.serviceEntries, tt.isAdditionalEndpointsEnabled, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env, "")
 
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["se1"].Hosts = []string{tt.dnsPrefix + ".e2e." + tt.identity + ".global"}
@@ -1979,7 +1985,7 @@ func TestAddServiceEntriesWithDrWithoutDatabaseClient(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			rr.AdmiralDatabaseClient = nil
-			AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries, false, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env)
+			AddServiceEntriesWithDrToAllCluster(ctxLogger, ctx, rr, map[string]string{"cl1": "cl1"}, tt.serviceEntries, false, tt.isServiceEntryModifyCalledForSourceCluster, tt.identity, tt.env, "")
 			if tt.dnsPrefix != "" && tt.dnsPrefix != "default" {
 				tt.serviceEntries["dummySe"].Hosts = []string{tt.dnsPrefix + ".e2e." + tt.identity + ".global"}
 			}
@@ -2612,7 +2618,7 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		}, {
-			name:                   "Given a rollout with invalid includeInboundPorts annotation service entry should not get created",
+			name:                   "Given a deployment with invalid includeInboundPorts annotation service entry should not get created",
 			assetIdentity:          rollout1Identity,
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
@@ -3711,7 +3717,9 @@ func TestCreateServiceEntryForNewServiceOrPodRolloutsUsecase(t *testing.T) {
 }
 
 func TestCreateServiceEntryForBlueGreenRolloutsUsecase(t *testing.T) {
-	setupForServiceEntryTests()
+	common.ResetSync()
+	common.InitializeConfig(admiralParamsForServiceEntryTests())
+
 	const NAMESPACE = "test-test"
 	const ACTIVE_SERVICENAME = "serviceNameActive"
 	const PREVIEW_SERVICENAME = "serviceNamePreview"
@@ -4204,7 +4212,7 @@ func TestHandleDynamoDbUpdateForOldGtp(t *testing.T) {
 	}
 }
 
-func TestupdateGlobalGtpCacheAndGetGtpPreferenceRegion(t *testing.T) {
+func TestUpdateGlobalGtpCacheAndGetGtpPreferenceRegion(t *testing.T) {
 	setupForServiceEntryTests()
 	var (
 		remoteRegistryWithoutGtpWithoutAdmiralClient = &RemoteRegistry{
@@ -5627,7 +5635,7 @@ func TestGetWorkloadData(t *testing.T) {
 					DnsPrefix: common.Default,
 					Target: []*model.TrafficGroup{
 						{
-							Region: "us-west-2",
+							Region: "us-west",
 							Weight: 100,
 						},
 					},
@@ -5656,7 +5664,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5670,7 +5678,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5720,7 +5728,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 	}
 
 	var workloadDataWithFailoverGTP = WorkloadData{
@@ -5731,7 +5739,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Aliases:    []string{"dev.custom.testsuffix"},
 		LbType:     model.TrafficPolicy_FAILOVER.String(),
 		TrafficDistribution: map[string]int32{
-			"us-west-2": 100,
+			"us-west": 100,
 		},
 		GtpManagedBy:   "mesh-agent",
 		LastUpdatedAt:  currentTime,
@@ -5744,7 +5752,7 @@ func TestGetWorkloadData(t *testing.T) {
 		Env:                 "dev",
 		DnsPrefix:           "default",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		GtpManagedBy:        "github",
 		LastUpdatedAt:       currentTime,
@@ -5815,7 +5823,7 @@ func TestGetWorkloadData(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			workloadData := getWorkloadData(ctxLogger, c.serviceEntry, c.globalTrafficPolicy, c.additionalEndpoints, istioNetworkingV1Alpha3.DestinationRule{}, "dev", c.isSuccess)
 			if !reflect.DeepEqual(workloadData, c.expectedWorkloadData) {
-				assert.Fail(t, "actual and expected workload data do not match. Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
+				assert.Fail(t, "actual and expected workload data do not match", "Actual : %v. Expected : %v.", workloadData, c.expectedWorkloadData)
 			}
 		})
 	}
@@ -5886,7 +5894,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 				Distribute: []*istioNetworkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
 					{
 						From: "*",
-						To:   map[string]uint32{"us-west-2": 100},
+						To:   map[string]uint32{"us-west": 100},
 					},
 				},
 			},
@@ -5911,7 +5919,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 				Distribute: []*istioNetworkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
 					{
 						From: "us-west-2/*",
-						To:   map[string]uint32{"us-west-2": 70, "us-east-2": 30},
+						To:   map[string]uint32{"us-west": 70, "us-east": 30},
 					},
 				},
 			},
@@ -5954,7 +5962,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 					DnsPrefix: common.Default,
 					Target: []*model.TrafficGroup{
 						{
-							Region: "us-west-2",
+							Region: "us-west",
 							Weight: 100,
 						},
 					},
@@ -5983,7 +5991,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -5997,7 +6005,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		DnsPrefix:           common.Default,
-		TrafficDistribution: make(map[string]int32),
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		Aliases:             nil,
 		GtpManagedBy:        "github",
@@ -6045,7 +6053,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 	}
 
 	var workloadDataWithoutGTPDefaultDistribution = WorkloadData{
@@ -6053,7 +6061,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Endpoint:            "dev.custom.global",
 		Env:                 "dev",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{"us-west-2": 100},
+		TrafficDistribution: map[string]int32{"us-west": 100},
 		LbType:              model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)],
 	}
 
@@ -6065,7 +6073,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Aliases:    []string{"dev.custom.testsuffix"},
 		LbType:     model.TrafficPolicy_FAILOVER.String(),
 		TrafficDistribution: map[string]int32{
-			"us-west-2": 100,
+			"us-west": 100,
 		},
 		GtpManagedBy:   "mesh-agent",
 		LastUpdatedAt:  currentTime,
@@ -6078,7 +6086,7 @@ func TestGetWorkloadDataActivePassiveEnabled(t *testing.T) {
 		Env:                 "dev",
 		DnsPrefix:           "default",
 		Aliases:             []string{"dev.custom.testsuffix"},
-		TrafficDistribution: map[string]int32{},
+		TrafficDistribution: map[string]int32{"us-west": 0},
 		LbType:              model.TrafficPolicy_TOPOLOGY.String(),
 		GtpManagedBy:        "github",
 		LastUpdatedAt:       currentTime,
@@ -6219,9 +6227,267 @@ func (mockDatabaseClientWithError) Get(env string, identity string) (interface{}
 	return nil, fmt.Errorf("failed to get workloadData items")
 }
 
-func TestDeployRolloutMigration(t *testing.T) {
+func TestDeleteEndpointDataFromDynamoDB(t *testing.T) {
 	common.ResetSync()
 	common.InitializeConfig(admiralParamsForServiceEntryTests())
+
+	var se = &v1alpha3.ServiceEntry{
+		//nolint
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{"dev.custom.global"},
+			Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+				{
+					Address:  "override.svc.cluster.local",
+					Ports:    map[string]uint32{"http": 80},
+					Network:  "mesh1",
+					Locality: "us-west",
+					Weight:   100,
+				},
+			},
+		},
+	}
+
+	var seWithNilSpec = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithNilSpec",
+		},
+	}
+
+	var seWithNilSpecHosts = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithNilSpecHosts",
+		},
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Addresses: []string{},
+		},
+	}
+
+	var seWithEmptySpecHosts = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithEmptySpecHosts",
+		},
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{},
+		},
+	}
+
+	se.Annotations = map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue, common.GetWorkloadIdentifier(): "custom"}
+	se.Labels = map[string]string{"env": "dev"}
+
+	rr1, _ := InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
+	rr1.AdmiralDatabaseClient = nil
+
+	rr2, _ := InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
+	rr2.AdmiralDatabaseClient = &mockDatabaseClientWithError{}
+
+	testCases := []struct {
+		name           string
+		serviceEntry   *v1alpha3.ServiceEntry
+		rr             *RemoteRegistry
+		expectedErr    bool
+		expectedErrMsg string
+	}{
+		{
+			name: "Given nil serviceentry object and nil remote registry " +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   nil,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "provided service entry is nil",
+		},
+		{
+			name: "Given serviceentry object with nil spec" +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithNilSpec,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "serviceentry seWithNilSpec has a nil spec",
+		},
+		{
+			name: "Given serviceentry object with nil spec hosts and nil remote registry " +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithNilSpecHosts,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "hosts are not defined in serviceentry: seWithNilSpecHosts",
+		},
+		{
+			name: "Given nil serviceentry object with empty spec hosts and nil remote registry " +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithEmptySpecHosts,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "0 hosts found in serviceentry: seWithEmptySpecHosts",
+		},
+		{
+			name: "Given serviceentry object and remote registry with nil admiral database client" +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   se,
+			rr:             rr1,
+			expectedErr:    true,
+			expectedErrMsg: "dynamodb client for workload data table is not initialized",
+		},
+		{
+			name: "Given serviceentry object and remote registry with admiral database client with errors" +
+				"When deleteWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   se,
+			rr:             rr2,
+			expectedErr:    true,
+			expectedErrMsg: "failed to delete workloadData",
+		},
+	}
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			err := deleteWorkloadData("testSourceCluster", "testEnv", c.serviceEntry, c.rr, nil)
+			if err == nil && c.expectedErr {
+				assert.Fail(t, "expected error to be returned")
+			} else if c.expectedErrMsg != "" && c.expectedErrMsg != err.Error() {
+				assert.Failf(t, "actual and expected error do not match. actual - %s, expected %s", err.Error(), c.expectedErrMsg)
+			}
+		})
+	}
+}
+
+func TestUpdateEndpointDataFromDynamoDB(t *testing.T) {
+	common.ResetSync()
+	common.InitializeConfig(admiralParamsForServiceEntryTests())
+
+	var se = &v1alpha3.ServiceEntry{
+		//nolint
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{"dev.custom.global"},
+			Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+				{
+					Address:  "override.svc.cluster.local",
+					Ports:    map[string]uint32{"http": 80},
+					Network:  "mesh1",
+					Locality: "us-west",
+					Weight:   100,
+				},
+			},
+		},
+	}
+
+	se.Annotations = map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue, common.GetWorkloadIdentifier(): "custom"}
+	se.Labels = map[string]string{"env": "dev"}
+
+	var seWithNilSpec = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithNilSpec",
+		},
+	}
+
+	var seWithNilSpecHosts = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithNilSpecHosts",
+		},
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Addresses: []string{},
+		},
+	}
+
+	var seWithEmptySpecHosts = &v1alpha3.ServiceEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "seWithEmptySpecHosts",
+		},
+		Spec: istioNetworkingV1Alpha3.ServiceEntry{
+			Hosts: []string{},
+		},
+	}
+
+	rr1, _ := InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
+	rr1.AdmiralDatabaseClient = nil
+
+	rr2, _ := InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
+	rr2.AdmiralDatabaseClient = &mockDatabaseClientWithError{}
+
+	testCases := []struct {
+		name           string
+		serviceEntry   *v1alpha3.ServiceEntry
+		rr             *RemoteRegistry
+		expectedErr    bool
+		expectedErrMsg string
+	}{
+		{
+			name: "Given nil serviceentry object and nil remote registry " +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   nil,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "provided service entry is nil",
+		},
+		{
+			name: "Given serviceentry object with nil spec" +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithNilSpec,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "serviceentry seWithNilSpec has a nil spec",
+		},
+		{
+			name: "Given serviceentry object with nil spec hosts and nil remote registry " +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithNilSpecHosts,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "hosts are not defined in serviceentry: seWithNilSpecHosts",
+		},
+		{
+			name: "Given nil serviceentry object with empty spec hosts and nil remote registry " +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   seWithEmptySpecHosts,
+			rr:             nil,
+			expectedErr:    true,
+			expectedErrMsg: "0 hosts found in serviceentry: seWithEmptySpecHosts",
+		},
+		{
+			name: "Given serviceentry object and remote registry with nil admiral database client" +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   se,
+			rr:             rr1,
+			expectedErr:    true,
+			expectedErrMsg: "dynamodb client for workload data table is not initialized",
+		},
+		{
+			name: "Given serviceentry object and remote registry with admiral database client with errors" +
+				"When storeWorkloadData is called, " +
+				"Then it should return an error",
+			serviceEntry:   se,
+			rr:             rr2,
+			expectedErr:    true,
+			expectedErrMsg: "failed to update workloadData",
+		},
+	}
+
+	var ctxLogger = logrus.WithFields(logrus.Fields{
+		"type": "storeWorkloadData",
+	})
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			err := storeWorkloadData("testSourceCluster", c.serviceEntry, nil, []string{}, c.rr, ctxLogger, istioNetworkingV1Alpha3.DestinationRule{}, true)
+			if err == nil && c.expectedErr {
+				assert.Fail(t, "expected error to be returned")
+			} else if c.expectedErrMsg != "" && c.expectedErrMsg != err.Error() {
+				assert.Failf(t, "actual and expected error do not match. actual - %s, expected %s", err.Error(), c.expectedErrMsg)
+			}
+		})
+	}
+}
+
+func TestDeployRolloutMigration(t *testing.T) {
+	setupForServiceEntryTests()
 	var (
 		env                     = "test"
 		stop                    = make(chan struct{})
@@ -7864,12 +8130,12 @@ func TestReconcileDestinationRule(t *testing.T) {
 		cluster = "test-cluster"
 	)
 
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace: "admiral-sync",
 	}
 
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	alreadyUpdatedDRSpec := &istioNetworkingV1Alpha3.DestinationRule{
 		Host: "host-1",
@@ -7948,7 +8214,8 @@ func TestReconcileDestinationRule(t *testing.T) {
 	}
 
 	for _, c := range testCases {
-		reconciliationRequired := reconcileDestinationRule(ctxLogger, c.enableDRCache, c.remoteController, c.destinationRule, c.drName, cluster)
+		reconciliationRequired := reconcileDestinationRule(
+			ctxLogger, c.enableDRCache, c.remoteController, c.destinationRule, c.drName, cluster, admiralParams.SyncNamespace)
 		if reconciliationRequired != c.expectedResult {
 			t.Errorf("expected: %v, got: %v", c.expectedResult, reconciliationRequired)
 		}
@@ -8425,6 +8692,7 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 				c.isSourceCluster,
 				c.identity,
 				c.env,
+				"",
 				c.se,
 				clusterChan,
 				c.errors,
@@ -8446,12 +8714,12 @@ func TestAddServiceEntriesWithDrWorker(t *testing.T) {
 }
 
 func TestGetCurrentDRForLocalityLbSetting(t *testing.T) {
-	admiralParams := common.AdmiralParams{
+	ap := common.AdmiralParams{
 		SyncNamespace: "ns",
 	}
 
 	common.ResetSync()
-	common.InitializeConfig(admiralParams)
+	common.InitializeConfig(ap)
 
 	var (
 		fakeIstioClient             = istiofake.NewSimpleClientset()
@@ -9714,6 +9982,391 @@ func TestGetClusters(t *testing.T) {
 	}
 }
 
+func TestStateSyncerConfiguration(t *testing.T) {
+	var (
+		env                      = "test"
+		stop                     = make(chan struct{})
+		foobarMetadataName       = "foobar"
+		foobarMetadataNamespace  = "foobar-ns"
+		identity                 = "identity"
+		testRollout1             = makeTestRollout(foobarMetadataName, foobarMetadataNamespace, identity)
+		testDeployment1          = makeTestDeployment(foobarMetadataName, foobarMetadataNamespace, identity)
+		clusterID                = "test-dev-k8s"
+		clusterDependentID       = "test-dev-dependent-k8s"
+		fakeIstioClient          = istiofake.NewSimpleClientset()
+		config                   = rest.Config{Host: "localhost"}
+		reSyncPeriod             = time.Millisecond * 1
+		serviceEntryAddressStore = &ServiceEntryAddressStore{
+			EntryAddresses: map[string]string{
+				"test." + identity + ".mesh-se": "127.0.0.1",
+			},
+			Addresses: []string{},
+		}
+		serviceForRollout = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              foobarMetadataName + "-stable",
+				Namespace:         foobarMetadataNamespace,
+				CreationTimestamp: metav1.NewTime(time.Now()),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
+		serviceForDeployment = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              foobarMetadataName,
+				Namespace:         foobarMetadataNamespace,
+				CreationTimestamp: metav1.NewTime(time.Now().AddDate(-1, 1, 1)),
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
+		serviceForIngress = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "east.aws.lb",
+				Namespace: "istio-system",
+				Labels:    map[string]string{"app": "gatewayapp"},
+			},
+			Spec: coreV1.ServiceSpec{
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+			Status: coreV1.ServiceStatus{
+				LoadBalancer: coreV1.LoadBalancerStatus{
+					Ingress: []coreV1.LoadBalancerIngress{
+						{
+							Hostname: "east.aws.lb",
+						},
+					},
+				},
+			},
+		}
+		remoteRegistryWithSyncError, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+		remoteRegistry, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+		remoteRegistryWithoutMockedSyncer, _ = InitAdmiral(context.Background(), common.AdmiralParams{
+			KubeconfigPath: "testdata/fake.config",
+			LabelSet: &common.LabelSet{
+				GatewayApp:              "gatewayapp",
+				WorkloadIdentityKey:     "identity",
+				PriorityKey:             "priority",
+				EnvKey:                  "env",
+				AdmiralCRDIdentityLabel: "identity",
+			},
+			EnableSAN:                         true,
+			SANPrefix:                         "prefix",
+			HostnameSuffix:                    "mesh",
+			SyncNamespace:                     "ns",
+			CacheReconcileDuration:            0,
+			ClusterRegistriesNamespace:        "default",
+			DependenciesNamespace:             "default",
+			WorkloadSidecarName:               "default",
+			Profile:                           common.AdmiralProfileDefault,
+			DependentClusterWorkerConcurrency: 5,
+		})
+	)
+
+	deploymentController, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+	deploymentController.Cache.UpdateDeploymentToClusterCache(identity, testDeployment1)
+
+	deploymentDependentController, err := admiral.NewDeploymentController(make(chan struct{}), &test.MockDeploymentHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+
+	rolloutController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+	rolloutController.Cache.UpdateRolloutToClusterCache(identity, &testRollout1)
+
+	rolloutDependentController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+
+	serviceController, err := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	serviceDependentController, err := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	virtualServiceController, err := istio.NewVirtualServiceController(make(chan struct{}), &test.MockVirtualServiceHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	globalTrafficPolicyController, err := admiral.NewGlobalTrafficController(make(chan struct{}), &test.MockGlobalTrafficHandler{}, &config, reSyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	serviceController.Cache.Put(serviceForDeployment)
+	serviceController.Cache.Put(serviceForRollout)
+	serviceController.Cache.Put(serviceForIngress)
+
+	rc := &RemoteController{
+		ClusterID:                clusterID,
+		DeploymentController:     deploymentController,
+		RolloutController:        rolloutController,
+		ServiceController:        serviceController,
+		VirtualServiceController: virtualServiceController,
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewServiceEntryCache(),
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewDestinationRuleCache(),
+		},
+		GlobalTraffic: globalTrafficPolicyController,
+	}
+
+	dependentRc := &RemoteController{
+		ClusterID:                clusterDependentID,
+		DeploymentController:     deploymentDependentController,
+		RolloutController:        rolloutDependentController,
+		ServiceController:        serviceDependentController,
+		VirtualServiceController: virtualServiceController,
+		NodeController: &admiral.NodeController{
+			Locality: &admiral.Locality{
+				Region: "us-west-2",
+			},
+		},
+		ServiceEntryController: &istio.ServiceEntryController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewServiceEntryCache(),
+		},
+		DestinationRuleController: &istio.DestinationRuleController{
+			IstioClient: fakeIstioClient,
+			Cache:       istio.NewDestinationRuleCache(),
+		},
+		GlobalTraffic: globalTrafficPolicyController,
+	}
+
+	remoteRegistryWithSyncError.PutRemoteController(clusterID, rc)
+	remoteRegistryWithSyncError.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistryWithSyncError.StartTime = time.Now()
+	remoteRegistryWithSyncError.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	mockConfigSyncerWithErr := &registryMocks.MockConfigSyncer{}
+	mockConfigSyncerWithErr.On("UpdateEnvironmentConfigByCluster",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).Return(fmt.Errorf("failed to update registry config"))
+	remoteRegistryWithSyncError.ConfigSyncer = mockConfigSyncerWithErr
+	configWriterMock := &ConfigWriterMock{}
+	remoteRegistryWithSyncError.ConfigWriter = configWriterMock
+	remoteRegistryWithSyncError.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	remoteRegistry.PutRemoteController(clusterID, rc)
+	remoteRegistry.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistry.StartTime = time.Now()
+	remoteRegistry.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	mockConfigSyncer := &registryMocks.MockConfigSyncer{}
+	mockConfigSyncer.On("UpdateEnvironmentConfigByCluster",
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything,
+		mock.Anything).
+		Return(nil)
+	remoteRegistry.ConfigSyncer = mockConfigSyncer
+	remoteRegistry.ConfigWriter = configWriterMock
+	remoteRegistry.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	remoteRegistryWithoutMockedSyncer.PutRemoteController(clusterID, rc)
+	remoteRegistryWithoutMockedSyncer.PutRemoteController(clusterDependentID, dependentRc)
+	remoteRegistryWithoutMockedSyncer.StartTime = time.Now()
+	remoteRegistryWithoutMockedSyncer.AdmiralCache.ServiceEntryAddressStore = serviceEntryAddressStore
+	remoteRegistryWithoutMockedSyncer.ConfigSyncer = registry.NewConfigSync()
+	remoteRegistryWithoutMockedSyncer.ConfigWriter = configWriterMock
+	remoteRegistryWithoutMockedSyncer.AdmiralCache.IdentityClusterCache.Put("identity", clusterID, clusterID)
+
+	common.ResetSync()
+	common.InitializeConfig(common.AdmiralParams{
+		KubeconfigPath: "testdata/fake.config",
+		LabelSet: &common.LabelSet{
+			GatewayApp:              "gatewayapp",
+			WorkloadIdentityKey:     "identity",
+			PriorityKey:             "priority",
+			EnvKey:                  "env",
+			AdmiralCRDIdentityLabel: "identity",
+		},
+		EnableSAN:                         true,
+		SANPrefix:                         "prefix",
+		HostnameSuffix:                    "mesh",
+		SyncNamespace:                     "ns",
+		CacheReconcileDuration:            0,
+		ClusterRegistriesNamespace:        "default",
+		DependenciesNamespace:             "default",
+		WorkloadSidecarName:               "default",
+		Profile:                           common.AdmiralProfileDefault,
+		DependentClusterWorkerConcurrency: 1,
+		AdmiralStateSyncerMode:            true,
+	})
+	passAssertFunc := func() error { return nil }
+
+	testCases := []struct {
+		name           string
+		assetIdentity  string
+		remoteRegistry *RemoteRegistry
+		configSyncer   *registryMocks.MockConfigSyncer
+		assertFunc     func() error
+		expectedErr    error
+	}{
+		{
+			name: "Given state syncer mode is enabled, " +
+				"When state syncer returns an error, " +
+				"Then, it returns an error, " +
+				"And, it doesn't call ConfigWriter",
+			assetIdentity:  "identity",
+			configSyncer:   mockConfigSyncerWithErr,
+			remoteRegistry: remoteRegistryWithSyncError,
+			assertFunc:     passAssertFunc,
+			expectedErr:    fmt.Errorf("failed to update registry config"),
+		},
+		{
+			name: "Given state syncer mode is enabled, " +
+				"When ConfigSyncer doesn't return any errors, " +
+				"Then, it should not return any error, " +
+				"Then, ConfigSyncer should be called," +
+				"And, it doesn't call ConfigWriter",
+			assetIdentity:  "identity",
+			remoteRegistry: remoteRegistry,
+			configSyncer:   mockConfigSyncer,
+			assertFunc:     passAssertFunc,
+			expectedErr:    nil,
+		},
+		{
+			name: "Given state syncer mode is enabled, " +
+				"Then, it should create the expected config",
+			assetIdentity:  "identity",
+			remoteRegistry: remoteRegistryWithoutMockedSyncer,
+			assertFunc: func() error {
+				wantFile, err := os.ReadFile("testdata/expectedIdentityIdentityConfiguration.json")
+				if err != nil {
+					return err
+				}
+				gotFile, err := os.ReadFile("testdata/identityIdentityConfiguration.json")
+				if err != nil {
+					return err
+				}
+				if bytes.Equal(wantFile, gotFile) {
+					return nil
+				}
+				return fmt.Errorf("expected configuration not found")
+			},
+			expectedErr: nil,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx = context.WithValue(ctx, "clusterName", clusterID)
+			ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
+
+			_, err = modifyServiceEntryForNewServiceOrPod(
+				ctx,
+				admiral.Add,
+				env,
+				c.assetIdentity,
+				c.remoteRegistry,
+			)
+			assert.Equal(t, err, c.expectedErr)
+			assert.Equal(t, configWriterMock.AssertNotCalled(t, "AddServiceEntriesWithDrToAllCluster",
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+				mock.Anything,
+			), true)
+			if c.configSyncer != nil {
+				assert.Equal(t, c.configSyncer.AssertCalled(t, "UpdateEnvironmentConfigByCluster",
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+					mock.Anything,
+				), true)
+			}
+			assert.Equal(t, c.assertFunc(), nil)
+		})
+	}
+}
+
 func TestValidateLocalityInServiceEntry(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -10235,4 +10888,395 @@ func Test_getOverwrittenLoadBalancerSourceOverwrite(t *testing.T) {
 
 	//restore
 	common.GetAdmiralParams().LabelSet.GatewayApp = beforeDefaultLB
+}
+
+func TestIsCartographerVSDisabled(t *testing.T) {
+
+	testCases := []struct {
+		name                    string
+		rc                      *RemoteController
+		env                     string
+		identity                string
+		getCustomVirtualService GetCustomVirtualService
+		expectedResult          bool
+		exptectedError          error
+	}{
+		{
+			name: "Given a nil remotecontroller" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			exptectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given empty env" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			exptectedError: fmt.Errorf("env is empty"),
+		},
+		{
+			name: "Given empty identity" +
+				"When func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:             &RemoteController{},
+			env:            "stage",
+			exptectedError: fmt.Errorf("identity is empty"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns an error" +
+				"And func DoDRPinning is called" +
+				"Then the func should return an error",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, fmt.Errorf("error getting custom virtualService")
+			},
+			exptectedError: fmt.Errorf("error getting custom virtualService"),
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns no matching VS" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return nil, nil
+			},
+			expectedResult: true,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS with no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return false",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"testNS"},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given valid params" +
+				"When getCustomVirtualService returns matching VS" +
+				"And the VS no dot in exportTo" +
+				"And func DoDRPinning is called" +
+				"Then the func should return true",
+			rc:       &RemoteController{},
+			env:      "stage",
+			identity: "testIdentity",
+			getCustomVirtualService: func(
+				ctx context.Context,
+				entry *logrus.Entry,
+				controller *RemoteController, env, identity string) ([]envCustomVSTuple, error) {
+				return []envCustomVSTuple{
+					{
+						customVS: &v1alpha3.VirtualService{
+							Spec: istioNetworkingV1Alpha3.VirtualService{
+								ExportTo: []string{"."},
+							},
+						},
+						env: "stage",
+					},
+				}, nil
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := IsCartographerVSDisabled(
+				context.Background(), nil, tc.rc, tc.env, tc.identity, tc.getCustomVirtualService)
+			if tc.exptectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.exptectedError, err)
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
+
+}
+
+func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
+
+	vsWithValidNS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "foo.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			ExportTo: []string{"testNS"},
+		},
+	}
+	vsWithSyncNS := &v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "bar.testns.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingLabel: "true"},
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{
+			ExportTo: []string{"sync-ns"},
+		},
+	}
+
+	ap := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+	common.ResetSync()
+	common.InitializeConfig(ap)
+
+	virtualServiceCache := istio.NewVirtualServiceCache()
+	virtualServiceCache.Put(vsWithValidNS)
+	virtualServiceCache.Put(vsWithSyncNS)
+
+	testCases := []struct {
+		name          string
+		serviceEntry  *istioNetworkingV1Alpha3.ServiceEntry
+		remoteCtrl    *RemoteController
+		expected      bool
+		expectedError error
+	}{
+		{
+			name: "Given a nil remoteController" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			expectedError: fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given a nil serviceEntry" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			remoteCtrl:    &RemoteController{},
+			expectedError: fmt.Errorf("serviceEntry is nil"),
+		},
+		{
+			name: "Given an SE with multiple hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"Then it should return an error",
+			remoteCtrl: &RemoteController{},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"host1", "host2"},
+			},
+			expectedError: fmt.Errorf("serviceEntry has more than one host"),
+		},
+		{
+			name: "Given an SE with valid host" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS does not exists in the cache" +
+				"Then it should return an error",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"baz.testns.global"},
+			},
+			expectedError: fmt.Errorf("virtualService baz.testns.global-incluster-vs not found in cache"),
+		},
+		{
+			name: "Given an SE with valid hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has valid NS" +
+				"Then it should return true",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"foo.testns.global"},
+			},
+			expected: true,
+		},
+		{
+			name: "Given an SE with valid hosts" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has sync NS" +
+				"Then it should return false",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"bar.testns.global"},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := hasInClusterVSWithValidExportToNS(tc.serviceEntry, tc.remoteCtrl)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestDoesIdentityHaveVS(t *testing.T) {
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("identity0", "cluster0", "cluster0")
+	identityClusterCache.Put("identity1", "cluster1", "cluster1")
+	identityClusterCache.Put("identity2", "cluster2", "cluster2")
+
+	identityVirtualServiceCache := istio.NewIdentityVirtualServiceCache()
+	identityVirtualServiceCache.Put(&v1alpha3.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vs1",
+			Namespace: "test-ns",
+		},
+		Spec: istioNetworkingV1Alpha3.VirtualService{Hosts: []string{"stage.identity0.global"}},
+	})
+
+	remoteController := &RemoteController{
+		VirtualServiceController: &istio.VirtualServiceController{
+			IdentityVirtualServiceCache: identityVirtualServiceCache,
+		},
+	}
+
+	ap := common.AdmiralParams{
+		SyncNamespace: "sync-ns",
+	}
+
+	remoteRegistry := NewRemoteRegistry(context.Background(), ap)
+	remoteRegistry.AdmiralCache.IdentityClusterCache = identityClusterCache
+	remoteRegistry.PutRemoteController("cluster0", remoteController)
+	remoteRegistry.PutRemoteController("cluster2", remoteController)
+
+	testCases := []struct {
+		name           string
+		remoteRegistry *RemoteRegistry
+		identity       string
+		expectedError  error
+		expectedResult bool
+	}{
+		{
+			name: "Given a nil remoteRegistry" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: nil,
+			expectedError:  fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a nil admiralCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: &RemoteRegistry{},
+			expectedError:  fmt.Errorf("AdmiralCache is nil in remoteRegistry"),
+		},
+		{
+			name: "Given a nil IdentityClusterCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: &RemoteRegistry{
+				AdmiralCache: &AdmiralCache{},
+			},
+			expectedError: fmt.Errorf("IdentityClusterCache is nil in AdmiralCache"),
+		},
+		{
+			name: "Given an identity not in IdentityClusterCache" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity9",
+			expectedError:  fmt.Errorf("identityClustersMap is nil for identity identity9"),
+		},
+		{
+			name: "Given an identity with no remoteController" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return an error",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity1",
+			expectedError:  fmt.Errorf("remoteController is nil for cluster cluster1"),
+		},
+		{
+			name: "Given an identity which has no VS in its NS" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return false",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity2",
+			expectedError:  nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given an identity which has VS in its NS" +
+				"When DoesIdentityHaveVS is called" +
+				"Then it should return true",
+			remoteRegistry: remoteRegistry,
+			identity:       "identity0",
+			expectedError:  nil,
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := DoesIdentityHaveVS(tc.remoteRegistry, tc.identity)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Nil(t, err)
+				assert.Equal(t, tc.expectedResult, actual)
+			}
+		})
+	}
 }

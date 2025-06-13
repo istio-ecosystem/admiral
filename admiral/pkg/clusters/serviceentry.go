@@ -1007,7 +1007,7 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	})
 
 	//Overwrite for NLB
-	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) || slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
+	if isNLBEnabled(admiralCache.NLBEnabledCluster, clusterName, sourceIdentity) {
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
 		ctx = ctx.WithFields(logrus.Fields{
 			"OverwritenLB":     overwriteEndpoint,
@@ -1054,6 +1054,38 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 
 	ctx.Info("")
 	return endpoint, port, nil
+}
+
+/*
+	Valid nlbCluster Input :
+	intuit.mesh.health.check:ip-paas-ppd-usw2-k8s
+	intuit.foo.bar,intuit.mesh.health.check:mesh-dod-food-ppd-usw2-k8s
+	mesh-dod-food-ppd-usw2-k8s
+
+	InValid nlbCluster Input :
+	Intuit.mesh.health.check:ip-paas-ppd-usw2-k8s
+	:ip-paas-ppd-usw2-k8s
+	*:mesh-dod-food-ppd-usw2-k8s
+*/
+
+func isNLBEnabled(nlbClusters []string, clusterName string, sourceIdentity string) bool {
+	// Check if clusterName is directly in nlbClusters or if sourceIdentity is in the NLB enabled identity list
+	if slices.Contains(nlbClusters, clusterName) ||
+		slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
+		return true
+	}
+
+	// Iterate over nlbClusters to check for identity and cluster name match
+	for _, nlbCluster := range nlbClusters {
+		nlbSplits := strings.Split(nlbCluster, ":")
+		if len(nlbSplits) == 2 {
+			identities := strings.Split(nlbSplits[0], ",")
+			if slices.Contains(identities, strings.ToLower(sourceIdentity)) && nlbSplits[1] == clusterName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {

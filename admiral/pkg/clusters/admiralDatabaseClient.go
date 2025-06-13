@@ -312,6 +312,10 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 	clusterToProcess := getLBToProcess(updatedLBs, existingCache)
 	ctxLogger.Infof("ClusterToProccess=%s, LBLabel=%s", clusterToProcess, lbLabel)
 	for _, cluster := range clusterToProcess {
+		//Cover NLB Usecase for asset migration by cluster
+		if len(strings.Split(cluster, ":")) == 2 {
+			cluster = strings.Split(cluster, ":")[1]
+		}
 		err := isServiceControllerInitialized(rr.remoteControllers[cluster])
 		if err == nil {
 			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {
