@@ -964,6 +964,15 @@ func performDRPinning(ctx context.Context,
 		}
 		newDR := cachedDR.DeepCopy()
 
+		if newDR.Spec.TrafficPolicy == nil ||
+			newDR.Spec.TrafficPolicy.LoadBalancer == nil ||
+			newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting == nil {
+			errs = append(errs, fmt.Errorf(
+				"skipped pinning DR to remote region as TrafficPolicy or LoadBalancer or LocalityLbSetting is nil for DR %s in cluster %s",
+				drName, sourceCluster))
+			continue
+		}
+
 		newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(currentLocality)
 		if err != nil {
 			errs = append(errs, fmt.Errorf(
@@ -1385,13 +1394,25 @@ func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
 	env string,
 	sourceClusterLocality string,
 	destinations map[string][]*vsrouting.RouteDestination,
-	updateWeights bool) error {
+	updateWeights bool, cname, sourceCluster string) error {
 	//update ingress gtp destination
 	// Get the global traffic policy for the env and identity
 	// and add the additional endpoints/hosts to the destination map
 	globalTrafficPolicy, err := remoteRegistry.AdmiralCache.GlobalTrafficCache.GetFromIdentity(sourceIdentity, env)
 	if err != nil {
 		return err
+	}
+	// If there is no GTP and active/passive is default and the func is called for
+	// in-cluster vs. (updateWeights signifies in-cluster vs and not ingress vs)
+	if globalTrafficPolicy == nil && updateWeights && common.EnableActivePassive() {
+		// doActivePassiveInClusterVS func returns a dummy GlobalTrafficPolicy
+		// that is used to perform active/passive routing for in-cluster VS.
+		globalTrafficPolicy, err = doActivePassiveInClusterVS(
+			remoteRegistry, cname, sourceCluster, sourceClusterLocality)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "doActivePassiveInClusterVS",
+				cname, "", sourceCluster, err.Error())
+		}
 	}
 	if globalTrafficPolicy != nil {
 		// Add the global traffic policy destinations to the destination map for ingress vs
@@ -1412,6 +1433,94 @@ func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
 	return nil
 }
 
+// doActivePassiveInClusterVS is a helper function that creates a dummy GlobalTrafficPolicy
+// to perform an active/passive routing for in-cluster VS.
+// First we fetch the ServiceEntry from cache to find out if the identity is multi-region.
+// If it is multi-region, we fetch the DestinationRule from cache to find out the locality that is passive.
+// Once we identify that the current cluster is the passive region, then we create a dummy failover GTP to fail
+// traffic to the active region mentioned in the DR.
+func doActivePassiveInClusterVS(remoteRegistry *RemoteRegistry,
+	cname string,
+	sourceCluster string,
+	sourceClusterLocality string) (*v1alpha1.GlobalTrafficPolicy, error) {
+
+	if remoteRegistry == nil {
+		return nil, fmt.Errorf("remoteRegistry is nil")
+	}
+	rc := remoteRegistry.GetRemoteController(sourceCluster)
+	if rc == nil {
+		return nil, fmt.Errorf("remotecontroller is nil for cluster %s", sourceCluster)
+	}
+	if rc.DestinationRuleController == nil {
+		return nil, fmt.Errorf("destinationRuleController is nil for cluster %s", sourceCluster)
+	}
+	if rc.DestinationRuleController.Cache == nil {
+		return nil, fmt.Errorf("destinationRuleController.Cache is nil for cluster %s", sourceCluster)
+	}
+	if rc.ServiceEntryController == nil {
+		return nil, fmt.Errorf("serviceEntryController is nil for cluster %s", sourceCluster)
+	}
+	if rc.ServiceEntryController.Cache == nil {
+		return nil, fmt.Errorf("serviceEntryController.Cache is nil for cluster %s", sourceCluster)
+	}
+	seName := fmt.Sprintf("%s-se", cname)
+	seFromCache := rc.ServiceEntryController.Cache.Get(seName, sourceCluster)
+	if seFromCache == nil {
+		return nil, fmt.Errorf("no se found in cache for seName %s", seName)
+	}
+	if !isSEMultiRegion(&seFromCache.Spec) {
+		return nil, fmt.Errorf("skipped active passive for incluster as the SE is not multi-region %s", seName)
+	}
+	drName := fmt.Sprintf("%s-default-dr", cname)
+	drFromCache := rc.DestinationRuleController.Cache.Get(drName, common.GetSyncNamespace())
+	if drFromCache == nil {
+		return nil, fmt.Errorf("no dr found in cache for drName %s", drName)
+	}
+	if drFromCache.Spec.TrafficPolicy == nil ||
+		drFromCache.Spec.TrafficPolicy.LoadBalancer == nil ||
+		drFromCache.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting == nil ||
+		drFromCache.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute == nil {
+		return nil, fmt.Errorf(
+			"skipped active passive for incluster as the DR has no localityLBSetting %s", drName)
+	}
+	distribution := drFromCache.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting.Distribute
+	if len(distribution) != 1 {
+		return nil, fmt.Errorf("distribution on the DR %s has a traffic split", drName)
+	}
+	if _, ok := distribution[0].To[sourceClusterLocality]; ok {
+		return nil, fmt.Errorf(
+			"the DR %s is pointing to the active cluster %s already", drName, sourceClusterLocality)
+	}
+	activeLocality := ""
+	for currentLocalityOnDR := range distribution[0].To {
+		activeLocality = currentLocalityOnDR
+	}
+	if activeLocality == "" {
+		return nil, fmt.Errorf("current locality is empty for dr %s", drName)
+	}
+	globalTrafficPolicy := &v1alpha1.GlobalTrafficPolicy{
+		Spec: model.GlobalTrafficPolicy{
+			Policy: []*model.TrafficPolicy{
+				{
+					DnsPrefix: common.Default,
+					LbType:    model.TrafficPolicy_FAILOVER,
+					Target: []*model.TrafficGroup{
+						{
+							Region: sourceClusterLocality,
+							Weight: int32(0),
+						},
+						{
+							Region: activeLocality,
+							Weight: int32(100),
+						},
+					},
+				},
+			},
+		},
+	}
+	return globalTrafficPolicy, nil
+}
+
 // addWeightsToRouteDestinations ensures that the weights of route destinations in the provided map
 // are correctly distributed to sum to 100 or 0.
 func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDestination) error {
@@ -1426,6 +1535,10 @@ func addWeightsToRouteDestinations(destinations map[string][]*vsrouting.RouteDes
 				totalWeight += destination.Weight
 			}
 			if totalWeight == 100 {
+				continue
+			}
+			if totalWeight > 0 {
+				log.Warnf("total weight is %d, expected 100 or 0", totalWeight)
 				continue
 			}
 			weightSplits := getWeightSplits(len(routeDestinations))
@@ -1605,6 +1718,21 @@ func addUpdateInClusterDestinationRule(
 	cname string,
 	env string) error {
 
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+	var clientConnectionSettings *v1alpha1.ClientConnectionConfig
+	var err error
+	if remoteRegistry.AdmiralCache != nil && remoteRegistry.AdmiralCache.ClientConnectionConfigCache != nil {
+		clientConnectionSettings, err =
+			remoteRegistry.AdmiralCache.ClientConnectionConfigCache.GetFromIdentity(sourceIdentity, env)
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
+				sourceIdentity, "", "",
+				fmt.Sprintf("no clientConnectionConfig found for identity %s env %s", sourceIdentity, env))
+		}
+	}
+
 	if sourceIdentity == "" {
 		return fmt.Errorf("sourceIdentity is empty")
 	}
@@ -1637,7 +1765,7 @@ func addUpdateInClusterDestinationRule(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"incluster-dr", exportToNamespaces, clientTLSSettings)
+			common.InclusterDRSuffix, exportToNamespaces, clientTLSSettings, clientConnectionSettings)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1687,7 +1815,7 @@ func addUpdateDestinationRuleForSourceIngress(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			"routing-dr", common.GetIngressVSExportToNamespace(), clientTLSSettings)
+			common.RoutingDRSuffix, common.GetIngressVSExportToNamespace(), clientTLSSettings, nil)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1707,7 +1835,8 @@ func addUpdateRoutingDestinationRule(
 	sourceCluster string,
 	drNameSuffix string,
 	exportToNamespaces []string,
-	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings) error {
+	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings,
+	clientConnectionSettings *v1alpha1.ClientConnectionConfig) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
@@ -1752,6 +1881,19 @@ func addUpdateRoutingDestinationRule(
 						return err
 					}
 				}
+			}
+		}
+
+		clientConnectionSettingsOverride := getClientConnectionPoolOverrides(clientConnectionSettings)
+		if clientConnectionSettingsOverride != nil {
+			drObj.TrafficPolicy.ConnectionPool = clientConnectionSettingsOverride
+		}
+		if common.DisableDefaultAutomaticFailover() {
+			// If automatic failover is disabled, we set the outlier detection settings to zero
+			// TODO: need add OOD processing similar to SE based routing
+			drObj.TrafficPolicy.OutlierDetection = &networkingV1Alpha3.OutlierDetection{
+				ConsecutiveGatewayErrors: &wrappers.UInt32Value{Value: 0},
+				Consecutive_5XxErrors:    &wrappers.UInt32Value{Value: 0},
 			}
 		}
 
