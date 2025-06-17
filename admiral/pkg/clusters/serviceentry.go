@@ -48,7 +48,6 @@ type SeDrTuple struct {
 }
 
 const (
-	intuitHostSuffix                             = "intuit"
 	resourceCreatedByAnnotationLabel             = "app.kubernetes.io/created-by"
 	resourceCreatedByAnnotationValue             = "admiral"
 	resourceCreatedByAnnotationCartographerValue = "cartographer"
@@ -58,6 +57,11 @@ const (
 	gtpManagedByMeshAgent                        = "mesh-agent"
 	gtpManagerMeshAgentFieldValue                = "ewok-mesh-agent"
 	errorCluster                                 = "error-cluster"
+	bluegreenStrategy                            = "bluegreen"
+	canaryStrategy                               = "canary"
+	deployToRolloutStrategy                      = "deployToRollout"
+	rolloutToDeployStrategy                      = "rolloutToDeploy"
+	ingressVSGenerationErrorMessage              = "skipped generating ingress virtual service on cluster %s due to error %w"
 )
 
 func createServiceEntryForDeployment(
@@ -321,7 +325,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      common.Deployment,
+				Type:      map[string]*registry.TypeConfig{common.Deployment: {Selectors: deployment.Spec.Selector.MatchLabels}},
+				Services:  make(map[string][]*registry.RegistryServiceConfig),
 			}
 		}
 
@@ -371,7 +376,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
 				Name:      env,
 				Namespace: namespace,
-				Type:      common.Rollout,
+				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
+				Services:  make(map[string][]*registry.RegistryServiceConfig),
 			}
 		}
 
@@ -436,7 +442,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 	if common.IsPersonaTrafficConfig() {
 		ctxLogger.Info(common.CtxLogFormat, deploymentOrRolloutName, deploymentOrRolloutNS, "", "NOT Generating Service Entry in Traffic Config Persona")
-		for sourceCluster, _ := range sourceServices {
+		for sourceCluster := range sourceServices {
 			resourceLabels := fetchResourceLabel(sourceDeployments, sourceRollouts, sourceCluster)
 			if resourceLabels != nil {
 				// check if additional endpoint generation is required
@@ -578,8 +584,13 @@ func modifyServiceEntryForNewServiceOrPod(
 					registryConfig.Clusters[sourceCluster].Environment[env] = &registry.IdentityConfigEnvironment{
 						Name:      env,
 						Namespace: namespace,
-						Type:      common.Rollout,
-						Event:     admiral.Delete, // TODO: we need to handle DELETE operations in admiral operator
+						Type: map[string]*registry.TypeConfig{
+							eventResourceType: {
+								Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
+							},
+						},
+						Event: admiral.Delete,
+						//TODO: we need to handle DELETE operations in admiral operator
 					}
 					continue
 				}
@@ -614,18 +625,28 @@ func modifyServiceEntryForNewServiceOrPod(
 						ctxLogger.Infof(common.CtxLogFormat, "WriteServiceEntryToSourceClusters",
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry with blue/green endpoints")
 						oldPorts := ep.Ports
-						blueGreenService := updateEndpointsForBlueGreen(
+						updateEndpointsForBlueGreen(
 							sourceRollouts[sourceCluster],
 							sourceWeightedServices[sourceCluster],
 							cnames, ep, sourceCluster, key)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								blueGreenService.Service.Name: &registry.RegistryServiceConfig{
-									Name:   blueGreenService.Service.Name,
-									Weight: -1,
-									Ports:  GetMeshPortsForRollout(sourceCluster, blueGreenService.Service, sourceRollouts[sourceCluster]),
-								},
+							activeServiceName := rollout.Spec.Strategy.BlueGreen.ActiveService
+							previewServiceName := rollout.Spec.Strategy.BlueGreen.PreviewService
+							if activeServiceInstance, ok := sourceWeightedServices[sourceCluster][activeServiceName]; ok {
+								registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = []*registry.RegistryServiceConfig{{
+									Name:      activeServiceName,
+									Ports:     GetMeshPortsForRollout(sourceCluster, activeServiceInstance.Service, rollout),
+									Selectors: activeServiceInstance.Service.Spec.Selector,
+								}}
 							}
+							if previewServiceInstance, ok := sourceWeightedServices[sourceCluster][previewServiceName]; ok {
+								registryConfig.Clusters[sourceCluster].Environment[env].Services[testServiceKey] = []*registry.RegistryServiceConfig{{
+									Name:      previewServiceName,
+									Ports:     GetMeshPortsForRollout(sourceCluster, previewServiceInstance.Service, rollout),
+									Selectors: previewServiceInstance.Service.Spec.Selector,
+								}}
+							}
+							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = bluegreenStrategy
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -650,13 +671,12 @@ func modifyServiceEntryForNewServiceOrPod(
 						canaryService := sourceRollouts[sourceCluster].Spec.Strategy.Canary.CanaryService
 						// use only canary service for fqdn
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								canaryService: &registry.RegistryServiceConfig{
-									Name:   canaryService,
-									Weight: -1,
-									Ports:  meshPorts,
-								},
-							}
+							registryConfig.Clusters[sourceCluster].Environment[env].Services[testServiceKey] = []*registry.RegistryServiceConfig{{
+								Name:      canaryService,
+								Ports:     meshPorts,
+								Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
+							}}
+							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = canaryStrategy
 							continue
 						}
 						fqdn := canaryService + common.Sep + serviceInstance[appType[sourceCluster]].Namespace + common.GetLocalDomainSuffix()
@@ -681,7 +701,7 @@ func modifyServiceEntryForNewServiceOrPod(
 						var se = copyServiceEntry(serviceEntry)
 						updateEndpointsForWeightedServices(se, sourceWeightedServices[sourceCluster], clusterIngress, meshPorts)
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseWeightedService(sourceWeightedServices[sourceCluster])
+							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = parseWeightedService(sourceWeightedServices[sourceCluster], meshPorts)
 							continue
 						}
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -698,7 +718,7 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry for Deployment to Rollout migration")
 						var err error
 						var se = copyServiceEntry(serviceEntry)
-						migrationService, err := util.UpdateEndpointsForDeployToRolloutMigration(
+						_, err = util.UpdateEndpointsForDeployToRolloutMigration(
 							serviceInstance, se, meshDeployAndRolloutPorts,
 							clusterIngress, clusterAppDeleteMap, sourceCluster,
 							clusterDeployRolloutPresent)
@@ -711,7 +731,7 @@ func modifyServiceEntryForNewServiceOrPod(
 							break
 						}
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = parseMigrationService(migrationService)
+							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = parseMigrationService(serviceInstance, meshDeployAndRolloutPorts)
 							continue
 						}
 						err = remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
@@ -728,11 +748,11 @@ func modifyServiceEntryForNewServiceOrPod(
 							deploymentOrRolloutName, deploymentOrRolloutNS, sourceCluster, "Updating ServiceEntry regular endpoints")
 						// call State Syncer's config syncer for deployment
 						if common.IsAdmiralStateSyncerMode() {
-							registryConfig.Clusters[sourceCluster].Environment[env].Services = map[string]*registry.RegistryServiceConfig{
-								localFqdn: &registry.RegistryServiceConfig{
-									Name:   localFqdn,
-									Weight: 0,
-									Ports:  meshPorts,
+							registryConfig.Clusters[sourceCluster].Environment[env].Services[defaultServiceKey] = []*registry.RegistryServiceConfig{
+								{
+									Name:      localFqdn,
+									Ports:     meshPorts,
+									Selectors: serviceInstance[appType[sourceCluster]].Spec.Selector,
 								},
 							}
 							continue
@@ -780,7 +800,7 @@ func modifyServiceEntryForNewServiceOrPod(
 
 		var (
 			sourceClusterLocality string
-			ingressDestinations   map[string][]*vsrouting.RouteDestination
+			ingressDestinations   = make(map[string][]*vsrouting.RouteDestination)
 			inClusterDestinations = make(map[string][]*vsrouting.RouteDestination)
 		)
 
@@ -858,16 +878,6 @@ func modifyServiceEntryForNewServiceOrPod(
 		deploymentOrRolloutName, deploymentOrRolloutNS, "", fmt.Sprintf("asset list=%v dependents=%v", registryConfig.ClientAssets, dependents))
 	util.LogElapsedTimeSinceTask(ctxLogger, "WriteServiceEntryToSourceClusters",
 		deploymentOrRolloutName, deploymentOrRolloutNS, sourceIdentity, "", start)
-
-	ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "")
-	if common.IsAdmiralStateSyncerMode() {
-		err = updateRegistryConfigForClusterPerEnvironment(ctxLogger, remoteRegistry, registryConfig)
-		if err != nil {
-			return nil, err
-		}
-		ctxLogger.Infof(common.CtxLogFormat, "updateRegistryConfigForClusterPerEnvironment", deploymentOrRolloutName, deploymentOrRolloutNS, "", "done writing")
-		return nil, nil
-	}
 
 	// VS Based Routing
 	// Writing phase: We update the base ingress virtualservices with the RouteDestinations
@@ -1630,7 +1640,6 @@ func AddServiceEntriesWithDrWorker(
 			common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster,
 			fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s",
 				doDRUpdateForInClusterVSRouting, cluster, identityId))
-
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting, isServiceEntryModifyCalledForSourceCluster)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
@@ -2088,44 +2097,6 @@ func getDNSPrefixFromServiceEntry(seDR *SeDrTuple) string {
 }
 
 func deleteWorkloadData(clusterName, env string, serviceEntry *v1alpha3.ServiceEntry, rr *RemoteRegistry, ctxLogger *logrus.Entry) error {
-	start := time.Now()
-
-	if serviceEntry == nil {
-		return fmt.Errorf("provided service entry is nil")
-	}
-
-	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
-		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
-	}
-
-	if serviceEntry.Spec.Hosts == nil {
-		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if len(serviceEntry.Spec.Hosts) == 0 {
-		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if rr.AdmiralDatabaseClient == nil {
-		return fmt.Errorf("dynamodb client for workload data table is not initialized")
-	}
-
-	workloadDataToDelete := WorkloadData{
-		AssetAlias: serviceEntry.Annotations[common.GetWorkloadIdentifier()],
-		Endpoint:   serviceEntry.Spec.Hosts[0],
-	}
-
-	err := rr.AdmiralDatabaseClient.Delete(workloadDataToDelete, ctxLogger)
-	if err != nil {
-		return err
-	}
-
-	_, ok := rr.AdmiralCache.DynamoDbEndpointUpdateCache.Load(workloadDataToDelete.Endpoint)
-	if ok {
-		rr.AdmiralCache.DynamoDbEndpointUpdateCache.Delete(workloadDataToDelete.Endpoint)
-	}
-
-	util.LogElapsedTimeSince("DeleteEndpointRecord", serviceEntry.Spec.Hosts[0], env, clusterName, start)
 	return nil
 }
 
@@ -2206,37 +2177,6 @@ func pushWorkloadDataToDynamodbTable(workloadDataToUpdate WorkloadData, endpoint
 
 func storeWorkloadData(clusterName string, serviceEntry *v1alpha3.ServiceEntry,
 	globalTrafficPolicy *v1.GlobalTrafficPolicy, additionalEndpoints []string, rr *RemoteRegistry, ctxLogger *logrus.Entry, dr networking.DestinationRule, isSuccess bool) error {
-
-	start := time.Now()
-
-	if serviceEntry == nil {
-		return fmt.Errorf("provided service entry is nil")
-	}
-
-	if reflect.DeepEqual(serviceEntry.Spec, networking.ServiceEntry{}) {
-		return fmt.Errorf("serviceentry %s has a nil spec", serviceEntry.ObjectMeta.Name)
-	}
-
-	if serviceEntry.Spec.Hosts == nil {
-		return fmt.Errorf("hosts are not defined in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if len(serviceEntry.Spec.Hosts) == 0 {
-		return fmt.Errorf("0 hosts found in serviceentry: %s", serviceEntry.ObjectMeta.Name)
-	}
-
-	if rr.AdmiralDatabaseClient == nil {
-		return fmt.Errorf("dynamodb client for workload data table is not initialized")
-	}
-
-	//get workload data based on service entry, globaltrafficpolicy and additional endpoints
-	workloadData := getWorkloadData(ctxLogger, serviceEntry, globalTrafficPolicy, additionalEndpoints, dr, clusterName, isSuccess)
-
-	err := pushWorkloadDataToDynamodbTable(workloadData, serviceEntry.Spec.Hosts[0], clusterName, rr, ctxLogger)
-	util.LogElapsedTimeSinceTask(ctxLogger, "UpdateEndpointRecord", serviceEntry.Spec.Hosts[0], "", clusterName, "", start)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -2286,20 +2226,6 @@ func getWorkloadData(ctxLogger *logrus.Entry, serviceEntry *v1alpha3.ServiceEntr
 					trafficDistribution[region] = int32(weight)
 					lbType = model.TrafficPolicy_LbType_name[int32(model.TrafficPolicy_FAILOVER)]
 				}
-			}
-		}
-	}
-
-	// always update trafficDistribution to reflect deployed regions from se.
-	if serviceEntry != nil &&
-		serviceEntry.Spec.Endpoints != nil {
-		for _, ep := range serviceEntry.Spec.Endpoints {
-			region := ep.Locality
-			_, present := trafficDistribution[region]
-			if !present {
-				// topology: region keys indicate the deployments. ignore the weights which would be 0 for all deployed regions.
-				// failover: regions keys indicate the deployments with weights indicating the split across the regions.
-				trafficDistribution[region] = 0
 			}
 		}
 	}
@@ -2659,15 +2585,6 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				} else {
 					modifiedSe.Addresses = []string{newAddress}
 				}
-
-				if isServiceEntryModifyCalledForSourceCluster {
-					if cache.CnameClusterCache == nil {
-						ctxLogger.Error("CnameClusterCache is nil.")
-					} else {
-						cache.CnameClusterCache.Put(host, cluster, cluster)
-					}
-				}
-
 			}
 			var seDr = &SeDrTuple{
 				DrName:                      drName,
