@@ -22,7 +22,6 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -46,7 +45,7 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 	clientConnectionSettings *v1.ClientConnectionConfig,
 	currentDR *v1alpha3.DestinationRule,
 	eventResourceType string,
-	ctxLogger *logrus.Entry,
+	ctxLogger *log.Entry,
 	event admiral.EventType,
 	doDRUpdateForInClusterRouting bool) *networkingV1Alpha3.DestinationRule {
 
@@ -97,25 +96,26 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 		return dr
 	}
 
-	if doDRUpdateForInClusterRouting {
-		remoteRegion := common.WestLocality
-		if locality == common.WestLocality {
-			remoteRegion = common.EastLocality
-		}
-
-		dr.TrafficPolicy.LoadBalancer.LocalityLbSetting = &networkingV1Alpha3.LocalityLoadBalancerSetting{
-			Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
-				{
-					From: "*",
-					To:   map[string]uint32{remoteRegion: 100},
-				},
-			},
-		}
+	if gtpTrafficPolicy == nil {
 		return dr
 	}
 
-	if gtpTrafficPolicy == nil {
-		return dr
+	// Pin the DR to remote region if in-cluster VS routing is enabled
+	// This will only be done if a GTP exists in the NS because by default
+	// we are active/passive and the previous state of the DR is lost if we pin the DR.
+	if doDRUpdateForInClusterRouting {
+		// Perform DR pinning only if it is multi-region
+		var err error
+		if isSEMultiRegion(se) {
+			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(locality)
+			if err == nil {
+				return dr
+			} else {
+				ctxLogger.Errorf(common.CtxLogFormat,
+					"doDRUpdateForInClusterRouting", "", "", "",
+					fmt.Sprintf("error getting locality LB settings: %v", err))
+			}
+		}
 	}
 
 	if len(gtpTrafficPolicy.Target) == 0 {

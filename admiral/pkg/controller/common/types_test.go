@@ -87,7 +87,7 @@ func TestMapOfMapOfMaps(t *testing.T) {
 		t.Fail()
 	}
 
-	keyList := mapOfMapOfMaps.Get("pkey2").Get("qa.a.global").GetKeys()
+	keyList := mapOfMapOfMaps.Get("pkey2").Get("qa.a.global").GetValues()
 	if len(keyList) != 2 {
 		t.Fail()
 	}

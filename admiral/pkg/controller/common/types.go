@@ -44,71 +44,73 @@ type SidecarEgressMap struct {
 }
 
 type AdmiralParams struct {
-	ArgoRolloutsEnabled                      bool
-	KubeconfigPath                           string
-	SecretFilterTags                         string
-	CacheReconcileDuration                   time.Duration
-	SeAndDrCacheReconcileDuration            time.Duration
-	ClusterRegistriesNamespace               string
-	DependenciesNamespace                    string
-	DnsConfigFile                            string
-	DNSTimeoutMs                             int
-	DNSRetries                               int
-	TrafficConfigNamespace                   string
-	SyncNamespace                            string
-	EnableSAN                                bool
-	SANPrefix                                string
-	AdmiralConfig                            string
-	Profile                                  string
-	LabelSet                                 *LabelSet
-	LogLevel                                 int
-	HostnameSuffix                           string
-	PreviewHostnamePrefix                    string
-	MetricsEnabled                           bool
-	ChannelCapacity                          int
-	WorkloadSidecarUpdate                    string
-	WorkloadSidecarName                      string
-	AdmiralStateCheckerName                  string
-	DRStateStoreConfigPath                   string
-	ServiceEntryIPPrefix                     string
-	EnvoyFilterVersion                       string
-	DeprecatedEnvoyFilterVersion             string
-	EnvoyFilterAdditionalConfig              string
-	EnableRoutingPolicy                      bool
-	RoutingPolicyClusters                    []string
-	ExcludedIdentityList                     []string
-	AdditionalEndpointSuffixes               []string
-	AdditionalEndpointLabelFilters           []string
-	HAMode                                   string
-	EnableWorkloadDataStorage                bool
-	EnableDiffCheck                          bool
-	EnableProxyEnvoyFilter                   bool
-	EnableDependencyProcessing               bool
-	DeploymentOrRolloutWorkerConcurrency     int
-	DependentClusterWorkerConcurrency        int
-	SeAddressConfigmap                       string
-	DependencyWarmupMultiplier               int
-	EnableOutlierDetection                   bool
-	EnableClientConnectionConfigProcessing   bool
-	MaxRequestsPerConnection                 int32
-	EnableAbsoluteFQDN                       bool
-	EnableAbsoluteFQDNForLocalEndpoints      bool
-	DisableDefaultAutomaticFailover          bool
-	EnableServiceEntryCache                  bool
-	AlphaIdentityList                        []string
-	EnableDestinationRuleCache               bool
-	DisableIPGeneration                      bool
-	EnableActivePassive                      bool
-	EnableSWAwareNSCaches                    bool
-	ClientInitiatedProcessingEnabled         bool
-	ExportToIdentityList                     []string
-	ExportToMaxNamespaces                    int
-	EnableSyncIstioResourcesToSourceClusters bool
-	DefaultWarmupDurationSecs                int64
-	EnableGenerationCheck                    bool
-	EnableIsOnlyReplicaCountChangedCheck     bool
-	PreventSplitBrain                        bool
-	IgnoreLabelsAnnotationsVSCopyList        []string
+	ArgoRolloutsEnabled                              bool
+	KubeconfigPath                                   string
+	SecretFilterTags                                 string
+	CacheReconcileDuration                           time.Duration
+	SeAndDrCacheReconcileDuration                    time.Duration
+	ClusterRegistriesNamespace                       string
+	DependenciesNamespace                            string
+	DnsConfigFile                                    string
+	DNSTimeoutMs                                     int
+	DNSRetries                                       int
+	TrafficConfigNamespace                           string
+	SyncNamespace                                    string
+	EnableSAN                                        bool
+	SANPrefix                                        string
+	AdmiralConfig                                    string
+	Profile                                          string
+	LabelSet                                         *LabelSet
+	LogLevel                                         int
+	HostnameSuffix                                   string
+	PreviewHostnamePrefix                            string
+	MetricsEnabled                                   bool
+	ChannelCapacity                                  int
+	WorkloadSidecarUpdate                            string
+	WorkloadSidecarName                              string
+	AdmiralStateCheckerName                          string
+	DRStateStoreConfigPath                           string
+	ServiceEntryIPPrefix                             string
+	EnvoyFilterVersion                               string
+	DeprecatedEnvoyFilterVersion                     string
+	EnvoyFilterAdditionalConfig                      string
+	EnableRoutingPolicy                              bool
+	RoutingPolicyClusters                            []string
+	ExcludedIdentityList                             []string
+	AdditionalEndpointSuffixes                       []string
+	AdditionalEndpointLabelFilters                   []string
+	HAMode                                           string
+	EnableWorkloadDataStorage                        bool
+	EnableDiffCheck                                  bool
+	EnableProxyEnvoyFilter                           bool
+	EnableDependencyProcessing                       bool
+	DeploymentOrRolloutWorkerConcurrency             int
+	DependentClusterWorkerConcurrency                int
+	SeAddressConfigmap                               string
+	DependencyWarmupMultiplier                       int
+	EnableOutlierDetection                           bool
+	EnableClientConnectionConfigProcessing           bool
+	MaxRequestsPerConnection                         int32
+	EnableAbsoluteFQDN                               bool
+	EnableAbsoluteFQDNForLocalEndpoints              bool
+	DisableDefaultAutomaticFailover                  bool
+	EnableServiceEntryCache                          bool
+	AlphaIdentityList                                []string
+	EnableDestinationRuleCache                       bool
+	DisableIPGeneration                              bool
+	EnableActivePassive                              bool
+	EnableSWAwareNSCaches                            bool
+	ClientInitiatedProcessingEnabledForControllers   bool
+	ClientInitiatedProcessingEnabledForDynamicConfig bool
+	InitiateClientInitiatedProcessingFor             []string
+	ExportToIdentityList                             []string
+	ExportToMaxNamespaces                            int
+	EnableSyncIstioResourcesToSourceClusters         bool
+	DefaultWarmupDurationSecs                        int64
+	EnableGenerationCheck                            bool
+	EnableIsOnlyReplicaCountChangedCheck             bool
+	PreventSplitBrain                                bool
+	IgnoreLabelsAnnotationsVSCopyList                []string
 
 	// Cartographer specific params
 	TrafficConfigPersona      bool
@@ -148,6 +150,8 @@ type AdmiralParams struct {
 	EnableVSRoutingInCluster            bool
 	VSRoutingInClusterEnabledResources  map[string]string
 	VSRoutingInClusterDisabledResources map[string]string
+	EnableCustomVSMerge                 bool
+	ProcessVSCreatedBy                  string
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool
@@ -165,6 +169,9 @@ type AdmiralParams struct {
 	CLBEnabledClusters     []string
 	NLBIngressLabel        string
 	CLBIngressLabel        string
+
+	// Slow Start
+	EnableTrafficConfigProcessingForSlowStart bool
 }
 
 func (b AdmiralParams) String() string {
@@ -416,12 +423,22 @@ func (s *MapOfMapOfMaps) Len() int {
 	return len(s.cache)
 }
 
-func (s *Map) GetKeys() []string {
+func (s *Map) GetValues() []string {
 	defer s.mutex.Unlock()
 	s.mutex.Lock()
 	keys := make([]string, 0)
 	for _, val := range s.cache {
 		keys = append(keys, val)
+	}
+	return keys
+}
+
+func (s *Map) GetKeys() []string {
+	defer s.mutex.Unlock()
+	s.mutex.Lock()
+	keys := make([]string, 0)
+	for key, _ := range s.cache {
+		keys = append(keys, key)
 	}
 	return keys
 }

@@ -8,13 +8,13 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"k8s.io/utils/strings/slices"
-
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
@@ -214,7 +214,6 @@ func modifyServiceEntryForNewServiceOrPod(
 	}
 	// END dependency handler optimization
 
-	// build service entry spec
 	for _, clusterId := range clusters {
 		rc := remoteRegistry.GetRemoteController(clusterId)
 		if rc == nil {
@@ -415,27 +414,6 @@ func modifyServiceEntryForNewServiceOrPod(
 					common.CtxLogFormat, "populateClientConnectionConfigCache", deploymentOrRolloutName,
 					deploymentOrRolloutNS, clusterId, err.Error())
 			}
-		}
-	}
-
-	if common.IsAdmiralStateSyncerMode() {
-		ctxLogger.Infof(
-			common.CtxLogFormat, "AdmiralStateSyncer", deploymentOrRolloutName,
-			deploymentOrRolloutNS, "", "Running in admiral state syncer mode")
-		var sourceClusters []string
-		// fetch all clusters where a deployment
-		// for the identity is present
-		for cluster := range sourceDeployments {
-			sourceClusters = append(sourceClusters, cluster)
-		}
-		// fetch all clusters where a rollout
-		// for the identity is present
-		for cluster := range sourceRollouts {
-			sourceClusters = append(sourceClusters, cluster)
-		}
-		err := updateClusterIdentityCache(remoteRegistry, sourceClusters, sourceIdentity)
-		if err != nil {
-			return nil, err
 		}
 	}
 
@@ -852,7 +830,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				env,
 				sourceClusterLocality,
 				ingressDestinations,
-				false)
+				false, cname, sourceCluster)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
@@ -867,7 +845,7 @@ func modifyServiceEntryForNewServiceOrPod(
 				env,
 				sourceClusterLocality,
 				inClusterDestinations,
-				true)
+				true, cname, sourceCluster)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "processGTPAndAddWeightsByCluster",
 					deploymentOrRolloutName, eventNamespace, sourceCluster, err)
@@ -944,7 +922,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			remoteRegistry,
 			sourceClusterToDRHosts,
 			sourceIdentity,
-			cname)
+			cname,
+			env)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterDestinationRule",
 				deploymentOrRolloutName, namespace, "", err)
@@ -1179,6 +1158,12 @@ func getAllVirtualServices(
 	rc *RemoteController,
 	namespace string,
 	listOptions v12.ListOptions) (*v1alpha3.VirtualServiceList, error) {
+	if rc == nil {
+		return nil, fmt.Errorf("remote controller is not initialized")
+	}
+	if rc.VirtualServiceController == nil || rc.VirtualServiceController.IstioClient == nil {
+		return nil, fmt.Errorf("virtualservice controller is not initialized")
+	}
 	virtualServicesList, err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).List(ctx, listOptions)
 	if err != nil && k8sErrors.IsNotFound(err) {
 		ctxLogger.Debugf(LogFormat, "list", common.VirtualServiceResourceType, "", rc.ClusterID, "virtualservices not found")
@@ -1639,54 +1624,14 @@ func AddServiceEntriesWithDrWorker(
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
-		doDRUpdateForInClusterVSRouting := common.DoDRUpdateForInClusterVSRouting(
-			cluster, identityId, isServiceEntryModifyCalledForSourceCluster)
+		doDRUpdateForInClusterVSRouting := DoDRUpdateForInClusterVSRouting(
+			ctx, ctxLogger, env, cluster, identityId, isServiceEntryModifyCalledForSourceCluster, rr, se)
 
-		// The below code checks if there is custom VS in the identity's namespace
-		// Any Argo VS will be ignored as they are not added to the IdentityNamespaceVirtualServiceCache
-		if doDRUpdateForInClusterVSRouting {
-			if eventNamespace != "" {
-				virtualServicesInIdentityNamespace := rc.
-					VirtualServiceController.IdentityNamespaceVirtualServiceCache.Get(eventNamespace)
-				if virtualServicesInIdentityNamespace != nil && len(virtualServicesInIdentityNamespace) > 0 {
-					doDRUpdateForInClusterVSRouting = false
-					ctxLogger.Infof(
-						common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-						cluster,
-						fmt.Sprintf(
-							"VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as there are custom virtualServices in the namespace %v",
-							doDRUpdateForInClusterVSRouting, cluster, identityId, eventNamespace))
-				}
-			}
-		}
+		ctxLogger.Infof(
+			common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster,
+			fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s",
+				doDRUpdateForInClusterVSRouting, cluster, identityId))
 
-		// This code has been added for custom VS to in-cluster VS migration
-		// We are preventing pinning to remote cluster until the custom VS's
-		// exportTo is set to dot.
-		if doDRUpdateForInClusterVSRouting {
-			envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identityId)
-			if err == nil {
-				if len(envVSTuple) > 0 {
-					customVS := envVSTuple[0].customVS
-					doDRUpdateForInClusterVSRouting = false
-					for _, exportTo := range customVS.Spec.ExportTo {
-						if exportTo == "." {
-							doDRUpdateForInClusterVSRouting = true
-							break
-						}
-					}
-				}
-			}
-			if !doDRUpdateForInClusterVSRouting {
-				ctxLogger.Infof(
-					common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "",
-					cluster,
-					fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s as custom VS exportTo is not dot",
-						doDRUpdateForInClusterVSRouting, cluster, identityId))
-			}
-		}
-
-		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster, fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s", doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
 			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting, isServiceEntryModifyCalledForSourceCluster)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
@@ -1944,6 +1889,148 @@ func AddServiceEntriesWithDrWorker(
 		}
 		errors <- addSEorDRToAClusterError
 	}
+}
+
+// DoesIdentityHaveVS checks if the identity has any virtual services in its namespace
+// It iterates through all the clusters for the identity
+// and check in the IdentityVirtualServiceCache if there is a corresponding custom VS
+// If it finds any, it returns true, otherwise false
+func DoesIdentityHaveVS(
+	remoteRegistry *RemoteRegistry,
+	identityId string) (bool, error) {
+
+	if remoteRegistry == nil {
+		return false, fmt.Errorf("remoteRegistry is nil")
+	}
+	if remoteRegistry.AdmiralCache == nil {
+		return false, fmt.Errorf("AdmiralCache is nil in remoteRegistry")
+	}
+	if remoteRegistry.AdmiralCache.IdentityClusterCache == nil {
+		return false, fmt.Errorf("IdentityClusterCache is nil in AdmiralCache")
+	}
+
+	identityClustersMap := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(identityId)
+	if identityClustersMap == nil {
+		return false, fmt.Errorf("identityClustersMap is nil for identity %s", identityId)
+	}
+	identityClusters := identityClustersMap.GetValues()
+	if len(identityClusters) == 0 {
+		return false, fmt.Errorf("no clusters found for identity %s", identityId)
+	}
+	for _, identityCluster := range identityClusters {
+		remoteController := remoteRegistry.GetRemoteController(identityCluster)
+		if remoteController == nil {
+			return false, fmt.Errorf("remoteController is nil for cluster %s", identityCluster)
+		}
+		if remoteController.VirtualServiceController == nil {
+			return false, fmt.Errorf("VirtualServiceController is nil for cluster %s", identityCluster)
+		}
+		if remoteController.VirtualServiceController.IdentityVirtualServiceCache == nil {
+			return false, fmt.Errorf("IdentityVirtualServiceCache is nil for cluster %s", identityCluster)
+		}
+		virtualServicesInIdentityNamespace := remoteController.
+			VirtualServiceController.IdentityVirtualServiceCache.Get(identityId)
+		if virtualServicesInIdentityNamespace == nil || len(virtualServicesInIdentityNamespace) == 0 {
+			continue
+		}
+		// Check if the VS in the namespace is an Argo VS
+		if common.GetArgoRolloutsEnabled() &&
+			remoteController.RolloutController != nil &&
+			remoteController.RolloutController.IdentityArgoVSCache != nil {
+			argoVSInIdentityNamespace := remoteController.RolloutController.IdentityArgoVSCache.Get(identityId)
+			if argoVSInIdentityNamespace == nil || len(argoVSInIdentityNamespace) == 0 {
+				return true, nil
+			}
+			for vsName := range virtualServicesInIdentityNamespace {
+				if _, ok := argoVSInIdentityNamespace[vsName]; !ok {
+					return true, nil
+				}
+			}
+		} else {
+			// If Argo Rollouts is not enabled, then all VS in the namespace are considered custom VS
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// IsCartographerVSDisabled has been added for cartographer VS to in-cluster VS migration
+// It checks if the cartographer virtual service for the given identity and environment
+// has exportTo set to dot. If it does, it returns true, otherwise false.
+func IsCartographerVSDisabled(
+	ctx context.Context,
+	ctxLogger *logrus.Entry,
+	rc *RemoteController,
+	env string,
+	identity string,
+	getCustomVirtualService GetCustomVirtualService) (bool, error) {
+
+	if rc == nil {
+		return false, fmt.Errorf("remoteController is nil")
+	}
+	if env == "" {
+		return false, fmt.Errorf("env is empty")
+	}
+	if identity == "" {
+		return false, fmt.Errorf("identity is empty")
+	}
+	envVSTuple, err := getCustomVirtualService(ctx, ctxLogger, rc, env, identity)
+	if err != nil {
+		return false, err
+	}
+
+	// There are no customVS for this identity and env
+	// so we are ok to pin the DR to the other region
+	if len(envVSTuple) == 0 {
+		return true, nil
+	}
+
+	// Get the first VS because it is the same VS for
+	// multi-env custom VS
+	customVS := envVSTuple[0].customVS
+
+	// Iterate through the exportTo and return true if
+	// the list has a dot
+	for _, exportTo := range customVS.Spec.ExportTo {
+		if exportTo == "." {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// hasInClusterVSWithValidExportToNS checks if the in-cluster virtual service exists
+// It returns true if the in-cluster virtual service exists
+// and its exportTo does not contain the sync namespace, otherwise false.
+// The VSName is constructed using the service entry host name
+func hasInClusterVSWithValidExportToNS(se *networking.ServiceEntry, rc *RemoteController) (bool, error) {
+	if rc == nil {
+		return false, fmt.Errorf("remoteController is nil")
+	}
+	if se == nil {
+		return false, fmt.Errorf("serviceEntry is nil")
+	}
+	if len(se.Hosts) != 1 {
+		return false, fmt.Errorf("serviceEntry has more than one host")
+	}
+	if rc.VirtualServiceController == nil {
+		return false, fmt.Errorf("VirtualServiceController is nil in remoteController")
+	}
+	if rc.VirtualServiceController.VirtualServiceCache == nil {
+		return false, fmt.Errorf("VirtualServiceCache is nil in VirtualServiceController")
+	}
+	vsName := fmt.Sprintf("%s-%s", se.Hosts[0], common.InclusterVSNameSuffix)
+	cachedVS := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
+	if cachedVS == nil {
+		return false, fmt.Errorf("virtualService %s not found in cache", vsName)
+	}
+	for _, ns := range cachedVS.Spec.ExportTo {
+		if ns == common.GetSyncNamespace() {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func validateServiceEntryEndpoints(entry *v1alpha3.ServiceEntry) (bool, error) {
@@ -2371,7 +2458,7 @@ func deleteAdditionalEndpoints(ctxLogger *logrus.Entry, ctx context.Context, rc 
 			return nil
 		}
 
-		err = deleteVirtualService(ctx, vsToDelete, namespace, rc)
+		err = deleteVirtualService(ctx, vsToDelete.Name, namespace, rc)
 		if err != nil {
 			ctxLogger.Errorf(LogErrFormat, "Delete", "VirtualService", vsToDelete.Name, rc.ClusterID, err)
 			return err

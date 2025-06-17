@@ -287,9 +287,10 @@ func TestRolloutController_Added(t *testing.T) {
 		AdmiralIgnoreLabel:   "admiral-ignore",
 	}
 	depController := RolloutController{
-		RolloutHandler: &mdh,
-		Cache:          &cache,
-		labelSet:       &labelset,
+		RolloutHandler:      &mdh,
+		Cache:               &cache,
+		labelSet:            &labelset,
+		IdentityArgoVSCache: NewIdentityArgoVSCache(),
 	}
 	rollout := argo.Rollout{}
 	rollout.Spec.Template.Labels = map[string]string{"identity": "rollout", "istio-injected": "true"}
@@ -403,9 +404,10 @@ func TestRolloutController_Deleted(t *testing.T) {
 		AdmiralIgnoreLabel:   "admiral-ignore",
 	}
 	depController := RolloutController{
-		RolloutHandler: &mdh,
-		Cache:          &cache,
-		labelSet:       &labelset,
+		RolloutHandler:      &mdh,
+		Cache:               &cache,
+		labelSet:            &labelset,
+		IdentityArgoVSCache: NewIdentityArgoVSCache(),
 	}
 	rollout := argo.Rollout{}
 	rollout.Spec.Template.Labels = map[string]string{"identity": "id", "istio-injected": "true"}
@@ -659,8 +661,9 @@ func TestRolloutDeleted(t *testing.T) {
 			cache: make(map[string]*RolloutClusterEntry),
 			mutex: &sync.Mutex{},
 		},
-		labelSet:  &labelset,
-		K8sClient: fake.NewSimpleClientset(),
+		labelSet:            &labelset,
+		K8sClient:           fake.NewSimpleClientset(),
+		IdentityArgoVSCache: NewIdentityArgoVSCache(),
 	}
 
 	rolloutControllerWithErrorHandler := &RolloutController{
@@ -670,7 +673,8 @@ func TestRolloutDeleted(t *testing.T) {
 			cache: make(map[string]*RolloutClusterEntry),
 			mutex: &sync.Mutex{},
 		},
-		labelSet: &labelset,
+		labelSet:            &labelset,
+		IdentityArgoVSCache: NewIdentityArgoVSCache(),
 	}
 	testCases := []struct {
 		name          string

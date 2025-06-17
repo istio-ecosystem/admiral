@@ -1005,6 +1005,9 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 	cndepclusternscache.Put("cname", "cluster3", "ns5", "ns5")
 	cndepclusternscache.Put("cname", "cluster4", "ns6", "ns6")
 	cndepclusternscache.Put("cname", "cluster4", "ns7", "ns7")
+	cndepclusternscache.Put("cname", "cluster5", "ns1", "ns1")
+	cndepclusternscache.Put("cname", "cluster5", "ns2", "ns2")
+	cndepclusternscache.Put("cname", "cluster5", "istio-system", "istio-system")
 	for i := range [35]int{} {
 		nshash := "ns" + strconv.Itoa(i+3)
 		cndepclusternscache.Put("cname", "cluster3", nshash, nshash)
@@ -1138,6 +1141,19 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 			skipIstioNSFromExportTo:             true,
 			expectedResult:                      []string{"ns1", "ns2"},
 		},
+		{
+			name: "Given the cname has dependent cluster namespaces and some dependents in the source cluster " +
+				"And there is a dependent in istio-system NS" +
+				"When skipIstioNSFromExportTo is true" +
+				"Then we should return a sorted slice of the dependent cluster namespaces excluding istio-system",
+			identityClusterCache:                idclustercache,
+			cnameIdentityCache:                  cnameidcache,
+			cnameDependentClusterNamespaceCache: cndepclusternscache,
+			cname:                               "cname",
+			clusterId:                           "cluster5",
+			skipIstioNSFromExportTo:             true,
+			expectedResult:                      []string{"ns1", "ns2"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1155,6 +1171,9 @@ func TestGetSortedDependentNamespaces(t *testing.T) {
 }
 
 func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) {
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("foo", "cluster1", "cluster1")
+	identityClusterCache.Put("bar", "cluster2", "cluster2")
 	testCases := []struct {
 		name                 string
 		remoteRegistry       *RemoteRegistry
@@ -1173,13 +1192,14 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 						mutex:              &sync.Mutex{},
 					},
 					ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+					IdentityClusterCache:              identityClusterCache,
 				},
 			},
 			globalIdentifier:     "doesNotExist",
 			clusterName:          "cluster1",
 			clientNs:             "clientNs",
 			initialDestinations:  []string{},
-			expectedDestinations: nil,
+			expectedDestinations: []string{},
 		},
 		{
 			name: "When processed client clusters are empty, process all actual server identities",
@@ -1190,13 +1210,14 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 						mutex:              &sync.Mutex{},
 					},
 					ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+					IdentityClusterCache:              identityClusterCache,
 				},
 			},
 			globalIdentifier:     "asset1",
 			clusterName:          "cluster1",
 			clientNs:             "clientNs",
 			initialDestinations:  []string{},
-			expectedDestinations: []string{"foo", "bar"},
+			expectedDestinations: []string{"bar", "foo"},
 		},
 		{
 			name: "When some server identities are already processed, skip those",
@@ -1211,6 +1232,7 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 						m.Put("cluster1", "clientNs", "foo", "foo")
 						return m
 					}(),
+					IdentityClusterCache: identityClusterCache,
 				},
 			},
 			globalIdentifier:     "asset1",
@@ -1223,7 +1245,10 @@ func TestGetDestinationsToBeProcessedForClientInitiatedProcessing(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualDestinations := getDestinationsToBeProcessedForClientInitiatedProcessing(tc.remoteRegistry, tc.globalIdentifier, tc.clusterName, tc.clientNs, tc.initialDestinations)
+			actualDestinations := getDestinationsToBeProcessedForClientInitiatedProcessing(tc.remoteRegistry, tc.globalIdentifier, tc.clusterName, tc.clientNs, tc.initialDestinations, false)
+			if len(actualDestinations) == 0 && len(tc.expectedDestinations) == 0 {
+				return // both are empty, which is expected
+			}
 			if !reflect.DeepEqual(tc.expectedDestinations, actualDestinations) {
 				t.Errorf("Test case %s failed: expected %v, got %v", tc.name, tc.expectedDestinations, actualDestinations)
 			}

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	"github.com/stretchr/testify/require"
 
@@ -1487,26 +1488,30 @@ func TestDeleteVirtualService(t *testing.T) {
 			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
 		},
 	}
+	barVS := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "stage.test00.bar-vs",
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			Hosts: []string{"stage.test00.foo", "stage.test00.bar"},
+		},
+	}
 
 	validIstioClient := istioFake.NewSimpleClientset()
 	validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, fooVS, metaV1.CreateOptions{})
+	validIstioClient.NetworkingV1alpha3().VirtualServices(namespace).Create(ctx, barVS, metaV1.CreateOptions{})
 
 	testcases := []struct {
 		name                  string
-		virtualService        *apiNetworkingV1Alpha3.VirtualService
+		virtualServiceName    string
 		rc                    *RemoteController
 		expectedError         error
 		expectedDeletedVSName string
 	}{
 		{
-			name:           "Given virtualservice to delete, when nil VS is passed, the func should return an error",
-			virtualService: nil,
-			expectedError:  fmt.Errorf("the VirtualService passed was nil"),
-		},
-		{
-			name:           "Given virtualservice to delete, when VS passed does not exists, the func should return an error",
-			virtualService: &apiNetworkingV1Alpha3.VirtualService{ObjectMeta: metaV1.ObjectMeta{Name: "vs-does-not-exists"}},
-			expectedError:  fmt.Errorf("either VirtualService was already deleted, or it never existed"),
+			name:               "Given virtualservice to delete, when VS passed does not exists, the func should return an error",
+			virtualServiceName: "vs-does-not-exists",
+			expectedError:      fmt.Errorf("either VirtualService was already deleted, or it never existed"),
 			rc: &RemoteController{
 				VirtualServiceController: &istio.VirtualServiceController{
 					IstioClient: validIstioClient,
@@ -1514,9 +1519,9 @@ func TestDeleteVirtualService(t *testing.T) {
 			},
 		},
 		{
-			name:           "Given virtualservice to delete, when VS exists, the func should delete the VS and not return any error",
-			virtualService: fooVS,
-			expectedError:  nil,
+			name:               "Given virtualservice to delete, when VS exists, the func should delete the VS and not return any error",
+			virtualServiceName: "stage.test00.foo-vs",
+			expectedError:      nil,
 			rc: &RemoteController{
 				VirtualServiceController: &istio.VirtualServiceController{
 					IstioClient: validIstioClient,
@@ -1524,12 +1529,23 @@ func TestDeleteVirtualService(t *testing.T) {
 			},
 			expectedDeletedVSName: "stage.test00.foo-vs",
 		},
+		{
+			name:               "Given virtualservice to delete, when VS exists with capital in name, the func should delete the VS and not return any error",
+			virtualServiceName: "stage.test00.Bar-vs",
+			expectedError:      nil,
+			rc: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					IstioClient: validIstioClient,
+				},
+			},
+			expectedDeletedVSName: "stage.test00.bar-vs",
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			err := deleteVirtualService(ctx, tc.virtualService, namespace, tc.rc)
+			err := deleteVirtualService(ctx, tc.virtualServiceName, namespace, tc.rc)
 
 			if err != nil && tc.expectedError != nil {
 				if !strings.Contains(err.Error(), tc.expectedError.Error()) {
@@ -2083,6 +2099,205 @@ func TestUpdateVirtualService(t *testing.T) {
 					Get(ctx, c.newVS.Name, metaV1.GetOptions{})
 				require.Equal(t, c.expectedVS.Spec.ExportTo, updatedVS.Spec.ExportTo)
 			}
+		})
+	}
+}
+
+func TestProcessVirtualService(t *testing.T) {
+
+	rolloutController := &admiral.RolloutController{
+		Cache: admiral.NewRolloutCache(),
+	}
+
+	rolloutController.Cache.UpdateRolloutToClusterCache("testIdentity", &v1alpha1.Rollout{})
+
+	remoteController := &RemoteController{
+		ClusterID:         "cluster1",
+		RolloutController: rolloutController,
+	}
+	remoteRegistry := &RemoteRegistry{
+		remoteControllers: map[string]*RemoteController{"cluster1": remoteController},
+	}
+
+	testCases := []struct {
+		name                         string
+		vs                           *apiNetworkingV1Alpha3.VirtualService
+		remoteRegistry               *RemoteRegistry
+		cluster                      string
+		expectedVS                   *apiNetworkingV1Alpha3.VirtualService
+		fakeHandleEventForRollout    *fakeHandleEventForRollout
+		fakeHandleEventForDeployment *fakeHandleEventForDeployment
+		expectedErr                  error
+	}{
+		{
+			name: "Given a nil vs" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: nil,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("virtualService is nil"),
+		},
+		{
+			name: "Given a nil remoteRegistry" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{},
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("remoteRegistry is nil"),
+		},
+		{
+			name: "Given a nil remoteController" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs:             &apiNetworkingV1Alpha3.VirtualService{},
+			cluster:        "cluster2",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf("remote controller for cluster cluster2 not found"),
+		},
+		{
+			name: "Given a vs which contains no labels" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice labels is nil on virtual service stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given a vs with identity label missing" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:   "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice identity is empty in createdFor label for virtual service stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given a vs with env label missing" +
+				"When processVirtualService is called" +
+				"Then the func should return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:        "stage.test00.foo.incluster-vs",
+					Labels:      map[string]string{common.CreatedFor: "testIdentity"},
+					Annotations: map[string]string{"testAnnotation": "testValue"},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+			expectedErr: fmt.Errorf(
+				"virtualservice environment is empty in createdForEnv annotations for virtualservice stage.test00.foo.incluster-vs"),
+		},
+		{
+			name: "Given all valid params" +
+				"When processVirtualService is called" +
+				"Then the func should not return an error",
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "stage.test00.foo.incluster-vs",
+					Labels: map[string]string{
+						common.CreatedFor: "testIdentity",
+					},
+					Annotations: map[string]string{
+						common.CreatedForEnv: "stage",
+					},
+				},
+			},
+			cluster:        "cluster1",
+			remoteRegistry: remoteRegistry,
+			fakeHandleEventForRollout: &fakeHandleEventForRollout{
+				handleEventForRolloutFunc: func() HandleEventForRolloutFunc { return nil },
+			},
+			fakeHandleEventForDeployment: &fakeHandleEventForDeployment{
+				handleEventForDeploymentFunc: func() HandleEventForDeploymentFunc { return nil },
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := processVirtualService(
+				context.Background(), tc.vs, tc.remoteRegistry,
+				tc.cluster, tc.fakeHandleEventForRollout.handleEventForRolloutFunc(),
+				tc.fakeHandleEventForDeployment.handleEventForDeploymentFunc())
+			assert.Equal(t, tc.expectedErr, err)
+		})
+	}
+
+}
+
+func TestToUpperFirst(t *testing.T) {
+
+	testCases := []struct {
+		name string
+		in   string
+		out  string
+	}{
+		{
+			name: "Given an identity in lowercase" +
+				"When processVirtualService is called" +
+				"Then the func should return the identity's first char in uppercase",
+			in:  "stage.test00.foo",
+			out: "Stage.test00.foo",
+		},
+		{
+			name: "Given an identity correct case" +
+				"When processVirtualService is called" +
+				"Then the func should return the identity's first char in uppercase",
+			in:  "Stage.test00.foo",
+			out: "Stage.test00.foo",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := toUpperFirst(tc.in)
+			assert.Equal(t, tc.out, out)
 		})
 	}
 }

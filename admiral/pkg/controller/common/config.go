@@ -438,10 +438,26 @@ func EnableSWAwareNSCaches() bool {
 	return wrapper.params.EnableSWAwareNSCaches
 }
 
-func ClientInitiatedProcessingEnabled() bool {
+func ClientInitiatedProcessingEnabledForControllers() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	return wrapper.params.ClientInitiatedProcessingEnabled
+	return wrapper.params.ClientInitiatedProcessingEnabledForControllers
+}
+
+func ClientInitiatedProcessingEnabledForDynamicConfig() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.ClientInitiatedProcessingEnabledForDynamicConfig
+}
+
+func GetInitiateClientInitiatedProcessingFor() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	var result = make(map[string]string)
+	for _, identity := range wrapper.params.InitiateClientInitiatedProcessingFor {
+		result[identity] = identity
+	}
+	return result
 }
 
 func GetIngressLBPolicy() string {
@@ -490,15 +506,6 @@ func IsSlowStartEnabledForCluster(cluster string) bool {
 	return false
 }
 
-// DoDRUpdateForInClusterVSRouting determines whether admiral-sync namespace DestinationRule should be updated
-// for in-cluster virtual service routing for the given cluster and identity.
-func DoDRUpdateForInClusterVSRouting(cluster string, identity string, isSourceCluster bool) bool {
-	if isSourceCluster && DoVSRoutingInClusterForClusterAndIdentity(cluster, identity) {
-		return true
-	}
-	return false
-}
-
 // ShouldInClusterVSRoutingPerformRollback checks whether in-cluster vs based routing resources are configured for rollback
 func ShouldInClusterVSRoutingPerformRollback() bool {
 	wrapper.RLock()
@@ -509,56 +516,41 @@ func ShouldInClusterVSRoutingPerformRollback() bool {
 	return false
 }
 
-// IsVSRoutingInClusterDisabledForCluster checks whether in-cluster vs routing is disabled globally or for specific cluster resources
-func IsVSRoutingInClusterDisabledForCluster(cluster string) bool {
+func IsCustomVSMergeEnabled() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	return wrapper.params.VSRoutingInClusterDisabledResources["*"] == "*" || wrapper.params.VSRoutingInClusterDisabledResources[cluster] == "*"
+	return wrapper.params.EnableCustomVSMerge
 }
 
-// IsVSRoutingInClusterDisabledForIdentity checks whether in-cluster vs routing is disabled
-// for a specific identity, either globally across all clusters or for a specific cluster.
-func IsVSRoutingInClusterDisabledForIdentity(cluster, identity string) bool {
+// TODO: Add unit tests
+func GetProcessVSCreatedBy() string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	if checkClusterIdentity(wrapper.params.VSRoutingInClusterDisabledResources["*"], identity) || checkClusterIdentity(wrapper.params.VSRoutingInClusterDisabledResources[cluster], identity) {
-		return true
-	}
-	return false
+	return wrapper.params.ProcessVSCreatedBy
 }
 
-// DoVSRoutingInClusterForClusterAndIdentity determines if Virtual Service (VS) routing is enabled
-// for a given cluster and identity for the in-cluster vs based routing.
-func DoVSRoutingInClusterForClusterAndIdentity(cluster, identity string) bool {
+func GetEnableVSRoutingInCluster() bool {
 	wrapper.RLock()
 	defer wrapper.RUnlock()
-	if !wrapper.params.EnableVSRoutingInCluster {
-		return false
-	}
-
-	enabledResources := wrapper.params.VSRoutingInClusterEnabledResources
-
-	//check if vs routing is enabled for everything or for all identities on a specific cluster
-	if enabledResources["*"] == "*" || enabledResources[cluster] == "*" {
-		return true
-	}
-
-	//check if vs routing is enabled for an identity on all source clusters or for an identity on a specific cluster
-	return checkClusterIdentity(enabledResources["*"], identity) || checkClusterIdentity(enabledResources[cluster], identity)
+	return wrapper.params.EnableVSRoutingInCluster
 }
 
-// Verify the specific identity is part of the configured identities
-func checkClusterIdentity(identities string, identity string) bool {
-	if strings.TrimSpace(identities) == "*" {
-		return true
+func GetVSRoutingInClusterEnabledResources() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if wrapper.params.VSRoutingInClusterEnabledResources == nil {
+		return map[string]string{}
 	}
+	return wrapper.params.VSRoutingInClusterEnabledResources
+}
 
-	for _, id := range strings.Split(identities, ",") {
-		if strings.TrimSpace(id) == strings.TrimSpace(identity) {
-			return true
-		}
+func GetVSRoutingInClusterDisabledResources() map[string]string {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	if wrapper.params.VSRoutingInClusterDisabledResources == nil {
+		return map[string]string{}
 	}
-	return false
+	return wrapper.params.VSRoutingInClusterDisabledResources
 }
 
 func DoRoutingPolicyForCluster(cluster string) bool {
@@ -706,4 +698,10 @@ func IsStateSyncerCluster(clusterName string) bool {
 		}
 	}
 	return false
+}
+
+func IsTrafficConfigProcessingEnabledForSlowStart() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableTrafficConfigProcessingForSlowStart
 }

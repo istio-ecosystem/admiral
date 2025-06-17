@@ -119,26 +119,37 @@ const (
 	EventResourceType      = "eventResourceType"
 	OutlierDetection       = "OutlierDetection"
 	ClientConnectionConfig = "ClientConnectionConfig"
-
-	WasmPathValue = "/etc/istio/extensions/dynamicrouter.wasm"
-	AIREnvSuffix  = "-air"
-	MESHSUFFIX    = ".mesh"
+	TrafficConfig          = "TrafficConfig"
+	WasmPathValue          = "/etc/istio/extensions/dynamicrouter.wasm"
+	AIREnvSuffix           = "-air"
+	MESHSUFFIX             = ".mesh"
 
 	LastUpdatedAt = "lastUpdatedAt"
 	IntuitTID     = "intuit_tid"
 	GTPCtrl       = "gtp-ctrl"
 
-	App                 = "app"
-	DynamicConfigUpdate = "DynamicConfigUpdate"
-	LBUpdateProcessor   = "LBUpdateProcessor"
+	App                       = "app"
+	DynamicConfigUpdate       = "DynamicConfigUpdate"
+	LBUpdateProcessor         = "LBUpdateProcessor"
+	ClientInitiatedProcessing = "ClientInitiatedProcessing"
 
 	DummyAdmiralGlobal = "dummy.admiral.global"
 
 	VSRoutingLabel = "admiral.io/vs-routing"
 	// VSRoutingType This label has been added in order to make the API call efficient
-	VSRoutingType          = "admiral.io/vs-routing-type"
-	InclusterVSNameSuffix  = "incluster-vs"
-	VSRoutingTypeInCluster = "incluster"
+	VSRoutingType                      = "admiral.io/vs-routing-type"
+	InclusterVSNameSuffix              = "incluster-vs"
+	VSRoutingTypeInCluster             = "incluster"
+	CreatedByLabel                     = "createdBy"
+	CreatedForLabel                    = "createdFor"
+	WarmupDurationValueInSeconds       = "warmupDurationValueInSeconds"
+	TrafficConfigAssetLabelKey         = "asset"
+	TrafficConfigEnvLabelKey           = "env"
+	TrafficConfigContextCacheKey       = "trafficConfigContextCacheKey"
+	TrafficConfigContextWorkloadEnvKey = "trafficConfigWorkloadEnvKey"
+	TrafficConfigIdentity              = "trafficConfigIdentity"
+	RoutingDRSuffix                    = "routing-dr"
+	InclusterDRSuffix                  = "incluster-dr"
 )
 
 type Event string
@@ -167,6 +178,7 @@ const (
 	GlobalTrafficPolicyResourceType ResourceType = "GlobalTrafficPolicy"
 	RoutingPolicyResourceType       ResourceType = "RoutingPolicy"
 	ShardResourceType               ResourceType = "Shard"
+	TrafficConfigResourceType       ResourceType = "TrafficConfig"
 
 	// Istio Resource Types
 	VirtualServiceResourceType  ResourceType = "VirtualService"
@@ -900,4 +912,12 @@ func IsVSRoutingInClusterVirtualService(vs *v1alpha4.VirtualService) bool {
 		return false
 	}
 	return true
+}
+
+// IsDefaultFQDN return true if the passed fqdn starts with the env
+func IsDefaultFQDN(fqdn, env string) bool {
+	if strings.HasPrefix(fqdn, env) {
+		return true
+	}
+	return false
 }

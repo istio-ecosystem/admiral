@@ -1,6 +1,7 @@
 package clusters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	v1 "github.com/istio-ecosystem/admiral/admiral/apis/v1"
@@ -10,9 +11,11 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"sync"
 	"testing"
 	"time"
 )
@@ -731,4 +734,261 @@ func Test_getLBToProcess(t *testing.T) {
 			assert.Equal(t, tt.args.updatedLB, *tt.args.cache, "getLBToProcess should update cache based upon params")
 		})
 	}
+}
+
+func TestRemoveProcessedIdentities(t *testing.T) {
+	tests := []struct {
+		name                  string
+		processedIdentities   []string
+		processingForMap      map[string]string
+		wantRemainingCount    int
+		wantRemainingElements map[string]string
+	}{
+		{
+			name:                  "All items processed",
+			processedIdentities:   []string{"id1", "id2"},
+			processingForMap:      map[string]string{"id1": "data1", "id2": "data2"},
+			wantRemainingCount:    0,
+			wantRemainingElements: map[string]string{},
+		},
+		{
+			name:                  "Some items processed",
+			processedIdentities:   []string{"id1"},
+			processingForMap:      map[string]string{"id1": "data1", "id2": "data2", "id3": "data3"},
+			wantRemainingCount:    2,
+			wantRemainingElements: map[string]string{"id2": "data2", "id3": "data3"},
+		},
+		{
+			name:                  "No items processed",
+			processedIdentities:   []string{"id4"}, // id4 is not in the map
+			processingForMap:      map[string]string{"id1": "data1", "id2": "data2", "id3": "data3"},
+			wantRemainingCount:    3,
+			wantRemainingElements: map[string]string{"id1": "data1", "id2": "data2", "id3": "data3"},
+		},
+		{
+			name:                  "Empty input",
+			processedIdentities:   []string{},
+			processingForMap:      map[string]string{},
+			wantRemainingCount:    0,
+			wantRemainingElements: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotCount := removeProcessedIdentities(tt.processedIdentities, tt.processingForMap)
+
+			if gotCount != tt.wantRemainingCount {
+				t.Errorf("removeProcessedIdentities() returned wrong count, got %d, want %d", gotCount, tt.wantRemainingCount)
+			}
+
+			if len(tt.wantRemainingElements) != len(tt.processingForMap) {
+				t.Errorf("Expected remaining elements map length %d, got %d", len(tt.wantRemainingElements), len(tt.processingForMap))
+			}
+
+			for key, value := range tt.wantRemainingElements {
+				if val, exists := tt.processingForMap[key]; !exists || val != value {
+					t.Errorf("Expected remaining element %s: %s, got %s", key, value, val)
+				}
+			}
+		})
+	}
+}
+
+// Create a mock struct
+type MyMock struct {
+	mock.Mock
+}
+
+// Implement the interface for the mock
+func (m *MyMock) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error {
+	var destinationsToBeProcessed []string
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed, false)
+	log.Infof(LogFormat, "UpdateFromMock", common.DependencyResourceType, globalIdentifier, clusterName+":"+clientNs, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
+	args := m.Called(ctx, remoteRegistry, globalIdentifier, clusterName, clientNs)
+
+	return args.Error(0)
+}
+
+func TestTriggerClientInitiatedProcessing(t *testing.T) {
+
+	admiralParams := common.AdmiralParams{
+		ClientInitiatedProcessingEnabledForDynamicConfig: true,
+		InitiateClientInitiatedProcessingFor:             []string{"globalIdentifier1"},
+	}
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	identityClusterNamespaceCache := common.NewMapOfMapOfMaps()
+	identityClusterNamespaceCache.Put("globalIdentifier1", "cluster1", "namespace1", "namespace1")
+	identityClusterNamespaceCache.Put("globalIdentifier1", "cluster1", "namespace2", "namespace2")
+	identityClusterNamespaceCache.Put("globalIdentifier1", "cluster2", "namespace3", "namespace3")
+	identityClusterNamespaceCache.Put("server1", "cluster2", "namespace4", "namespace4")
+	identityClusterNamespaceCache.Put("server1", "cluster3", "namespace5", "namespace5")
+
+	identityClusterCache := common.NewMapOfMaps()
+	identityClusterCache.Put("globalIdentifier1", "cluster1", "cluster1")
+	identityClusterCache.Put("globalIdentifier1", "cluster2", "cluster2")
+	identityClusterCache.Put("server1", "cluster2", "cluster2")
+	identityClusterCache.Put("server1", "cluster3", "cluster3")
+
+	clientClusterNamespaceServerCache := common.NewMapOfMapOfMaps()
+	clientClusterNamespaceServerCache.Put("cluster1", "namespace1", "server1", "server1")
+	remoteRegistry := &RemoteRegistry{
+		AdmiralCache: &AdmiralCache{
+			IdentityClusterCache:          identityClusterCache,
+			IdentityClusterNamespaceCache: identityClusterNamespaceCache,
+			SourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{"globalIdentifier1": {"server1"}},
+				mutex:              &sync.Mutex{},
+			},
+			ClientClusterNamespaceServerCache: clientClusterNamespaceServerCache,
+		},
+	}
+
+	identityClusterNamespaceCache2 := common.NewMapOfMapOfMaps()
+	identityClusterNamespaceCache2.Put("globalIdentifier1", "cluster1", "namespace1", "namespace1")
+	identityClusterNamespaceCache2.Put("globalIdentifier1", "cluster1", "namespace2", "namespace2")
+	identityClusterNamespaceCache2.Put("globalIdentifier1", "cluster2", "namespace3", "namespace3")
+	identityClusterNamespaceCache2.Put("server1", "cluster2", "namespace4", "namespace4")
+	identityClusterNamespaceCache2.Put("server1", "cluster3", "namespace5", "namespace5")
+	identityClusterNamespaceCache2.Put("globalIdentifier2", "cluster11", "namespace11", "namespace11")
+
+	identityClusterCache2 := common.NewMapOfMaps()
+	identityClusterCache2.Put("globalIdentifier1", "cluster1", "cluster1")
+	identityClusterCache2.Put("globalIdentifier1", "cluster2", "cluster2")
+	identityClusterCache2.Put("server1", "cluster2", "cluster2")
+	identityClusterCache2.Put("server1", "cluster3", "cluster3")
+	identityClusterCache2.Put("globalIdentifier2", "cluster11", "cluster11")
+
+	remoteRegistry2 := &RemoteRegistry{
+		AdmiralCache: &AdmiralCache{
+			IdentityClusterCache:          identityClusterCache2,
+			IdentityClusterNamespaceCache: identityClusterNamespaceCache2,
+			SourceToDestinations: &sourceToDestinations{
+				sourceDestinations: map[string][]string{"globalIdentifier1": {"server1"}, "globalIdentifier2": {"server1"}},
+				mutex:              &sync.Mutex{},
+			},
+			ClientClusterNamespaceServerCache: clientClusterNamespaceServerCache,
+		},
+	}
+
+	tests := []struct {
+		name               string
+		processingForMap   map[string]string
+		mockReturnError    error
+		expectedErr        error
+		expectedCalls      int
+		remoteRegistryFunc func() *RemoteRegistry
+	}{
+		{
+			name: "Success: valid input",
+			processingForMap: map[string]string{
+				"globalIdentifier1": "globalIdentifier1",
+			},
+			mockReturnError: nil,
+			expectedErr:     nil,
+			expectedCalls:   3,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return remoteRegistry
+			},
+		},
+		{
+			name:             "Error: processing method returns error",
+			processingForMap: map[string]string{"globalIdentifier1": "globalIdentifier1"},
+			mockReturnError:  fmt.Errorf("mock error"),
+			expectedErr:      fmt.Errorf("Failed to process 1 identities as a client"),
+			expectedCalls:    3,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return remoteRegistry
+			},
+		},
+		{
+			name:             "Edge case: empty processingForMap",
+			processingForMap: map[string]string{},
+			mockReturnError:  nil,
+			expectedErr:      nil,
+			expectedCalls:    0,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return remoteRegistry
+			},
+		},
+		{
+			name: "Edge case: empty IdentityClusterNamespaceCache",
+			processingForMap: map[string]string{
+				"globalIdentifier1": "globalIdentifier1",
+			},
+			mockReturnError: nil,
+			expectedErr:     nil,
+			expectedCalls:   0,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return &RemoteRegistry{
+					AdmiralCache: &AdmiralCache{
+						IdentityClusterNamespaceCache: common.NewMapOfMapOfMaps(),
+						SourceToDestinations: &sourceToDestinations{
+							sourceDestinations: map[string][]string{
+								"globalIdentifier1": {"server1"},
+							},
+							mutex: &sync.Mutex{},
+						},
+						ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+					},
+				}
+			},
+		},
+		{
+			name: "Edge case: empty SourceToDestinations",
+			processingForMap: map[string]string{
+				"globalIdentifier1": "globalIdentifier1",
+			},
+			mockReturnError: nil,
+			expectedErr:     nil,
+			expectedCalls:   0,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return &RemoteRegistry{
+					AdmiralCache: &AdmiralCache{
+						IdentityClusterNamespaceCache:     common.NewMapOfMapOfMaps(),
+						SourceToDestinations:              &sourceToDestinations{},
+						ClientClusterNamespaceServerCache: common.NewMapOfMapOfMaps(),
+					},
+				}
+			},
+		},
+		{
+			name: "Multiple entries in processingForMap",
+			processingForMap: map[string]string{
+				"globalIdentifier1": "globalIdentifier1",
+				"globalIdentifier2": "globalIdentifier2", // Not present in registry
+			},
+			expectedCalls: 4,
+			remoteRegistryFunc: func() *RemoteRegistry {
+				return remoteRegistry2
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup remote registry and mock
+			remoteRegistry := tt.remoteRegistryFunc()
+			mk := &MyMock{}
+			mk.On("processClientDependencyRecord",
+				mock.Anything,
+				mock.Anything,
+				mock.AnythingOfType("string"),
+				mock.AnythingOfType("string"),
+				mock.AnythingOfType("string"),
+			).Return(tt.mockReturnError)
+			// Call the function under test
+			err := triggerClientInitiatedProcessing(context.Background(), mk, remoteRegistry, tt.processingForMap)
+			// Assert the number of calls made
+			mk.AssertNumberOfCalls(t, "processClientDependencyRecord", tt.expectedCalls)
+			// Assert the error is as expected
+			if err != nil && err.Error() != tt.expectedErr.Error() {
+				t.Errorf("Expected error %v, got %v", tt.expectedErr, err)
+			} else if err == nil && tt.expectedErr != nil {
+				t.Errorf("Expected error %v, got nil", tt.expectedErr)
+			}
+		})
+	}
+	// Reset the config to its original state
+	common.ResetSync()
 }

@@ -137,7 +137,7 @@ func GetRootCmd(args []string) *cobra.Command {
 		"Size of the log file in Mbs. If not specified, defaults to 200 Mbs")
 	rootCmd.PersistentFlags().StringVar(&params.KubeconfigPath, "kube_config", "",
 		"Use a Kubernetes configuration file instead of in-cluster configuration")
-	rootCmd.PersistentFlags().BoolVar(&params.ArgoRolloutsEnabled, "argo_rollouts", false,
+	rootCmd.PersistentFlags().BoolVar(&params.ArgoRolloutsEnabled, "argo_rollouts", true,
 		"Use argo rollout configurations")
 	rootCmd.PersistentFlags().StringVar(&params.SecretFilterTags, "secret_filter_tags", "admiral/sync", "Filter tags for the specific admiral namespace secret to watch")
 	rootCmd.PersistentFlags().StringVar(&params.ClusterRegistriesNamespace, "secret_namespace", "admiral",
@@ -246,8 +246,10 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&params.EnableSWAwareNSCaches, "enable_sw_aware_ns_caches", false, "Enable/Disable SW Aware NS Caches")
 	rootCmd.PersistentFlags().Int64Var(&params.DefaultWarmupDurationSecs, "default_warmup_duration_in_seconds", 45, "The default value for the warmupDurationSecs to be used on Destination Rules created by admiral")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableGenerationCheck, "enable_generation_check", true, "Enable/Disable Generation Check")
-	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", false, "Enable/Disable Replica Count Check")
-	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabled, "client_initiated_processing_enabled", true, "Enable/Disable Client Initiated Processing")
+	rootCmd.PersistentFlags().BoolVar(&params.EnableIsOnlyReplicaCountChangedCheck, "enable_replica_count_check", true, "Enable/Disable Replica Count Check")
+	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabledForControllers, "client_initiated_processing_enabled_for_controllers", false, "Enable/Disable Client Initiated Processing for controllers")
+	rootCmd.PersistentFlags().BoolVar(&params.ClientInitiatedProcessingEnabledForDynamicConfig, "client_initiated_processing_enabled_for_dynamic_config", false, "Enable/Disable Client Initiated Processing via DB")
+	rootCmd.PersistentFlags().StringSliceVar(&params.InitiateClientInitiatedProcessingFor, "initiate_client_initiated_processing_for", []string{}, "List of identities for which client initiated processing should be initiated")
 	rootCmd.PersistentFlags().BoolVar(&params.PreventSplitBrain, "prevent_split_brain", true, "Enable/Disable Explicit Split Brain prevention logic")
 	rootCmd.PersistentFlags().StringSliceVar(&params.IgnoreLabelsAnnotationsVSCopyList, "ignore_labels_annotations_vs_copy_list", []string{"applications.argoproj.io/app-name", "app.kubernetes.io/instance", "argocd.argoproj.io/tracking-id"}, "Labels and annotations that should not be preserved during VS copy")
 
@@ -282,6 +284,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringToStringVarP(&params.VSRoutingInClusterEnabledResources, "vs_routing_in_cluster_enabled_resources", "e", map[string]string{}, "The source clusters and corresponding source identities to enable VS based routing in-cluster on")
 	// Usage:  --vs_routing_in_cluster_disabled_resources *=identity1,cluster2=*,cluster3="identity3, identity4" OR --vs_routing_in_cluster_disabled_resources *=* (disable for everything)
 	rootCmd.PersistentFlags().StringToStringVarP(&params.VSRoutingInClusterDisabledResources, "vs_routing_in_cluster_disabled_resources", "d", map[string]string{}, "The source clusters and corresponding source identities to disable VS based routing in-cluster on")
+	rootCmd.PersistentFlags().BoolVar(&params.EnableCustomVSMerge, "enable_custom_vs_merge", false, "Enable/Disable custom VS merge with in cluster VS")
+	rootCmd.PersistentFlags().StringVar(&params.ProcessVSCreatedBy, "process_vs_created_by", "", "process the VS that was createdBy. Add createdBy label and value provided here for admiral to process this VS")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
@@ -298,6 +302,9 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringSliceVar(&params.NLBEnabledIdentityList, "nlb_enabled_identity_list", []string{"intuit.services.mesh.meshhealthcheck"}, "Comma seperated list of enabled idenity list to be enabled for NLB in lower case")
 	rootCmd.PersistentFlags().StringVar(&params.NLBIngressLabel, "nlb_ingress_label", common.NLBIstioIngressGatewayLabelValue, "The value of the `app` label to use to match and find the service that represents the NLB ingress for cross cluster traffic")
 	rootCmd.PersistentFlags().StringVar(&params.CLBIngressLabel, "clb_ingress_label", common.IstioIngressGatewayLabelValue, "The value of the `app` label to use to match and find the service that represents the CLB ingress for cross cluster traffic")
+
+	//Parameters for slow start
+	rootCmd.PersistentFlags().BoolVar(&params.EnableTrafficConfigProcessingForSlowStart, "enable_traffic_config_processing_for_slow_start", false, "Enable/Disable TrafficConfig Processing for slowStart support")
 
 	return rootCmd
 }

@@ -6,12 +6,13 @@ import (
 	"time"
 
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
-	cmp "github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"github.com/stretchr/testify/assert"
 	"istio.io/api/networking/v1alpha3"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istioFake "istio.io/client-go/pkg/clientset/versioned/fake"
@@ -1011,30 +1012,68 @@ func TestGetServiceWithSuffixMatch(t *testing.T) {
 		},
 	}
 
+	services2 := []*coreV1.Service{
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service1-root-service"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service2"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service3-root-service-abc"},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{
+					"app": "different",
+				},
+			},
+		},
+	}
+
+	services3 := []*coreV1.Service{
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service2"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+		{
+			ObjectMeta: metaV1.ObjectMeta{Name: "service3-root-service-abc"},
+			Spec: coreV1.ServiceSpec{
+				Selector: selectorMap,
+			},
+		},
+	}
+
 	testCases := []struct {
 		name            string
-		suffix          string
+		token           string
 		services        []*coreV1.Service
 		rolloutSelector *metaV1.LabelSelector
 		expectedResult  string
 	}{
 		{
-			name:            "Match found, given suffux, services and selector. Should return service with suffix",
-			suffix:          "root-service",
+			name:            "Match found, given suffux, services and selector. Should return service with token",
+			token:           "root-service",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "service1-root-service",
 		},
 		{
 			name:            "No match found, given incorrect suffux, services and selector. Should return empty",
-			suffix:          "nomatch",
+			token:           "nomatch",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "",
 		},
 		{
 			name:     "No match found, given suffux, services and not matching selector. Should return empty",
-			suffix:   "root-service",
+			token:    "root-service",
 			services: services,
 			rolloutSelector: &metaV1.LabelSelector{
 				MatchLabels: map[string]string{
@@ -1045,33 +1084,133 @@ func TestGetServiceWithSuffixMatch(t *testing.T) {
 		},
 		{
 			name:            "Match found, given empty suffux, services and selector. Should return first service",
-			suffix:          "",
+			token:           "",
 			services:        services,
 			rolloutSelector: labelSelector,
 			expectedResult:  "service1-root-service",
 		},
 		{
 			name:            "No match found, given suffux, services and nil selector. Should return empty",
-			suffix:          "suffix",
+			token:           "token",
 			services:        services,
 			rolloutSelector: nil,
 			expectedResult:  "",
 		},
 		{
 			name:            "No match found, given suffux, no services and selector. Should return empty",
-			suffix:          "suffix",
+			token:           "token",
 			services:        []*coreV1.Service{},
 			rolloutSelector: labelSelector,
 			expectedResult:  "",
+		},
+		{
+			name:            "No match found with token, but found with contains check, should return root service",
+			token:           "root-service",
+			services:        services3,
+			rolloutSelector: labelSelector,
+			expectedResult:  "service3-root-service-abc",
+		},
+		{
+			name:            "If match found with token, prefer that service",
+			token:           "root-service",
+			services:        services2,
+			rolloutSelector: labelSelector,
+			expectedResult:  "service1-root-service",
 		},
 	}
 
 	for _, c := range testCases {
 		t.Run(c.name, func(t *testing.T) {
-			result := GetServiceWithSuffixMatch(c.suffix, c.services, c.rolloutSelector)
+			result := GetServiceWithNameMatch(c.token, c.services, c.rolloutSelector)
 			if result != c.expectedResult {
 				t.Errorf("Failed. Got %v, expected %v", result, c.expectedResult)
 			}
+		})
+	}
+}
+
+func TestShouldProcessVSCreatedBy(t *testing.T) {
+	testCases := []struct {
+		name           string
+		vs             *v1alpha32.VirtualService
+		admiralParams  common.AdmiralParams
+		expectedResult bool
+	}{
+		{
+			name: "Given a nil VS" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs:             nil,
+			expectedResult: false,
+		},
+		{
+			name: "Given a nil VS labels" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs:             &v1alpha32.VirtualService{},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs but the the createdBy param is empty" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs but createdBy label doesnt exists" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"testLabel": "testValue"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs and createdBy exists but it doesnt match" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return false",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"createdBy": "somethingElse"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: false,
+		},
+		{
+			name: "Given a valid vs and createdBy exists and they match" +
+				"When ShouldProcessVSCreatedBy func is called" +
+				"Then should return true",
+			vs: &v1alpha32.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels: map[string]string{"createdBy": "testCreatedBy"},
+				},
+			},
+			admiralParams: common.AdmiralParams{
+				ProcessVSCreatedBy: "testCreatedBy",
+			},
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			common.ResetSync()
+			common.InitializeConfig(tc.admiralParams)
+			actual := ShouldProcessVSCreatedBy(tc.vs)
+			assert.Equal(t, tc.expectedResult, actual)
 		})
 	}
 }

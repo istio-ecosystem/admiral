@@ -246,15 +246,13 @@ func getSortedDependentNamespaces(
 		if ok && admiralCache.IdentityClusterCache != nil {
 			sourceClusters := admiralCache.IdentityClusterCache.Get(partitionedIdentity.(string))
 			if sourceClusters != nil && sourceClusters.Get(clusterId) != "" {
-				if !skipIstioNSFromExportTo {
-					namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
-				}
+				namespaceSlice = append(namespaceSlice, common.NamespaceIstioSystem)
 
 				// Add source namespaces s.t. throttle filter can query envoy clusters
 				if admiralCache.IdentityClusterNamespaceCache != nil && admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)) != nil {
 					sourceNamespacesInCluster := admiralCache.IdentityClusterNamespaceCache.Get(partitionedIdentity.(string)).Get(clusterId)
 					if sourceNamespacesInCluster != nil && sourceNamespacesInCluster.Len() > 0 {
-						namespaceSlice = append(namespaceSlice, sourceNamespacesInCluster.GetKeys()...)
+						namespaceSlice = append(namespaceSlice, sourceNamespacesInCluster.GetValues()...)
 					}
 				}
 			}
@@ -272,7 +270,7 @@ func getSortedDependentNamespaces(
 	if clusterNamespaces != nil && clusterNamespaces.Len() > 0 {
 		namespaces := clusterNamespaces.Get(clusterId)
 		if namespaces != nil && namespaces.Len() > 0 {
-			namespaceSlice = append(namespaceSlice, namespaces.GetKeys()...)
+			namespaceSlice = append(namespaceSlice, namespaces.GetValues()...)
 			if len(namespaceSlice) > common.GetExportToMaxNamespaces() {
 				namespaceSlice = []string{"*"}
 				ctxLogger.Infof("exceeded max namespaces for cname=%s in cluster=%s", cname, clusterId)
@@ -287,8 +285,15 @@ func getSortedDependentNamespaces(
 			dedupNamespaceSlice = append(dedupNamespaceSlice, namespaceSlice[i])
 		}
 	}
-	ctxLogger.Infof("getSortedDependentNamespaces for cname %v and cluster %v got namespaces: %v", cname, clusterId, dedupNamespaceSlice)
-	return dedupNamespaceSlice
+	var finalDeDupedNamespaces []string
+	for _, s := range dedupNamespaceSlice {
+		if skipIstioNSFromExportTo && s == common.NamespaceIstioSystem {
+			continue
+		}
+		finalDeDupedNamespaces = append(finalDeDupedNamespaces, s)
+	}
+	ctxLogger.Infof("getSortedDependentNamespaces for cname %v and cluster %v got namespaces: %v", cname, clusterId, finalDeDupedNamespaces)
+	return finalDeDupedNamespaces
 }
 
 func (w WorkloadEntrySorted) Len() int {
@@ -351,38 +356,66 @@ func parseMigrationService(migrationServices map[string]*k8sV1.Service, meshPort
 	return services
 }
 
-func processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string) error {
+type ProcessClientDependencyRecord interface {
+	processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error
+}
+type ClientDependencyRecordProcessor struct{}
+
+func (c ClientDependencyRecordProcessor) processClientDependencyRecord(ctx context.Context, remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, bypass bool) error {
 	var destinationsToBeProcessed []string
+	if IsCacheWarmupTimeForDependency(remoteRegistry) {
+		log.Debugf(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "processing skipped during cache warm up state for dependency")
+		return nil
+	}
 
-	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed)
+	destinationsToBeProcessed = getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry, globalIdentifier, clusterName, clientNs, destinationsToBeProcessed, bypass)
 	log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, fmt.Sprintf("destinationsToBeProcessed=%v", destinationsToBeProcessed))
-
+	if len(destinationsToBeProcessed) == 0 {
+		log.Infof(LogFormat, "Update", common.DependencyResourceType, globalIdentifier, clusterName, "no destinations to be processed")
+		return nil
+	}
 	err := processDestinationsForSourceIdentity(ctx, remoteRegistry, "Update", true, common.NewMap(), destinationsToBeProcessed, globalIdentifier, modifyServiceEntryForNewServiceOrPod)
+
 	if err != nil {
 		return errors.New("failed to perform client initiated processing for " + globalIdentifier + ", got error: " + err.Error())
 	}
 	return nil
 }
 
-func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string) []string {
+func getDestinationsToBeProcessedForClientInitiatedProcessing(remoteRegistry *RemoteRegistry, globalIdentifier string, clusterName string, clientNs string, destinationsToBeProcessed []string, bypass bool) []string {
 	actualServerIdentities := remoteRegistry.AdmiralCache.SourceToDestinations.Get(globalIdentifier)
 	processedClientClusters := remoteRegistry.AdmiralCache.ClientClusterNamespaceServerCache.Get(clusterName)
 
 	if actualServerIdentities == nil {
 		return nil
 	}
+	var meshServerIdentities []string
 
-	if processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
-		destinationsToBeProcessed = actualServerIdentities
+	for _, actualServerIdentity := range actualServerIdentities {
+		if isIdentityMeshEnabled(actualServerIdentity, remoteRegistry) {
+			meshServerIdentities = append(meshServerIdentities, actualServerIdentity)
+		}
+	}
+
+	if bypass || processedClientClusters == nil || processedClientClusters.Get(clientNs) == nil {
+		destinationsToBeProcessed = meshServerIdentities
 	} else {
 		processedClientNamespaces := processedClientClusters.Get(clientNs)
-		for _, actualServerIdentity := range actualServerIdentities {
+		for _, actualServerIdentity := range meshServerIdentities {
 			if processedClientNamespaces.Get(actualServerIdentity) == "" {
 				destinationsToBeProcessed = append(destinationsToBeProcessed, actualServerIdentity)
 			}
 		}
 	}
-	return destinationsToBeProcessed
+	sort.Strings(destinationsToBeProcessed)
+	// Remove duplicates
+	var dedupDestinationSlice []string
+	for i := 0; i < len(destinationsToBeProcessed); i++ {
+		if i == 0 || destinationsToBeProcessed[i] != destinationsToBeProcessed[i-1] {
+			dedupDestinationSlice = append(dedupDestinationSlice, destinationsToBeProcessed[i])
+		}
+	}
+	return dedupDestinationSlice
 }
 
 func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *RemoteRegistry, eventType admiral.EventType, hasNonMeshDestination bool, sourceClusters *common.Map, destinations []string, sourceIdentity string, modifySE ModifySEFunc) error {
@@ -410,7 +443,7 @@ func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *R
 		log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", fmt.Sprintf("processing destination %d/%d destinationIdentity=%s", counter, totalDestinations, destinationIdentity))
 		clusters := remoteRegistry.AdmiralCache.IdentityClusterCache.Get(destinationIdentity)
 		if destinationClusters == nil || destinationClusters.Len() == 0 {
-			listOfSourceClusters := strings.Join(sourceClusters.GetKeys(), ",")
+			listOfSourceClusters := strings.Join(sourceClusters.GetValues(), ",")
 			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, listOfSourceClusters,
 				fmt.Sprintf("destinationClusters does not have any clusters. Skipping processing: %v.", destinationIdentity))
 			continue
@@ -429,7 +462,7 @@ func processDestinationsForSourceIdentity(ctx context.Context, remoteRegistry *R
 			continue
 		}
 
-		for _, destinationClusterID := range clusters.GetKeys() {
+		for _, destinationClusterID := range clusters.GetValues() {
 			message = fmt.Sprintf("processing cluster=%s for destinationIdentity=%s", destinationClusterID, destinationIdentity)
 			log.Infof(LogFormat, string(eventType), common.DependencyResourceType, sourceIdentity, "", message)
 			rc := remoteRegistry.GetRemoteController(destinationClusterID)

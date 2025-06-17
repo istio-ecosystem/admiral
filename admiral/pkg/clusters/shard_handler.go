@@ -3,17 +3,18 @@ package clusters
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"slices"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -214,6 +215,7 @@ func ConsumeIdentityConfigs(ctxLogger *log.Entry, ctx context.Context, configWri
 				isServiceEntryModifyCalledForSourceClusterAndEnv,
 				assetName,
 				strings.Split(se.Hosts[0], common.Sep)[0],
+				"",
 				copyServiceEntry(se),
 				clusters,
 				errors)

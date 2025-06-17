@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -21,6 +22,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type IsVSAlreadyDeletedErr struct {
+	msg string
+}
+
+var vsAlreadyDeletedMsg = "either VirtualService was already deleted, or it never existed"
+
+func (e *IsVSAlreadyDeletedErr) Error() string {
+	return vsAlreadyDeletedMsg
+}
+
 // NewVirtualServiceHandler returns a new instance of VirtualServiceHandler after verifying
 // the required properties are set correctly
 func NewVirtualServiceHandler(remoteRegistry *RemoteRegistry, clusterID string) (*VirtualServiceHandler, error) {
@@ -36,6 +47,7 @@ func NewVirtualServiceHandler(remoteRegistry *RemoteRegistry, clusterID string) 
 		updateResource:                         handleVirtualServiceEventForRollout,
 		syncVirtualServiceForDependentClusters: syncVirtualServicesToAllDependentClusters,
 		syncVirtualServiceForAllClusters:       syncVirtualServicesToAllRemoteClusters,
+		processVirtualService:                  processVirtualService,
 	}, nil
 }
 
@@ -61,6 +73,14 @@ type SyncVirtualServiceResource func(
 	vsName string,
 ) error
 
+type ProcessVirtualService func(
+	ctx context.Context,
+	virtualService *v1alpha3.VirtualService,
+	remoteRegistry *RemoteRegistry,
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error
+
 // VirtualServiceHandler responsible for handling Add/Update/Delete events for
 // VirtualService resources
 type VirtualServiceHandler struct {
@@ -69,13 +89,100 @@ type VirtualServiceHandler struct {
 	updateResource                         UpdateResourcesForVirtualService
 	syncVirtualServiceForDependentClusters SyncVirtualServiceResource
 	syncVirtualServiceForAllClusters       SyncVirtualServiceResource
+	processVirtualService                  ProcessVirtualService
+}
+
+// processVirtualService uses the identity and the envs in the virtualService passed
+// and calls rollout and deployment handler for all the envs for the given identity.
+// This mainly used so that any add/update made on the custom vs should trigger a merge
+// on in-cluster VS
+func processVirtualService(
+	ctx context.Context,
+	virtualService *v1alpha3.VirtualService,
+	remoteRegistry *RemoteRegistry,
+	cluster string,
+	handleEventForRollout HandleEventForRolloutFunc,
+	handleEventForDeployment HandleEventForDeploymentFunc) error {
+	if virtualService == nil {
+		return fmt.Errorf("virtualService is nil")
+	}
+
+	if remoteRegistry == nil {
+		return fmt.Errorf("remoteRegistry is nil")
+	}
+
+	rc := remoteRegistry.GetRemoteController(cluster)
+	if rc == nil {
+		return fmt.Errorf("remote controller for cluster %s not found", cluster)
+	}
+
+	// Get the identity and the environments from the VS
+	labels := virtualService.Labels
+	if labels == nil {
+		return fmt.Errorf(
+			"virtualservice labels is nil on virtual service %s", virtualService.Name)
+	}
+	identity := labels[common.CreatedFor]
+	if identity == "" {
+		return fmt.Errorf(
+			"virtualservice identity is empty in %s label for virtual service %s", common.CreatedFor, virtualService.Name)
+	}
+	annotations := virtualService.Annotations
+	if annotations == nil {
+		return fmt.Errorf(
+			"virtualservice annotations is nil on virtual service %s", virtualService.Name)
+	}
+	envs := annotations[common.CreatedForEnv]
+	if envs == "" {
+		return fmt.Errorf(
+			"virtualservice environment is empty in %s annotations for virtualservice %s", common.CreatedForEnv, virtualService.Name)
+	}
+
+	// Call the rollout and deployment handlers for just one env
+	// calling for just env is enough as we'll be processing for all environments
+	// later in the modifySE
+	splitEnvs := strings.Split(envs, "_")
+	if rc.RolloutController != nil {
+		rollout := rc.RolloutController.Cache.Get(identity, splitEnvs[0])
+		if rollout == nil {
+			rollout = rc.RolloutController.Cache.Get(toUpperFirst(identity), splitEnvs[0])
+		}
+		if rollout != nil {
+			handleEventForRollout(ctx, admiral.Update, rollout, remoteRegistry, cluster)
+		} else {
+			log.Infof(
+				"rollout is nil for identity %s and env %s", identity, splitEnvs[0])
+		}
+	}
+	if rc.DeploymentController != nil {
+		deployment := rc.DeploymentController.Cache.Get(identity, splitEnvs[0])
+		if deployment == nil {
+			deployment = rc.DeploymentController.Cache.Get(toUpperFirst(identity), splitEnvs[0])
+		}
+		if deployment != nil {
+			handleEventForDeployment(ctx, admiral.Update, deployment, remoteRegistry, cluster)
+		} else {
+			log.Infof(
+				"deployment is nil for identity %s and env %s", identity, splitEnvs[0])
+		}
+	}
+
+	return nil
+}
+
+func toUpperFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[0:1]) + s[1:]
 }
 
 func (vh *VirtualServiceHandler) Added(ctx context.Context, obj *v1alpha3.VirtualService) error {
 	if commonUtil.IsAdmiralReadOnly() {
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Add)
@@ -85,7 +192,8 @@ func (vh *VirtualServiceHandler) Updated(ctx context.Context, obj *v1alpha3.Virt
 	if commonUtil.IsAdmiralReadOnly() {
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		return nil
 	}
 	return vh.handleVirtualServiceEvent(ctx, obj, common.Update)
@@ -96,7 +204,8 @@ func (vh *VirtualServiceHandler) Deleted(ctx context.Context, obj *v1alpha3.Virt
 		log.Infof(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "Admiral is in read-only mode. Skipping resource from namespace="+obj.Namespace)
 		return nil
 	}
-	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) {
+	shouldProcessVS := ShouldProcessVSCreatedBy(obj)
+	if IgnoreIstioResource(obj.Spec.ExportTo, obj.Annotations, obj.Namespace) && !shouldProcessVS {
 		log.Infof(LogFormat, common.Delete, "VirtualService", obj.Name, vh.clusterID, "Skipping resource from namespace="+obj.Namespace)
 		if len(obj.Annotations) > 0 && obj.Annotations[common.AdmiralIgnoreAnnotation] == "true" {
 			log.Debugf(LogFormat, "admiralIoIgnoreAnnotationCheck", "VirtualService", obj.Name, vh.clusterID, "Value=true namespace="+obj.Namespace)
@@ -125,6 +234,21 @@ func (vh *VirtualServiceHandler) handleVirtualServiceEvent(ctx context.Context, 
 	spec := virtualService.Spec
 
 	log.Infof(LogFormat, event, common.VirtualServiceResourceType, virtualService.Name, vh.clusterID, "Received event")
+
+	// Process VS
+	if ShouldProcessVSCreatedBy(virtualService) {
+		log.Infof(
+			LogFormat, event, common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,
+			"processing custom virtualService")
+		err := vh.processVirtualService(
+			ctx, virtualService, vh.remoteRegistry, vh.clusterID, HandleEventForRollout, HandleEventForDeployment)
+		if err != nil {
+			log.Errorf(
+				LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, vh.clusterID,
+				fmt.Sprintf("processVirtualService failed due to error %v", err.Error()))
+		}
+		return nil
+	}
 
 	if len(spec.Hosts) > 1 {
 		log.Errorf(LogFormat, "Event", common.VirtualServiceResourceType, virtualService.Name, vh.clusterID, "Skipping as multiple hosts not supported for virtual service namespace="+virtualService.Namespace)
@@ -332,9 +456,10 @@ func syncVirtualServiceToDependentCluster(
 		// Best effort delete for existing virtual service with old name
 		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := deleteVirtualService(ctx, vSName, syncNamespace, rc)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
+			var vsAlreadyDeletedErr *IsVSAlreadyDeletedErr
+			if errors.As(err, &vsAlreadyDeletedErr) {
 				ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vSName, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
@@ -459,9 +584,10 @@ func syncVirtualServiceToRemoteCluster(
 		// Best effort delete for existing virtual service with old name
 		_ = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, virtualService.Name, metav1.DeleteOptions{})
 
-		err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(syncNamespace).Delete(ctx, vSName, metav1.DeleteOptions{})
+		err := deleteVirtualService(ctx, vSName, syncNamespace, rc)
 		if err != nil {
-			if k8sErrors.IsNotFound(err) {
+			var vsAlreadyDeletedErr *IsVSAlreadyDeletedErr
+			if errors.As(err, &vsAlreadyDeletedErr) {
 				ctxLogger.Infof(LogFormat, "Delete", common.VirtualServiceResourceType, vSName, cluster, "Either VirtualService was already deleted, or it never existed")
 				return nil
 			}
@@ -701,16 +827,19 @@ func createVirtualServiceSkeleton(vs networkingV1Alpha3.VirtualService, name str
 	return &v1alpha3.VirtualService{Spec: vs, ObjectMeta: metaV1.ObjectMeta{Name: name, Namespace: namespace}}
 }
 
-func deleteVirtualService(ctx context.Context, exist *v1alpha3.VirtualService, namespace string, rc *RemoteController) error {
-	if exist == nil {
-		return fmt.Errorf("the VirtualService passed was nil")
+func deleteVirtualService(ctx context.Context, vsName string, namespace string, rc *RemoteController) error {
+	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, vsName, metaV1.DeleteOptions{})
+	if err == nil {
+		return nil
 	}
-	err := rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, exist.Name, metaV1.DeleteOptions{})
-	if err != nil {
-		if k8sErrors.IsNotFound(err) {
-			return fmt.Errorf("either VirtualService was already deleted, or it never existed")
+	if k8sErrors.IsNotFound(err) {
+		err = rc.VirtualServiceController.IstioClient.NetworkingV1alpha3().VirtualServices(namespace).Delete(ctx, strings.ToLower(vsName), metaV1.DeleteOptions{})
+		if err == nil {
+			return nil
 		}
-		return err
+		if k8sErrors.IsNotFound(err) {
+			return &IsVSAlreadyDeletedErr{vsAlreadyDeletedMsg}
+		}
 	}
-	return nil
+	return err
 }

@@ -51,6 +51,7 @@ type RemoteController struct {
 	JobController                    *admiral.JobController
 	VertexController                 *admiral.VertexController
 	MonoVertexController             *admiral.MonoVertexController
+	TrafficConfigController          *admiral.TrafficConfigController
 	stop                             chan struct{}
 	//listener for normal types
 }
@@ -86,6 +87,9 @@ type AdmiralCache struct {
 	//LB Migration Cache
 	NLBEnabledCluster []string
 	CLBEnabledCluster []string
+
+	// TrafficConfigCache
+	SlowStartConfigCache *common.MapOfMapOfMaps // mapping of <asset> to <trafficConfigEnv> to <worklaodEnv> to slowStartDurationInSeconds
 }
 
 type RemoteRegistry struct {
@@ -104,6 +108,7 @@ type RemoteRegistry struct {
 	ClientLoader                loader.ClientLoader
 	RegistryClient              registry.ClientAPI
 	ConfigWriter                ConfigWriter
+	TrafficConfigController     *admiral.TrafficConfigController
 }
 
 // ModifySEFunc is a function that follows the dependency injection pattern which is used by HandleEventForGlobalTrafficPolicy
@@ -157,6 +162,7 @@ func NewRemoteRegistry(ctx context.Context, params common.AdmiralParams) *Remote
 		CnameDependentClusterNamespaceCache: common.NewMapOfMapOfMaps(),
 		ClientClusterNamespaceServerCache:   common.NewMapOfMapOfMaps(),
 		PartitionIdentityCache:              common.NewMap(),
+		SlowStartConfigCache:                common.NewMapOfMapOfMaps(),
 	}
 	if common.GetAdmiralProfile() == common.AdmiralProfileDefault || common.GetAdmiralProfile() == common.AdmiralProfilePerf {
 		serviceEntrySuspender = NewDefaultServiceEntrySuspender(params.ExcludedIdentityList)
@@ -242,7 +248,12 @@ func (d *sourceToDestinations) put(dependencyObj *admiralV1.Dependency) {
 func (d *sourceToDestinations) Get(key string) []string {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	return d.sourceDestinations[key]
+	// make a copy and return
+
+	destinations := d.sourceDestinations[key]
+	destinationsCopy := make([]string, len(d.sourceDestinations[key]))
+	copy(destinationsCopy, destinations)
+	return destinationsCopy
 }
 
 func (r *RemoteRegistry) GetRemoteController(clusterId string) *RemoteController {
