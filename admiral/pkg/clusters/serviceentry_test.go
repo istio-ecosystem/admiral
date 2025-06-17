@@ -10031,7 +10031,7 @@ func Test_getOverwrittenLoadBalancer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
+			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, "")
 			assert.Equalf(t, tt.expectedEndpoint, actualEndpoint, fmt.Sprintf("getOverwrittenLoadBalancer should return endpoint %s, but got %s", tt.expectedEndpoint, actualEndpoint))
 			assert.Equalf(t, tt.expectedPort, actualPort, fmt.Sprintf("getOverwrittenLoadBalancer should return port %d, but got %d", tt.expectedPort, actualPort))
 		})
@@ -10630,4 +10630,81 @@ func TestDoesIdentityHaveVS(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_isNLBEnabled(t *testing.T) {
+	type args struct {
+		nlbClusters    []string
+		clusterName    string
+		sourceIdentity string
+	}
+
+	beforeState := common.GetAdmiralParams()
+	admiralParamsTest := common.GetAdmiralParams()
+	admiralParamsTest.NLBEnabledIdentityList = []string{"intuit.nlb.mesh.health"}
+	common.UpdateAdmiralParams(admiralParamsTest)
+
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"Identity & Cluster info present", args{
+			nlbClusters:    []string{"intuit.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, true},
+		{"Empty NLB Clusters", args{
+			nlbClusters:    nil,
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Identity Present in param as well as NLB overwrites and both match", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.nlb.mesh.health",
+		}, true},
+
+		//Invalid input
+		{"Identity Present in param as well as NLB overwrites and both match (case sensative", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "Intuit.nlb.mesh.health",
+		}, true},
+
+		{"Identity not present in NLB overwrite", args{
+			nlbClusters:    []string{":test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Multiple identity present in NLB overwrite", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Multiple identity present in NLB overwrite with matching", args{
+			nlbClusters:    []string{"intuit.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, true},
+		//Cluster Not matching
+		{"Multiple identity present in NLB overwrite with non matching cluster", args{
+			nlbClusters:    []string{"intuit.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-elb-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Identity not present in NLB overwrite with non matching cluster", args{
+			nlbClusters:    []string{":test-elb-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, isNLBEnabled(tt.args.nlbClusters, tt.args.clusterName, tt.args.sourceIdentity), "isNLBEnabled(%v, %v, %v)", tt.args.nlbClusters, tt.args.clusterName, tt.args.sourceIdentity)
+		})
+	}
+
+	common.UpdateAdmiralParams(beforeState)
+
 }

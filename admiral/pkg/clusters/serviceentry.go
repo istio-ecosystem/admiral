@@ -2585,6 +2585,15 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				} else {
 					modifiedSe.Addresses = []string{newAddress}
 				}
+
+				if isServiceEntryModifyCalledForSourceCluster {
+					if cache.CnameClusterCache == nil {
+						ctxLogger.Error("CnameClusterCache is nil.")
+					} else {
+						cache.CnameClusterCache.Put(host, cluster, cluster)
+					}
+				}
+
 			}
 			var seDr = &SeDrTuple{
 				DrName:                      drName,
