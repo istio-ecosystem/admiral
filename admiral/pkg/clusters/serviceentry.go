@@ -8,14 +8,13 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"k8s.io/utils/strings/slices"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
