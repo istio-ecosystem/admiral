@@ -8713,7 +8713,7 @@ func TestDoDRUpdateForInClusterVSRouting(t *testing.T) {
 			common.InitializeConfig(p)
 
 			assert.Equal(t, tc.expected, DoDRUpdateForInClusterVSRouting(context.Background(),
-				ctxLogger, tc.env, tc.cluster, tc.identity, tc.isSourceCluster, tc.remoteRegistry, tc.serviceEntry))
+				ctxLogger, tc.env, tc.cluster, tc.identity, tc.isSourceCluster, tc.remoteRegistry, tc.serviceEntry, true))
 		})
 	}
 
@@ -8866,6 +8866,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 		vsRoutingInClusterDisabledResources   map[string]string
 		remoteRegistry                        *RemoteRegistry
 		expected                              bool
+		performCartographerVSCheck            bool
 	}{
 		{
 			name: "Given enableVSRoutingInCluster is false, enabledVSRoutingInClusterForResources is empty" +
@@ -8913,6 +8914,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 			enabledVSRoutingInClusterForResources: map[string]string{"cluster9": "*"},
 			remoteRegistry:                        remoteRegistry,
 			expected:                              false,
+			performCartographerVSCheck:            true,
 		},
 		{
 			name: "Given enableVSRoutingInCluster is true, and given cluster does exists in the map" +
@@ -9012,7 +9014,7 @@ func TestDoVSRoutingInClusterForClusterAndIdentity(t *testing.T) {
 			common.InitializeConfig(p)
 
 			assert.Equal(t, tc.expected, DoVSRoutingInClusterForClusterAndIdentity(
-				context.Background(), ctxLogger, tc.env, tc.cluster, tc.identity, tc.remoteRegistry))
+				context.Background(), ctxLogger, tc.env, tc.cluster, tc.identity, tc.remoteRegistry, tc.performCartographerVSCheck))
 		})
 	}
 

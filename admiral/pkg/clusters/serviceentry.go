@@ -1571,8 +1571,10 @@ func AddServiceEntriesWithDrWorker(
 		currentDR := getCurrentDRForLocalityLbSetting(rr, isServiceEntryModifyCalledForSourceCluster, cluster, se, partitionedIdentity)
 		ctxLogger.Infof("currentDR set for dr=%v cluster=%v", getIstioResourceName(se.Hosts[0], "-default-dr"), cluster)
 
+		// performCartographerVSCheck is set to true because we need to check if cartographer VS's exportTo
+		// has been modified to dot before pinning the .mesh DR
 		doDRUpdateForInClusterVSRouting := DoDRUpdateForInClusterVSRouting(
-			ctx, ctxLogger, env, cluster, identityId, isServiceEntryModifyCalledForSourceCluster, rr, se)
+			ctx, ctxLogger, env, cluster, identityId, isServiceEntryModifyCalledForSourceCluster, rr, se, true)
 
 		ctxLogger.Infof(
 			common.CtxLogFormat, "AddServiceEntriesWithDrWorker", "", "", cluster,
