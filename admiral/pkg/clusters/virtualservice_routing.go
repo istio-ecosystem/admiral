@@ -539,7 +539,8 @@ func generateVirtualServiceForIncluster(
 	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
 	vsRoutingInclusterEnabledForClusterAndIdentity := false
 	if common.EnableExportTo(vsName) &&
-		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
+		DoVSRoutingInClusterForClusterAndIdentity(
+			ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry, false) {
 		vsRoutingInclusterEnabledForClusterAndIdentity = true
 		virtualService.Spec.ExportTo = getSortedDependentNamespaces(
 			remoteRegistry.AdmiralCache, vsName, sourceCluster, ctxLogger, true)
@@ -847,7 +848,10 @@ func shouldPerformDRPinning(
 		return false
 	}
 
-	if !DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
+	// performCartographerVSCheck param is set to true since it is needed to make a decision
+	// if DR pinning should be performed
+	if !DoVSRoutingInClusterForClusterAndIdentity(
+		ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry, true) {
 		ctxLogger.Infof(common.CtxLogFormat, "shouldPerformDRPinning",
 			vsName, common.NamespaceIstioSystem, sourceCluster,
 			fmt.Sprintf("DoVSRoutingInClusterForClusterAndIdentity=false for cluster %s and identity %s", sourceCluster, sourceIdentity))
@@ -1742,17 +1746,6 @@ func addUpdateInClusterDestinationRule(
 	}
 
 	for sourceCluster, drHosts := range sourceClusterToDRHosts {
-		if !DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry) {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-			continue
-		}
-
-		ctxLogger.Info(common.CtxLogFormat, "VSBasedRoutingInCluster",
-			"", "", sourceCluster,
-			fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster enabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-
 		san := fmt.Sprintf("%s%s/%s", common.SpiffePrefix, common.GetSANPrefix(), sourceIdentity)
 
 		clientTLSSettings := &networkingV1Alpha3.ClientTLSSettings{
@@ -1760,8 +1753,20 @@ func addUpdateInClusterDestinationRule(
 			SubjectAltNames: []string{san},
 		}
 
-		exportToNamespaces := getSortedDependentNamespaces(
-			remoteRegistry.AdmiralCache, cname, sourceCluster, ctxLogger, true)
+		exportToNamespaces := []string{common.GetSyncNamespace()}
+		if common.EnableExportTo(cname) &&
+			DoVSRoutingInClusterForClusterAndIdentity(
+				ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry, false) {
+			exportToNamespaces = getSortedDependentNamespaces(
+				remoteRegistry.AdmiralCache, cname, sourceCluster, ctxLogger, true)
+			ctxLogger.Info(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster enabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
+				"", "", sourceCluster,
+				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
+		}
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
@@ -2331,13 +2336,16 @@ func mergeHosts(hosts1 []string, hosts2 []string) []string {
 // or for a specific cluster and identity.
 // It also checks if there is a custom Virtual Service in the identity's namespace
 // and if the Cartographer Virtual Service is disabled for the given cluster and identity.
+// performCartographerVSCheck is a flag to indicate whether to perform the Cartographer VS check as this check
+// is only needed to verify if .mesh DR pinning should be performed.
 func DoVSRoutingInClusterForClusterAndIdentity(
 	ctx context.Context,
 	ctxLogger *log.Entry,
 	env,
 	cluster,
 	identity string,
-	remoteRegistry *RemoteRegistry) bool {
+	remoteRegistry *RemoteRegistry,
+	performCartographerVSCheck bool) bool {
 
 	// Check if the feature is enabled globally
 	if !common.GetEnableVSRoutingInCluster() {
@@ -2380,24 +2388,29 @@ func DoVSRoutingInClusterForClusterAndIdentity(
 			return false
 		}
 
-		// Check if the Cartographer Virtual Service is disabled
-		// We will disable this feature if the Cartographer VS does not have dot in exportTo
-		rc := remoteRegistry.GetRemoteController(cluster)
-		if rc == nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
-				identity, "", cluster, "remote controller is nil")
-			return false
-		}
-		isCartographerVSDisabled, err := IsCartographerVSDisabled(ctx, ctxLogger, rc, env, identity, getCustomVirtualService)
-		if err != nil {
-			ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
-				identity, "", cluster, fmt.Sprintf("failed IsCartographerVSDisabled check due to error %v", err))
-			return false
-		}
-		if !isCartographerVSDisabled {
-			ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
-				identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
-			return false
+		// This should be set to true if we need to check if .mesh DR should be pinned to remote
+		// region or not. For the DR to be pinned, the cartographer VS should have exportTo set to
+		// dot
+		if performCartographerVSCheck {
+			// Check if the Cartographer Virtual Service is disabled
+			// We will disable this feature if the Cartographer VS does not have dot in exportTo
+			rc := remoteRegistry.GetRemoteController(cluster)
+			if rc == nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+					identity, "", cluster, "remote controller is nil")
+				return false
+			}
+			isCartographerVSDisabled, err := IsCartographerVSDisabled(ctx, ctxLogger, rc, env, identity, getCustomVirtualService)
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+					identity, "", cluster, fmt.Sprintf("failed IsCartographerVSDisabled check due to error %v", err))
+				return false
+			}
+			if !isCartographerVSDisabled {
+				ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+					identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
+				return false
+			}
 		}
 
 		return true
@@ -2431,7 +2444,8 @@ func DoDRUpdateForInClusterVSRouting(
 	identity string,
 	isSourceCluster bool,
 	remoteRegistry *RemoteRegistry,
-	se *networkingV1Alpha3.ServiceEntry) bool {
+	se *networkingV1Alpha3.ServiceEntry,
+	performCartographerVSCheck bool) bool {
 
 	if remoteRegistry == nil {
 		ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
@@ -2451,7 +2465,7 @@ func DoDRUpdateForInClusterVSRouting(
 		return false
 	}
 	if isSourceCluster &&
-		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, cluster, identity, remoteRegistry) {
+		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, cluster, identity, remoteRegistry, performCartographerVSCheck) {
 		return true
 	}
 	return false
