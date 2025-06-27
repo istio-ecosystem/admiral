@@ -9547,3 +9547,85 @@ func TestIsVSRoutingInClusterDisabledForCluster(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateAuthorityMatches(t *testing.T) {
+
+	testCases := []struct {
+		name                     string
+		globalFQDN               string
+		identity                 string
+		expectedAuthorityMatches []*networkingV1Alpha3.HTTPMatchRequest
+	}{
+		{
+			name: "Given a global FQDN and identity does not exists in the FQDN" +
+				"When generateAuthorityMatches is called" +
+				"Then it should return a matches slice with just the global FQDN",
+			globalFQDN: "foo.testns.global",
+			identity:   "identity1",
+			expectedAuthorityMatches: []*networkingV1Alpha3.HTTPMatchRequest{
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "foo.testns.global",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a global FQDN and identity with lower case is passed" +
+				"When generateAuthorityMatches is called" +
+				"Then it should return a matches slice with both upper and lower case identity",
+			globalFQDN: "foo.identity1.global",
+			identity:   "identity1",
+			expectedAuthorityMatches: []*networkingV1Alpha3.HTTPMatchRequest{
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "foo.identity1.global",
+						},
+					},
+				},
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "foo.Identity1.global",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a global FQDN and identity with upper case is passed" +
+				"When generateAuthorityMatches is called" +
+				"Then it should return a matches slice with both upper and lower case identity",
+			globalFQDN: "foo.identity1.global",
+			identity:   "Identity1",
+			expectedAuthorityMatches: []*networkingV1Alpha3.HTTPMatchRequest{
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "foo.identity1.global",
+						},
+					},
+				},
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "foo.Identity1.global",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualAuthorityMatches := generateAuthorityMatches(tc.globalFQDN, tc.identity)
+			assert.Equal(t, len(tc.expectedAuthorityMatches), len(actualAuthorityMatches))
+			assert.True(t, reflect.DeepEqual(tc.expectedAuthorityMatches, actualAuthorityMatches))
+		})
+	}
+
+}

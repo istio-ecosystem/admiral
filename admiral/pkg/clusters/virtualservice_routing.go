@@ -474,6 +474,45 @@ func populateDestinationsForCanaryStrategy(
 	return nil
 }
 
+func generateAuthorityMatches(globalFQDN, sourceIdentity string) []*networkingV1Alpha3.HTTPMatchRequest {
+	idx := strings.Index(strings.ToLower(globalFQDN), strings.ToLower(sourceIdentity))
+	if idx == -1 {
+		return []*networkingV1Alpha3.HTTPMatchRequest{
+			{
+				Authority: &networkingV1Alpha3.StringMatch{
+					MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+						Prefix: globalFQDN,
+					},
+				},
+			},
+		}
+	}
+
+	upperCase := strings.ToUpper(sourceIdentity[:1]) + sourceIdentity[1:]
+	globalFQDNWithUpperCaseIdentity := globalFQDN[:idx] + upperCase + globalFQDN[idx+len(sourceIdentity):]
+
+	lowerCase := strings.ToLower(sourceIdentity[:1]) + sourceIdentity[1:]
+	globalFQDNWithLowerCaseIdentity := globalFQDN[:idx] + lowerCase + globalFQDN[idx+len(sourceIdentity):]
+
+	return []*networkingV1Alpha3.HTTPMatchRequest{
+		{
+			Authority: &networkingV1Alpha3.StringMatch{
+				MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+					Prefix: globalFQDNWithLowerCaseIdentity,
+				},
+			},
+		},
+		{
+			Authority: &networkingV1Alpha3.StringMatch{
+				MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+					Prefix: globalFQDNWithUpperCaseIdentity,
+				},
+			},
+		},
+	}
+
+}
+
 // generateVirtualServiceForIncluster generates the VirtualService for the in-cluster routing
 func generateVirtualServiceForIncluster(
 	ctx context.Context,
@@ -498,16 +537,8 @@ func generateVirtualServiceForIncluster(
 			continue
 		}
 		httpRoute := networkingV1Alpha3.HTTPRoute{
-			Match: []*networkingV1Alpha3.HTTPMatchRequest{
-				{
-					Authority: &networkingV1Alpha3.StringMatch{
-						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
-							Prefix: globalFQDN,
-						},
-					},
-				},
-			},
-			Name: globalFQDN,
+			Match: generateAuthorityMatches(globalFQDN, sourceIdentity),
+			Name:  globalFQDN,
 		}
 		httpRouteDestinations := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
 		for _, routeDestination := range routeDestinations {
@@ -1753,20 +1784,8 @@ func addUpdateInClusterDestinationRule(
 			SubjectAltNames: []string{san},
 		}
 
-		exportToNamespaces := []string{common.GetSyncNamespace()}
-		if common.EnableExportTo(cname) &&
-			DoVSRoutingInClusterForClusterAndIdentity(
-				ctx, ctxLogger, env, sourceCluster, sourceIdentity, remoteRegistry, false) {
-			exportToNamespaces = getSortedDependentNamespaces(
-				remoteRegistry.AdmiralCache, cname, sourceCluster, ctxLogger, true)
-			ctxLogger.Info(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster enabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-		} else {
-			ctxLogger.Infof(common.CtxLogFormat, "VSBasedRoutingInCluster",
-				"", "", sourceCluster,
-				fmt.Sprintf("Writing phase: addUpdateInClusterDestinationRule: VS based routing in-cluster disabled for cluster %s and identity %s", sourceCluster, sourceIdentity))
-		}
+		exportToNamespaces := getSortedDependentNamespaces(
+			remoteRegistry.AdmiralCache, cname, sourceCluster, ctxLogger, true)
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
