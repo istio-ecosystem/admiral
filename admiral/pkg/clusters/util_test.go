@@ -777,7 +777,7 @@ func TestGenerateServiceEntryForCanary(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			se := map[string]*istioNetworkingV1Alpha3.ServiceEntry{}
 			san := getSanForRollout(&c.rollout, workloadIdentityKey)
-			err := GenerateServiceEntryForCanary(ctxLogger, ctx, admiral.Add, rc, &admiralCache, map[string]uint32{"http": uint32(80)}, &c.rollout, se, workloadIdentityKey, san)
+			err := GenerateServiceEntryForCanary(ctxLogger, ctx, admiral.Add, rc, &admiralCache, map[string]uint32{"http": uint32(80)}, &c.rollout, se, workloadIdentityKey, san, "")
 			if err != nil || len(se) != c.expectedResult {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, len(se))
 			}

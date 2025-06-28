@@ -2195,15 +2195,23 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 		},
 	}
 
+	admiralCache.CnameClusterCache = common.NewMapOfMaps()
+
+	expectedCnameCache := common.NewMapOfMaps()
+	expectedCnameCache.Put("east.dev.bar.global", "fake-cluster", "fake-cluster")
+	expectedCnameCache.Put("west.dev.bar.global", "fake-cluster", "fake-cluster")
+
 	testCases := []struct {
-		name                string
-		env                 string
-		locality            string
-		se                  *istioNetworkingV1Alpha3.ServiceEntry
-		gtp                 *v13.GlobalTrafficPolicy
-		seDrSet             map[string]*SeDrTuple
-		cc                  admiral.ConfigMapControllerInterface
-		disableIPGeneration bool
+		name                                       string
+		env                                        string
+		locality                                   string
+		se                                         *istioNetworkingV1Alpha3.ServiceEntry
+		gtp                                        *v13.GlobalTrafficPolicy
+		seDrSet                                    map[string]*SeDrTuple
+		cc                                         admiral.ConfigMapControllerInterface
+		disableIPGeneration                        bool
+		isServiceEntryModifyCalledForSourceCluster bool
+		cnameCache                                 *common.MapOfMaps
 	}{
 		{
 			name:     "Should handle a nil GTP",
@@ -2213,6 +2221,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			gtp:      nil,
 			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{}},
 			cc:       cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: common.NewMapOfMaps(),
 		},
 		{
 			name:     "Should handle a GTP with default overide",
@@ -2222,6 +2232,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			gtp:      gTPDefaultOverride,
 			seDrSet:  map[string]*SeDrTuple{host: &SeDrTuple{SeDnsPrefix: "default", SeDrGlobalTrafficPolicyName: "gTPDefaultOverrideName"}},
 			cc:       cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: common.NewMapOfMaps(),
 		},
 		{
 			name:     "Should handle a GTP with multiple Dns",
@@ -2232,6 +2244,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				common.GetCnameVal([]string{east, host}): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: true,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with Dns prefix with Caps",
@@ -2242,6 +2256,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet: map[string]*SeDrTuple{host: &SeDrTuple{SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}, common.GetCnameVal([]string{west, host}): &SeDrTuple{SeDnsPrefix: "west", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, host})): &SeDrTuple{SeDnsPrefix: "east", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with canary endpoint",
@@ -2253,6 +2269,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 				common.GetCnameVal([]string{west, hostCanary}):                          &SeDrTuple{SeDnsPrefix: "west.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				strings.ToLower(common.GetCnameVal([]string{eastWithCaps, hostCanary})): &SeDrTuple{SeDnsPrefix: "east.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name:     "Should handle a GTP with canary endpoint ande default",
@@ -2265,6 +2283,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 				common.GetCnameVal([]string{east, hostCanary}): &SeDrTuple{SeDnsPrefix: "east.canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"},
 				hostCanary: &SeDrTuple{SeDnsPrefix: "canary", SeDrGlobalTrafficPolicyName: "gTPMultipleDnsName"}},
 			cc: cacheController,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 		{
 			name: "Given a SE is getting updated due to a GTP applied to a Deployment, " +
@@ -2279,6 +2299,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			seDrSet:             nil,
 			cc:                  errorCacheController,
 			disableIPGeneration: false,
+			isServiceEntryModifyCalledForSourceCluster: false,
+			cnameCache: expectedCnameCache,
 		},
 	}
 	ctx := context.Background()
@@ -2292,7 +2314,7 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 			common.ResetSync()
 			common.InitializeConfig(admiralParams)
 			admiralCache.ConfigMapController = c.cc
-			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil, false)
+			result, _ := createSeAndDrSetFromGtp(ctxLogger, ctx, c.env, c.locality, "fake-cluster", c.se, c.gtp, nil, nil, &admiralCache, nil, false, c.isServiceEntryModifyCalledForSourceCluster)
 			if c.seDrSet == nil {
 				if !reflect.DeepEqual(result, c.seDrSet) {
 					t.Fatalf("Expected nil seDrSet but got %+v", result)
@@ -2313,6 +2335,8 @@ func TestCreateSeAndDrSetFromGtp(t *testing.T) {
 					t.Fatalf("Expected seDrSet entry global traffic policy name %s does not match the result %s", c.seDrSet[host].SeDrGlobalTrafficPolicyName, result[host].SeDrGlobalTrafficPolicyName)
 				}
 			}
+
+			assert.Equal(t, c.cnameCache, admiralCache.CnameClusterCache)
 		})
 	}
 }
@@ -3360,7 +3384,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range deploymentSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE, err := createServiceEntryForDeployment(ctxLogger, ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries)
+			createdSE, err := createServiceEntryForDeployment(ctxLogger, ctx, c.action, c.rc, &c.admiralCache, c.meshPorts, &c.deployment, c.serviceEntries, "")
 			if err != nil {
 				assert.Equal(t, err.Error(), c.expectedError.Error())
 			} else if !compareServiceEntries(createdSE, c.expectedResult) {
@@ -3447,7 +3471,7 @@ func TestCreateServiceEntry(t *testing.T) {
 	//Run the test for every provided case
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
-			createdSE, _ := createServiceEntryForRollout(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
+			createdSE, _ := createServiceEntryForRollout(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{}, "")
 			if !compareServiceEntries(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
@@ -10007,7 +10031,7 @@ func Test_getOverwrittenLoadBalancer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache)
+			actualEndpoint, actualPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, "")
 			assert.Equalf(t, tt.expectedEndpoint, actualEndpoint, fmt.Sprintf("getOverwrittenLoadBalancer should return endpoint %s, but got %s", tt.expectedEndpoint, actualEndpoint))
 			assert.Equalf(t, tt.expectedPort, actualPort, fmt.Sprintf("getOverwrittenLoadBalancer should return port %d, but got %d", tt.expectedPort, actualPort))
 		})
@@ -10072,7 +10096,7 @@ func TestGetClusterIngressGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{})
+			actual, _, err := getOverwrittenLoadBalancer(ctxLogger, tc.rc, "TEST_CLUSTER", &AdmiralCache{}, "")
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError, err)
@@ -10083,6 +10107,138 @@ func TestGetClusterIngressGateway(t *testing.T) {
 		})
 	}
 
+}
+
+func Test_getOverwrittenLoadBalancerSourceOverwrite(t *testing.T) {
+	type args struct {
+		ctx            *logrus.Entry
+		rc             *RemoteController
+		clusterName    string
+		admiralCache   *AdmiralCache
+		sourceIdentity string
+		lbLabel        string
+	}
+
+	testAdmiralParam := common.GetAdmiralParams()
+	testAdmiralParam.NLBEnabledIdentityList = append(testAdmiralParam.NLBEnabledIdentityList, "intuit.source.asset.match")
+	testAdmiralParam.NLBIngressLabel = common.NLBIstioIngressGatewayLabelValue
+	common.UpdateAdmiralParams(testAdmiralParam)
+
+	//Before
+	beforeDefaultLB := common.GetAdmiralParams().LabelSet.GatewayApp
+
+	noSourceIdentityOnlyCLBFound := args{
+		ctx:            logrus.New().WithContext(context.Background()),
+		rc:             &RemoteController{},
+		clusterName:    "test-cluster",
+		admiralCache:   &AdmiralCache{NLBEnabledCluster: []string{"test-cluster1"}},
+		sourceIdentity: "",
+		lbLabel:        common.IstioIngressGatewayLabelValue,
+	}
+
+	testLoadBalancerIngressArgCLB := v1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "clb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]v1.PortStatus, 0),
+	}
+
+	testLoadBalancerIngressArgNLB := v1.LoadBalancerIngress{
+		IP:       "007.007.007.007",
+		Hostname: "nlb.istio.com",
+		IPMode:   nil,
+		Ports:    make([]v1.PortStatus, 0),
+	}
+
+	portStatus := v1.PortStatus{
+		Port:     007,
+		Protocol: "HTTP",
+		Error:    nil,
+	}
+
+	testServiceCLB := v1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "clb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.IstioIngressGatewayLabelValue},
+		},
+		Spec: v1.ServiceSpec{},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{Ingress: make([]v1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	testServiceNLB := v1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "nlb",
+			Namespace:         common.NamespaceIstioSystem,
+			Generation:        0,
+			CreationTimestamp: metav1.Time{},
+			Labels:            map[string]string{common.App: common.NLBIstioIngressGatewayLabelValue},
+		},
+		Spec: v1.ServiceSpec{},
+		Status: v1.ServiceStatus{
+			LoadBalancer: v1.LoadBalancerStatus{Ingress: make([]v1.LoadBalancerIngress, 0)},
+			Conditions:   nil,
+		},
+	}
+
+	config := rest.Config{
+		Host: "localhost",
+	}
+
+	testLoadBalancerIngressArgCLB.Ports = append(testLoadBalancerIngressArgCLB.Ports, portStatus)
+	testServiceCLB.Status.LoadBalancer.Ingress = append(testServiceCLB.Status.LoadBalancer.Ingress, testLoadBalancerIngressArgCLB)
+
+	noSourceIdentityOnlyCLBFound.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	noSourceIdentityOnlyCLBFound.rc.ServiceController.Cache.Put(&testServiceCLB)
+
+	sourceIdentityOnlyCLBFound := noSourceIdentityOnlyCLBFound
+	sourceIdentityOnlyCLBFound.sourceIdentity = "intuit.source.asset.match"
+
+	sourceIdentityBothLBFound := args{
+		ctx:            logrus.New().WithContext(context.Background()),
+		rc:             &RemoteController{},
+		clusterName:    "test-cluster",
+		admiralCache:   &AdmiralCache{NLBEnabledCluster: []string{"test-cluster1"}},
+		sourceIdentity: "",
+		lbLabel:        common.IstioIngressGatewayLabelValue,
+	}
+
+	sourceIdentityBothLBFound.sourceIdentity = "intuit.source.asset.match"
+	sourceIdentityBothLBFound.rc.ServiceController, _ = admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, time.Second*time.Duration(300), loader.GetFakeClientLoader())
+	testServiceNLB.Status.LoadBalancer.Ingress = append(testServiceNLB.Status.LoadBalancer.Ingress, testLoadBalancerIngressArgNLB)
+	noSourceIdentityOnlyCLBFound.rc.ServiceController.Cache.Put(&testServiceCLB)
+	sourceIdentityBothLBFound.rc.ServiceController.Cache.Put(&testServiceNLB)
+
+	tests := []struct {
+		name     string
+		args     args
+		wantLB   string
+		wantPort int
+		//wantErr  assert.ErrorAssertionFunc
+	}{
+		{"No Source Asset overwrite", noSourceIdentityOnlyCLBFound, "clb.istio.com", 15443},
+		{"Source Asset Overwrite with Only CLB found", sourceIdentityOnlyCLBFound, "clb.istio.com", 15443},
+		{"Source Asset Overwrite with Both LB Found", sourceIdentityBothLBFound, "nlb.istio.com", 15443},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			common.GetAdmiralParams().LabelSet.GatewayApp = tt.args.lbLabel
+			gotLB, gotPort, _ := getOverwrittenLoadBalancer(tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+			assert.Equalf(t, tt.wantLB, gotLB, "getOverwrittenLoadBalancer(%v, %v, %v, %v, %v)", tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+			assert.Equalf(t, tt.wantPort, gotPort, "getOverwrittenLoadBalancer(%v, %v, %v, %v, %v)", tt.args.ctx, tt.args.rc, tt.args.clusterName, tt.args.admiralCache, tt.args.sourceIdentity)
+		})
+	}
+
+	//restore
+	common.GetAdmiralParams().LabelSet.GatewayApp = beforeDefaultLB
 }
 
 func TestIsCartographerVSDisabled(t *testing.T) {
@@ -10474,4 +10630,81 @@ func TestDoesIdentityHaveVS(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_isNLBEnabled(t *testing.T) {
+	type args struct {
+		nlbClusters    []string
+		clusterName    string
+		sourceIdentity string
+	}
+
+	beforeState := common.GetAdmiralParams()
+	admiralParamsTest := common.GetAdmiralParams()
+	admiralParamsTest.NLBEnabledIdentityList = []string{"intuit.nlb.mesh.health"}
+	common.UpdateAdmiralParams(admiralParamsTest)
+
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"Identity & Cluster info present", args{
+			nlbClusters:    []string{"intuit.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, true},
+		{"Empty NLB Clusters", args{
+			nlbClusters:    nil,
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Identity Present in param as well as NLB overwrites and both match", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.nlb.mesh.health",
+		}, true},
+
+		//Invalid input
+		{"Identity Present in param as well as NLB overwrites and both match (case sensative", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "Intuit.nlb.mesh.health",
+		}, true},
+
+		{"Identity not present in NLB overwrite", args{
+			nlbClusters:    []string{":test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Multiple identity present in NLB overwrite", args{
+			nlbClusters:    []string{"intuit.nlb.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Multiple identity present in NLB overwrite with matching", args{
+			nlbClusters:    []string{"intuit.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, true},
+		//Cluster Not matching
+		{"Multiple identity present in NLB overwrite with non matching cluster", args{
+			nlbClusters:    []string{"intuit.mesh.health,intuit.elb.bmw,intuit.elb.tesla:test-elb-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+		{"Identity not present in NLB overwrite with non matching cluster", args{
+			nlbClusters:    []string{":test-elb-k8s"},
+			clusterName:    "test-k8s",
+			sourceIdentity: "intuit.mesh.health",
+		}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, isNLBEnabled(tt.args.nlbClusters, tt.args.clusterName, tt.args.sourceIdentity), "isNLBEnabled(%v, %v, %v)", tt.args.nlbClusters, tt.args.clusterName, tt.args.sourceIdentity)
+		})
+	}
+
+	common.UpdateAdmiralParams(beforeState)
+
 }

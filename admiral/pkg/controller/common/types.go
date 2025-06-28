@@ -168,6 +168,7 @@ type AdmiralParams struct {
 	NLBEnabledIdentityList []string
 	CLBEnabledClusters     []string
 	NLBIngressLabel        string
+	CLBIngressLabel        string
 
 	// Slow Start
 	EnableTrafficConfigProcessingForSlowStart bool
