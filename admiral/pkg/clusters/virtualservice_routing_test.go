@@ -284,6 +284,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 										},
 									},
 								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity.global",
+										},
+									},
+								},
 							},
 							Route: []*networkingV1Alpha3.HTTPRouteDestination{
 								{
@@ -332,6 +339,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 										},
 									},
 								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity1.global",
+										},
+									},
+								},
 							},
 							Route: []*networkingV1Alpha3.HTTPRouteDestination{
 								{
@@ -376,6 +390,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 									Authority: &networkingV1Alpha3.StringMatch{
 										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity.global",
 										},
 									},
 								},
@@ -429,6 +450,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 										},
 									},
 								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "preview.test-env.Test-identity.global",
+										},
+									},
+								},
 							},
 							Route: []*networkingV1Alpha3.HTTPRouteDestination{
 								{
@@ -448,6 +476,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 									Authority: &networkingV1Alpha3.StringMatch{
 										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity.global",
 										},
 									},
 								},
@@ -501,6 +536,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 										},
 									},
 								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "canary.test-env.Test-identity.global",
+										},
+									},
+								},
 							},
 							Route: []*networkingV1Alpha3.HTTPRouteDestination{
 								{
@@ -520,6 +562,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 									Authority: &networkingV1Alpha3.StringMatch{
 										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity.global",
 										},
 									},
 								},
@@ -577,6 +626,13 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 									Authority: &networkingV1Alpha3.StringMatch{
 										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 											Prefix: "test-env.test-identity.global",
+										},
+									},
+								},
+								{
+									Authority: &networkingV1Alpha3.StringMatch{
+										MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+											Prefix: "test-env.Test-identity.global",
 										},
 									},
 								},
@@ -9613,6 +9669,29 @@ func TestGenerateAuthorityMatches(t *testing.T) {
 					Authority: &networkingV1Alpha3.StringMatch{
 						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
 							Prefix: "foo.Identity1.global",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a region specific global FQDN and identity with upper case is passed" +
+				"When generateAuthorityMatches is called" +
+				"Then it should return a matches slice with both upper and lower case identity",
+			globalFQDN: "east.foo.identity1.global",
+			identity:   "Identity1",
+			expectedAuthorityMatches: []*networkingV1Alpha3.HTTPMatchRequest{
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "east.foo.identity1.global",
+						},
+					},
+				},
+				{
+					Authority: &networkingV1Alpha3.StringMatch{
+						MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+							Prefix: "east.foo.Identity1.global",
 						},
 					},
 				},
