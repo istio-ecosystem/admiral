@@ -152,6 +152,8 @@ type AdmiralParams struct {
 	VSRoutingInClusterDisabledResources map[string]string
 	EnableCustomVSMerge                 bool
 	ProcessVSCreatedBy                  string
+	EnableSidecarCaching                bool
+	MaxSidecarEgressHostsLimitToCache   int
 
 	//Client discovery (types requiring mesh egress only)
 	EnableClientDiscovery          bool

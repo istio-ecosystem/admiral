@@ -286,6 +286,8 @@ func GetRootCmd(args []string) *cobra.Command {
 	rootCmd.PersistentFlags().StringToStringVarP(&params.VSRoutingInClusterDisabledResources, "vs_routing_in_cluster_disabled_resources", "d", map[string]string{}, "The source clusters and corresponding source identities to disable VS based routing in-cluster on")
 	rootCmd.PersistentFlags().BoolVar(&params.EnableCustomVSMerge, "enable_custom_vs_merge", false, "Enable/Disable custom VS merge with in cluster VS")
 	rootCmd.PersistentFlags().StringVar(&params.ProcessVSCreatedBy, "process_vs_created_by", "", "process the VS that was createdBy. Add createdBy label and value provided here for admiral to process this VS")
+	rootCmd.PersistentFlags().BoolVar(&params.EnableSidecarCaching, "enable_sidecar_caching", false, "Enable/Disable sidecar caching")
+	rootCmd.PersistentFlags().IntVar(&params.MaxSidecarEgressHostsLimitToCache, "max_sidecar_egress_hosts_limit_to_cache", 100, "This is the max sidecar egress hosts limit to cache. If the number of egress hosts exceeds this limit, then the sidecar will not be cached. This is to limit the memory consumption of the sidecar cache")
 
 	rootCmd.PersistentFlags().BoolVar(&params.EnableClientDiscovery, "enable_client_discovery", true, "Enable/Disable Client (mesh egress) Discovery")
 	rootCmd.PersistentFlags().StringSliceVar(&params.ClientDiscoveryClustersForJobs, "client_discovery_clusters_for_jobs", []string{}, "List of clusters for client discovery for k8s jobs")
