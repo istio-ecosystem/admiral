@@ -28,6 +28,14 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type addUpdateSidecarFunc func(
+	ctxLogger *log.Entry,
+	ctx context.Context,
+	newSidecarConfig *v1alpha3.Sidecar,
+	cachedSidecar *v1alpha3.Sidecar,
+	clientNamespace string,
+	rc *RemoteController)
+
 type envCustomVSTuple struct {
 	env      string
 	customVS *v1alpha3.VirtualService
@@ -712,7 +720,8 @@ func addUpdateInClusterVirtualServices(
 	sourceClusterToDestinations map[string]map[string][]*vsrouting.RouteDestination,
 	cname string,
 	sourceIdentity string,
-	env string) error {
+	env string,
+	sourceClusterToEventNsCache map[string]string) error {
 
 	if sourceIdentity == "" {
 		return fmt.Errorf("identity is empty")
@@ -746,6 +755,17 @@ func addUpdateInClusterVirtualServices(
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 				"", "", sourceCluster, err.Error())
 			return err
+		}
+
+		// Update the client's default sidecar with cluster local services
+		// This is to make sure that the client proxies have the necessary .local clusters
+		// available in its config
+		err = updateClientSidecarWithClusterLocalServices(ctx,
+			ctxLogger, rc, virtualService, sourceCluster, sourceClusterToEventNsCache, addUpdateSidecar)
+		if err != nil {
+			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
+				virtualService.Name, virtualService.Namespace, sourceCluster,
+				fmt.Sprintf("updateClientSidecarWithClusterLocalServices failed due to %v", err.Error()))
 		}
 
 		virtualServicesToBeProcessed := []*v1alpha3.VirtualService{virtualService}
@@ -836,6 +856,109 @@ func addUpdateInClusterVirtualServices(
 	}
 
 	return nil
+}
+
+// TODO: Add unit tests
+func updateClientSidecarWithClusterLocalServices(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	rc *RemoteController,
+	vs *v1alpha3.VirtualService,
+	sourceCluster string,
+	sourceClusterToEventNsCache map[string]string,
+	addUpdateSidecar addUpdateSidecarFunc) error {
+
+	if !common.IsSidecarCachingEnabled() {
+		ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+			vs.Name, vs.Namespace, sourceCluster,
+			"sidecar caching is disabled, skipping")
+		return nil
+	}
+
+	if rc == nil {
+		return fmt.Errorf("remoteController is nil")
+	}
+	if rc.SidecarController == nil {
+		return fmt.Errorf("sidecarController is nil")
+	}
+	if rc.SidecarController.SidecarCache == nil {
+		return fmt.Errorf("sidecarCache is nil")
+	}
+	if vs == nil {
+		return fmt.Errorf("virtualService is nil")
+	}
+	if sourceClusterToEventNsCache == nil {
+		return fmt.Errorf("sourceClusterToEventNsCache is nil")
+	}
+	identityNamespace := sourceClusterToEventNsCache[sourceCluster]
+	if identityNamespace == "" {
+		return fmt.Errorf("identityNamespace is empty for sourceCluster %s", sourceCluster)
+	}
+	newHostToAddToSidecarEgress := fmt.Sprintf("%s/*.svc.cluster.local", identityNamespace)
+
+	exportToNamespaces := vs.Spec.ExportTo
+	if exportToNamespaces == nil || len(exportToNamespaces) == 0 {
+		return fmt.Errorf("exportToNamespaces is nil or empty for virtualService %s", vs.Name)
+	}
+	clientNamepaces := make([]string, 0)
+	for _, namespace := range exportToNamespaces {
+		if namespace == common.GetSyncNamespace() {
+			ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+				vs.Name, vs.Namespace, sourceCluster, "virtualservice contains sync namespace, skipping update")
+			return nil
+		}
+		// We skip the self namespace as the sidecar in the identity's namespace
+		// already has ./* in its egress host
+		if namespace == identityNamespace {
+			continue
+		}
+		clientNamepaces = append(clientNamepaces, namespace)
+	}
+	if len(clientNamepaces) == 0 {
+		ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+			vs.Name, vs.Namespace, sourceCluster,
+			"no client namespaces found to update sidecar with cluster local services")
+		return nil
+	}
+
+	// For each client namespace, we will update the sidecar with the cluster local services
+	for _, clientNamespace := range clientNamepaces {
+		cachedSidecar := rc.SidecarController.SidecarCache.Get(common.GetWorkloadSidecarName(), clientNamespace)
+		if cachedSidecar == nil {
+			ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+				vs.Name, vs.Namespace, sourceCluster,
+				fmt.Sprintf("skipped updating sidecar in namespace %s as it is missing in the cache", clientNamespace))
+			continue
+		}
+		if cachedSidecar.Spec.Egress == nil || len(cachedSidecar.Spec.Egress) == 0 {
+			ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+				vs.Name, vs.Namespace, sourceCluster,
+				fmt.Sprintf("skipped updating sidecar in namespace %s as no egress found", clientNamespace))
+			continue
+		}
+		cachedSidecarEgressHosts := cachedSidecar.Spec.Egress[0].Hosts
+		if cachedSidecarEgressHosts == nil || len(cachedSidecarEgressHosts) == 0 {
+			ctxLogger.Infof(common.CtxLogFormat, "updateClientSidecarWithClusterLocalServices",
+				vs.Name, vs.Namespace, sourceCluster,
+				fmt.Sprintf("skipped updating sidecar in namespace %s as no egress hosts found", clientNamespace))
+			continue
+		}
+		lookup := make(map[string]bool)
+		for _, egressHost := range cachedSidecarEgressHosts {
+			lookup[egressHost] = true
+		}
+		if lookup[newHostToAddToSidecarEgress] {
+			continue
+		}
+		newSidecar := copySidecar(cachedSidecar)
+		newSidecar.Spec.Egress[0].Hosts = append(newSidecar.Spec.Egress[0].Hosts, newHostToAddToSidecarEgress)
+		newSidecarConfig := createSidecarSkeleton(newSidecar.Spec, common.GetWorkloadSidecarName(), clientNamespace)
+
+		addUpdateSidecar(ctxLogger, ctx, newSidecarConfig, cachedSidecar, clientNamespace, rc)
+	}
+
+	return nil
+
 }
 
 // shouldPerformDRPinning checks if the DR pinning to remote region is required
