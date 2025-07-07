@@ -1208,6 +1208,9 @@ func mergeCustomVirtualServices(
 	if rc.VirtualServiceController.VirtualServiceCache == nil {
 		return nil, fmt.Errorf("virtualServiceController.VirtualServiceCache is nil")
 	}
+	if rc.VirtualServiceController.HostToRouteDestinationCache == nil {
+		return nil, fmt.Errorf("virtualServiceController.HostToRouteDestinationCache is nil")
+	}
 
 	mergedVirtualServices := make([]*v1alpha3.VirtualService, 0)
 
@@ -1227,6 +1230,7 @@ func mergeCustomVirtualServices(
 				return nil, err
 			}
 			err = rc.VirtualServiceController.HostToRouteDestinationCache.Put(mergedVirtualService)
+			log.Infof("HostToRouteDestinationCache length: %d", rc.VirtualServiceController.HostToRouteDestinationCache.Len())
 			if err != nil {
 				return nil, err
 			}
