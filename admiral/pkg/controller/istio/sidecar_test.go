@@ -25,6 +25,7 @@ func TestSidecarAdded(t *testing.T) {
 	ctx := context.Background()
 	sidecarController := SidecarController{
 		SidecarHandler: mockSidecarHandler,
+		SidecarCache:   NewSidecarCache(),
 	}
 
 	testCases := []struct {
@@ -79,6 +80,7 @@ func TestSidecarUpdated(t *testing.T) {
 	ctx := context.Background()
 	sidecarController := SidecarController{
 		SidecarHandler: mockSidecarHandler,
+		SidecarCache:   NewSidecarCache(),
 	}
 
 	testCases := []struct {
@@ -133,6 +135,7 @@ func TestSidecarDeleted(t *testing.T) {
 	ctx := context.Background()
 	sidecarController := SidecarController{
 		SidecarHandler: mockSidecarHandler,
+		SidecarCache:   NewSidecarCache(),
 	}
 
 	testCases := []struct {
@@ -248,7 +251,9 @@ func TestSideCarGetProcessItemStatus(t *testing.T) {
 
 // TODO: This is just a placeholder for when we add diff check for other types
 func TestSideCarUpdateProcessItemStatus(t *testing.T) {
-	sidecarController := SidecarController{}
+	sidecarController := SidecarController{
+		SidecarCache: NewSidecarCache(),
+	}
 	testCases := []struct {
 		name        string
 		obj         interface{}
@@ -256,7 +261,7 @@ func TestSideCarUpdateProcessItemStatus(t *testing.T) {
 	}{
 		{
 			name:        "TODO: Currently always returns nil",
-			obj:         nil,
+			obj:         &v1alpha3.Sidecar{},
 			expectedErr: nil,
 		},
 	}
