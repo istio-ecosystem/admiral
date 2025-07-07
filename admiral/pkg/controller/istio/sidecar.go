@@ -56,7 +56,6 @@ type SidecarCache struct {
 	mutex *sync.RWMutex
 }
 
-// TODO: Add unit tests
 func (s *SidecarCache) Put(sidecar *networking.Sidecar) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -207,6 +206,10 @@ func (sec *SidecarController) Added(ctx context.Context, obj interface{}) error 
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.Sidecar", obj)
 	}
+	if err := sec.SidecarCache.Put(sidecar); err != nil {
+		log.Warnf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s",
+			"Put", "SidecarCache", sidecar.Name, sidecar.Namespace, "", err.Error())
+	}
 	return sec.SidecarHandler.Added(ctx, sidecar)
 }
 
@@ -214,6 +217,10 @@ func (sec *SidecarController) Updated(ctx context.Context, obj interface{}, oldO
 	sidecar, ok := obj.(*networking.Sidecar)
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.Sidecar", obj)
+	}
+	if err := sec.SidecarCache.Put(sidecar); err != nil {
+		log.Warnf("op=%s type=%v name=%v namespace=%s cluster=%s message=%s",
+			"Put", "SidecarCache", sidecar.Name, sidecar.Namespace, "", err.Error())
 	}
 	return sec.SidecarHandler.Updated(ctx, sidecar)
 }
@@ -223,15 +230,24 @@ func (sec *SidecarController) Deleted(ctx context.Context, obj interface{}) erro
 	if !ok {
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.Sidecar", obj)
 	}
+	sec.SidecarCache.Delete(sidecar)
 	return sec.SidecarHandler.Deleted(ctx, sidecar)
 }
 
-func (sec *SidecarController) GetProcessItemStatus(obj interface{}) (string, error) {
-	return common.NotProcessed, nil
+func (s *SidecarController) GetProcessItemStatus(obj interface{}) (string, error) {
+	sidecar, ok := obj.(*networking.Sidecar)
+	if !ok {
+		return common.NotProcessed, fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.Sidecar", obj)
+	}
+	return s.SidecarCache.GetSidecarProcessStatus(sidecar), nil
 }
 
-func (sec *SidecarController) UpdateProcessItemStatus(obj interface{}, status string) error {
-	return nil
+func (s *SidecarController) UpdateProcessItemStatus(obj interface{}, status string) error {
+	sidecar, ok := obj.(*networking.Sidecar)
+	if !ok {
+		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.Sidecar", obj)
+	}
+	return s.SidecarCache.UpdateSidecarProcessStatus(sidecar, status)
 }
 
 func (sec *SidecarController) LogValueOfAdmiralIoIgnore(obj interface{}) {

@@ -667,7 +667,7 @@ func TestAddUpdateInClusterVirtualServices(t *testing.T) {
 				tc.remoteRegistry,
 				tc.sourceClusterToDestinations,
 				tc.vsName,
-				tc.sourceIdentity, tc.env)
+				tc.sourceIdentity, tc.env, map[string]string{"cluster-1": "testns"})
 			if tc.expectedError != nil {
 				require.NotNil(t, err)
 				require.Equal(t, tc.expectedError.Error(), err.Error())
@@ -9704,6 +9704,299 @@ func TestGenerateAuthorityMatches(t *testing.T) {
 			actualAuthorityMatches := generateAuthorityMatches(tc.globalFQDN, tc.identity)
 			assert.Equal(t, len(tc.expectedAuthorityMatches), len(actualAuthorityMatches))
 			assert.True(t, reflect.DeepEqual(tc.expectedAuthorityMatches, actualAuthorityMatches))
+		})
+	}
+
+}
+
+func TestUpdateClientSidecarWithClusterLocalServices(t *testing.T) {
+
+	clientSidecar1 := &apiNetworkingV1Alpha3.Sidecar{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "default",
+			Namespace: "clientNS1",
+		},
+		Spec: networkingV1Alpha3.Sidecar{
+			Egress: []*networkingV1Alpha3.IstioEgressListener{
+				{
+					Hosts: []string{"./*", "admiral-sync/*.mesh"},
+				},
+			},
+		},
+	}
+	clientSidecar2 := &apiNetworkingV1Alpha3.Sidecar{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "default",
+			Namespace: "clientNS2",
+		},
+		Spec: networkingV1Alpha3.Sidecar{
+			Egress: []*networkingV1Alpha3.IstioEgressListener{
+				{
+					Hosts: []string{"./*", "admiral-sync/*.mesh", "identityNamespace/*.svc.cluster.local"},
+				},
+			},
+		},
+	}
+	clientSidecar3 := &apiNetworkingV1Alpha3.Sidecar{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "default",
+			Namespace: "clientNS3",
+		},
+		Spec: networkingV1Alpha3.Sidecar{
+			Egress: []*networkingV1Alpha3.IstioEgressListener{
+				{
+					Hosts: []string{"./*", "admiral-sync/*.mesh", "xyz/*.svc.cluster.local"},
+				},
+			},
+		},
+	}
+
+	ap := common.AdmiralParams{
+		SyncNamespace:                     "admiral-sync",
+		WorkloadSidecarName:               "default",
+		EnableSidecarCaching:              true,
+		MaxSidecarEgressHostsLimitToCache: 100,
+	}
+	common.ResetSync()
+	common.InitializeConfig(ap)
+
+	validSidecarCache := istio.NewSidecarCache()
+	validSidecarCache.Put(clientSidecar1)
+	validSidecarCache.Put(clientSidecar2)
+	validSidecarCache.Put(clientSidecar3)
+
+	testCases := []struct {
+		name                        string
+		rc                          *RemoteController
+		vs                          *apiNetworkingV1Alpha3.VirtualService
+		sourceCluster               string
+		sourceClusterToEventNsCache map[string]string
+		enableSidecarCaching        bool
+		expectedError               error
+		expectedEgressHosts         map[string][]string
+	}{
+		{
+			name: "Given enableSidecarCaching is set to false" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return no error",
+			enableSidecarCaching: false,
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name:      "test-vs",
+					Namespace: "identityNamespace",
+				},
+			},
+		},
+		{
+			name: "Given enableSidecarCaching is set to true, but remote controller is nil" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			expectedError:        fmt.Errorf("remoteController is nil"),
+		},
+		{
+			name: "Given sideController is nil" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc:                   &RemoteController{},
+			expectedError:        fmt.Errorf("sidecarController is nil"),
+		},
+		{
+			name: "Given sidecarCache is nil" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{},
+			},
+			expectedError: fmt.Errorf("sidecarCache is nil"),
+		},
+		{
+			name: "Given virtualService is nil" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			expectedError: fmt.Errorf("virtualService is nil"),
+		},
+		{
+			name: "Given sourceClusterToEventNsCache is nil" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs:            &apiNetworkingV1Alpha3.VirtualService{},
+			expectedError: fmt.Errorf("sourceClusterToEventNsCache is nil"),
+		},
+		{
+			name: "Given identityNamespace is not in sourceClusterToEventNsCache" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs:                          &apiNetworkingV1Alpha3.VirtualService{},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster2": "identityNamespace"},
+			expectedError:               fmt.Errorf("identityNamespace is empty for sourceCluster cluster1"),
+		},
+		{
+			name: "Given vs with no exportToNS" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return an error",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "test-vs",
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{},
+				},
+			},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster1": "identityNamespace"},
+			expectedError:               fmt.Errorf("exportToNamespaces is nil or empty for virtualService test-vs"),
+		},
+		{
+			name: "Given vs with sync ns in the exportTo" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "test-vs",
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"admiral-sync"},
+				},
+			},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster1": "identityNamespace"},
+		},
+		{
+			name: "Given vs with only the identity's own NS" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "test-vs",
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"identityNamespace"},
+				},
+			},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster1": "identityNamespace"},
+		},
+		{
+			name: "Given vs with valid client NS but no cached sidecar" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: istio.NewSidecarCache(),
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "test-vs",
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"identityNamespace", "clientNS"},
+				},
+			},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster1": "identityNamespace"},
+		},
+		{
+			name: "Given vs with valid client NS but no cached sidecar" +
+				"When updateClientSidecarWithClusterLocalServices func is called" +
+				"Then the func should return",
+			enableSidecarCaching: true,
+			rc: &RemoteController{
+				SidecarController: &istio.SidecarController{
+					SidecarCache: validSidecarCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: "test-vs",
+				},
+				Spec: networkingV1Alpha3.VirtualService{
+					ExportTo: []string{"identityNamespace", "clientNS1", "clientNS2", "clientNS3"},
+				},
+			},
+			sourceCluster:               "cluster1",
+			sourceClusterToEventNsCache: map[string]string{"cluster1": "identityNamespace"},
+			expectedEgressHosts: map[string][]string{
+				"clientNS1": {"./*", "admiral-sync/*.mesh", "identityNamespace/*.svc.cluster.local"},
+				"clientNS2": {"./*", "admiral-sync/*.mesh", "identityNamespace/*.svc.cluster.local"},
+				"clientNS3": {"./*", "admiral-sync/*.mesh", "xyz/*.svc.cluster.local", "identityNamespace/*.svc.cluster.local"},
+			},
+		},
+	}
+
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ap := common.AdmiralParams{
+				SyncNamespace:        "admiral-sync",
+				WorkloadSidecarName:  "default",
+				EnableSidecarCaching: tc.enableSidecarCaching,
+			}
+			common.ResetSync()
+			common.InitializeConfig(ap)
+
+			addUpdateSidecar := func(ctxLogger *log.Entry,
+				ctx context.Context,
+				newSidecarConfig *apiNetworkingV1Alpha3.Sidecar,
+				cachedSidecar *apiNetworkingV1Alpha3.Sidecar,
+				clientNamespace string,
+				rc *RemoteController) {
+				sidecarName := newSidecarConfig.ObjectMeta.Namespace
+				sidecarEgressHosts := newSidecarConfig.Spec.Egress
+				assert.True(t, reflect.DeepEqual(tc.expectedEgressHosts[sidecarName], sidecarEgressHosts[0].Hosts))
+			}
+
+			err := updateClientSidecarWithClusterLocalServices(
+				context.Background(), ctxLogger, tc.rc, tc.vs, tc.sourceCluster, tc.sourceClusterToEventNsCache, addUpdateSidecar)
+			if tc.expectedError != nil {
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+
 		})
 	}
 

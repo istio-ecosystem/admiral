@@ -858,7 +858,6 @@ func addUpdateInClusterVirtualServices(
 	return nil
 }
 
-// TODO: Add unit tests
 func updateClientSidecarWithClusterLocalServices(
 	ctx context.Context,
 	ctxLogger *log.Entry,
