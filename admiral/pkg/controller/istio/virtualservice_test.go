@@ -1279,6 +1279,9 @@ func (m *MockVirtualServiceCache) GetVSProcessStatus(*v1alpha3.VirtualService) s
 func (m *MockVirtualServiceCache) UpdateVSProcessStatus(*v1alpha3.VirtualService, string) error {
 	return m.Error
 }
+func (m *MockVirtualServiceCache) Len() int {
+	return 0
+}
 
 type MockIdentityNamespaceVirtualServiceCache struct {
 }
@@ -1291,4 +1294,7 @@ func (m MockIdentityNamespaceVirtualServiceCache) Delete(*v1alpha3.VirtualServic
 }
 func (m MockIdentityNamespaceVirtualServiceCache) Get(string) map[string]*v1alpha3.VirtualService {
 	return nil
+}
+func (m MockIdentityNamespaceVirtualServiceCache) Len() int {
+	return 0
 }
