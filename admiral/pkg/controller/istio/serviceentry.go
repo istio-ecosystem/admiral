@@ -13,7 +13,7 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	versioned "istio.io/client-go/pkg/clientset/versioned"
+	"istio.io/client-go/pkg/clientset/versioned"
 	informers "istio.io/client-go/pkg/informers/externalversions/networking/v1alpha3"
 	k8sV1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
@@ -85,6 +85,8 @@ func (d *ServiceEntryCache) Put(se *networking.ServiceEntry, cluster string) {
 	}
 
 	d.cache[cluster] = seInCluster
+	log.Infof("op=%s type=%v cluster=%s length=%d",
+		"cacheLength", "ServiceEntry", cluster, len(d.cache[cluster]))
 }
 
 func (d *ServiceEntryCache) Get(identity string, cluster string) *networking.ServiceEntry {

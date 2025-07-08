@@ -2083,7 +2083,8 @@ func addUpdateRoutingDestinationRule(
 			drName, util.IstioSystemNamespace, sourceCluster, "destinationrule created successfully")
 
 		rc.DestinationRuleController.Cache.Put(newDR)
-
+		log.Infof("op=%s type=%v cluster=%s length=%d",
+			"cacheLength", "DestinationRule", sourceCluster, rc.DestinationRuleController.Cache.Len())
 	}
 
 	return nil
@@ -2593,21 +2594,23 @@ func DoDRUpdateForInClusterVSRouting(
 			"", "", cluster, "remoteRegistry is nil")
 		return false
 	}
-	// Check if the incluster VS has valid exportTo namespaces (not sync namespace)
-	hasValidInClusterVS, err := hasInClusterVSWithValidExportToNS(se, remoteRegistry.GetRemoteController(cluster))
-	if err != nil {
-		ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
-			identity, "", cluster, fmt.Sprintf("error checking for valid in-cluster VS %v", err))
-		return false
-	}
-	if !hasValidInClusterVS {
-		ctxLogger.Infof(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
-			identity, "", cluster, "skipping DR update as incluter VS does not have valid exportTo namespaces")
-		return false
-	}
-	if isSourceCluster &&
-		DoVSRoutingInClusterForClusterAndIdentity(ctx, ctxLogger, env, cluster, identity, remoteRegistry, performCartographerVSCheck) {
-		return true
+	if isSourceCluster {
+		// Check if the incluster VS has valid exportTo namespaces (not sync namespace)
+		hasValidInClusterVS, err := hasInClusterVSWithValidExportToNS(se, remoteRegistry.GetRemoteController(cluster))
+		if err != nil {
+			ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+				identity, "", cluster, fmt.Sprintf("error checking for valid in-cluster VS %v", err))
+			return false
+		}
+		if !hasValidInClusterVS {
+			ctxLogger.Infof(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+				identity, "", cluster, "skipping DR update as incluter VS does not have valid exportTo namespaces")
+			return false
+		}
+		if DoVSRoutingInClusterForClusterAndIdentity(
+			ctx, ctxLogger, env, cluster, identity, remoteRegistry, performCartographerVSCheck) {
+			return true
+		}
 	}
 	return false
 }
