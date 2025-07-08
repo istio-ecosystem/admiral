@@ -533,6 +533,20 @@ func GetEnableVSRoutingInCluster() bool {
 	return wrapper.params.EnableVSRoutingInCluster
 }
 
+// TODO: Add unit tests
+func IsSidecarCachingEnabled() bool {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.EnableSidecarCaching
+}
+
+// TODO: Add unit tests
+func GetMaxSidecarEgressHostsLimitToCache() int {
+	wrapper.RLock()
+	defer wrapper.RUnlock()
+	return wrapper.params.MaxSidecarEgressHostsLimitToCache
+}
+
 func GetVSRoutingInClusterEnabledResources() map[string]string {
 	wrapper.RLock()
 	defer wrapper.RUnlock()

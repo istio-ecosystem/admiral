@@ -12,7 +12,7 @@ import (
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	networking "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	versioned "istio.io/client-go/pkg/clientset/versioned"
+	"istio.io/client-go/pkg/clientset/versioned"
 	informers "istio.io/client-go/pkg/informers/externalversions/networking/v1alpha3"
 	k8sV1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
@@ -70,6 +70,12 @@ func (d *DestinationRuleCache) getKey(dr *networking.DestinationRule) string {
 
 func makeKey(str1, str2 string) string {
 	return str1 + "/" + str2
+}
+
+func (d *DestinationRuleCache) Len() int {
+	defer d.mutex.RUnlock()
+	d.mutex.RLock()
+	return len(d.cache)
 }
 
 func (d *DestinationRuleCache) Put(dr *networking.DestinationRule) {
@@ -173,6 +179,8 @@ func (drc *DestinationRuleController) Added(ctx context.Context, obj interface{}
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.DestinationRule", obj)
 	}
 	drc.Cache.Put(dr)
+	log.Infof("op=%s type=%v cluster=%s length=%d",
+		"cacheLength", "ServiceEntry", drc.Cluster, drc.Cache.Len())
 	return drc.DestinationRuleHandler.Added(ctx, dr)
 }
 
@@ -182,6 +190,8 @@ func (drc *DestinationRuleController) Updated(ctx context.Context, obj interface
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.DestinationRule", obj)
 	}
 	drc.Cache.Put(dr)
+	log.Infof("op=%s type=%v cluster=%s length=%d",
+		"cacheLength", "ServiceEntry", drc.Cluster, drc.Cache.Len())
 	return drc.DestinationRuleHandler.Updated(ctx, dr)
 }
 
