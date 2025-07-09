@@ -3512,8 +3512,9 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 
 	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-ns.svc.cluster.local-incluster-dr",
-			Namespace: util.IstioSystemNamespace,
+			Name:        "test-ns.svc.cluster.local-incluster-dr",
+			Namespace:   util.IstioSystemNamespace,
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: networkingV1Alpha3.DestinationRule{
 			Host:     "*.test-ns.svc.cluster.local",
@@ -3841,8 +3842,9 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 
 	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-ns.svc.cluster.local-routing-dr",
-			Namespace: util.IstioSystemNamespace,
+			Name:        "test-ns.svc.cluster.local-routing-dr",
+			Namespace:   util.IstioSystemNamespace,
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: networkingV1Alpha3.DestinationRule{
 			Host:     "*.test-ns.svc.cluster.local",

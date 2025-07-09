@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/model"
 	"k8s.io/apimachinery/pkg/labels"
@@ -18,6 +19,7 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
+	controllerutils "github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	log "github.com/sirupsen/logrus"
@@ -557,13 +559,14 @@ func generateVirtualServiceForIncluster(
 		vsHosts = append(vsHosts, globalFQDN)
 	}
 
+	virtualService.Name = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
 	if len(vsHosts) == 0 {
-		return nil, fmt.Errorf(
-			"skipped creating virtualservice as there are no valid hosts found")
+		err := deleteVSRoutingResources(ctx, ctxLogger, remoteRegistry, sourceCluster, vsName, false)
+		return nil, fmt.Errorf("deleting old in-cluster virtual service as there are no valid hosts found for %s, error=%v", virtualService.Name, err)
 	}
 	if len(httpRoutes) == 0 {
-		return nil, fmt.Errorf(
-			"skipped creating virtualservice on cluster as there are no valid http routes found")
+		err := deleteVSRoutingResources(ctx, ctxLogger, remoteRegistry, sourceCluster, vsName, false)
+		return nil, fmt.Errorf("deleting old in-cluster virtual service as there are no valid http routes found for %s, error=%v", virtualService.Name, err)
 	}
 	sort.Strings(vsHosts)
 	virtualService.Spec.Hosts = vsHosts
@@ -571,8 +574,6 @@ func generateVirtualServiceForIncluster(
 		return httpRoutes[i].Match[0].Authority.String() < httpRoutes[j].Match[0].Authority.String()
 	})
 	virtualService.Spec.Http = httpRoutes
-
-	virtualService.Name = fmt.Sprintf("%s-%s", vsName, common.InclusterVSNameSuffix)
 
 	// Add the exportTo namespaces to the virtual service
 	virtualService.Spec.ExportTo = []string{common.GetSyncNamespace()}
@@ -591,8 +592,47 @@ func generateVirtualServiceForIncluster(
 	return virtualService, nil
 }
 
+func deleteVSRoutingResources(ctx context.Context, ctxLogger *log.Entry, remoteRegistry *RemoteRegistry, sourceCluster string, vsName string, crossCluster bool) error {
+	var err error
+	start := time.Now()
+	rc := remoteRegistry.GetRemoteController(sourceCluster)
+	if rc == nil {
+		return fmt.Errorf("remote controller not initialized on this cluster")
+	}
+
+	if crossCluster {
+		vsName = vsName + "-" + common.RoutingVSNameSuffix
+	} else {
+		vsName = vsName + "-" + common.InclusterVSNameSuffix
+	}
+
+	oldVirtualService := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
+	if oldVirtualService != nil && isGeneratedByAdmiral(oldVirtualService.Annotations) {
+		err = deleteVirtualService(ctx, vsName, util.IstioSystemNamespace, rc)
+		controllerutils.LogElapsedTimeSinceTask(ctxLogger, "deleteVSRoutingResources", vsName, util.IstioSystemNamespace, sourceCluster, "", start)
+	}
+	if err != nil {
+		var vsAlreadyDeletedErr *IsVSAlreadyDeletedErr
+		if errors.As(err, &vsAlreadyDeletedErr) {
+			ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vsName, rc.ClusterID, "Either VirtualService was already deleted, or it never existed")
+			return nil
+		}
+		if isDeadCluster(err) {
+			ctxLogger.Warnf(LogErrFormat, "Delete", common.VirtualServiceResourceType, vsName, rc.ClusterID, "dead cluster")
+			return nil
+		}
+		return fmt.Errorf(LogErrFormat, "Delete", "VirtualService", vsName, rc.ClusterID, err)
+	}
+	ctxLogger.Infof(LogFormat, "Delete", "VirtualService", vsName, rc.ClusterID, "Success")
+	return err
+}
+
 // generateVirtualServiceForIngress generates the VirtualService for the cross-cluster routing
 func generateVirtualServiceForIngress(
+	ctx context.Context,
+	ctxLogger *log.Entry,
+	remoteRegistry *RemoteRegistry,
+	sourceCluster string,
 	destination map[string][]*vsrouting.RouteDestination,
 	vsName string) (*v1alpha3.VirtualService, error) {
 
@@ -628,14 +668,14 @@ func generateVirtualServiceForIngress(
 		tlsRoutes = append(tlsRoutes, &tlsRoute)
 		vsHosts = append(vsHosts, hostWithSNIPrefix)
 	}
-
+	virtualService.Name = vsName + "-" + common.RoutingVSNameSuffix
 	if len(vsHosts) == 0 {
-		return nil, fmt.Errorf(
-			"skipped creating virtualservice as there are no valid hosts found")
+		err := deleteVSRoutingResources(ctx, ctxLogger, remoteRegistry, sourceCluster, vsName, true)
+		return nil, fmt.Errorf("deleting old ingress virtual service as there are no valid hosts found for %s, error=%v", virtualService.Name, err)
 	}
 	if len(tlsRoutes) == 0 {
-		return nil, fmt.Errorf(
-			"skipped creating virtualservice on cluster as there are no valid tls routes found")
+		err := deleteVSRoutingResources(ctx, ctxLogger, remoteRegistry, sourceCluster, vsName, true)
+		return nil, fmt.Errorf("deleting old ingress virtual service as there are no valid tls routes found for %s, error=%v", virtualService.Name, err)
 	}
 	sort.Strings(vsHosts)
 	virtualService.Spec.Hosts = vsHosts
@@ -644,17 +684,17 @@ func generateVirtualServiceForIngress(
 	})
 	virtualService.Spec.Tls = tlsRoutes
 
-	virtualService.Name = vsName + "-routing-vs"
-
 	return virtualService, nil
 }
 
 // doReconcileVirtualService checks if desired virtualservice state has changed from the one that is cached
 // returns true if it has, else returns false
 func doReconcileVirtualService(
+	ctxLogger *log.Entry,
 	rc *RemoteController,
 	desiredVirtualService *v1alpha3.VirtualService,
 	doRoutesMatch VSRouteComparator,
+	sourceCluster string,
 ) (bool, error) {
 	if rc == nil {
 		return true, fmt.Errorf("remoteController is nil")
@@ -671,14 +711,24 @@ func doReconcileVirtualService(
 	vsName := desiredVirtualService.Name
 	cachedVS := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
 	if cachedVS == nil {
+		ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+			fmt.Sprintf("missing cached VS"))
 		return true, nil
 	}
+
+	if !isGeneratedByAdmiral(cachedVS.Annotations) {
+		ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", cachedVS.Name, cachedVS.Namespace, rc.ClusterID, "skipped updating the VS as there exists a custom VS with the same name")
+		return false, nil
+	}
+
 	cachedVSSpec := cachedVS.Spec.DeepCopy()
 	desiredVirtualServiceSpec := desiredVirtualService.Spec.DeepCopy()
 	// Check if exportTo has a diff
 	slices.Sort(cachedVSSpec.ExportTo)
 	slices.Sort(desiredVirtualServiceSpec.ExportTo)
 	if !reflect.DeepEqual(cachedVSSpec.ExportTo, desiredVirtualServiceSpec.ExportTo) {
+		ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+			fmt.Sprintf("VS exportTo has changed, cached: %v, desired: %v", cachedVSSpec.ExportTo, desiredVirtualServiceSpec.ExportTo))
 		return true, nil
 	}
 
@@ -686,15 +736,21 @@ func doReconcileVirtualService(
 	slices.Sort(cachedVSSpec.Hosts)
 	slices.Sort(desiredVirtualServiceSpec.Hosts)
 	if !reflect.DeepEqual(cachedVSSpec.Hosts, desiredVirtualServiceSpec.Hosts) {
+		ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+			fmt.Sprintf("VS hosts has changed, cached: %v, desired: %v", cachedVSSpec.Hosts, desiredVirtualServiceSpec.Hosts))
 		return true, nil
 	}
 
 	// Check if routes have a diff
 	routeMatched, err := doRoutesMatch(cachedVSSpec, desiredVirtualServiceSpec)
 	if err != nil {
+		ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+			fmt.Sprintf("error in routeMatch check %v", err.Error()))
 		return true, err
 	}
 	if !routeMatched {
+		ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+			fmt.Sprintf("diff in routes, cached: %v, desired: %v", cachedVSSpec, desiredVirtualServiceSpec))
 		return true, err
 	}
 
@@ -703,6 +759,8 @@ func doReconcileVirtualService(
 		slices.Sort(cachedVSSpec.Gateways)
 		slices.Sort(desiredVirtualServiceSpec.Gateways)
 		if !reflect.DeepEqual(cachedVSSpec.Gateways, desiredVirtualServiceSpec.Gateways) {
+			ctxLogger.Infof(common.CtxLogFormat, "ReconcileVirtualService", vsName, "", sourceCluster,
+				fmt.Sprintf("diff in gateways, cached: %v, desired: %v", cachedVSSpec.Gateways, desiredVirtualServiceSpec.Gateways))
 			return true, nil
 		}
 	}
@@ -793,7 +851,7 @@ func addUpdateInClusterVirtualServices(
 				common.CtxLogFormat, "ReconcileVirtualService", vs.Name, "", sourceCluster,
 				"checking if incluster routing virtualService requires reconciliation")
 			reconcileRequired, err :=
-				doReconcileVirtualService(rc, vs, httpRoutesComparator)
+				doReconcileVirtualService(ctxLogger, rc, vs, httpRoutesComparator, sourceCluster)
 			if err != nil {
 				ctxLogger.Errorf(common.CtxLogFormat, "addUpdateInClusterVirtualServices",
 					vs.Name, vs.Namespace, sourceCluster,
@@ -1448,7 +1506,7 @@ func addUpdateVirtualServicesForIngress(
 			continue
 		}
 
-		virtualService, err := generateVirtualServiceForIngress(destination, vsName)
+		virtualService, err := generateVirtualServiceForIngress(ctx, ctxLogger, remoteRegistry, sourceCluster, destination, vsName)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				"", "", sourceCluster, err.Error())
@@ -1459,7 +1517,7 @@ func addUpdateVirtualServicesForIngress(
 			common.CtxLogFormat, "ReconcileVirtualService", virtualService.Name, "", sourceCluster,
 			"checking if ingress routing virtualService requires reconciliation")
 		reconcileRequired, err :=
-			doReconcileVirtualService(rc, virtualService, tlsRoutesComparator)
+			doReconcileVirtualService(ctxLogger, rc, virtualService, tlsRoutesComparator, sourceCluster)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateVirtualServicesForIngress",
 				virtualService.Name, virtualService.Namespace, sourceCluster,
@@ -1573,6 +1631,9 @@ func processGTPAndAddWeightsByCluster(ctxLogger *log.Entry,
 		if err != nil {
 			ctxLogger.Warnf(common.CtxLogFormat, "doActivePassiveInClusterVS",
 				cname, "", sourceCluster, err.Error())
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "doActivePassiveInClusterVS",
+				cname, "", sourceCluster, "active/passive routing for in-cluster VS enabled")
 		}
 	}
 	if globalTrafficPolicy != nil {
@@ -1915,7 +1976,7 @@ func addUpdateInClusterDestinationRule(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			common.InclusterDRSuffix, exportToNamespaces, clientTLSSettings, clientConnectionSettings)
+			common.InclusterDRSuffix, exportToNamespaces, clientTLSSettings, clientConnectionSettings, sourceIdentity)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1965,7 +2026,7 @@ func addUpdateDestinationRuleForSourceIngress(
 
 		err := addUpdateRoutingDestinationRule(
 			ctx, ctxLogger, remoteRegistry, drHosts, sourceCluster,
-			common.RoutingDRSuffix, common.GetIngressVSExportToNamespace(), clientTLSSettings, nil)
+			common.RoutingDRSuffix, common.GetIngressVSExportToNamespace(), clientTLSSettings, nil, sourceIdentity)
 
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateDestinationRuleForSourceIngress",
@@ -1986,7 +2047,8 @@ func addUpdateRoutingDestinationRule(
 	drNameSuffix string,
 	exportToNamespaces []string,
 	clientTLSSettings *networkingV1Alpha3.ClientTLSSettings,
-	clientConnectionSettings *v1alpha1.ClientConnectionConfig) error {
+	clientConnectionSettings *v1alpha1.ClientConnectionConfig,
+	sourceIdentity string) error {
 
 	if remoteRegistry == nil {
 		return fmt.Errorf("remoteRegistry is nil")
@@ -2054,6 +2116,7 @@ func addUpdateRoutingDestinationRule(
 		}
 
 		newDR.Spec.ExportTo = exportToNamespaces
+		newDR.Spec = *addNLBIdleTimeout(ctx, ctxLogger, remoteRegistry, rc, newDR.Spec.DeepCopy(), sourceCluster, sourceIdentity)
 
 		doReconcileDR := reconcileDestinationRule(
 			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, util.IstioSystemNamespace)
@@ -2075,7 +2138,10 @@ func addUpdateRoutingDestinationRule(
 				sourceCluster, fmt.Sprintf("failed getting existing DR, error=%v", err))
 			existingDR = nil
 		}
-
+		if existingDR != nil && !isGeneratedByAdmiral(existingDR.Annotations) {
+			ctxLogger.Infof(LogFormat, "update", "DestinationRule", existingDR.Name, rc.ClusterID, "skipped updating the DR as there exists a custom DR with the same name in "+util.IstioSystemNamespace+" namespace")
+			continue
+		}
 		err = addUpdateDestinationRule(ctxLogger, ctx, newDR, existingDR, util.IstioSystemNamespace, rc, remoteRegistry)
 		if err != nil {
 			ctxLogger.Errorf(common.CtxLogFormat, "addUpdateRoutingDestinationRule",
