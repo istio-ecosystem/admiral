@@ -2443,12 +2443,7 @@ func adjustWeights(
 	adjustedRDs := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
 	for _, rd := range routeDestinations {
 		newRD := rd.DeepCopy()
-		if rd.Weight != 0 {
-			newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
-			adjustedRDs = append(adjustedRDs, newRD)
-			continue
-		}
-		newRD.Weight = weight
+		newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
 		adjustedRDs = append(adjustedRDs, newRD)
 	}
 	return adjustedRDs, nil

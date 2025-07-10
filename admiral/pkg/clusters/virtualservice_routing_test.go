@@ -6634,9 +6634,50 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 			},
 		},
 	}
+	vsQALAirFailover := &apiNetworkingV1Alpha3.VirtualService{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:   "qal-air-failover.stage1.host1.global-incluster-vs",
+			Labels: map[string]string{common.VSRoutingType: common.VSRoutingTypeInCluster},
+		},
+		Spec: networkingV1Alpha3.VirtualService{
+			ExportTo: []string{"ns1"},
+			Hosts:    []string{"qal-air-failover.stage1.host1.global"},
+			Http: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal-air-failover.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air-failover.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air-failover.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ap := common.AdmiralParams{
+		HostnameSuffix: "global",
+	}
+	common.ResetSync()
+	common.InitializeConfig(ap)
 
 	hostToRouteDestinationCache := istio.NewHostToRouteDestinationCache()
 	hostToRouteDestinationCache.Put(vs)
+	hostToRouteDestinationCache.Put(vsQALAirFailover)
 
 	rc := &RemoteController{
 		ClusterID: "cluster-1",
@@ -6864,6 +6905,208 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 								},
 							},
 							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache which simulates a failover" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache which has traffic splits" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 90,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+							Weight: 10,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 90,
 						},
 					},
 					Match: []*networkingV1Alpha3.HTTPMatchRequest{
@@ -7394,6 +7637,133 @@ func TestModifyCustomVSHTTPRoutes(t *testing.T) {
 								"x-intuit-route-name": {
 									MatchType: &networkingV1Alpha3.StringMatch_Exact{
 										Exact: "qal-greeting",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Given a custom vs with fqdn that exists in the incluster cache" +
+				"And also contains a route to a different fqdn that is in the hostToRouteDestinationCache cache" +
+				"And modifyCustomVSHTTPRoutes func is called" +
+				"Then the func should successfully modify the customVS",
+			customVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air-failover.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inclusterVSRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Name: "qal.stage1.host1.global",
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 100,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Authority: &networkingV1Alpha3.StringMatch{
+								MatchType: &networkingV1Alpha3.StringMatch_Prefix{
+									Prefix: "qal.stage1.host1.global",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMergedRoutes: []*networkingV1Alpha3.HTTPRoute{
+				{
+					Timeout: &duration.Duration{Seconds: 10},
+					Route: []*networkingV1Alpha3.HTTPRouteDestination{
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air-failover.svc.cluster.local",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 8090,
+								},
+							},
+						},
+						{
+							Destination: &networkingV1Alpha3.Destination{
+								Host: "qal-air-failover.stage1.host1.global",
+								Port: &networkingV1Alpha3.PortSelector{
+									Number: 80,
+								},
+							},
+							Weight: 50,
+						},
+					},
+					Match: []*networkingV1Alpha3.HTTPMatchRequest{
+						{
+							Headers: map[string]*networkingV1Alpha3.StringMatch{
+								"x-intuit-route-name": {
+									MatchType: &networkingV1Alpha3.StringMatch_Exact{
+										Exact: "Health Check",
 									},
 								},
 							},
@@ -10064,6 +10434,273 @@ func TestUpdateClientSidecarWithClusterLocalServices(t *testing.T) {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
 
+		})
+	}
+
+}
+
+func TestAdjustWeights(t *testing.T) {
+
+	testCases := []struct {
+		name                       string
+		weight                     int32
+		routeDestinations          []*networkingV1Alpha3.HTTPRouteDestination
+		expectedRoutesDestinations []*networkingV1Alpha3.HTTPRouteDestination
+	}{
+		{
+			name: "Given a weight of 0 and a single routeDestination in the slice" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with weight 0",
+			weight: 0,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+			},
+		},
+		{
+			name: "Given weight 100 and two .local svc in route destination" +
+				", which simulated deployment/rollout migration" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with 50/50 weight to each destination",
+			weight: 100,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.deployment.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.rollout.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.deployment.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.rollout.svc.cluster.local",
+					},
+					Weight: 50,
+				},
+			},
+		},
+		{
+			name: "Given weight 100 a .local svc and .global with their corresponding weights" +
+				", which simulates percentage based traffic routing" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with correct traffic split",
+			weight: 100,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 20,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 80,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 20,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 80,
+				},
+			},
+		},
+		{
+			name: "Given weight 50 a .local svc and .global with their corresponding weights" +
+				", which simulates percentage based traffic routing" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with correct traffic split",
+			weight: 50,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 20,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 80,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 10,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 40,
+				},
+			},
+		},
+		{
+			name: "Given weight 100 a .local svc and .global in routes with 0 and 100 weight" +
+				", which simulates 100% failover" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with correct traffic split",
+			weight: 100,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 100,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+					Weight: 0,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 100,
+				},
+			},
+		},
+		{
+			name: "Given weight 100 a .local svc and .global in routes with 0 and 100 weight" +
+				", which simulates 100% failover" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with correct traffic split",
+			weight: 100,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 100,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.svc.cluster.local",
+					},
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 100,
+				},
+			},
+		},
+		{
+			name: "Given weight 100 and canary and regular .local svc with their respective traffic split" +
+				"When adjustWeights is called" +
+				"Then the function should return a slice of HTTPRouteDestination with correct traffic split",
+			weight: 100,
+			routeDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.foo.bar.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "root.foo.bar.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 50,
+				},
+			},
+			expectedRoutesDestinations: []*networkingV1Alpha3.HTTPRouteDestination{
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "canary.foo.bar.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "root.foo.bar.svc.cluster.local",
+					},
+					Weight: 25,
+				},
+				{
+					Destination: &networkingV1Alpha3.Destination{
+						Host: "foo.bar.global",
+					},
+					Weight: 50,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := adjustWeights(tc.routeDestinations, tc.weight)
+			if err != nil {
+				assert.Fail(t, err.Error())
+			}
+			assert.Equal(t, len(tc.expectedRoutesDestinations), len(actual))
+			for i, expected := range tc.expectedRoutesDestinations {
+				assert.Equal(t, expected.Destination.Host, actual[i].Destination.Host)
+				assert.Equal(t, expected.Weight, actual[i].Weight)
+			}
 		})
 	}
 
