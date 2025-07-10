@@ -1180,8 +1180,7 @@ func performDRPinning(ctx context.Context,
 		newDR := cachedDR.DeepCopy()
 
 		if newDR.Spec.TrafficPolicy == nil ||
-			newDR.Spec.TrafficPolicy.LoadBalancer == nil ||
-			newDR.Spec.TrafficPolicy.LoadBalancer.LocalityLbSetting == nil {
+			newDR.Spec.TrafficPolicy.LoadBalancer == nil {
 			errs = append(errs, fmt.Errorf(
 				"skipped pinning DR to remote region as TrafficPolicy or LoadBalancer or LocalityLbSetting is nil for DR %s in cluster %s",
 				drName, sourceCluster))
@@ -2511,14 +2510,15 @@ func adjustWeights(
 		return nil, fmt.Errorf("slice of HTTPRouteDestination is nil")
 	}
 	adjustedRDs := make([]*networkingV1Alpha3.HTTPRouteDestination, 0)
+	if len(routeDestinations) == 1 {
+		newRD := routeDestinations[0].DeepCopy()
+		newRD.Weight = weight
+		adjustedRDs = append(adjustedRDs, newRD)
+		return adjustedRDs, nil
+	}
 	for _, rd := range routeDestinations {
 		newRD := rd.DeepCopy()
-		if rd.Weight != 0 {
-			newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
-			adjustedRDs = append(adjustedRDs, newRD)
-			continue
-		}
-		newRD.Weight = weight
+		newRD.Weight = int32((float32(rd.Weight) / 100) * float32(weight))
 		adjustedRDs = append(adjustedRDs, newRD)
 	}
 	return adjustedRDs, nil
@@ -2597,6 +2597,9 @@ func DoVSRoutingInClusterForClusterAndIdentity(
 			ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
 				identity, "", cluster, "identity has a custom VS in its namespace")
 			return false
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+				identity, "", cluster, "identity does not have a custom VS in its namespace")
 		}
 
 		// This should be set to true if we need to check if .mesh DR should be pinned to remote
@@ -2621,6 +2624,9 @@ func DoVSRoutingInClusterForClusterAndIdentity(
 				ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
 					identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
 				return false
+			} else {
+				ctxLogger.Infof(common.CtxLogFormat, "DoVSRoutingInClusterForClusterAndIdentity",
+					identity, "", cluster, fmt.Sprintf("isCartographerVSDisabled=%v", isCartographerVSDisabled))
 			}
 		}
 
@@ -2665,7 +2671,8 @@ func DoDRUpdateForInClusterVSRouting(
 	}
 	if isSourceCluster {
 		// Check if the incluster VS has valid exportTo namespaces (not sync namespace)
-		hasValidInClusterVS, err := hasInClusterVSWithValidExportToNS(se, remoteRegistry.GetRemoteController(cluster))
+		hasValidInClusterVS, err := hasInClusterVSWithValidExportToNS(
+			ctxLogger, se, remoteRegistry.GetRemoteController(cluster))
 		if err != nil {
 			ctxLogger.Warnf(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
 				identity, "", cluster, fmt.Sprintf("error checking for valid in-cluster VS %v", err))
@@ -2675,6 +2682,10 @@ func DoDRUpdateForInClusterVSRouting(
 			ctxLogger.Infof(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
 				identity, "", cluster, "skipping DR update as incluter VS does not have valid exportTo namespaces")
 			return false
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat, "DoDRUpdateForInClusterVSRouting",
+				identity, "", cluster,
+				fmt.Sprintf("in-cluster VS has valid exportTo namespaces for identity %s and env %s", identity, env))
 		}
 		if DoVSRoutingInClusterForClusterAndIdentity(
 			ctx, ctxLogger, env, cluster, identity, remoteRegistry, performCartographerVSCheck) {

@@ -1951,7 +1951,10 @@ func IsCartographerVSDisabled(
 // It returns true if the in-cluster virtual service exists
 // and its exportTo does not contain the sync namespace, otherwise false.
 // The VSName is constructed using the service entry host name
-func hasInClusterVSWithValidExportToNS(se *networking.ServiceEntry, rc *RemoteController) (bool, error) {
+func hasInClusterVSWithValidExportToNS(
+	ctxLogger *logrus.Entry,
+	se *networking.ServiceEntry,
+	rc *RemoteController) (bool, error) {
 	if rc == nil {
 		return false, fmt.Errorf("remoteController is nil")
 	}
@@ -1967,7 +1970,14 @@ func hasInClusterVSWithValidExportToNS(se *networking.ServiceEntry, rc *RemoteCo
 	if rc.VirtualServiceController.VirtualServiceCache == nil {
 		return false, fmt.Errorf("VirtualServiceCache is nil in VirtualServiceController")
 	}
-	vsName := fmt.Sprintf("%s-%s", se.Hosts[0], common.InclusterVSNameSuffix)
+	seHost := se.Hosts[0]
+	if strings.HasPrefix(seHost, canaryPrefix) {
+		seHost = strings.ReplaceAll(seHost, canaryPrefix+".", "")
+	}
+	if strings.HasPrefix(seHost, previewPrefix) {
+		seHost = strings.ReplaceAll(seHost, previewPrefix+".", "")
+	}
+	vsName := fmt.Sprintf("%s-%s", seHost, common.InclusterVSNameSuffix)
 	cachedVS := rc.VirtualServiceController.VirtualServiceCache.Get(vsName)
 	if cachedVS == nil {
 		return false, fmt.Errorf("virtualService %s not found in cache", vsName)
@@ -1977,6 +1987,9 @@ func hasInClusterVSWithValidExportToNS(se *networking.ServiceEntry, rc *RemoteCo
 			return false, nil
 		}
 	}
+	ctxLogger.Infof(common.CtxLogFormat, "hasInClusterVSWithValidExportToNS",
+		"", "", rc.ClusterID,
+		fmt.Sprintf("in-cluster VS %s has valid exportTo namespaces", vsName))
 	return true, nil
 }
 

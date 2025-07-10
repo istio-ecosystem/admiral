@@ -10335,6 +10335,36 @@ func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Given an SE with canary host" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has valid NS" +
+				"Then it should return true",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"canary.foo.testns.global"},
+			},
+			expected: true,
+		},
+		{
+			name: "Given an SE with preview host" +
+				"When hasInClusterVSWithValidExportToNS is called" +
+				"And the in-cluster VS has valid NS" +
+				"Then it should return true",
+			remoteCtrl: &RemoteController{
+				VirtualServiceController: &istio.VirtualServiceController{
+					VirtualServiceCache: virtualServiceCache,
+				},
+			},
+			serviceEntry: &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts: []string{"preview.foo.testns.global"},
+			},
+			expected: true,
+		},
+		{
 			name: "Given an SE with valid hosts" +
 				"When hasInClusterVSWithValidExportToNS is called" +
 				"And the in-cluster VS has sync NS" +
@@ -10351,9 +10381,11 @@ func TestHasInClusterVSWithValidExportToNS(t *testing.T) {
 		},
 	}
 
+	var ctxLogger = logrus.WithFields(logrus.Fields{})
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := hasInClusterVSWithValidExportToNS(tc.serviceEntry, tc.remoteCtrl)
+			result, err := hasInClusterVSWithValidExportToNS(ctxLogger, tc.serviceEntry, tc.remoteCtrl)
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
