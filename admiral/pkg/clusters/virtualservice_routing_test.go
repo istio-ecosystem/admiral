@@ -8305,6 +8305,20 @@ func TestPerformDRPinning(t *testing.T) {
 		},
 	}
 
+	cachedDefaultActiveActiveDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "foo.test-aa.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "foo.test-aa.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{},
+			},
+		},
+	}
+
 	expectedDefaultDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name:      "foo.test-ns.global-default-dr",
@@ -8328,15 +8342,41 @@ func TestPerformDRPinning(t *testing.T) {
 		},
 	}
 
+	expectedActiveActiveDefaultDR := &apiNetworkingV1Alpha3.DestinationRule{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      "foo.test-aa.global-default-dr",
+			Namespace: "sync-ns",
+		},
+		Spec: networkingV1Alpha3.DestinationRule{
+			Host:     "foo.test-aa.global",
+			ExportTo: []string{"test-dependent-ns0", "test-dependent-ns1", "test-ns"},
+			TrafficPolicy: &networkingV1Alpha3.TrafficPolicy{
+				LoadBalancer: &networkingV1Alpha3.LoadBalancerSettings{
+					LocalityLbSetting: &networkingV1Alpha3.LocalityLoadBalancerSetting{
+						Distribute: []*networkingV1Alpha3.LocalityLoadBalancerSetting_Distribute{
+							{
+								From: "*",
+								To:   map[string]uint32{"us-east-2": 100},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
 	drCache := istio.NewDestinationRuleCache()
 	drCache.Put(cachedDefaultDR)
 	drCache.Put(cachedAdditionalEndpointDR)
+	drCache.Put(cachedDefaultActiveActiveDR)
 
 	istioClient := istioFake.NewSimpleClientset()
 	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
 		Create(context.Background(), cachedDefaultDR, metaV1.CreateOptions{})
 	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
 		Create(context.Background(), cachedAdditionalEndpointDR, metaV1.CreateOptions{})
+	istioClient.NetworkingV1alpha3().DestinationRules("sync-ns").
+		Create(context.Background(), cachedDefaultActiveActiveDR, metaV1.CreateOptions{})
 
 	ap := common.AdmiralParams{
 		LabelSet: &common.LabelSet{
@@ -8446,6 +8486,33 @@ func TestPerformDRPinning(t *testing.T) {
 			sourceIdentity:        "foo.test-ns.global-default-dr",
 			env:                   "foo",
 			expectDestinationRule: cachedDefaultDR,
+		},
+		{
+			name: "Given for a VS host there is active/active DR in cache and region needs to be flipped" +
+				"When performDRPinning func is called" +
+				"Then the func should not return an error and DR will be updated with new region",
+			remoteRegistry: &RemoteRegistry{},
+			remoteController: &RemoteController{
+				NodeController: &admiral.NodeController{
+					Locality: &admiral.Locality{
+						Region: "us-west-2",
+					},
+				},
+				DestinationRuleController: &istio.DestinationRuleController{
+					IstioClient: istioClient,
+					Cache:       drCache,
+				},
+			},
+			vs: &apiNetworkingV1Alpha3.VirtualService{
+				Spec: networkingV1Alpha3.VirtualService{
+					Hosts: []string{"foo.test-aa.global"},
+				},
+			},
+			drName:                "foo.test-aa.global-default-dr",
+			sourceCluster:         "cluster1",
+			sourceIdentity:        "foo.test-aa.global-default-dr",
+			env:                   "foo",
+			expectDestinationRule: expectedActiveActiveDefaultDR,
 		},
 		{
 			name: "Given for a VS host there is DR in cache and region needs to be flipped" +

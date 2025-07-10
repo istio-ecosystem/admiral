@@ -276,9 +276,9 @@ func getSortedDependentNamespaces(
 				namespaceSlice = []string{"*"}
 				ctxLogger.Infof("exceeded max namespaces for cname=%s in cluster=%s", cname, clusterId)
 			}
-			sort.Strings(namespaceSlice)
 		}
 	}
+	sort.Strings(namespaceSlice)
 	// this is to avoid duplication in namespaceSlice e.g. dynamicrouting deployment present in istio-system can be a dependent of blackhole on blackhole's source cluster
 	var dedupNamespaceSlice []string
 	for i := 0; i < len(namespaceSlice); i++ {

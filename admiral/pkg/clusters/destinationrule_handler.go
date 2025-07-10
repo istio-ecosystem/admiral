@@ -107,12 +107,19 @@ func getDestinationRule(se *networkingV1Alpha3.ServiceEntry,
 		if isSEMultiRegion(se) {
 			dr.TrafficPolicy.LoadBalancer.LocalityLbSetting, err = getLocalityLBSettings(locality)
 			if err == nil {
+				ctxLogger.Infof(common.CtxLogFormat,
+					"doDRUpdateForInClusterRouting", "", "", "",
+					fmt.Sprintf("dr pinning successful for host %s", se.Hosts[0]))
 				return dr
 			} else {
 				ctxLogger.Errorf(common.CtxLogFormat,
 					"doDRUpdateForInClusterRouting", "", "", "",
 					fmt.Sprintf("error getting locality LB settings: %v", err))
 			}
+		} else {
+			ctxLogger.Infof(common.CtxLogFormat,
+				"doDRUpdateForInClusterRouting", "", "", "",
+				fmt.Sprintf("Skipping DR pinning as ServiceEntry is not multi-region for host: %s", se.Hosts[0]))
 		}
 	}
 
