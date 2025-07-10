@@ -2116,7 +2116,6 @@ func addUpdateRoutingDestinationRule(
 		}
 
 		newDR.Spec.ExportTo = exportToNamespaces
-		newDR.Spec = *addNLBIdleTimeout(ctx, ctxLogger, remoteRegistry, rc, newDR.Spec.DeepCopy(), sourceCluster, sourceIdentity)
 
 		doReconcileDR := reconcileDestinationRule(
 			ctxLogger, true, rc, &newDR.Spec, drName, sourceCluster, util.IstioSystemNamespace)
