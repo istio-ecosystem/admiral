@@ -5245,13 +5245,17 @@ func TestDoReconcileVirtualService(t *testing.T) {
 			expectedError:  nil,
 		},
 	}
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := doReconcileVirtualService(
+				ctxLogger,
 				tc.rc,
 				tc.desiredVS,
-				tc.comparator)
+				tc.comparator, "")
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
