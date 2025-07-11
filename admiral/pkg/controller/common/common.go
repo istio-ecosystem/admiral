@@ -139,6 +139,8 @@ const (
 	// VSRoutingType This label has been added in order to make the API call efficient
 	VSRoutingType                      = "admiral.io/vs-routing-type"
 	InclusterVSNameSuffix              = "incluster-vs"
+	InclusterDRNameSuffix              = "incluster-dr"
+	RoutingVSNameSuffix                = "routing-vs"
 	VSRoutingTypeInCluster             = "incluster"
 	CreatedByLabel                     = "createdBy"
 	CreatedForLabel                    = "createdFor"

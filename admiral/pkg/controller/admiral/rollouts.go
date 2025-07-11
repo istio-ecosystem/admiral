@@ -51,6 +51,7 @@ type IIdentityArgoVSCache interface {
 	Get(identity string) map[string]bool
 	Put(newRolloutObj *argo.Rollout, oldRolloutObj *argo.Rollout) error
 	Delete(rolloutObj *argo.Rollout) error
+	Len() int
 }
 
 type IdentityArgoVSCache struct {
@@ -494,14 +495,18 @@ func (r *RolloutController) populateIdentityArgoVSCache(
 		return fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", obj)
 	}
 	if oldObj == nil {
-		return r.IdentityArgoVSCache.Put(rollout, nil)
+		err := r.IdentityArgoVSCache.Put(rollout, nil)
+		log.Infof("IdentityArgoVSCache length: %d", r.IdentityArgoVSCache.Len())
+		return err
 	}
 	oldRollout, oldOk := oldObj.(*argo.Rollout)
 	if !oldOk {
 		return fmt.Errorf("type assertion failed, %v is not of type *argo.Rollout", oldObj)
 	}
 
-	return r.IdentityArgoVSCache.Put(rollout, oldRollout)
+	err := r.IdentityArgoVSCache.Put(rollout, oldRollout)
+	log.Infof("IdentityArgoVSCache length: %d", r.IdentityArgoVSCache.Len())
+	return err
 }
 
 func getArgoVSFromRollout(rollout *argo.Rollout) string {
@@ -565,4 +570,10 @@ func (i *IdentityArgoVSCache) Delete(rolloutObj *argo.Rollout) error {
 		delete(i.cache[identity], argoVSName)
 	}
 	return nil
+}
+
+func (i *IdentityArgoVSCache) Len() int {
+	defer i.mutex.RUnlock()
+	i.mutex.RLock()
+	return len(i.cache)
 }

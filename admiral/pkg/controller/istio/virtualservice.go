@@ -35,6 +35,7 @@ type IVirtualServiceCache interface {
 	Delete(vs *networking.VirtualService)
 	GetVSProcessStatus(vs *networking.VirtualService) string
 	UpdateVSProcessStatus(vs *networking.VirtualService, status string) error
+	Len() int
 }
 
 type VirtualServiceController struct {
@@ -81,6 +82,7 @@ type IIdentityVirtualServiceCache interface {
 	Get(identity string) map[string]*networking.VirtualService
 	Put(vs *networking.VirtualService) error
 	Delete(vs *networking.VirtualService) error
+	Len() int
 }
 
 // IdentityVirtualServiceCache holds VS that are in identity's NS
@@ -186,6 +188,12 @@ func (i *IdentityVirtualServiceCache) Delete(vs *networking.VirtualService) erro
 		delete(vsMap, name)
 	}
 	return nil
+}
+
+func (i *IdentityVirtualServiceCache) Len() int {
+	defer i.mutex.RUnlock()
+	i.mutex.RLock()
+	return len(i.cache)
 }
 
 func getIdentitiesFromVSHostName(hostName string) []string {
@@ -299,14 +307,17 @@ func (v *VirtualServiceController) Added(ctx context.Context, obj interface{}) e
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
 	err := v.VirtualServiceCache.Put(vs)
+	log.Infof("VirtualServiceCache length: %d", v.VirtualServiceCache.Len())
 	if err != nil {
 		return err
 	}
 	err = v.HostToRouteDestinationCache.Put(vs)
+	log.Infof("HostToRouteDestinationCache length: %d", v.HostToRouteDestinationCache.Len())
 	if err != nil {
 		return err
 	}
 	v.IdentityVirtualServiceCache.Put(vs)
+	log.Infof("IdentityVirtualServiceCache length: %d", v.IdentityVirtualServiceCache.Len())
 	return v.VirtualServiceHandler.Added(ctx, vs)
 }
 
@@ -316,8 +327,11 @@ func (v *VirtualServiceController) Updated(ctx context.Context, obj interface{},
 		return fmt.Errorf("type assertion failed, %v is not of type *v1alpha3.VirtualService", obj)
 	}
 	v.VirtualServiceCache.Put(vs)
+	log.Infof("VirtualServiceCache length: %d", v.VirtualServiceCache.Len())
 	v.HostToRouteDestinationCache.Put(vs)
+	log.Infof("HostToRouteDestinationCache length: %d", v.HostToRouteDestinationCache.Len())
 	v.IdentityVirtualServiceCache.Put(vs)
+	log.Infof("IdentityVirtualServiceCache length: %d", v.IdentityVirtualServiceCache.Len())
 	return v.VirtualServiceHandler.Updated(ctx, vs)
 }
 
@@ -364,6 +378,12 @@ func (sec *VirtualServiceController) Get(ctx context.Context, isRetry bool, obj 
 		return sec.IstioClient.NetworkingV1alpha3().VirtualServices(vs.Namespace).Get(ctx, vs.Name, meta_v1.GetOptions{})
 	}*/
 	return nil, fmt.Errorf("istio client is not initialized, txId=%s", ctx.Value("txId"))
+}
+
+func (vs *VirtualServiceCache) Len() int {
+	defer vs.mutex.RUnlock()
+	vs.mutex.RLock()
+	return len(vs.cache)
 }
 
 func (v *VirtualServiceCache) GetVSProcessStatus(vs *networking.VirtualService) string {
@@ -452,4 +472,10 @@ func (h *HostToRouteDestinationCache) Delete(vs *networking.VirtualService) erro
 		}
 	}
 	return nil
+}
+
+func (h *HostToRouteDestinationCache) Len() int {
+	defer h.mutex.RUnlock()
+	h.mutex.RLock()
+	return len(h.cache)
 }
