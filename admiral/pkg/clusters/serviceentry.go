@@ -28,6 +28,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/sirupsen/logrus"
 	networking "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -155,6 +156,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		serviceInstance                       *k8sV1.Service
 		rollout                               *argo.Rollout
 		deployment                            *k8sAppsV1.Deployment
+		vertex                                *numaflowv1alpha1.Vertex
 		start                                 = time.Now()
 		identityKey                           = common.ConstructKeyWithEnvAndIdentity(env, sourceIdentity)
 		gtpIdentityKey                        = common.ConstructKeyWithEnvAndIdentity(env, partitionedIdentity)
@@ -168,6 +170,7 @@ func modifyServiceEntryForNewServiceOrPod(
 		sourceWeightedServices                = make(map[string]map[string]*WeightedService)
 		sourceDeployments                     = make(map[string]*k8sAppsV1.Deployment)
 		sourceRollouts                        = make(map[string]*argo.Rollout)
+		sourceVertices                        = make(map[string]*numaflowv1alpha1.Vertex)
 		appType                               = make(map[string]string)
 		serviceEntries                        = make(map[string]*networking.ServiceEntry)
 		clustersToDeleteSE                    = make(map[string]bool)
@@ -228,8 +231,12 @@ func modifyServiceEntryForNewServiceOrPod(
 			rollout = rc.RolloutController.Cache.Get(partitionedIdentity, env)
 		}
 
-		if deployment == nil && rollout == nil {
-			ctxLogger.Infof(common.CtxLogFormat, "event", "", "", clusterId, "neither deployment nor rollouts found")
+		if rc.VertexWorkloadController != nil {
+			vertex = rc.VertexWorkloadController.Cache.Get(partitionedIdentity, env)
+		}
+
+		if deployment == nil && rollout == nil && vertex == nil {
+			ctxLogger.Infof(common.CtxLogFormat, "event", "", "", clusterId, "neither deployment, rollouts nor vertex found")
 			continue
 		}
 
@@ -258,6 +265,8 @@ func modifyServiceEntryForNewServiceOrPod(
 			}
 		} else if rollout != nil {
 			appType[rc.ClusterID] = common.Rollout
+		} else if vertex != nil {
+			appType[rc.ClusterID] = common.Vertex
 		}
 
 		// For Deployment <-> Rollout migration
@@ -371,6 +380,57 @@ func modifyServiceEntryForNewServiceOrPod(
 				Name:      env,
 				Namespace: namespace,
 				Type:      map[string]*registry.TypeConfig{common.Rollout: {Selectors: rollout.Spec.Selector.MatchLabels}},
+				Services:  make(map[string][]*registry.RegistryServiceConfig),
+			}
+		}
+
+		if vertex != nil {
+			if eventResourceType == common.Vertex {
+				deploymentOrRolloutName = vertex.Name
+				deploymentOrRolloutNS = vertex.Namespace
+			}
+			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry", deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "building service entry for vertex")
+			ctxLogger.Infof(common.CtxLogFormat, "AdmiralCacheIdentityClusterCachePut", deploymentOrRolloutName,
+				deploymentOrRolloutNS, rc.ClusterID, "updating identity<->cluster mapping")
+			clusterDeployRolloutPresent[rc.ClusterID][common.Vertex] = true
+			var err error
+			serviceInstance, err = getServiceForVertex(rc, vertex)
+			if err != nil {
+				ctxLogger.Warnf(common.CtxLogFormat, "GetServiceForVertex", deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, err)
+				continue
+			}
+			sourceServices[rc.ClusterID][common.Vertex] = serviceInstance
+			sourceClusterToEventNsCache[rc.ClusterID] = vertex.Namespace
+
+			namespace = vertex.Namespace
+			var annotations map[string]string
+			if vertex.Spec.Metadata != nil {
+				annotations = vertex.Spec.Metadata.Annotations
+			}
+			localMeshPorts := common.GetMeshPorts(rc.ClusterID, serviceInstance, annotations)
+			cname = common.GetCnameForVertex(vertex, common.GetWorkloadIdentifier(), common.GetHostnameSuffix())
+			sourceVertices[rc.ClusterID] = vertex
+			sourceClusters = append(sourceClusters, clusterId)
+
+			if common.IsPersonaTrafficConfig() {
+				continue
+			}
+
+			eventType, deleteCluster := removeSeEndpoints(clusterName, event, clusterId, deployRolloutMigration[rc.ClusterID], common.Vertex, clusterAppDeleteMap)
+			clustersToDeleteSE[clusterId] = deleteCluster
+
+			start = time.Now()
+			_, errCreateSE := createServiceEntryForVertex(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, vertex, serviceEntries)
+			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry",
+				deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "total service entries built="+strconv.Itoa(len(serviceEntries)))
+			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForVertex",
+				deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
+			modifySEerr = common.AppendError(modifySEerr, errCreateSE)
+
+			registryConfig.Clusters[clusterId].Environment[env] = &registry.IdentityConfigEnvironment{
+				Name:      env,
+				Namespace: namespace,
+				Type:      map[string]*registry.TypeConfig{common.Vertex: {Selectors: vertex.Spec.Metadata.Labels}},
 				Services:  make(map[string][]*registry.RegistryServiceConfig),
 			}
 		}
@@ -2782,6 +2842,41 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 	return tmpSe, nil
 }
 
+func createServiceEntryForVertex(
+	ctxLogger *logrus.Entry,
+	ctx context.Context,
+	event admiral.EventType,
+	rc *RemoteController,
+	admiralCache *AdmiralCache,
+	meshPorts map[string]uint32,
+	destVertex *numaflowv1alpha1.Vertex,
+	serviceEntries map[string]*networking.ServiceEntry) (*networking.ServiceEntry, error) {
+	defer util.LogElapsedTimeForTask(ctxLogger, "createServiceEntryForVertex", "", "", "", "")()
+	workloadIdentityKey := common.GetWorkloadIdentifier()
+	globalFqdn := common.GetCnameForVertex(destVertex, workloadIdentityKey, common.GetHostnameSuffix())
+
+	//Handling retries for getting/putting service entries from/in cache
+	start := time.Now()
+	address, err := getUniqueAddress(ctxLogger, ctx, admiralCache, globalFqdn)
+	if err != nil {
+		return nil, err
+	}
+	util.LogElapsedTimeSinceTask(ctxLogger, "GetUniqueAddress",
+		"", "", rc.ClusterID, "", start)
+
+	if !common.DisableIPGeneration() && len(address) == 0 {
+		ctxLogger.Errorf(common.CtxLogFormat, "createServiceEntryForVertex", destVertex.Name, destVertex.Namespace, "", "Failed because address is empty while DisableIPGeneration is disabled")
+		return nil, nil
+	}
+	if len(globalFqdn) == 0 {
+		ctxLogger.Errorf(common.CtxLogFormat, "createServiceEntryForVertex", destVertex.Name, destVertex.Namespace, "", "Failed because fqdn is empty")
+		return nil, nil
+	}
+
+	san := getSanForVertex(destVertex, workloadIdentityKey)
+	return generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Vertex), nil
+}
+
 func getSanForDeployment(destDeployment *k8sAppsV1.Deployment, workloadIdentityKey string) (san []string) {
 	if common.GetEnableSAN() {
 		tmpSan := common.GetSAN(common.GetSANPrefix(), destDeployment, workloadIdentityKey)
@@ -2802,6 +2897,16 @@ func getSanForRollout(destRollout *argo.Rollout, workloadIdentityKey string) (sa
 	}
 	return nil
 
+}
+
+func getSanForVertex(destVertex *numaflowv1alpha1.Vertex, workloadIdentityKey string) (san []string) {
+	if common.GetEnableSAN() {
+		tmpSan := common.GetSANForVertex(common.GetSANPrefix(), destVertex, workloadIdentityKey)
+		if len(tmpSan) > 0 {
+			return []string{common.GetSANForVertex(common.GetSANPrefix(), destVertex, workloadIdentityKey)}
+		}
+	}
+	return nil
 }
 
 func getUniqueAddress(ctxLogger *logrus.Entry, ctx context.Context, admiralCache *AdmiralCache, globalFqdn string) (string, error) {

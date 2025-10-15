@@ -2,10 +2,11 @@ package clusters
 
 import (
 	"context"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
 
 	admiralV1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
@@ -50,6 +51,7 @@ type RemoteController struct {
 	ClientConnectionConfigController *admiral.ClientConnectionConfigController
 	JobController                    *admiral.JobController
 	VertexController                 *admiral.VertexController
+	VertexWorkloadController         *admiral.VertexWorkloadController
 	MonoVertexController             *admiral.MonoVertexController
 	TrafficConfigController          *admiral.TrafficConfigController
 	stop                             chan struct{}

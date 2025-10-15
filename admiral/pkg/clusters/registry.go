@@ -3,9 +3,10 @@ package clusters
 import (
 	"context"
 	"fmt"
-	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"os"
 	"time"
+
+	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/admiral"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
@@ -259,6 +260,12 @@ func (r *RemoteRegistry) createCacheController(clientConfig *rest.Config, cluste
 				rc.MonoVertexController, err = admiral.NewMonoVertexController(stop, &ClientDiscoveryHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
 				if err != nil {
 					return fmt.Errorf("error with MonoVertexController initialization, err: %v", err)
+				}
+
+				logrus.Infof("starting VertexWorkloadController clusterID: %v", clusterID)
+				rc.VertexWorkloadController, err = admiral.NewVertexWorkloadController(stop, &VertexHandler{RemoteRegistry: r, ClusterID: clusterID}, clientConfig, 0, r.ClientLoader)
+				if err != nil {
+					return fmt.Errorf("error with VertexWorkloadController initialization, err: %v", err)
 				}
 			}
 		}

@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sV1 "k8s.io/api/core/v1"
 )
@@ -171,6 +172,7 @@ const (
 	SecretResourceType     ResourceType = "Secret"
 	NodeResourceType       ResourceType = "Node"
 	JobResourceType        ResourceType = "Job"
+	VertexResourceType     ResourceType = "Vertex"
 
 	// Admiral Resource Types
 	DependencyResourceType          ResourceType = "Dependency"
@@ -228,6 +230,57 @@ func GetDeploymentIdentityPartition(deployment *k8sAppsV1.Deployment) string {
 		identityPartition = deployment.Spec.Template.Labels[GetPartitionIdentifier()]
 	}
 	return identityPartition
+}
+
+func GetVertexGlobalIdentifier(vertex *numaflowv1alpha1.Vertex) string {
+	var identity string
+	if vertex.Spec.Metadata != nil {
+		identity = vertex.Spec.Metadata.Labels[GetWorkloadIdentifier()]
+		if len(identity) == 0 {
+			identity = vertex.Spec.Metadata.Annotations[GetWorkloadIdentifier()]
+		}
+		if EnableSWAwareNSCaches() && len(identity) > 0 && len(GetVertexIdentityPartition(vertex)) > 0 {
+			identity = GetVertexIdentityPartition(vertex) + Sep + strings.ToLower(identity)
+		}
+	}
+	return identity
+}
+
+func GetVertexOriginalIdentifier(vertex *numaflowv1alpha1.Vertex) string {
+	var identity string
+	if vertex.Spec.Metadata != nil {
+		identity = vertex.Spec.Metadata.Labels[GetWorkloadIdentifier()]
+		if len(identity) == 0 {
+			identity = vertex.Spec.Metadata.Annotations[GetWorkloadIdentifier()]
+		}
+	}
+	return identity
+}
+
+func GetVertexIdentityPartition(vertex *numaflowv1alpha1.Vertex) string {
+	var identityPartition string
+	if vertex.Spec.Metadata != nil {
+		if vertex.Spec.Metadata.Annotations != nil {
+			identityPartition = vertex.Spec.Metadata.Annotations[GetPartitionIdentifier()]
+		}
+		if len(identityPartition) == 0 && vertex.Spec.Metadata.Labels != nil {
+			identityPartition = vertex.Spec.Metadata.Labels[GetPartitionIdentifier()]
+		}
+	}
+	return identityPartition
+}
+
+func GetEnvForVertex(vertex *numaflowv1alpha1.Vertex) string {
+	var environment string
+	if vertex.Spec.Metadata != nil {
+		if vertex.Spec.Metadata.Labels != nil {
+			environment = vertex.Spec.Metadata.Labels[GetEnvKey()]
+		}
+		if len(environment) == 0 && vertex.Spec.Metadata.Annotations != nil {
+			environment = vertex.Spec.Metadata.Annotations[GetEnvKey()]
+		}
+	}
+	return environment
 }
 
 func GetLocalDomainSuffix() string {
@@ -387,6 +440,13 @@ func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelect
 	if selector == nil || len(selector.MatchLabels) == 0 || len(serviceSelector) == 0 {
 		return false
 	}
+	return IsServiceMatchForLabels(serviceSelector, selector.MatchLabels)
+}
+
+func IsServiceMatchForLabels(serviceSelector map[string]string, selector map[string]string) bool {
+	if len(selector) == 0 || len(serviceSelector) == 0 {
+		return false
+	}
 	var match = true
 	for lkey, lvalue := range serviceSelector {
 		// Rollouts controller adds a dynamic label with name rollouts-pod-template-hash to both active and passive replicasets.
@@ -394,7 +454,7 @@ func IsServiceMatch(serviceSelector map[string]string, selector *v12.LabelSelect
 		if lkey == RolloutPodHashLabel {
 			continue
 		}
-		value, ok := selector.MatchLabels[lkey]
+		value, ok := selector[lkey]
 		if !ok || value != lvalue {
 			match = false
 			break
@@ -702,6 +762,19 @@ func IsAirEnv(originalEnvLabel string) bool {
 	return strings.HasSuffix(originalEnvLabel, AIREnvSuffix)
 }
 
+func GetMeshPorts(clusterName string, destService *k8sV1.Service,
+	annotations map[string]string) map[string]uint32 {
+
+	var meshPorts string
+	if annotations == nil {
+		meshPorts = ""
+	} else {
+		meshPorts = annotations[SidecarEnabledPorts]
+	}
+	ports := GetMeshPortsHelper(meshPorts, destService, clusterName)
+	return ports
+}
+
 func GetMeshPortsForDeployments(clusterName string, destService *k8sV1.Service,
 	destDeployment *k8sAppsV1.Deployment) map[string]uint32 {
 
@@ -920,4 +993,51 @@ func IsDefaultFQDN(fqdn, env string) bool {
 		return true
 	}
 	return false
+}
+
+func GetSANForVertex(domain string, vertex *numaflowv1alpha1.Vertex, identifier string) string {
+	identifierVal := GetValueForKeyFromVertex(identifier, vertex)
+	if len(identifierVal) == 0 {
+		log.Errorf("Unable to get SAN for vertex with name %v in namespace %v as it doesn't have the %v annotation or label", vertex.Name, vertex.Namespace, identifier)
+		return ""
+	}
+	if len(domain) > 0 {
+		return SpiffePrefix + domain + Slash + identifierVal
+	} else {
+		return SpiffePrefix + identifierVal
+	}
+}
+
+func GetCnameForVertex(vertex *numaflowv1alpha1.Vertex, identifier string, nameSuffix string) string {
+	var environment = GetEnvForVertex(vertex)
+	alias := GetValueForKeyFromVertex(identifier, vertex)
+	if len(alias) == 0 {
+		log.Warnf("%v label missing on vertex %v in namespace %v. Falling back to annotation to create cname.", identifier, vertex.Name, vertex.Namespace)
+		if vertex.Spec.Metadata != nil && vertex.Spec.Metadata.Annotations != nil {
+			alias = vertex.Spec.Metadata.Annotations[identifier]
+		}
+	}
+	if len(alias) == 0 {
+		log.Errorf("Unable to get cname for vertex with name %v in namespace %v as it doesn't have the %v annotation", vertex.Name, vertex.Namespace, identifier)
+		return ""
+	}
+	cname := GetCnameVal([]string{environment, alias, nameSuffix})
+	if vertex.Spec.Metadata != nil && vertex.Spec.Metadata.Annotations != nil && vertex.Spec.Metadata.Annotations[AdmiralCnameCaseSensitive] == "true" {
+		return cname
+	}
+	return strings.ToLower(cname)
+}
+
+func GetValueForKeyFromVertex(key string, vertex *numaflowv1alpha1.Vertex) string {
+	var value string
+	if vertex.Spec.Metadata != nil && vertex.Spec.Metadata.Labels != nil {
+		value = vertex.Spec.Metadata.Labels[key]
+	}
+	if len(value) == 0 {
+		log.Warnf("%v label missing on vertex %v in namespace %v. Falling back to annotation.", key, vertex.Name, vertex.Namespace)
+		if vertex.Spec.Metadata != nil && vertex.Spec.Metadata.Annotations != nil {
+			value = vertex.Spec.Metadata.Annotations[key]
+		}
+	}
+	return value
 }

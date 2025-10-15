@@ -10,6 +10,7 @@ import (
 	admiralV1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/util"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	log "github.com/sirupsen/logrus"
 	networkingV1Alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -125,6 +126,50 @@ func getServiceForDeployment(rc *RemoteController, deployment *appsV1.Deployment
 
 	if matchedService == nil {
 		return nil, fmt.Errorf(LogFormatAdv, "Get", "Service", deployment.Name, deployment.Namespace, rc.ClusterID, "no matching service instances found")
+	}
+
+	return matchedService, nil
+}
+
+func getServiceForVertex(rc *RemoteController, vertex *numaflowv1alpha1.Vertex) (*coreV1.Service, error) {
+	if vertex == nil {
+		return nil, fmt.Errorf(LogFormatAdv, "Get", "Service", "", "", rc.ClusterID, "error getting service, vertex is nil.")
+	}
+
+	var labels map[string]string
+	if vertex.Spec.Metadata != nil {
+		labels = vertex.Spec.Metadata.Labels
+	}
+
+	if labels == nil {
+		return nil, fmt.Errorf(LogFormatAdv, "Get", "Service", vertex.Name, vertex.Namespace, rc.ClusterID, "no labels found for vertex")
+	}
+
+	cachedServices := rc.ServiceController.Cache.Get(vertex.Namespace)
+	if cachedServices == nil {
+		return nil, fmt.Errorf(LogFormatAdv, "Get", "Service", vertex.Name, vertex.Namespace, rc.ClusterID, "no cached services found for vertex.")
+	}
+
+	// Sort the cachedServices such that the service are sorted based on creation time
+	sort.Slice(cachedServices, func(i, j int) bool {
+		return cachedServices[i].CreationTimestamp.Before(&cachedServices[j].CreationTimestamp)
+	})
+
+	var matchedService *coreV1.Service
+	for _, service := range cachedServices {
+		var match = common.IsServiceMatchForLabels(service.Spec.Selector, vertex.Spec.Metadata.Labels)
+		//make sure the service matches the vertex labels and also has a mesh port in the port spec
+		if match {
+			ports := common.GetMeshPorts(rc.ClusterID, service, vertex.Spec.Metadata.Annotations)
+			if len(ports) > 0 {
+				matchedService = service
+				break
+			}
+		}
+	}
+
+	if matchedService == nil {
+		return nil, fmt.Errorf(LogFormatAdv, "Get", "Service", vertex.Name, vertex.Namespace, rc.ClusterID, "no matching service instances found")
 	}
 
 	return matchedService, nil

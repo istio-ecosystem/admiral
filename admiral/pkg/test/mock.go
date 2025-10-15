@@ -3,11 +3,12 @@ package test
 import (
 	"context"
 	"errors"
+	"net/http"
+
 	admiralapiv1 "github.com/istio-ecosystem/admiral-api/pkg/apis/admiral/v1"
 	admiralapi "github.com/istio-ecosystem/admiral-api/pkg/client/clientset/versioned"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/util"
-	"net/http"
 
 	argoprojv1alpha1 "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/typed/rollouts/v1alpha1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,7 @@ import (
 	argo "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	v1alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	admiralV1 "github.com/istio-ecosystem/admiral/admiral/pkg/apis/admiral/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	v1alpha32 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	k8sAppsV1 "k8s.io/api/apps/v1"
 	k8sCoreV1 "k8s.io/api/core/v1"
@@ -425,6 +427,19 @@ type MockClientDiscoveryHandler struct {
 }
 
 func (m *MockClientDiscoveryHandler) Added(ctx context.Context, obj *common.K8sObject) error {
+	return nil
+}
+
+type MockVertexWorkloadHandler struct {
+	Obj *numaflowv1alpha1.Vertex
+}
+
+func (m *MockVertexWorkloadHandler) Added(ctx context.Context, obj *numaflowv1alpha1.Vertex) error {
+	m.Obj = obj
+	return nil
+}
+
+func (m *MockVertexWorkloadHandler) Deleted(ctx context.Context, obj *numaflowv1alpha1.Vertex) error {
 	return nil
 }
 

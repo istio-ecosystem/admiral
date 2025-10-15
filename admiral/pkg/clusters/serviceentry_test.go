@@ -37,6 +37,7 @@ import (
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/common"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/controller/istio"
 	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -2374,6 +2375,7 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 		foobarMetadataNamespace = "foobar-ns"
 		rollout1Identity        = "rollout1"
 		deployment1Identity     = "deployment1"
+		vertex1Identity         = "vertex1"
 		testRollout1            = argo.Rollout{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      foobarMetadataName,
@@ -2416,6 +2418,39 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 				},
 			},
 		}
+		testDeployment1Invalid = &k8sAppsV1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      foobarMetadataName,
+				Namespace: foobarMetadataNamespace,
+				Annotations: map[string]string{
+					"env": "test",
+					"traffic.sidecar.istio.io/includeInboundPorts": "abcs",
+				},
+				Labels: map[string]string{
+					"identity": deployment1Identity,
+				},
+			},
+			Spec: k8sAppsV1.DeploymentSpec{
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: map[string]string{
+							"env": "test",
+							"traffic.sidecar.istio.io/includeInboundPorts": "abcs",
+						},
+						Labels: map[string]string{
+							"identity": deployment1Identity,
+							"app":      deployment1Identity,
+						},
+					},
+					Spec: coreV1.PodSpec{},
+				},
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": deployment1Identity,
+					},
+				},
+			},
+		}
 		testDeployment1 = &k8sAppsV1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      foobarMetadataName,
@@ -2433,22 +2468,67 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: map[string]string{
 							"env": "test",
-							"traffic.sidecar.istio.io/includeInboundPorts": "abcs",
+							"traffic.sidecar.istio.io/includeInboundPorts": "8090",
 						},
 						Labels: map[string]string{
 							"identity": deployment1Identity,
+							"app":      deployment1Identity,
 						},
 					},
 					Spec: coreV1.PodSpec{},
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
-						"identity": deployment1Identity,
-						"app":      deployment1Identity,
+						"app": deployment1Identity,
 					},
 				},
 			},
 		}
+		testVertex = &numaflowv1alpha1.Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      foobarMetadataName,
+				Namespace: foobarMetadataNamespace,
+			},
+			Spec: numaflowv1alpha1.VertexSpec{
+				AbstractVertex: numaflowv1alpha1.AbstractVertex{
+					AbstractPodTemplate: numaflowv1alpha1.AbstractPodTemplate{
+						Metadata: &numaflowv1alpha1.Metadata{
+							Labels: map[string]string{
+								"identity": vertex1Identity,
+								"app":      vertex1Identity,
+								"env":      "test",
+							},
+							Annotations: map[string]string{
+								"traffic.sidecar.istio.io/includeInboundPorts": "8090",
+							},
+						},
+					},
+				},
+			},
+		}
+		testVertexInvalid = &numaflowv1alpha1.Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      foobarMetadataName,
+				Namespace: foobarMetadataNamespace,
+			},
+			Spec: numaflowv1alpha1.VertexSpec{
+				AbstractVertex: numaflowv1alpha1.AbstractVertex{
+					AbstractPodTemplate: numaflowv1alpha1.AbstractPodTemplate{
+						Metadata: &numaflowv1alpha1.Metadata{
+							Labels: map[string]string{
+								"identity": vertex1Identity,
+								"app":      vertex1Identity,
+								"env":      "test",
+							},
+							Annotations: map[string]string{
+								"traffic.sidecar.istio.io/includeInboundPorts": "abcs",
+							},
+						},
+					},
+				},
+			},
+		}
+
 		clusterID                           = "test-dev-k8s"
 		fakeIstioClient                     = istiofake.NewSimpleClientset()
 		config                              = rest.Config{Host: "localhost"}
@@ -2479,10 +2559,37 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 				SubjectAltNames: []string{"spiffe://prefix/" + deployment1Identity},
 			},
 		}
+		expectedServiceEntriesForVertex = map[string]*istioNetworkingV1Alpha3.ServiceEntry{
+			"test." + vertex1Identity + ".mesh": &istioNetworkingV1Alpha3.ServiceEntry{
+				Hosts:     []string{"test." + vertex1Identity + ".mesh"},
+				Addresses: []string{"127.0.0.1"},
+				Ports: []*istioNetworkingV1Alpha3.ServicePort{
+					&istioNetworkingV1Alpha3.ServicePort{
+						Number:   80,
+						Protocol: "http",
+						Name:     "http",
+					},
+				},
+				Location:   istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+				Resolution: istioNetworkingV1Alpha3.ServiceEntry_DNS,
+				Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+					&istioNetworkingV1Alpha3.WorkloadEntry{
+						Address: "dummy.admiral.global",
+						Ports: map[string]uint32{
+							"http": 0,
+						},
+						Locality: "us-west-2",
+						Labels:   map[string]string{"security.istio.io/tlsMode": "istio"},
+					},
+				},
+				SubjectAltNames: []string{"spiffe://prefix/" + vertex1Identity},
+			},
+		}
 		serviceEntryAddressStore = &ServiceEntryAddressStore{
 			EntryAddresses: map[string]string{
 				"test." + deployment1Identity + ".mesh-se": "127.0.0.1",
 				"test." + rollout1Identity + ".mesh-se":    "127.0.0.1",
+				"test." + vertex1Identity + ".mesh-se":     "127.0.0.1",
 			},
 			Addresses: []string{},
 		}
@@ -2516,6 +2623,21 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 				},
 			},
 		}
+		serviceForVertex = &coreV1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      foobarMetadataName,
+				Namespace: foobarMetadataNamespace,
+			},
+			Spec: coreV1.ServiceSpec{
+				Selector: map[string]string{"app": vertex1Identity},
+				Ports: []coreV1.ServicePort{
+					{
+						Name: "http",
+						Port: 8090,
+					},
+				},
+			},
+		}
 		rr1, _ = InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
 		rr2, _ = InitAdmiral(context.Background(), admiralParamsForServiceEntryTests())
 	)
@@ -2524,6 +2646,11 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 		t.Fail()
 	}
 	deploymentController.Cache.UpdateDeploymentToClusterCache(deployment1Identity, testDeployment1)
+	vertexController, err := admiral.NewVertexWorkloadController(make(chan struct{}), &test.MockVertexWorkloadHandler{}, &config, resyncPeriod, loader.GetFakeClientLoader())
+	if err != nil {
+		t.Fail()
+	}
+	vertexController.Cache.UpdateVertexToClusterCache(vertex1Identity, testVertex)
 	rolloutController, err := admiral.NewRolloutsController(make(chan struct{}), &test.MockRolloutHandler{}, &config, resyncPeriod, loader.GetFakeClientLoader())
 	if err != nil {
 		t.Fail()
@@ -2545,6 +2672,7 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 	t.Logf("expectedServiceEntriesForDeployment: %v\n", expectedServiceEntriesForDeployment)
 	serviceController.Cache.Put(serviceForRollout)
 	serviceController.Cache.Put(serviceForDeployment)
+	serviceController.Cache.Put(serviceForVertex)
 	rc := &RemoteController{
 		ClusterID:                clusterID,
 		DeploymentController:     deploymentController,
@@ -2564,7 +2692,8 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 			IstioClient: fakeIstioClient,
 			Cache:       istio.NewDestinationRuleCache(),
 		},
-		GlobalTraffic: gtpc,
+		GlobalTraffic:            gtpc,
+		VertexWorkloadController: vertexController,
 	}
 	rr1.PutRemoteController(clusterID, rc)
 	rr1.ServiceEntrySuspender = NewDefaultServiceEntrySuspender([]string{})
@@ -2588,10 +2717,25 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
 		}, {
+			name:                   "Given a deployment with valid includeInboundPorts annotation service entry should be created",
+			assetIdentity:          deployment1Identity,
+			remoteRegistry:         rr1,
+			expectedServiceEntries: expectedServiceEntriesForDeployment,
+		}, {
 			name:                   "Given a rollout with invalid includeInboundPorts annotation service entry should not get created",
 			assetIdentity:          rollout1Identity,
 			remoteRegistry:         rr1,
 			expectedServiceEntries: nil,
+		}, {
+			name:                   "Given a vertex with invalid includeInboundPorts annotation service entry should not get created",
+			assetIdentity:          vertex1Identity,
+			remoteRegistry:         rr1,
+			expectedServiceEntries: nil,
+		}, {
+			name:                   "Given a vertex with valid includeInboundPorts annotation service entry should be created",
+			assetIdentity:          vertex1Identity,
+			remoteRegistry:         rr1,
+			expectedServiceEntries: expectedServiceEntriesForVertex,
 		}, {
 			name:                   "Given a deployment with invalid assetId",
 			assetIdentity:          "invalid_asset_id",
@@ -2604,7 +2748,28 @@ func TestModifyServiceEntryForNewServiceOrPod(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ctx := context.Background()
 			ctx = context.WithValue(ctx, "clusterName", "clusterName")
-			ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
+
+			// Set the appropriate eventResourceType based on the test case
+			if c.assetIdentity == vertex1Identity {
+				ctx = context.WithValue(ctx, "eventResourceType", common.Vertex)
+			} else if c.assetIdentity == rollout1Identity {
+				ctx = context.WithValue(ctx, "eventResourceType", common.Rollout)
+			} else {
+				ctx = context.WithValue(ctx, "eventResourceType", common.Deployment)
+			}
+
+			// Update the deployment cache based on the test case
+			if c.name == "Given a deployment with invalid includeInboundPorts annotation service entry should not get created" {
+				deploymentController.Cache.UpdateDeploymentToClusterCache(deployment1Identity, testDeployment1Invalid)
+			} else if c.name == "Given a deployment with valid includeInboundPorts annotation service entry should be created" {
+				deploymentController.Cache.UpdateDeploymentToClusterCache(deployment1Identity, testDeployment1)
+			}
+			if c.name == "Given a vertex with invalid includeInboundPorts annotation service entry should not get created" {
+				vertexController.Cache.UpdateVertexToClusterCache(vertex1Identity, testVertexInvalid)
+			} else if c.name == "Given a vertex with valid includeInboundPorts annotation service entry should be created" {
+				vertexController.Cache.UpdateVertexToClusterCache(vertex1Identity, testVertex)
+			}
+
 			serviceEntries, _ := modifyServiceEntryForNewServiceOrPod(
 				ctx,
 				admiral.Add,
@@ -3448,6 +3613,101 @@ func TestCreateServiceEntry(t *testing.T) {
 	for _, c := range rolloutSeCreationTestCases {
 		t.Run(c.name, func(t *testing.T) {
 			createdSE, _ := createServiceEntryForRollout(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, &c.rollout, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
+			if !compareServiceEntries(createdSE, c.expectedResult) {
+				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
+			}
+		})
+	}
+
+	// Test for Vertex
+	seVertex := istioNetworkingV1Alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istioNetworkingV1Alpha3.ServicePort{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "http", Protocol: "http"}},
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"http": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Vertex, "security.istio.io/tlsMode": "istio"}},
+		},
+	}
+
+	grpcSeVertex := istioNetworkingV1Alpha3.ServiceEntry{
+		Hosts:     []string{"e2e.my-first-service.mesh"},
+		Addresses: []string{localAddress},
+		Ports: []*istioNetworkingV1Alpha3.ServicePort{{Number: uint32(common.DefaultServiceEntryPort),
+			Name: "grpc", Protocol: "grpc"}},
+		Location:        istioNetworkingV1Alpha3.ServiceEntry_MESH_INTERNAL,
+		Resolution:      istioNetworkingV1Alpha3.ServiceEntry_DNS,
+		SubjectAltNames: []string{"spiffe://prefix/my-first-service"},
+		Endpoints: []*istioNetworkingV1Alpha3.WorkloadEntry{
+			{Address: "dummy.admiral.global", Ports: map[string]uint32{"grpc": 0}, Locality: "us-west-2", Labels: map[string]string{"type": common.Vertex, "security.istio.io/tlsMode": "istio"}},
+		},
+	}
+
+	vertex := &numaflowv1alpha1.Vertex{}
+	vertex.Namespace = "test-ns"
+	spec := numaflowv1alpha1.VertexSpec{}
+	spec.Metadata = &numaflowv1alpha1.Metadata{
+		Labels: map[string]string{"env": "e2e", "identity": "my-first-service"},
+	}
+	vertex.Spec = spec
+
+	vertexWithoutIdentity := &numaflowv1alpha1.Vertex{}
+	vertexWithoutIdentity.Namespace = "test-ns"
+	specWithoutIdentity := numaflowv1alpha1.VertexSpec{}
+	specWithoutIdentity.Metadata = &numaflowv1alpha1.Metadata{
+		Labels: map[string]string{},
+	}
+	vertexWithoutIdentity.Spec = specWithoutIdentity
+
+	vertexSeCreationTestCases := []struct {
+		name           string
+		rc             *RemoteController
+		admiralCache   AdmiralCache
+		meshPorts      map[string]uint32
+		vertex         *numaflowv1alpha1.Vertex
+		expectedResult *istioNetworkingV1Alpha3.ServiceEntry
+	}{
+		{
+			name:           "Should return a created service entry with grpc protocol for Vertex",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32{"grpc": uint32(80)},
+			vertex:         vertex,
+			expectedResult: &grpcSeVertex,
+		},
+		{
+			name:           "Should return a created service entry with http protocol for Vertex",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			vertex:         vertex,
+			expectedResult: &seVertex,
+		},
+		{
+			name:           "Should not create a service entry when configmap controller fails for Vertex",
+			rc:             rc,
+			admiralCache:   errorAdmiralCache,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			vertex:         vertex,
+			expectedResult: nil,
+		},
+		{
+			name:           "Should not create a service entry for vertex without identity",
+			rc:             rc,
+			admiralCache:   admiralCache,
+			meshPorts:      map[string]uint32{"http": uint32(80)},
+			vertex:         vertexWithoutIdentity,
+			expectedResult: nil,
+		},
+	}
+
+	//Run the test for every provided case
+	for _, c := range vertexSeCreationTestCases {
+		t.Run(c.name, func(t *testing.T) {
+			createdSE, _ := createServiceEntryForVertex(ctxLogger, ctx, admiral.Add, c.rc, &c.admiralCache, c.meshPorts, c.vertex, map[string]*istioNetworkingV1Alpha3.ServiceEntry{})
 			if !compareServiceEntries(createdSE, c.expectedResult) {
 				t.Errorf("Test %s failed, expected: %v got %v", c.name, c.expectedResult, createdSE)
 			}
