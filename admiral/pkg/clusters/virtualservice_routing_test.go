@@ -3512,8 +3512,9 @@ func TestAddUpdateInClusterDestinationRule(t *testing.T) {
 
 	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-ns.svc.cluster.local-incluster-dr",
-			Namespace: util.IstioSystemNamespace,
+			Name:        "test-ns.svc.cluster.local-incluster-dr",
+			Namespace:   util.IstioSystemNamespace,
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: networkingV1Alpha3.DestinationRule{
 			Host:     "*.test-ns.svc.cluster.local",
@@ -3841,8 +3842,9 @@ func TestAddUpdateDestinationRuleForSourceIngress(t *testing.T) {
 
 	existingDR := &apiNetworkingV1Alpha3.DestinationRule{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      "test-ns.svc.cluster.local-routing-dr",
-			Namespace: util.IstioSystemNamespace,
+			Name:        "test-ns.svc.cluster.local-routing-dr",
+			Namespace:   util.IstioSystemNamespace,
+			Annotations: map[string]string{resourceCreatedByAnnotationLabel: resourceCreatedByAnnotationValue},
 		},
 		Spec: networkingV1Alpha3.DestinationRule{
 			Host:     "*.test-ns.svc.cluster.local",
@@ -5243,13 +5245,17 @@ func TestDoReconcileVirtualService(t *testing.T) {
 			expectedError:  nil,
 		},
 	}
+	ctxLogger := log.WithFields(log.Fields{
+		"type": "VirtualService",
+	})
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := doReconcileVirtualService(
+				ctxLogger,
 				tc.rc,
 				tc.desiredVS,
-				tc.comparator)
+				tc.comparator, "")
 			if tc.expectedError != nil {
 				assert.NotNil(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
