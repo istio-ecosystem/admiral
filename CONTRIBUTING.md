@@ -7,42 +7,72 @@ We welcome contributions :)
 Also refer to [Collaboration](./README.md) for communication channels.
 
 ## Setting up for local Development
-* Clone the repo and set ADMIRAL_HOME env variable
+
+### Pre-requisite
+
+#### Pre requisite 1 - Setup environment variables
 ```bash
 git clone https://github.com/istio-ecosystem/admiral.git
 cd admiral
 export ADMIRAL_HOME=$(pwd)
-```
-* Run a [minikube](https://kubernetes.io/docs/setup/learning-environment/minikube/) k8s cluster using existing script (you can use any k8s cluster if one exists already)
-* Note: Recommend using k8s version 1.16.8 or above to work with recent istio version
+``` 
+
+#### Pre requisite 2 - Create a kubernetes cluster
 ```bash
-$ADMIRAL_HOME/tests/create_cluster.sh 1.16.8
+$ADMIRAL_HOME/tests/create_cluster.sh 1.28.0
 export KUBECONFIG=~/.kube/config
 ```
-* Install [Prerequisites](./docs/Examples.md#Prerequisite) and make sure to install istio control plane in cluster. Alternatively, you can use the script to install istio control plane on the cluster created in previous step:
 
-Mac: `$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 osx`
+#### Pre requisite 3 - Install Istio 
+For Mac (Intel based): 
+```bash
+$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 osx
+```
 
-Mac (Apple Silicon): `$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 osx-arm64`
+Mac (Apple Silicon): 
+```bash
+$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 osx-arm64
+```
 
-Linux: `$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 linux`
+Linux: 
+```bash
+$ADMIRAL_HOME/tests/install_istio.sh 1.20.2 linux
+```
 
-* Set up necessary permissions and configurations for Admiral
+#### Pre requisite 4 - Config DNS Proxying
+Configure DNS for service entries (hosts) ending in `global`, by enabling [Enable DNS proxy mode](https://istio.io/latest/docs/ops/configuration/traffic-management/dns-proxy/)
+
+#### Pre requisite 5 - Install kustomize
+```bash
+brew install kustomize
+```
+
+## Running Admiral 
+
+### Install Admiral CRDs, and grant access using RBAC 
 
 ```bash
 $ADMIRAL_HOME/install/scripts/dev_setup.sh
 ```
-* Run `admiral` from your IDE (assumes that the kubeconfig is for the cluster is at `~/.kube/config`)
-```
-$ADMIRAL_HOME/admiral/cmd/admiral/main.go --kube_config "<Path_to_Kubeconfig>"
+
+### Installing istio's bookinfo applications
+```bash
+kubectl apply -f out/yaml/bookinfo/* --kubeconfig $KUBECONFIG
 ```
 
-* `Optional`: Adding a second cluster for admiral to monitor (for multi-cluster)
+### Run admiral as a local process
+```bash
+go run $ADMIRAL_HOME/admiral/cmd/admiral/main.go --sync_period=5s --kube_config $KUBECONFIG
+```
+
+## Optional configurations
+
+### Multi cluster admiral setup
 ```bash
 $ADMIRAL_HOME/install/scripts/cluster-secret.sh <Path_to_Kubeconfig_Admiral_Cluster> <Path_to_Kubeconfig_Remote_Cluster> admiral
 ```
 
-* `Optional`: Run `admiral` inside the minikube cluster
+### Running admiral as a deployment inside a kubernetes cluster
 ```bash
 # point to the admiral primary cluster
 export KUBECONFIG=<Path_to_Kubeconfig_Admiral_Cluster>
@@ -60,7 +90,7 @@ minikube service admiral-http -n admiral --url
 minikube service admiral-metrics -n admiral --url
 ```
 
-* `Optional`: Install prometheus for metrics.
+### Install prometheus for metrics.
 ```bash
 # build the yaml files
 make gen-yaml

@@ -1,0 +1,24 @@
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: productpage 
+  namespace: admiral
+spec:
+  source: productpage
+  identityLabel: identity
+  destinations:
+    - details
+    - reviews
+
+---
+apiVersion: admiral.io/v1alpha1
+kind: Dependency
+metadata:
+  name: reviews
+  namespace: admiral
+spec:
+  source: reviews
+  identityLabel: identity
+  destinations:
+    - ratings
