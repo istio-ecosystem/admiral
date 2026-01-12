@@ -201,7 +201,6 @@ func UpdateASyncAdmiralConfig(ctxDynamicConfig context.Context, rr *RemoteRegist
 }
 
 func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
-
 	dbRawData, err := rr.DynamicConfigDatabaseClient.Get("EnableDynamicConfig", common.Admiral)
 	if err != nil {
 		log.Errorf("task=%s, error getting EnableDynamicConfig admiral config, err: %v", common.DynamicConfigUpdate, err)
@@ -227,6 +226,8 @@ func ReadAndUpdateSyncAdmiralConfig(rr *RemoteRegistry) error {
 		ctx := context.Background()
 		//Process NLB Cluster
 		processLBMigration(ctx, rr, common.GetAdmiralParams().NLBEnabledClusters, &rr.AdmiralCache.NLBEnabledCluster, common.GetAdmiralParams().NLBIngressLabel)
+		//Process CLB Cluster
+		processLBMigration(ctx, rr, common.GetAdmiralParams().CLBEnabledClusters, &rr.AdmiralCache.CLBEnabledCluster, common.GetAdmiralParams().CLBIngressLabel)
 		// Process InitiateClientInitiatedProcessingFor
 		var c ClientDependencyRecordProcessor
 		err := triggerClientInitiatedProcessing(ctx, c, rr, common.GetInitiateClientInitiatedProcessingFor())
@@ -310,8 +311,11 @@ func processLBMigration(ctx context.Context, rr *RemoteRegistry, updatedLBs []st
 
 	clusterToProcess := getLBToProcess(updatedLBs, existingCache)
 	ctxLogger.Infof("ClusterToProccess=%s, LBLabel=%s", clusterToProcess, lbLabel)
-
 	for _, cluster := range clusterToProcess {
+		//Cover NLB Usecase for asset migration by cluster
+		if len(strings.Split(cluster, ":")) == 2 {
+			cluster = strings.Split(cluster, ":")[1]
+		}
 		err := isServiceControllerInitialized(rr.remoteControllers[cluster])
 		if err == nil {
 			for _, fetchService := range rr.remoteControllers[cluster].ServiceController.Cache.Get(common.NamespaceIstioSystem) {

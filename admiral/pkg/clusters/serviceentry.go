@@ -8,13 +8,14 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/istio-ecosystem/admiral/admiral/pkg/core/vsrouting"
+	"k8s.io/utils/strings/slices"
+
 	"github.com/istio-ecosystem/admiral/admiral/pkg/registry"
 	commonUtil "github.com/istio-ecosystem/admiral/admiral/pkg/util"
 	"gopkg.in/yaml.v2"
@@ -71,7 +72,8 @@ func createServiceEntryForDeployment(
 	admiralCache *AdmiralCache,
 	meshPorts map[string]uint32,
 	destDeployment *k8sAppsV1.Deployment,
-	serviceEntries map[string]*networking.ServiceEntry) (*networking.ServiceEntry, error) {
+	serviceEntries map[string]*networking.ServiceEntry,
+	sourceIdentity string) (*networking.ServiceEntry, error) {
 	defer util.LogElapsedTimeForTask(ctxLogger, "createServiceEntryForDeployment", "", "", "", "")()
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCname(destDeployment, workloadIdentityKey, common.GetHostnameSuffix())
@@ -95,7 +97,7 @@ func createServiceEntryForDeployment(
 	}
 
 	san := getSanForDeployment(destDeployment, workloadIdentityKey)
-	return generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Deployment), nil
+	return generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Deployment, sourceIdentity), nil
 }
 
 // modifyServiceEntryForNewServiceOrPod creates/updates
@@ -118,6 +120,7 @@ func modifyServiceEntryForNewServiceOrPod(
 	}
 
 	ctx = context.WithValue(ctx, common.TrafficConfigIdentity, sourceIdentity)
+	ctx = context.WithValue(ctx, common.TrafficConfigContextWorkloadEnvKey, env)
 
 	// Assigns sourceIdentity, which could have the partition prefix or might not, to the partitionedIdentity
 	// Then, gets the non-partitioned identity and assigns it to sourceIdentity. sourceIdentity will always have the original/non-partitioned identity
@@ -128,6 +131,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			"processing skipped as service entry update is suspended for identity "+sourceIdentity+" in environment "+env)
 		return nil, nil
 	}
+
 	if commonUtil.IsAdmiralReadOnly() {
 		ctxLogger.Infof(common.CtxLogFormat, event, "", "", "", "processing skipped as Admiral is in Read-only mode")
 		return nil, nil
@@ -234,14 +238,16 @@ func modifyServiceEntryForNewServiceOrPod(
 		}
 
 		// START - Admiral 2.0
-		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+		ingressEndpoint, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache, sourceIdentity)
 
 		registryConfig.Clusters[clusterId] = &registry.IdentityConfigCluster{
 			Name:            clusterId,
 			Locality:        getLocality(rc),
 			IngressEndpoint: ingressEndpoint,
 			IngressPort:     strconv.Itoa(port),
-			Environment:     map[string]*registry.IdentityConfigEnvironment{},
+			Environment: map[string]*registry.IdentityConfigEnvironment{
+				env: &registry.IdentityConfigEnvironment{},
+			},
 		}
 		// END admiral 2.0
 
@@ -309,7 +315,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			clustersToDeleteSE[clusterId] = deleteCluster
 
 			start = time.Now()
-			_, errCreateSE := createServiceEntryForDeployment(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries)
+			_, errCreateSE := createServiceEntryForDeployment(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, deployment, serviceEntries, sourceIdentity)
 			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry",
 				deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "total service entries built="+strconv.Itoa(len(serviceEntries)))
 			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForDeployment",
@@ -362,7 +368,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			clustersToDeleteSE[clusterId] = deleteCluster
 
 			start = time.Now()
-			_, errCreateSE := createServiceEntryForRollout(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries)
+			_, errCreateSE := createServiceEntryForRollout(ctxLogger, ctx, eventType, rc, remoteRegistry.AdmiralCache, localMeshPorts, rollout, serviceEntries, sourceIdentity)
 			ctxLogger.Infof(common.CtxLogFormat, "BuildServiceEntry", deploymentOrRolloutName, deploymentOrRolloutNS, clusterId, "total service entries built="+strconv.Itoa(len(serviceEntries)))
 			util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateServiceEntryForRollout",
 				deploymentOrRolloutName, deploymentOrRolloutNS, rc.ClusterID, "", start)
@@ -415,6 +421,7 @@ func modifyServiceEntryForNewServiceOrPod(
 			}
 		}
 	}
+
 	//PID: use partitionedIdentity because IdentityDependencyCache is filled using the partitionedIdentity - DONE
 	dependents := remoteRegistry.AdmiralCache.IdentityDependencyCache.Get(partitionedIdentity).Copy()
 	// updates CnameDependentClusterCache and CnameDependentClusterNamespaceCache
@@ -600,7 +607,7 @@ func modifyServiceEntryForNewServiceOrPod(
 					modifySEerr = common.AppendError(modifySEerr, err)
 				}
 			}
-			clusterIngress, _, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache)
+			clusterIngress, _, _ := getOverwrittenLoadBalancer(ctxLogger, rc, clusterName, remoteRegistry.AdmiralCache, sourceIdentity)
 
 			if err != nil {
 				err := fmt.Errorf(
@@ -642,7 +649,6 @@ func modifyServiceEntryForNewServiceOrPod(
 							registryConfig.Clusters[sourceCluster].Environment[env].Type[common.Rollout].Strategy = bluegreenStrategy
 							continue
 						}
-
 						err := remoteRegistry.ConfigWriter.AddServiceEntriesWithDrToAllCluster(
 							ctxLogger, ctx, remoteRegistry, map[string]string{sourceCluster: sourceCluster},
 							map[string]*networking.ServiceEntry{key: serviceEntry},
@@ -968,7 +974,7 @@ If provided cluster is overwritten with some other app label mention in nlb-isti
 
 	then overwrite load balancer
 */
-func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache) (string, int, error) {
+func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, clusterName string, admiralCache *AdmiralCache, sourceIdentity string) (string, int, error) {
 
 	err := isServiceControllerInitialized(rc)
 	if err != nil {
@@ -976,8 +982,9 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	}
 
 	ctx = ctx.WithFields(logrus.Fields{
-		"task":        common.LBUpdateProcessor,
-		"clusterName": clusterName,
+		"task":           common.LBUpdateProcessor,
+		"clusterName":    clusterName,
+		"sourceIdentity": sourceIdentity,
 	})
 
 	endpoint, port := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().LabelSet.GatewayApp, common.NamespaceIstioSystem)
@@ -988,7 +995,7 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 	})
 
 	//Overwrite for NLB
-	if slices.Contains(admiralCache.NLBEnabledCluster, clusterName) {
+	if isNLBEnabled(admiralCache.NLBEnabledCluster, clusterName, sourceIdentity) {
 		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().NLBIngressLabel, common.NamespaceIstioSystem)
 		ctx = ctx.WithFields(logrus.Fields{
 			"OverwritenLB":     overwriteEndpoint,
@@ -1010,8 +1017,63 @@ func getOverwrittenLoadBalancer(ctx *logrus.Entry, rc *RemoteController, cluster
 		})
 	}
 
+	//Overwrite for CLB
+	if slices.Contains(admiralCache.CLBEnabledCluster, clusterName) {
+		overwriteEndpoint, overwritePort := rc.ServiceController.Cache.GetSingleLoadBalancer(common.GetAdmiralParams().CLBIngressLabel, common.NamespaceIstioSystem)
+		ctx = ctx.WithFields(logrus.Fields{
+			"OverwritenLB":     overwriteEndpoint,
+			"Port":             overwritePort,
+			"OverwrittenLabel": common.GetAdmiralParams().CLBIngressLabel,
+		})
+
+		//Validate if provided LB information is not default dummy, If Dummy then coutinue default LB
+		if len(overwriteEndpoint) > 0 && overwritePort > 0 && overwriteEndpoint != common.DummyAdmiralGlobal {
+			ctx = ctx.WithFields(logrus.Fields{
+				"Overwritten": true,
+			})
+			ctx.Info("")
+			return overwriteEndpoint, overwritePort, nil
+		}
+
+		ctx = ctx.WithFields(logrus.Fields{
+			"Overwritten": false,
+		})
+	}
+
 	ctx.Info("")
 	return endpoint, port, nil
+}
+
+/*
+	Valid nlbCluster Input :
+	intuit.mesh.health.check:ip-paas-ppd-usw2-k8s
+	intuit.foo.bar,intuit.mesh.health.check:mesh-dod-food-ppd-usw2-k8s
+	mesh-dod-food-ppd-usw2-k8s
+
+	InValid nlbCluster Input :
+	Intuit.mesh.health.check:ip-paas-ppd-usw2-k8s
+	:ip-paas-ppd-usw2-k8s
+	*:mesh-dod-food-ppd-usw2-k8s
+*/
+
+func isNLBEnabled(nlbClusters []string, clusterName string, sourceIdentity string) bool {
+	// Check if clusterName is directly in nlbClusters or if sourceIdentity is in the NLB enabled identity list
+	if slices.Contains(nlbClusters, clusterName) ||
+		slices.Contains(common.GetAdmiralParams().NLBEnabledIdentityList, strings.ToLower(sourceIdentity)) {
+		return true
+	}
+
+	// Iterate over nlbClusters to check for identity and cluster name match
+	for _, nlbCluster := range nlbClusters {
+		nlbSplits := strings.Split(nlbCluster, ":")
+		if len(nlbSplits) == 2 {
+			identities := strings.Split(nlbSplits[0], ",")
+			if slices.Contains(identities, strings.ToLower(sourceIdentity)) && nlbSplits[1] == clusterName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func orderSourceClusters(ctx context.Context, rr *RemoteRegistry, services map[string]map[string]*k8sV1.Service) []string {
@@ -1581,7 +1643,7 @@ func AddServiceEntriesWithDrWorker(
 			fmt.Sprintf("VSRoutingInClusterEnabled: %v for cluster: %s and Identity: %s",
 				doDRUpdateForInClusterVSRouting, cluster, identityId))
 		var seDrSet, clientNamespaces = createSeAndDrSetFromGtp(ctxLogger, ctx, env, region, cluster, se,
-			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting)
+			globalTrafficPolicy, outlierDetection, clientConnectionSettings, cache, currentDR, doDRUpdateForInClusterVSRouting, isServiceEntryModifyCalledForSourceCluster)
 		util.LogElapsedTimeSinceTask(ctxLogger, "AdmiralCacheCreateSeAndDrSetFromGtp", "", "", cluster, "", start)
 
 		for _, seDr := range seDrSet {
@@ -1614,6 +1676,7 @@ func AddServiceEntriesWithDrWorker(
 				ctxLogger.Infof(common.CtxLogFormat, "AddServiceEntriesWithDrWorker", oldServiceEntry.Name, syncNamespace, cluster, "skipped updating the SE as there exists a custom SE with the same name")
 				skipSEUpdate = true
 			}
+			seDr.DestinationRule = addNLBIdleTimeout(ctx, ctxLogger, rr, rc, seDr.DestinationRule.DeepCopy(), "", identityId)
 			drReconciliationRequired := reconcileDestinationRule(
 				ctxLogger,
 				common.EnableDestinationRuleCache(),
@@ -2479,9 +2542,7 @@ func isGeneratedByCartographer(annotations map[string]string) bool {
 	return true
 }
 
-func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region string, cluster string,
-	se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection,
-	clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule, doDRUpdateForInClusterRouting bool) (map[string]*SeDrTuple, []string) {
+func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, region, cluster string, se *networking.ServiceEntry, globalTrafficPolicy *v1.GlobalTrafficPolicy, outlierDetection *v1.OutlierDetection, clientConnectionSettings *v1.ClientConnectionConfig, cache *AdmiralCache, currentDR *v1alpha3.DestinationRule, doDRUpdateForInClusterRouting, isServiceEntryModifyCalledForSourceCluster bool) (map[string]*SeDrTuple, []string) {
 	var (
 		defaultDrName = getIstioResourceName(se.Hosts[0], "-default-dr")
 		defaultSeName = getIstioResourceName(se.Hosts[0], "-se")
@@ -2539,6 +2600,15 @@ func createSeAndDrSetFromGtp(ctxLogger *logrus.Entry, ctx context.Context, env, 
 				} else {
 					modifiedSe.Addresses = []string{newAddress}
 				}
+
+				if isServiceEntryModifyCalledForSourceCluster {
+					if cache.CnameClusterCache == nil {
+						ctxLogger.Error("CnameClusterCache is nil.")
+					} else {
+						cache.CnameClusterCache.Put(host, cluster, cluster)
+					}
+				}
+
 			}
 			var seDr = &SeDrTuple{
 				DrName:                      drName,
@@ -2726,9 +2796,7 @@ func putServiceEntryStateFromConfigmap(ctxLogger *logrus.Entry, ctx context.Cont
 	return c.PutConfigMap(ctx, originalConfigmap)
 }
 
-func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController,
-	admiralCache *AdmiralCache, meshPorts map[string]uint32, destRollout *argo.Rollout,
-	serviceEntries map[string]*networking.ServiceEntry) (*networking.ServiceEntry, error) {
+func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, event admiral.EventType, rc *RemoteController, admiralCache *AdmiralCache, meshPorts map[string]uint32, destRollout *argo.Rollout, serviceEntries map[string]*networking.ServiceEntry, sourceIdentity string) (*networking.ServiceEntry, error) {
 	workloadIdentityKey := common.GetWorkloadIdentifier()
 	globalFqdn := common.GetCnameForRollout(destRollout, workloadIdentityKey, common.GetHostnameSuffix())
 
@@ -2761,7 +2829,7 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 			if len(previewGlobalFqdn) != 0 && (common.DisableIPGeneration() || len(previewAddress) != 0) {
 				ctxLogger.Infof(common.CtxLogFormat,
 					"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "ServiceEntry previewGlobalFqdn="+previewGlobalFqdn+". previewAddress="+previewAddress)
-				generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout)
+				generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, previewGlobalFqdn, rc, serviceEntries, previewAddress, san, common.Rollout, sourceIdentity)
 			}
 		}
 	}
@@ -2769,14 +2837,14 @@ func createServiceEntryForRollout(ctxLogger *logrus.Entry, ctx context.Context, 
 	// Works for istio canary only, creates an additional SE for canary service
 	ctxLogger.Infof(common.CtxLogFormat,
 		"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "Generating service entry for canary")
-	err = GenerateServiceEntryForCanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, destRollout, serviceEntries, workloadIdentityKey, san)
+	err = GenerateServiceEntryForCanary(ctxLogger, ctx, event, rc, admiralCache, meshPorts, destRollout, serviceEntries, workloadIdentityKey, san, sourceIdentity)
 	if err != nil {
 		ctxLogger.Errorf(common.CtxLogFormat,
 			"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", err.Error())
 		return nil, err
 	}
 
-	tmpSe := generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Rollout)
+	tmpSe := generateServiceEntry(ctxLogger, event, admiralCache, meshPorts, globalFqdn, rc, serviceEntries, address, san, common.Rollout, sourceIdentity)
 	ctxLogger.Infof(common.CtxLogFormat,
 		"createServiceEntryForRollout", destRollout.Name, destRollout.Namespace, "", "service entry generated")
 	return tmpSe, nil
@@ -2856,7 +2924,7 @@ func generateServiceEntry(
 	serviceEntries map[string]*networking.ServiceEntry,
 	address string,
 	san []string,
-	appType string) *networking.ServiceEntry {
+	appType string, sourceIdentity string) *networking.ServiceEntry {
 	start := time.Now()
 	defer util.LogElapsedTimeSinceTask(ctxLogger, "GenerateServiceEntry", "", "", rc.ClusterID, "", start)
 	admiralCache.CnameClusterCache.Put(globalFqdn, rc.ClusterID, rc.ClusterID)
@@ -2890,7 +2958,7 @@ func generateServiceEntry(
 	}
 
 	start = time.Now()
-	endpointAddress, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache)
+	endpointAddress, port, _ := getOverwrittenLoadBalancer(ctxLogger, rc, rc.ClusterID, admiralCache, sourceIdentity)
 	util.LogElapsedTimeSinceTask(ctxLogger, "GetLoadBalancer", "", "", rc.ClusterID, "", start)
 	var locality string
 	if rc.NodeController.Locality != nil {

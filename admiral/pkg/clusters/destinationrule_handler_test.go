@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/client/loader"
+	"github.com/istio-ecosystem/admiral/admiral/pkg/test"
+	"k8s.io/client-go/rest"
 	"testing"
 	"time"
 
@@ -1667,6 +1670,111 @@ func TestAddUpdateDestinationRule2(t *testing.T) {
 	}
 }
 
+func TestAddNLBIdleTimeout(t *testing.T) {
+	var (
+		ctxLogger = log.WithFields(log.Fields{
+			"type": "destinationRule",
+		})
+		dr = &v1alpha32.DestinationRule{
+			ObjectMeta: metaV1.ObjectMeta{
+				Name:      "my-dr",
+				Namespace: "test-ns",
+			},
+			Spec: v1alpha3.DestinationRule{
+				Host: "e2e.blah.global",
+			},
+		}
+		ctx = context.Background()
+		rc  = &RemoteController{
+			ClusterID: "test-cluster",
+			DestinationRuleController: &istio.DestinationRuleController{
+				IstioClient: istioFake.NewSimpleClientset(),
+			},
+		}
+		admiralParams = common.AdmiralParams{
+			LabelSet:              &common.LabelSet{},
+			SyncNamespace:         "test-sync-ns",
+			EnableSWAwareNSCaches: true,
+			ExportToMaxNamespaces: 35,
+		}
+		stop         = make(chan struct{})
+		config       = rest.Config{Host: "test-nlb"}
+		resyncPeriod = time.Millisecond * 1
+		nlbService   = newFakeService(common.NLBIstioIngressGatewayLabelValue, common.NamespaceIstioSystem, map[string]string{"app": common.NLBIstioIngressGatewayLabelValue})
+	)
+	common.ResetSync()
+	common.InitializeConfig(admiralParams)
+	rr := NewRemoteRegistry(ctx, admiralParams)
+	serviceControllerWithOneMatchingService, _ := admiral.NewServiceController(stop, &test.MockServiceHandler{}, &config, resyncPeriod, loader.GetFakeClientLoader())
+	rc.ServiceController = serviceControllerWithOneMatchingService
+	serviceControllerWithOneMatchingService.K8sClient.CoreV1().Services(common.NamespaceIstioSystem).Create(ctx, nlbService, metaV1.CreateOptions{})
+	rr.PutRemoteController("test-cluster", rc)
+	rr.AdmiralCache.CnameClusterCache.Put(dr.Spec.Host, "test-cluster", "test-cluster")
+	rr.AdmiralCache.CnameDependentClusterNamespaceCache.Put(dr.Spec.Host, rc.ClusterID, "dep-ns", "dep-ns")
+	rr.AdmiralCache.NLBEnabledCluster = []string{"test-cluster"}
+
+	//Before State
+	beforeDefaultLB := common.GetAdmiralParams().LabelSet.GatewayApp
+
+	//Set to default to CLB
+	common.GetAdmiralParams().LabelSet.GatewayApp = common.IstioIngressGatewayLabelValue
+
+	cases := []struct {
+		name            string
+		newDR           *v1alpha32.DestinationRule
+		VSSourceCluster string
+		svcTimeout      string
+		expTimeout      string
+	}{
+		{
+			name: "Given the nlb svc has timeout value less than 350, " +
+				"When we create a dr for a service in that cluster, " +
+				"Then the created dr should have TCP idle timeout of 350s",
+			newDR:      dr,
+			svcTimeout: "330",
+			expTimeout: "seconds:350",
+		},
+		{
+			name: "Given the nlb svc has timeout value greater than 350, " +
+				"When we create a dr for a service in that cluster, " +
+				"Then the created dr should have TCP idle timeout of the same value as the nlb svc",
+			newDR:      dr,
+			svcTimeout: "2100",
+			expTimeout: "seconds:2100",
+		},
+		{
+			name: "Given the update is for a vs routing dr, " +
+				"When the source cluster is nlb enabled, " +
+				"Then the idle timeout should be correct",
+			newDR:      dr,
+			svcTimeout: "2100",
+			expTimeout: "seconds:2100",
+		},
+		{
+			name: "Given the update is for a vs routing dr, " +
+				"When the source cluster is nlb enabled, " +
+				"Then the idle timeout should be correct",
+			newDR:           dr,
+			svcTimeout:      "2100",
+			expTimeout:      "seconds:2100",
+			VSSourceCluster: "test-cluster",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			nlbService.Annotations = map[string]string{common.NLBIdleTimeoutAnnotation: c.svcTimeout}
+			serviceControllerWithOneMatchingService.K8sClient.CoreV1().Services(common.NamespaceIstioSystem).Update(ctx, nlbService, metaV1.UpdateOptions{})
+			updatedDr := addNLBIdleTimeout(ctx, ctxLogger, rr, rc, c.newDR.Spec.DeepCopy(), c.VSSourceCluster, "")
+			if updatedDr.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout.String() != c.expTimeout {
+				t.Errorf("got tcp idle timeout: %s, expected %s", updatedDr.TrafficPolicy.ConnectionPool.Tcp.IdleTimeout, c.expTimeout)
+			}
+		})
+	}
+
+	//restore
+	common.GetAdmiralParams().LabelSet.GatewayApp = beforeDefaultLB
+}
+
 // write test for getClientConnectionPoolOverrides
 func TestGetClientConnectionPoolOverrides(t *testing.T) {
 
@@ -1992,4 +2100,136 @@ func TestGetDestinationRuleVSRoutingInCluster(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsNLBTimeoutNeeded(t *testing.T) {
+	type args struct {
+		sourceClusters []string
+		nlbOverwrite   []string
+		clbOverwrite   []string
+		sourceIdentity string
+	}
+
+	//Store previous state
+	beforeRunningtest := common.GetAdmiralParams().LabelSet.GatewayApp
+
+	updateAdmiralParam := common.GetAdmiralParams()
+	updateAdmiralParam.NLBEnabledIdentityList = []string{"intuit.test.asset"}
+
+	common.UpdateAdmiralParams(updateAdmiralParam)
+
+	//common.GetAdmiralParams().LabelSet.GatewayApp = common.NLBIstioIngressGatewayLabelValue
+	//NLB is default. SourceCluster doen't have clb overwrite
+	nlbDefaultWithNoCLBOverwrite := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "test2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+	}
+
+	//NLB is default. SourceCluster does have clb overwrite partially
+	nlbDefaultWithCLBOverwrite := args{
+		sourceClusters: []string{"test1-k8s", "clb1-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "test2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+	}
+
+	//NLB is default. All sourcecluster belongs to clb overwrite
+	nlbDefaultWithAllCLBOverwrite := args{
+		sourceClusters: []string{"test1-k8s", "clb1-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "test2-k8s"},
+		clbOverwrite:   []string{"test1-k8s", "clb1-k8s"},
+	}
+
+	//CLB is default. SourceCluster does have partial nlb overwrite
+	clbDefaultWithPartialNLBOverwrite := args{
+		sourceClusters: []string{"test1-k8s", "nlb1-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "test2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+	}
+
+	//CLB is default. SourceCluster doen't have nlb overwrite, SourceCluster doesn't have clb overwrite
+	clbDefaultWithNoOverwrite := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+	}
+
+	//CLB is default, Source Asset found
+	withSourceAsset := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "intuit.test.asset",
+	}
+
+	withSourceAssetCamelCase := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "Intuit.test.asset",
+	}
+
+	withSourceAssetEmpty := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "",
+	}
+
+	withSourceAssetNotMatching := args{
+		sourceClusters: []string{"test1-k8s", "test2-k8s"},
+		nlbOverwrite:   []string{"nlb1-k8s", "nlb2-k8s"},
+		clbOverwrite:   []string{"clb1-k8s", "test3-k8s"},
+		sourceIdentity: "intuit.test.asset.trymatchme",
+	}
+
+	tests := []struct {
+		name      string
+		args      args
+		defaultLB string
+		want      bool
+	}{
+		//NLB Default
+		{"NLB is default. SourceCluster doen't have clb overwrite", nlbDefaultWithNoCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, true},
+		{"NLB is default. SourceCluster does have clb overwrite partially", nlbDefaultWithCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, true},
+		{"NLB is default. All sourcecluster belongs to clb overwrite", nlbDefaultWithAllCLBOverwrite, common.NLBIstioIngressGatewayLabelValue, false},
+
+		//CLB Default
+		{"CLB is default. SourceCluster does have partial nlb overwrite", clbDefaultWithPartialNLBOverwrite, common.IstioIngressGatewayLabelValue, true},
+		{"CLB is default. SourceCluster doen't have nlb overwrite, SourceCluster doesn't have clb overwrite", clbDefaultWithNoOverwrite, common.IstioIngressGatewayLabelValue, false},
+
+		//Overwrite source asset
+		{"CLB is default. Source Asset overwrite is present", withSourceAsset, common.IstioIngressGatewayLabelValue, true},
+		{"NLB is default. Source Asset overwrite is present", withSourceAsset, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is present - Camel Case", withSourceAssetCamelCase, common.IstioIngressGatewayLabelValue, true},
+		{"NLB is default. Source Asset overwrite is present - Camel Case", withSourceAssetCamelCase, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is empty", withSourceAssetEmpty, common.IstioIngressGatewayLabelValue, false},
+		{"NLB is default. Source Asset overwrite is empty", withSourceAssetEmpty, common.NLBIstioIngressGatewayLabelValue, true},
+		{"CLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.IstioIngressGatewayLabelValue, false},
+		{"NLB is default. Source Asset overwrite is notmatching", withSourceAssetNotMatching, common.NLBIstioIngressGatewayLabelValue, true},
+
+		//Cluster Specific Asset migration. CLB is default
+		{"CLB is default. Source Asset overwrite for a matching cluster", args{
+			sourceClusters: []string{"nlb1-k8s", "test2-k8s"},
+			nlbOverwrite:   []string{"intuit.test.asset.trymatchme:nlb1-k8s", "nlb2-k8s"},
+			clbOverwrite:   []string{"clb1-k8s", "clb2-k8s"},
+			sourceIdentity: "intuit.test.asset.trymatchme",
+		}, common.IstioIngressGatewayLabelValue, true},
+
+		{"CLB is default. Source Asset overwrite for a non matching cluster", args{
+			sourceClusters: []string{"test1-k8s", "test2-k8s"},
+			nlbOverwrite:   []string{"intuit.test.asset.trymatchme:nlb1-k8s", "nlb2-k8s"},
+			clbOverwrite:   []string{"clb1-k8s", "clb2-k8s"},
+			sourceIdentity: "intuit.test.asset.trymatchme",
+		}, common.IstioIngressGatewayLabelValue, false},
+	}
+	for _, tt := range tests {
+		common.GetAdmiralParams().LabelSet.GatewayApp = tt.defaultLB
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, IsNLBTimeoutNeeded(tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite, tt.args.sourceIdentity), "IsNLBTimeoutNeeded(%v, %v, %v)", tt.args.sourceClusters, tt.args.nlbOverwrite, tt.args.clbOverwrite)
+		})
+	}
+
+	//Restore previous state
+	common.GetAdmiralParams().LabelSet.GatewayApp = beforeRunningtest
 }

@@ -322,3 +322,22 @@ func (sec *ServiceController) Get(ctx context.Context, isRetry bool, obj interfa
 	}
 	return nil, fmt.Errorf("kubernetes client is not initialized, txId=%s", ctx.Value("txId"))
 }
+
+func (s *serviceCache) GetSingleLoadBalancerTimeout(key string, namespace string) (string, error) {
+	services := s.Get(namespace)
+	if len(services) == 0 {
+		return "", fmt.Errorf("no services found in namespace: %s", namespace)
+	}
+	for _, service := range services {
+		if common.IsIstioIngressGatewayService(service, key) {
+			// Will need to change the processing here once AWS lb controller is updated
+			// Value will change from "350" to  "tcp.idle_timeout.seconds=350"
+			if service.Annotations != nil {
+				if service.Annotations[common.NLBIdleTimeoutAnnotation] != "" {
+					return service.Annotations[common.NLBIdleTimeoutAnnotation], nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("no istio-ingressgateway services found in namespace: %s", namespace)
+}

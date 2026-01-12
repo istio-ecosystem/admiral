@@ -44,6 +44,8 @@ const (
 	NamespaceIstioSystem             = "istio-system"
 	IstioIngressGatewayLabelValue    = "istio-ingressgateway"
 	NLBIstioIngressGatewayLabelValue = "istio-ingressgateway-nlb"
+	NLBIdleTimeoutAnnotation         = "service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout" // service.beta.kubernetes.io/aws-load-balancer-listener-attributes.TCP-15543: tcp.idle_timeout.seconds=350 (needs to change to this once aws lb controller updated)
+	NLBDefaultTimeoutSeconds         = 350
 	Env                              = "env"
 	DefaultMtlsPort                  = 15443
 	DefaultServiceEntryPort          = 80
@@ -920,4 +922,18 @@ func IsDefaultFQDN(fqdn, env string) bool {
 		return true
 	}
 	return false
+}
+
+func SliceIntersection[T comparable](a []T, b []T) []T {
+	set := make([]T, 0)
+	hash := make(map[T]struct{})
+	for _, v := range a {
+		hash[v] = struct{}{}
+	}
+	for _, v := range b {
+		if _, ok := hash[v]; ok {
+			set = append(set, v)
+		}
+	}
+	return set
 }
